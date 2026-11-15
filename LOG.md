@@ -1043,4 +1043,6 @@ investigación completa, con fuentes y capturas de antes y después, está en el
   204 de 204; cuentas 61 de 61, sin
   Internet 32 de 32, seguridad 375 de 375, ayuda) salvo `rastreo`, con los mismos 27 casos de la
   ruedita que en la 0.13.2 y ninguno nuevo.
-- **Falta:** verla en el A55 y el escritorio, probarla con personas, y el commit y la publicación.
+- **Publicada el mismo día:** Raspberry (prueba de humo 30 de 30 en `nomcolab.dpdns.org`), release
+  v0.14.0 en GitHub con el APK y `main` al día; el despliegue a Azure salió bien (la Web App sigue apagada).
+- **Falta:** verla en la app real (A55 y escritorio) para el visto bueno del equipo, y probarla con personas.

@@ -504,7 +504,7 @@ Por qué y con qué fuentes: el documento «UI and Psychology» del equipo; lo d
 - [x] Regresión rápida: todo bien salvo `rastreo` (los mismos 27 casos de la ruedita de la 0.13.2); `prueba_funciones` 201 de 201 (204 de 204 a ancho de celular).
 - [ ] Verla en el A55 (barras del sistema, pestañas abajo) y en el escritorio real.
 - [ ] Prueba de cinco segundos y tareas con cinco personas (bloque H) con la apariencia nueva.
-- [ ] Commit y publicar la 0.14.0 (Pi, release de GitHub, push); incluye lo de la 0.13.2 que no se había publicado.
+- [x] Commit y publicación de la 0.14.0 (15-nov): Raspberry (humo 30 de 30), release v0.14.0 en GitHub y push a `main`; incluye la 0.13.2.
 
 ## Cómo quedó (8 de noviembre de 2026)
 
@@ -552,8 +552,8 @@ sesión anterior: `./desplegar.sh roles` para las columnas nuevas de usuarios.
 
 ## Orden recomendado para la siguiente sesión
 
-**Desde el 15 de noviembre de 2026:** la 0.14.0 (fase 17, apariencia y orden) está hecha y probada en local, sin commit ni
-publicar: revisarla en el A55, hacer el commit y publicarla junto con la 0.13.2. Después sigue lo de abajo.
+**Desde el 15 de noviembre de 2026:** la 0.14.0 (fase 17, apariencia y orden) está publicada (Raspberry, GitHub) junto con
+la 0.13.2. Falta que el equipo la revise en la app real (A55 y escritorio) y dé el visto bueno. Después sigue lo de abajo.
 
 **Desde el 14 de noviembre de 2026 (madrugada):** leer primero `docs/RELEVO-PARIDAD-Y-PRUEBAS-REALES.md`.
 Orden: (1) versión 0.13.2 con DEF-46 (ramas), DEF-45 (PowerPoint), DEF-44, DEF-48, DEF-49, DEF-47 y
