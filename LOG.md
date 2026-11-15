@@ -986,3 +986,61 @@ dejar un relevo detallado. Relevo completo: `4-CODIGO/docs/RELEVO-PARIDAD-Y-PRUE
 - **Investigación de Office:** catálogos por pestaña y comando con su elemento de ECMA-376, estado en
   el código y plan de implementación; cobertura de cada elemento de los esquemas contra el corpus.
   Copia parcial en `4-CODIGO/docs/paridad/`; se termina en el escritorio.
+
+## 59. Los defectos del relevo, corregidos; Word y PowerPoint ya no pierden nada al editar; 89 funciones nuevas (0.13.2, 14 de noviembre de 2026)
+
+Qué se hizo, con su prueba automática cada cosa (detalle en `4-CODIGO/docs/RELEVO-PARIDAD-Y-PRUEBAS-REALES.md`, sección 8):
+
+- **DEF-46 (ramas):** la marca de «sin conexión» ya no se suelta ni se vuelve a poner en cada reintento
+  (`ramas.js`, `crdt.js`, `cola.js`, `editor.js`): se suelta cuando el envío salió bien. Prueba con
+  reintentos reales (umbral de 10 s, 25 s sin red) en `prueba_sin_internet.py`: 32 de 32.
+- **DEF-45 (PowerPoint):** una diapositiva importada que se edita conserva sus animaciones, y cada
+  figura su número, su nombre y su marcador de posición; el formato de todo el cuadro (negrita,
+  color, tamaño) se parcha sobre el texto original; solo se quitan las animaciones de figuras que ya
+  no existen (`ooxml.js`). Tres casos nuevos en `ediciones.py` con cuatro presentaciones.
+- **MEJ-1 (Word):** el párrafo editado se parcha sobre su XML original (corridas, marcadores,
+  comentarios, campos, idioma, `rsid`); un control de contenido conserva su envoltura; ya no se
+  agregan listas que nadie usa a `numbering.xml`. Caso nuevo con los 21 documentos del corpus.
+- **DEF-44** (error al resaltar cambios con el fin del documento), **DEF-47** (encender el teléfono
+  con otro servidor elegido), **DEF-48** (código sin guion), **DEF-49** (pegar el enlace completo;
+  la app abre los enlaces de invitación), **DEF-43** (botones cortados en Ajustes) y **H-8** (al
+  pedir «Cambiar dónde trabaja tu equipo» ya no se conecta sola; aviso al entrar a un equipo del Wi-Fi).
+- Además: la versión se ve en Ajustes; en el celular, tocar un cuadro ya elegido abre su texto (y
+  se corrigió que la edición se cerraba sola tras el toque); Atrás cierra primero el menú; en la
+  hoja, Enter después de Tab regresa a la columna inicial; «Buenas noches» de madrugada; en el
+  servidor, «lo que cambió desde tu visita» ya no se pierde cuando dos rachas se cierran juntas.
+- **Hoja:** 89 funciones nuevas (185 en total), cada una comparada con LibreOffice
+  (`pruebas/office/funciones_lo.py`: 178 fórmulas iguales, 5 que LibreOffice no tiene).
+- **Resultados:** `regresion.sh` completo: todo bien salvo `rastreo` (las mismas 20 acciones de la
+  ruedita que no alcanza a abrir desde el 13-nov; ninguna nueva); validador de Microsoft: 206 de
+  206 archivos editados sin errores nuevos; APK 0.13.2 probado en el emulador (se instala encima de
+  la 0.13.1, abre con un enlace de invitación en frío y ya abierta, Atrás).
+
+## 60. Apariencia nueva y orden de la interfaz (0.14.0, 15 de noviembre de 2026)
+
+La interfaz funcionaba, pero se veía como muchas páginas armadas con plantilla: acento índigo con
+degradado, vidrio desenfocado, todo muy redondeado y todo animado. Se investigó por qué pasa eso,
+cómo juzga la gente una pantalla en el primer vistazo y cómo encuentra las cosas, y con eso se
+rehízo la apariencia y el orden. La lógica, las funciones y los nombres no cambiaron. La
+investigación completa, con fuentes y capturas de antes y después, está en el documento
+«UI and Psychology»; lo decidido, en `4-CODIGO/docs/DISENO-UI.md`.
+
+- **Apariencia:** grises neutros y un solo color de marca (el azul noche del ícono, `#2B2952`);
+  superficies planas con borde; radios de 4 a 12 px; letra con pesos 400, 600 y 700; movimiento de
+  90 a 200 ms sin rebote. Se quitaron el desenfoque, los degradados, el grano, la luz bajo el
+  cursor, el brillo del botón, las cascadas al entrar y la pantalla de saludo.
+- **Orden:** entrar es una columna; el inicio muestra primero lo último que se abrió y los
+  espacios; en el riel, los espacios van arriba y lo guardado abajo; en el celular las pestañas van
+  pegadas abajo.
+- **Editores:** las herramientas que no se explican con el ícono llevan su nombre; en la
+  computadora la barra baja a un segundo renglón en vez de esconder botones; la de presentaciones
+  sigue el orden de trabajo y «Presentar» resalta. El modo enfoque queda en «Más opciones» y Ctrl+.
+- **Mismo estilo** en el sitio de ayuda y en los colores de la app Android.
+- **De paso:** `DIAS.LAB` estaba dos veces en la ayuda de fórmulas (la tabla decía 186); se quitó
+  la repetida y la prueba ahora cuenta también los nombres con números.
+- **Resultados:** contraste de los textos nuevos de 5.3:1 o más; las cuatro barras caben en un
+  renglón a 1366 px; `regresion.sh rapido`: todo bien (funciones 201 de 201 y, a ancho de celular,
+  204 de 204; cuentas 61 de 61, sin
+  Internet 32 de 32, seguridad 375 de 375, ayuda) salvo `rastreo`, con los mismos 27 casos de la
+  ruedita que en la 0.13.2 y ninguno nuevo.
+- **Falta:** verla en el A55 y el escritorio, probarla con personas, y el commit y la publicación.

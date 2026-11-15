@@ -752,7 +752,8 @@
         if (!el.textContent) r.collapse(true);
         const s = getSelection(); s.removeAllRanges(); s.addRange(r);
       }
-      el.onblur = () => setTimeout(() => { if (document.activeElement !== el && !barraTexto.contains(document.activeElement) && !document.querySelector(".lz-panel")) terminarEdicion(); }, 0);
+      // (un cuadro que ya no está en la página —se volvió a dibujar— no decide nada: el nuevo tiene su propio aviso)
+      el.onblur = () => setTimeout(() => { if (el.isConnected && document.activeElement !== el && !barraTexto.contains(document.activeElement) && !document.querySelector(".lz-panel")) terminarEdicion(); }, 0);
       el.onpaste = (e) => {
         const t = (e.clipboardData && e.clipboardData.getData("text/plain") || "").trim();
         const s0 = getSelection();
@@ -1157,7 +1158,7 @@
           btn("opacidad", ico("blend"), "Transparencia"),
           (formas.some((b) => ["rect", "burbuja"].includes(b.figura || "rect")) || imgs.length) ? btn("esquinas", ico("esquina"), "Redondear esquinas") : "",
           btn("sombra", ico("sombra"), "Sombra", `aria-pressed="${b0.sombra === true || (b0.sombra == null && b0.tipo === "forma" && !esLinea(b0.figura))}"`),
-          imgs.length === 1 && imgs[0].src ? btn("recortar", ico("scissors"), "Recortar") + btn("mascara", ico("shapes"), "Forma|La foto dentro de un círculo, estrella, corazón…") + btn("filtros", ico("wand-sparkles"), "Filtros|Brillo, contraste, blanco y negro…") : "",
+          imgs.length === 1 && imgs[0].src ? btn("recortar", ico("scissors"), "Recortar") + btn("mascara", ico("shapes"), "Forma|La foto dentro de un círculo, estrella, corazón…") + btn("filtros", ico("blend"), "Filtros|Brillo, contraste, blanco y negro…") : "",
           bs.length === 1 && ((b0.tipo === "tabla" && b0.enDiapo) || (b0.tipo === "grafica" && !b0.hoja)) ? btn("datos", ico("table"), "Editar datos") : "",
           bs.length === 1 && b0.tipo === "icono" ? btn("icono-color", `<span class="lz-color" style="--c:${esc(b0.color || "#2B2A33")}"><span></span></span>`, "Color del ícono") : "",
           '<span class="sep"></span>',
@@ -1396,6 +1397,9 @@
         // Selección múltiple con el dedo: tocar otra figura la suma; tocar una ya elegida la quita
         // (si no se arrastra: arrastrar mueve todas juntas).
         let quitar = null, entrar = null;
+        // Con el dedo: un toque corto sobre el cuadro que ya estaba elegido (y solo ese) es «escribir aquí»,
+        // como en PowerPoint del celular (el doble toque rápido cuesta trabajo en una pantalla chica).
+        const yaSola = e.pointerType !== "mouse" && !multiple && sel.size === 1 && sel.has(id) && editando !== id;
         if (multiple && e.pointerType !== "mouse") { if (sel.has(id)) quitar = id; else seleccionar([id], true); }
         else if (!sel.has(id)) seleccionar(id);
         else if (sel.size > 1 && gruposDe(porId(id)).length) entrar = id;
@@ -1407,7 +1411,7 @@
           if (entrar) gesto = { tipo: "mover", ids: [], p0: p, b0: {}, caja0: null, movido: false, idClic: id, entrar };
           return;
         }
-        gesto = { tipo: "mover", ids: bs.map((b) => b.id), p0: p, b0: Object.fromEntries(bs.map((b) => [b.id, { x: b.x, y: b.y, w: b.w, h: b.h }])), caja0: cajaDe(bs), movido: false, idClic: id, quitar, entrar };
+        gesto = { tipo: "mover", ids: bs.map((b) => b.id), p0: p, b0: Object.fromEntries(bs.map((b) => [b.id, { x: b.x, y: b.y, w: b.w, h: b.h }])), caja0: cajaDe(bs), movido: false, idClic: id, quitar, entrar, yaSola, t0: Date.now() };
         superficie.setPointerCapture(e.pointerId);
         return;
       }
@@ -1529,7 +1533,13 @@
       // 5.2 Segundo toque sobre un grupo ya elegido: entra al grupo de adentro.
       if (g.tipo === "mover" && !g.movido && g.entrar && e.type === "pointerup" && entrarAlGrupo(g.entrar)) { finGesto.ultimo = Date.now(); finGesto.id = g.idClic; return; }
       if (g.tipo === "mover" && g.movido) doc().lote(() => g.ids.forEach((id) => doc().cambiar(id, g.b[id])));
-      else if (g.tipo === "mover" && !g.movido && e.type === "pointerup" && doc().valor(g.idClic, "tipo") !== "imagen" && Date.now() - (finGesto.ultimo || 0) < 350 && finGesto.id === g.idClic) editar(g.idClic);
+      else if (g.tipo === "mover" && !g.movido && e.type === "pointerup" && doc().valor(g.idClic, "tipo") !== "imagen" && ((Date.now() - (finGesto.ultimo || 0) < 350 && finGesto.id === g.idClic) || (g.yaSola && Date.now() - g.t0 < 300 && !(NOM.rueda && NOM.rueda.abierta())))) {
+        // Se entra a escribir y aquí termina: volver a dibujar todo cambiaba el cuadro por uno nuevo y el
+        // aviso de «perdió el foco» del anterior cerraba la edición en el acto (con el dedo no se podía escribir).
+        editar(g.idClic);
+        finGesto.ultimo = 0;
+        if (editando === g.idClic) return;
+      }
       else if (g.tipo === "tamano" && g.b) doc().cambiar(g.id, g.b);
       else if (g.tipo === "girar") doc().cambiar(g.id, { rot: g.rot || null });
       else if (g.tipo === "paneo" && g.limpiar && !g.movido && (sel.size || selConector)) { sel = new Set(); selConector = null; ed.seleccionar(null); render(); }
@@ -1672,7 +1682,7 @@
           (bs.length === 1 && b0.tipo === "imagen" && b0.src) ? { texto: "Imagen", icono: "image", sub: [
             { texto: "Recortar", icono: "scissors", fn: () => recortarImagen(b0.id) },
             { texto: "Forma", icono: "shapes", fn: () => mascaraImagen({ x: innerWidth / 2, y: innerHeight / 2 }, b0.id) },
-            { texto: "Filtros", icono: "wand-sparkles", fn: () => filtrosImagen({ x: innerWidth / 2, y: innerHeight / 2 }, b0.id) },
+            { texto: "Filtros", icono: "blend", fn: () => filtrosImagen({ x: innerWidth / 2, y: innerHeight / 2 }, b0.id) },
             { texto: "Cambiar imagen", corto: "Cambiar", icono: "image", fn: async () => { const img = await ed.pedirImagen(); if (img) { doc().cambiar(b0.id, { src: img.src }); render(); } } }] }
             : { texto: "Comentar", icono: "message-square", off: !NOM.comentarios, fn: () => NOM.comentarios.nuevo(ed) },
           { texto: "Otras", icono: "more-vertical", sub: [
@@ -1751,7 +1761,7 @@
         if (abierto) { cerrar(); return; }
         abierto = true;
         lateral.innerHTML = `<div class="cajon capas-cajon"><div class="cajon-cab"><h3>${ico("layers", "ico-s")} Capas</h3><button class="icono-btn" data-cerrar aria-label="Cerrar capas">${ico("x")}</button></div>
-          <p class="suave chico" style="padding:0 16px;font-weight:650">Arriba lo que está al frente. Arrastra de la manija para cambiar el orden.</p>
+          <p class="suave chico" style="padding:0 16px;font-weight:400">Arriba lo que está al frente. Arrastra de la manija para cambiar el orden.</p>
           <div class="cajon-cuerpo" data-capas></div></div>`;
         cont = lateral.firstElementChild;
         $("[data-cerrar]", cont).onclick = cerrar;
@@ -2032,7 +2042,7 @@
       function accionesDiapo(p) {
         const pags = doc().paginas(), i = pags.indexOf(p);
         return [
-          { texto: "Transición", icono: "sparkles", fn: () => menuTransicion(null, p) },
+          { texto: "Transición", icono: "blend", fn: () => menuTransicion(null, p) },
           { texto: "Notas", icono: "sticky-note", fn: () => { ed.pagina = p; lienzo.render(); alternarNotas(true); } },
           { texto: "Antes", icono: "chevron-left", off: i <= 0, fn: () => moverDiapo(p, -1) },
           { texto: "Después", icono: "chevron-right", off: i >= pags.length - 1, fn: () => moverDiapo(p, 1) },
@@ -2063,7 +2073,7 @@
         const pags = doc().paginas(), i = pags.indexOf(p);
         NOM.menu(anc, [
           { texto: "Duplicar", icono: "copy", fn: () => duplicarDiapo(p) },
-          { texto: "Transición…", icono: "sparkles", fn: () => menuTransicion(anc, p) },
+          { texto: "Transición…", icono: "blend", fn: () => menuTransicion(anc, p) },
           ...(ed.esPropietario ? [{ texto: lienzo.duenoPagina(p) ? "Cambiar a quién se asignó…" : "Asignar a una persona…", icono: "user-check", fn: () => lienzo.asignarPagina(p) }] : []),
           { texto: "Revolver el orden", icono: "shuffle", fn: revolver },
           ...(i > 0 ? [{ texto: "Mover antes", icono: "chevron-left", fn: () => { const q = pags.slice(); q.splice(i, 1); q.splice(i - 1, 0, p); doc().cambiar("_doc", { paginas: q }); } }] : []),
@@ -2096,7 +2106,7 @@
         const elegir = (v, todas) => doc().cambiar("_doc", Object.fromEntries((todas ? doc().paginas() : [p]).map((x) => ["trans:" + x, v || null])));
         const items = [{ titulo: "Al llegar a la diapositiva…" }, ...TRANS.map(([v, t]) => ({ texto: t, marcado: v === actual, fn: () => elegir(v) })), "-", { texto: "Usar la misma en todas", icono: "copy", fn: () => elegir(actual, true) }];
         if (anc) NOM.menu(anc, items);
-        else NOM.rueda.abrir(innerWidth / 2, innerHeight / 2, TRANS.map(([v, t]) => ({ texto: t, icono: v ? "sparkles" : "x", marcado: v === actual, fn: () => elegir(v) })).concat([{ texto: "En todas", icono: "copy", fn: () => elegir(actual, true) }]), { titulo: "Transición", modo: "clic" });
+        else NOM.rueda.abrir(innerWidth / 2, innerHeight / 2, TRANS.map(([v, t]) => ({ texto: t, icono: v ? "blend" : "x", marcado: v === actual, fn: () => elegir(v) })).concat([{ texto: "En todas", icono: "copy", fn: () => elegir(actual, true) }]), { titulo: "Transición", modo: "clic" });
       }
       // ---- 8.3 animaciones: la lista ordenada de la diapositiva ("anim:<página>" en _doc)
       const listaAnim = () => listaAnimaciones(doc(), ed.pagina, bloquesPresentables(doc(), ed.pagina)).map((x) => Object.assign({}, x));
@@ -2129,7 +2139,7 @@
       /** El panel de animaciones: orden, cuándo empieza cada una, retraso y duración. */
       function dialogoAnimaciones() {
         let l = listaAnim();
-        const cuerpo = NOM.html(`<div class="col"><p class="suave chico" style="font-weight:650">Se reproducen de arriba abajo. "Al hacer clic" empieza un paso nuevo; "Con la anterior" y "Después de la anterior" van en el mismo paso.</p><div class="lista anim-lista" data-l></div></div>`);
+        const cuerpo = NOM.html(`<div class="col"><p class="suave chico" style="font-weight:400">Se reproducen de arriba abajo. "Al hacer clic" empieza un paso nuevo; "Con la anterior" y "Después de la anterior" van en el mismo paso.</p><div class="lista anim-lista" data-l></div></div>`);
         const pintarL = () => {
           $("[data-l]", cuerpo).innerHTML = l.length ? l.map((x, k) => `<div class="anim-fila" data-k="${k}">
             <div class="fila" style="align-items:center"><b class="crece recorta">${k + 1}. ${esc(nombreBloque(x.id))}</b><span class="chip chico">${TIPO_ANIM[x.tipo]}</span>
@@ -2155,7 +2165,7 @@
           x[c] = c === "retraso" || c === "dur" ? Math.round(parseFloat(e.target.value || "0") * 1000) : e.target.value;
         });
         const pie = NOM.html(`<div style="display:contents"><button class="btn" type="button" data-probar>${ico("play", "ico-s")} Ver cómo queda</button><span class="crece"></span><button class="btn" type="button" data-no>Cancelar</button><button class="btn primario" data-si>Guardar</button></div>`);
-        const h = NOM.hoja({ titulo: "Animaciones de la diapositiva", icono: "sparkles", cuerpo, pie, ancha: true });
+        const h = NOM.hoja({ titulo: "Animaciones de la diapositiva", icono: "star", cuerpo, pie, ancha: true });
         $("[data-no]", pie).onclick = () => h.cerrar();
         $("[data-si]", pie).onclick = (e) => { e.preventDefault(); if (!ed.soloLectura) guardarAnim(l); h.cerrar(); };
         $("[data-probar]", pie).onclick = () => { if (!ed.soloLectura) guardarAnim(l); h.cerrar(); presentar(ed); };
@@ -2218,7 +2228,7 @@
             <button type="button" class="btn chico" data-f="imagen">${ico("image", "ico-s")} Imagen</button><button type="button" class="btn chico" data-f="quitar">${ico("x", "ico-s")} Del tema</button>
             <button type="button" class="btn chico" data-f="todas">${ico("copy", "ico-s")} Usar en todas</button></div>
           <b>Tamaño</b><div class="entrada"><select data-tam>${Object.entries(D.TAMANOS).map(([k, t]) => `<option value="${k}" ${tm === k ? "selected" : ""}>${esc(t.t)} · ${t.w}×${t.h}</option>`).join("")}</select></div>
-          <p class="suave chico" style="font-weight:650">Al cambiar el tamaño, lo que ya está se acomoda en proporción.</p></div>`);
+          <p class="suave chico" style="font-weight:400">Al cambiar el tamaño, lo que ya está se acomoda en proporción.</p></div>`);
         const h = NOM.hoja({ titulo: "Diseño", icono: "palette", cuerpo });
         const p = ed.pagina;
         cuerpo.addEventListener("click", async (e) => {
@@ -2284,28 +2294,32 @@
       }
       this._notas = { pintar: pintarNotas };
 
+      // En el orden en que se arma una presentación: diapositiva nueva, qué se le pone, cómo se ve y se mueve,
+      // lo que se hace con lo elegido y, al final, presentar.
       this._herr = [
+        { etq: "Diapositiva", id: "nueva", icono: "file-plus", micro: "Nueva diapositiva|Elige un diseño: portada, título y contenido, dos columnas…", fn: (e, b) => menuNueva(b) },
+        "|",
         { id: "texto", icono: "type", micro: "Cuadro de texto|Agrega un título o un párrafo a la diapositiva.", fn: () => lienzo.crear("texto") },
-        { id: "figura", icono: "shapes", micro: "Figuras|Más de 20: flechas, estrellas, globos de diálogo…", fn: (e, b) => menuFiguras(lienzo, b) },
+        { etq: true, id: "figura", icono: "shapes", micro: "Figuras|Más de 20: flechas, estrellas, globos de diálogo…", fn: (e, b) => menuFiguras(lienzo, b) },
         { id: "imagen", icono: "image", micro: "Imagen|Desde tu equipo.", fn: () => lienzo.imagen(), mantenerFoco: false },
-        { id: "insertar", icono: "plus-square", micro: "Insertar|Tabla, gráfica, íconos y ecuación.", fn: (e, b) => menuInsertar(b) },
-        { id: "diseno", icono: "palette", micro: "Diseño|Tema, fondo y tamaño de las diapositivas.", fn: (e, b) => menuDiseno(b), off: () => ed.soloLectura },
+        { etq: true, id: "insertar", icono: "plus-square", micro: "Insertar|Tabla, gráfica, íconos y ecuación.", fn: (e, b) => menuInsertar(b) },
+        "|",
+        { etq: true, id: "diseno", icono: "palette", micro: "Diseño|Tema, fondo y tamaño de las diapositivas.", fn: (e, b) => menuDiseno(b), off: () => ed.soloLectura },
+        { etq: true, id: "transicion", icono: "blend", micro: "Transición|Cómo entra esta diapositiva al presentar.", fn: (e, b) => menuTransicion(b) },
+        { etq: true, id: "animacion", icono: "star", micro: "Animación|Entrada, énfasis y salida al presentar, en el orden que elijas.", fn: (e, b) => menuAnimacion(b) },
         "|",
         { id: "color", icono: "palette", micro: "Color|Cambia el color de las figuras seleccionadas.", fn: (e, b) => menuColor(lienzo, b), off: () => !lienzo.seleccion() },
         { id: "alinear", icono: "al-centro-h", micro: "Alinear|En la diapositiva o entre las figuras elegidas.", fn: (e, b) => menuAlinear(lienzo, b), off: () => !lienzo.seleccion() },
-        { id: "animacion", icono: "sparkles", micro: "Animación|Entrada, énfasis y salida al presentar, en el orden que elijas.", fn: (e, b) => menuAnimacion(b) },
         { id: "frente", icono: "bring-to-front", micro: "Traer al frente||Ctrl+Mayús+]", fn: () => lienzo.capaZ("frente"), off: () => !lienzo.seleccion() },
         { id: "atras", icono: "send-to-back", micro: "Enviar al fondo||Ctrl+Mayús+[", fn: () => lienzo.capaZ("fondo"), off: () => !lienzo.seleccion() },
         { id: "borrar", icono: "trash-2", micro: "Eliminar|Quita los bloques seleccionados.|Supr", fn: () => lienzo.eliminar(), off: () => !lienzo.seleccion() },
         "|",
         { id: "capas", icono: "layers", micro: "Capas|Ocultar, bloquear y ordenar lo de la diapositiva.", fn: () => lienzo.capas.abrir() },
-        { id: "comentar", icono: "message-square", micro: "Comentar|Comenta lo elegido (o la diapositiva). Funciona sin Internet.", fn: () => NOM.comentarios && NOM.comentarios.nuevo(ed), clase: "solo-escritorio" },
-        "|",
-        { id: "nueva", icono: "file-plus", micro: "Nueva diapositiva|Elige un diseño: portada, título y contenido, dos columnas…", fn: (e, b) => menuNueva(b) },
         { id: "notas", icono: "sticky-note", micro: "Notas del orador|Solo tú las ves, en el modo presentador.", fn: () => alternarNotas(), activo: () => !notas.hidden },
-        { id: "transicion", icono: "sparkles", micro: "Transición|Cómo entra esta diapositiva al presentar.", fn: (e, b) => menuTransicion(b) },
-        { id: "presentar", icono: "play", micro: "Presentar|Aquí, en modo presentador o en otra pantalla (proyector).|F5", fn: (e, b) => menuPresentar(b) },
+        { id: "comentar", icono: "message-square", micro: "Comentar|Comenta lo elegido (o la diapositiva). Funciona sin Internet.", fn: () => NOM.comentarios && NOM.comentarios.nuevo(ed), clase: "solo-escritorio" },
         { id: "imagen-png", icono: "download", micro: "Guardar como imagen|Esta diapositiva o todas (PNG), para mandarlas por mensaje.", clase: "solo-escritorio", fn: (e, b) => NOM.menu(b, [{ titulo: "Guardar como imagen (PNG)" }, { texto: "Esta diapositiva", icono: "image", fn: () => exportarImagen(false) }, { texto: "Todas (en un .zip)", icono: "archive", fn: () => exportarImagen(true) }]) },
+        "|",
+        { clase: "destacado", etq: true, id: "presentar", icono: "play", micro: "Presentar|Aquí, en modo presentador o en otra pantalla (proyector).|F5", fn: (e, b) => menuPresentar(b) },
       ];
       this._teclaF5 = (e) => { if (e.key === "F5") { e.preventDefault(); presentar(ed); } };
       document.addEventListener("keydown", this._teclaF5);
@@ -2594,7 +2608,7 @@
       const lienzo = crearLienzo(ed, ed.lienzo, { acotado: false, alUsarHerramienta: () => { lienzo.fijarHerramienta(null); ed.refrescarHerramientas(); } });
       this._lienzo = lienzo;
       if (pags.length > 1) {
-        const sel = html(`<div class="zoom-ctl" style="left:16px;right:auto">${ico("layers")}<select class="mini-select" aria-label="Página" style="border:0;background:transparent;font-weight:800">${pags.map((p, i) => `<option value="${esc(p)}" ${p === ed.pagina ? "selected" : ""}>Página ${i + 1}</option>`).join("")}</select></div>`);
+        const sel = html(`<div class="zoom-ctl" style="left:16px;right:auto">${ico("layers")}<select class="mini-select" aria-label="Página" style="border:0;background:transparent;font-weight:600">${pags.map((p, i) => `<option value="${esc(p)}" ${p === ed.pagina ? "selected" : ""}>Página ${i + 1}</option>`).join("")}</select></div>`);
         $("select", sel).onchange = (e) => { ed.pagina = e.target.value; lienzo.render(); lienzo.ajustar(); };
         ed.lienzo.append(sel);
       }
@@ -2606,12 +2620,12 @@
         { id: "elipse", icono: "circle", micro: "Elipse|Para inicio y fin de un flujo.", fn: h("elipse"), activo: activo("elipse") },
         { id: "rombo", icono: "diamond", micro: "Rombo|Para decisiones (sí / no).", fn: h("rombo"), activo: activo("rombo") },
         { id: "nota", icono: "sticky-note", micro: "Nota adhesiva|Ideas sueltas, como en un pizarrón.", fn: h("nota"), activo: activo("nota") },
-        { id: "mas-figuras", icono: "shapes", micro: "Más figuras|Estrella, flecha, nube, cilindro, documento, línea…", fn: (e, b) => menuFiguras(lienzo, b, (f) => { lienzo.fijarHerramienta(f); ed.refrescarHerramientas(); aviso("Haz clic en el lienzo para colocarla", { ms: 1800 }); }), activo: () => !!lienzo.herramienta() && !["rect", "elipse", "rombo", "nota", "texto", "conector"].includes(lienzo.herramienta()) },
+        { etq: "Figuras", id: "mas-figuras", icono: "shapes", micro: "Más figuras|Estrella, flecha, nube, cilindro, documento, línea…", fn: (e, b) => menuFiguras(lienzo, b, (f) => { lienzo.fijarHerramienta(f); ed.refrescarHerramientas(); aviso("Haz clic en el lienzo para colocarla", { ms: 1800 }); }), activo: () => !!lienzo.herramienta() && !["rect", "elipse", "rombo", "nota", "texto", "conector"].includes(lienzo.herramienta()) },
         { id: "texto", icono: "type", micro: "Texto libre", fn: h("texto"), activo: activo("texto") },
-        { id: "conector", icono: "spline", micro: "Conector|Toca una figura y luego otra para unirlas con una flecha.", fn: h("conector"), activo: activo("conector") },
+        { etq: true, id: "conector", icono: "spline", micro: "Conector|Toca una figura y luego otra para unirlas con una flecha.", fn: h("conector"), activo: activo("conector") },
         { id: "imagen", icono: "image", micro: "Imagen", fn: () => lienzo.imagen(), mantenerFoco: false },
         { id: "iconos", icono: "star", micro: "Íconos|Más de 250 dibujos: personas, ciencia, redes… (sin internet).", fn: () => bibliotecaIconos(ed, lienzo), mantenerFoco: false },
-        { id: "listos", icono: "network", micro: "Diagramas listos|Ciclo, línea del tiempo, organigrama, mapa mental, Venn, FODA, espina de pescado, UML, entidad-relación…", fn: () => NOM.diagramas && NOM.diagramas.elegir(lienzo), mantenerFoco: false },
+        { etq: true, id: "listos", icono: "network", micro: "Diagramas listos|Ciclo, línea del tiempo, organigrama, mapa mental, Venn, FODA, espina de pescado, UML, entidad-relación…", fn: () => NOM.diagramas && NOM.diagramas.elegir(lienzo), mantenerFoco: false },
         "|",
         { id: "color", icono: "palette", micro: "Color|Cambia el color de las figuras seleccionadas.", fn: (e, b) => menuColor(lienzo, b), off: () => !lienzo.seleccion() },
         { id: "alinear", icono: "al-centro-h", micro: "Alinear y distribuir|Elige dos o más figuras.", fn: (e, b) => menuAlinear(lienzo, b), off: () => lienzo.cuantos() < 2 },

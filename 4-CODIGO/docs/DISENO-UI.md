@@ -1,58 +1,53 @@
 # NOM-COLAB — Diseño de la interfaz
 
-Equipo 6 "WACK" · CECyT 9 · 5IM7 · octubre 2026
+Equipo 6 "WACK" · CECyT 9 · 5IM7 · octubre 2026 (apariencia revisada en noviembre de 2026, versión 0.14.0)
 
 Este documento explica **por qué** la interfaz se ve y se comporta como lo hace.
 Cada decisión sale de un principio de psicología cognitiva o de diseño de
-interacción, y cada una dice en qué archivo vive.
+interacción, y cada una dice en qué archivo vive. La investigación detrás de la apariencia actual
+(qué hace que una interfaz parezca de plantilla, primera impresión, cómo se encuentran las cosas)
+está en el documento «UI and Psychology» del equipo; aquí queda lo que se decidió.
 
-## 1. Estilo: "arcilla suave" (claymorphism contenido)
+## 1. Estilo: plano, neutro y con un solo color de marca
 
-**Qué es.** Superficies con volumen suave: esquinas muy redondeadas (16–28 px),
-una luz interior arriba, una sombra interior abajo y una sombra exterior
-difusa y teñida. Se siente "apretable" y amable.
+**Qué es.** Superficies planas con un borde de 1 px, grises neutros y un solo color de marca: el
+azul noche del ícono. El color se guarda para lo que dice algo (el tipo de documento y los
+estados). Esquinas redondeadas pequeñas, en una escala fija.
 
-**Por qué no claymorphism puro.** La investigación sobre los estilos "soft UI"
-coincide en un riesgo: cuando el límite de un elemento depende solo de una
-sombra sutil, las personas con baja visión, daltonismo o monitores de baja
-calidad no distinguen dónde empieza y dónde acaba. Claymorphism es más legible
-que neumorphism porque usa rellenos con color y sombras teñidas, pero aun así
-las sombras no deben cargar significado por sí solas
-([Setproduct](https://www.setproduct.com/blog/neumorphism-design-guide),
-[Pixso](https://pixso.net/articles/glassmorphism-vs-neumorphism-vs-claymorphism/),
-[LogRocket](https://blog.logrocket.com/ux-design/what-is-claymorphism-web-design/)).
+**Por qué se dejó la «arcilla» con «vidrio» (noviembre de 2026).** La versión anterior juntaba
+catorce de las veinte señales por las que hoy se reconoce una interfaz armada con plantilla: acento
+índigo con degradado y resplandor, desenfoque en todo lo que flota, radios de 16 a 28 px, luz bajo
+el cursor, grano en el fondo, todo animado en cascada. Cada una tenía su razón; juntas daban una
+primera impresión genérica, y esa impresión se forma en unos 50 ms (Lindgaard et al., 2006) y pesa
+en la credibilidad (Fogg et al., 2003). Lo simple y familiar es lo mejor calificado (Tuch et al.,
+2012), y los sistemas de diseño de las empresas grandes (Material 3, Fluent 2, Carbon) coinciden
+en lo mismo: base neutra, un color de marca, pocos radios y pocas sombras definidos como variables.
 
 **Decisión.**
 
 | Regla | Dónde |
 |---|---|
-| La arcilla es solo para **lo que se toca**: tarjetas, botones, hojas, barras. El **lienzo de trabajo es plano** (papel blanco, rejilla, pizarrón con puntos) para no competir con el contenido. | `css/nom.css` (`--clay`), `css/editor.css` (`.papel`, `.plano`) |
-| Toda superficie de arcilla lleva además un **borde de 1 px** (`--borde`). La sombra decora; el borde delimita. | `.clay`, `.btn` |
-| Contraste de texto medido contra WCAG 2.x AA: tinta 12.8:1, texto secundario 4.9:1, botón principal 5.4:1 (blanco sobre índigo). | tokens `--tinta`, `--tinta-suave`, `--acento` |
-| Modo **calidad baja** que apaga las sombras compuestas (hardware mínimo de los requerimientos). | `:root[data-calidad="baja"]`, CU-27 |
-
-**Arcilla + vidrio (glassmorphism).** Lo que **flota encima** del trabajo deja ver lo de
-atrás, desenfocado, para que nunca se pierda de vista lo que se está editando: la ruedita,
-los menús y paletas, las ventanas (hojas), los avisos, los micro-textos, la barra de
-selección del lienzo, el control de zoom, buscar y reemplazar, el cajón de versiones y las
-barras fijas del celular. Conserva la arcilla: la misma luz interior arriba y la sombra
-teñida abajo, más un borde claro de 1 px.
-
-| Regla | Dónde |
-|---|---|
-| La opacidad sube con la cantidad de texto: 66 % en anillos y barras de íconos, 86 % en menús y ventanas, 82–86 % de tinta en avisos y micro-textos; el desenfoque (20 px) borra lo de atrás para que no compita con las letras. | tokens `--vidrio`, `--vidrio-fuerte`, `--vidrio-tinta`, `--vidrio-desenfoque` |
-| Si el navegador no sabe desenfocar, o con **calidad baja**, las mismas superficies se vuelven opacas: nada se lee peor. | `@supports not (backdrop-filter…)`, `:root[data-calidad="baja"]` |
-| El lienzo de trabajo sigue plano y opaco: el vidrio es solo para lo que flota. | `css/editor.css` |
+| **Un color de marca**, el azul noche del ícono (`#2B2952`, 13.6:1 con blanco), para **la** acción principal de cada pantalla. En tema oscuro la acción principal es clara (`--sobre-acento` oscuro). | `css/nom.css` (`--acento`, `--sobre-acento`) |
+| El naranja de la llama (`--llama`) solo para avance y marca (barra de carga, anillo de primeros pasos): no alcanza contraste para texto. | `--llama` |
+| Lo elegido **dentro de un documento** (celdas, marcos, tiradores) va en un azul propio, para no confundirlo con la acción principal. | `--seleccion`, `css/editor.css` |
+| Toda superficie lleva **borde de 1 px**; la sombra solo dice qué está encima de qué (tres niveles). Los campos tienen un borde de 3.3:1: su límite no depende de una sombra. | `.caja`, `--sombra-1`, `--sombra-2`, `--sombra-flotante`, `--borde-campo` |
+| Lo que flota (menús, ventanas, avisos, ruedita) es **opaco**: sin desenfoque. | `--sup-flota`, `--sup-inversa` |
+| **Radios** 4, 6, 8, 10 y 12 px; nada más. | `--r-xs` … `--r-xl` |
+| **Letra** Nunito (la de la marca) con tres pesos: 400, 600 y 700 (800 solo en el nombre de la app). Tres tamaños de título: 26, 18 y 15 px. | `css/nom.css` (base) |
+| Sin degradados, resplandores, texturas ni luces que sigan al cursor. | — |
+| Contraste medido contra WCAG 2.x AA: tinta 15.5:1, texto secundario 6:1 (5.5:1 sobre lo hundido), el menor de los textos de color 5.3:1. | `--tinta`, `--tinta-suave` |
+| Modo **calidad baja**: quita las sombras (hardware mínimo de los requerimientos). | `:root[data-calidad="baja"]`, CU-27 |
+| El **lienzo de trabajo** es papel blanco sobre gris neutro y no compite con el contenido. | `css/editor.css` (`.papel`, `.wd-pagina`) |
 
 ## 2. Captar la atención rápido (sin robarla)
 
 | Principio | Qué dice | Cómo se aplica |
 |---|---|---|
 | **Atributos preatentivos** | El color, la forma y la posición se procesan antes de la atención consciente (≈ 200–250 ms). | Cada modo tiene un color fijo en todo el sistema: Texto azul, Hoja verde, Presentación naranja, Diagrama violeta. Se reconoce el tipo de documento sin leer. `--m-texto`, `--m-hoja`… |
-| **Efecto Von Restorff** | Lo que es distinto a su entorno se recuerda y se encuentra primero ([Laws of UX](https://lawsofux.com/)). | Un solo color de acento (índigo) y se usa para **una** acción principal por pantalla: "Entrar", "Nuevo espacio", "Nuevo documento". Todo lo demás es neutro. |
-| **Efecto estético-usabilidad** | Lo atractivo se percibe como más fácil de usar y la gente tolera mejor fallas menores ([Laws of UX](https://lawsofux.com/)). | Paleta armónica, una sola tipografía redondeada (Nunito), radios y espaciado en múltiplos de 4/8. |
+| **Efecto Von Restorff** | Lo que es distinto a su entorno se recuerda y se encuentra primero ([Laws of UX](https://lawsofux.com/)). | Un solo color de marca (azul noche) y se usa para **una** acción principal por pantalla: "Entrar", "Nuevo espacio", "Nuevo documento", "Presentar". Todo lo demás es neutro. |
+| **Efecto estético-usabilidad** | Lo atractivo se percibe como más fácil de usar y la gente tolera mejor fallas menores ([Laws of UX](https://lawsofux.com/)). | Una sola tipografía (Nunito) con pocos pesos, espaciado en múltiplos de 4/8 y una escala fija de radios. |
 | **Gestalt: región común y proximidad** | Lo que comparte un contorno se lee como un grupo. | Cada espacio, documento y ajuste es una tarjeta; los controles relacionados van juntos (segmentados de 2–4 opciones). |
-| **Efecto Zeigarnik** | Las tareas inconclusas se recuerdan más y la gente quiere cerrarlas. | En Inicio, lo primero es **"Continúa donde lo dejaste"** con los últimos documentos abiertos. `vista-espacios.js · inicio()` |
+| **Efecto Zeigarnik** | Las tareas inconclusas se recuerdan más y la gente quiere cerrarlas. | En Inicio, lo primero es **Recientes**: los últimos documentos abiertos. `vista-espacios.js · inicio()` |
 
 ## 3. Familiar: que no haya que aprender nada nuevo
 
@@ -75,10 +70,10 @@ Supr (borra).
 
 | Principio | Qué dice | Cómo se aplica |
 |---|---|---|
-| **Ley de Hick** | El tiempo de decisión crece con el número de opciones ([Laws of UX](https://lawsofux.com/)). | La barra de herramientas muestra **solo las del modo activo**. Opciones raras van a un menú "…". Los segmentados nunca pasan de 4 opciones. |
-| **Carga cognitiva / memoria de trabajo** | La memoria de trabajo maneja ≈ 4 bloques a la vez. | Cuatro modos, tres secciones en móvil (Inicio, Unirse, Ajustes), un solo campo obligatorio extra al registrarse. |
+| **Ley de Hick** | El tiempo de decisión crece con el número de opciones ([Laws of UX](https://lawsofux.com/)). | La barra de herramientas muestra **solo las del modo activo**, en el orden en que se usan; las que no se explican con el ícono llevan su nombre a la vista (rastro de información, NN/g). En la computadora nada queda escondido: si no cabe, la barra baja a un segundo renglón. Opciones raras van a un menú "…". Los segmentados nunca pasan de 4 opciones. |
+| **Carga cognitiva / memoria de trabajo** | La memoria de trabajo maneja ≈ 4 bloques a la vez. | Cuatro modos, tres secciones en móvil (Inicio, Unirse, Ajustes), un solo campo obligatorio extra al registrarse. Entrar es una sola columna con un botón principal. |
 | **Divulgación progresiva** | Mostrar lo avanzado solo cuando se necesita. | La dirección manual del servidor está plegada bajo "¿No aparece?"; las funciones de hoja, en un menú. |
-| **Ley de Fitts** | Un objetivo grande y cercano se alcanza más rápido. | Objetivos táctiles ≥ 44 px (48 en la barra inferior del editor móvil). En móvil la navegación y las herramientas están **abajo, al alcance del pulgar**, y el botón flotante "+" en la esquina. |
+| **Ley de Fitts** | Un objetivo grande y cercano se alcanza más rápido. | Objetivos táctiles ≥ 44 px. En móvil la navegación y las herramientas están **abajo, al alcance del pulgar**, y el botón flotante "+" en la esquina. |
 | **Prevención de errores** | Es mejor evitar el error que explicarlo. | Validación al momento con el mensaje junto al campo; medidor de fuerza de contraseña; aviso de Bloq Mayús; confirmación antes de borrar o depurar. |
 
 ## 5. Fluido: respuesta y movimiento
@@ -87,11 +82,10 @@ Supr (borra).
 |---|---|---|
 | **Umbrales de respuesta (Nielsen)** | 0.1 s se siente instantáneo; 1 s es el límite antes de perder el hilo ([SAP Fiori, motion](https://www.sap.com/design-system/fiori-design-web/v1-120/foundations/visual/motion-design)). | Cada cambio se **aplica en local primero** y se envía después (CRDT); escribir nunca espera a la red. Medido: 42 ms entre que un equipo envía y otro recibe. |
 | **Umbral de Doherty** | La productividad sube cuando la respuesta baja de ≈ 400 ms ([Laws of UX](https://lawsofux.com/)). | Esqueletos de carga en lugar de pantallas en blanco; si la red tarda más de 2.5 s, el indicador ya dice "Sin conexión" en vez de dejar esperando. |
-| **Duración del movimiento** | Microinteracciones ≤ 150 ms; movimientos pequeños 150–250 ms; grandes 250–500 ms ([SAP Fiori](https://www.sap.com/design-system/fiori-design-web/v1-120/foundations/visual/motion-design), [Val Head](https://valhead.com/?p=2978)). | Tokens `--t-micro` 120 ms, `--t-corto` 200 ms, `--t-largo` 280 ms. Curva de salida suave `cubic-bezier(.2,.8,.2,1)`; rebote solo en el interruptor y en los avisos de éxito. |
+| **Duración del movimiento** | Microinteracciones ≤ 150 ms; movimientos pequeños 150–250 ms ([SAP Fiori](https://www.sap.com/design-system/fiori-design-web/v1-120/foundations/visual/motion-design), [Val Head](https://valhead.com/?p=2978)). | Tokens `--t-micro` 90 ms, `--t-corto` 140 ms, `--t-largo` 200 ms. Una sola curva (`--suave`), sin rebote. |
 | **Respeto al movimiento reducido** | Las animaciones pueden marear a algunas personas. | La preferencia de la app "Reducir movimiento" (Ajustes o Ctrl+K) pone todas las duraciones en 1 ms. Ya no se toma la del sistema: muchos teléfonos tienen las animaciones del sistema apagadas (opciones de desarrollador, ahorro de batería) y la app se veía distinta en el celular que en la computadora. |
-| **Regla pico-final** | Se recuerda el momento más intenso y el final. | Al crear cuenta o espacio aparece una palomita animada; al guardar, "Versión N guardada". |
-| **Continuidad (todo se mueve)** | El movimiento explica de dónde viene y a dónde va cada cosa; los cortes bruscos desorientan. | Cada pantalla entra en cascada (encabezado, tarjetas y listas con 40 ms entre cada una); el editor baja su barra; menús, ventanas y avisos entran con un pequeño rebote y también **salen** animados; la ruedita gira al abrir y sus acciones aparecen una tras otra; al cambiar de tema los colores se funden en medio segundo; los íconos "saludan" al pasar el cursor. Las entradas usan `animation-fill-mode: backwards` para no dejar transformaciones puestas (romperían los elementos fijos). |
-| **Bienvenida viva** | Mostrar lo que se ofrece en vez de decirlo. | Un documento, una presentación y una hoja flotan junto al título; se apartan del cursor (paralaje), se inclinan hacia él y saltan al tocarlos (`vista-cuentas.js`, `.flotantes`). |
+| **Regla pico-final** | Se recuerda el momento más intenso y el final. | Al crear cuenta aparece una palomita que se traza; al guardar, "Versión N guardada". |
+| **El movimiento explica** | Si quitar una animación no cambia lo que se entiende, sobra. | Las pantallas aparecen ya armadas (sin cascadas). Solo se anima lo que cambia de estado: una ventana que se abre, un aviso que llega, el cajón de versiones. Al cambiar de tema los colores se funden en un instante. No hay pantalla de saludo al entrar: se llega directo al trabajo. |
 
 ## 6. Un entorno enfocado, sin distracciones
 
@@ -126,9 +120,9 @@ prolongada no se ejecuta la acción, así explorar nunca causa un cambio.
 
 | | Navegador (escritorio) | Móvil (navegador o app Android) |
 |---|---|---|
-| Navegación | Riel lateral con tus espacios | Barra superior + pestañas abajo + botón "+" |
+| Navegación | Riel lateral: Inicio, tus espacios y Unirse arriba; lo guardado (en este equipo, en el servidor) abajo | Barra superior + pestañas pegadas al borde de abajo + botón "+" |
 | Hojas (modales) | Centradas | Suben desde abajo, con agarradera |
-| Herramientas del editor | Arriba | **Abajo**, sobre el teclado (la app usa `adjustResize`) |
+| Herramientas del editor | Arriba, con nombre en las que lo necesitan; botones de 32 px (cursor) | **Abajo**, sobre el teclado (la app usa `adjustResize`); solo íconos de 44 px |
 | Tipo de documento | Etiqueta de color junto al nombre (no se cambia después de crearlo) | Igual |
 | Diapositivas | Miniaturas a la izquierda | Tira horizontal abajo |
 
@@ -139,7 +133,7 @@ selector de archivos.
 
 ## 9. Accesibilidad
 
-- Foco visible en todo (anillo de 2 px del color de acento con separación).
+- Foco visible en todo (anillo de 2 px del color de marca con separación).
 - Navegación completa con teclado: Tab en hojas atrapa el foco; flechas en menús.
 - `aria-label` en todos los botones de ícono; `role="status"` en el indicador de sincronización.
 - Tema claro, oscuro o automático (sigue al sistema).
@@ -176,7 +170,7 @@ resultó molesto, así que solo aparece cuando la persona la pide sosteniendo:
 | Siempre | Clic derecho o tecla Menú: al instante. |
 
 Al soltar sin moverse la rueda se queda abierta hasta que se elige; al hacer la acción, se va. Reemplaza a la barra
-pequeña que salía encima del texto.
+pequeña que salía encima del texto. Es un disco opaco con borde y se abre de una vez, sin giro.
 
 | Principio | Qué dice la investigación | Cómo se aplica |
 |---|---|---|
@@ -234,45 +228,45 @@ No se puede impedir el zoom del navegador ni el tamaño mínimo de letra que eli
 (son ajustes de accesibilidad del propio navegador), ni lo que una extensión haga con
 permisos mayores que los de la página.
 
-## 14. Acabado de producto premium
+## 14. Acabado: lo que hace que se sienta cuidado
 
-Qué separa una app "que funciona" de una que se siente como un producto de primer nivel
-(Linear, Stripe, Vercel, Raycast). La investigación coincide en tres ideas:
+Lo que separa una app "que funciona" de una que se siente cuidada no son los efectos, sino cómo
+responde. Tres ideas:
 
-1. **La estética cambia la confianza.** A igual contenido, un diseño más cuidado se percibe
-   más creíble y más fácil de usar, y el juicio se forma en los primeros segundos
-   (efecto estética-usabilidad: Kurosu y Kashimura 1995, Tractinsky et al. 2000; estudio de
-   credibilidad en *Information Processing & Management*, 2007). El efecto se diluye con el
-   uso, así que lo que sostiene la impresión es la calidad de la interacción.
-2. **Densidad de comportamiento, no de pixeles.** Esas apps son visualmente sobrias pero todo
-   responde: cursor, foco, teclado, carga. Cada elemento tiene sus estados diseñados (normal,
-   cursor, foco, presionado, deshabilitado, cargando), los vacíos y errores son específicos, y el
-   movimiento es corto (< 300 ms en lo frecuente), con curvas propias y nunca desde escala 0
-   (guías de interfaz de Vercel; análisis de Stripe, Linear y Vercel de Mantlr; principios de
-   animación de Emil Kowalski).
-3. **Que la persona sepa qué hacer y se sienta esperada.** Vacíos que invitan a la primera
-   acción, listas cortas de primeros pasos en lugar de recorridos largos, y una paleta de
-   comandos (Ctrl+K) que hace descubrible todo y enseña los atajos.
+1. **La estética cambia la confianza**, y el juicio se forma en los primeros instantes (efecto
+   estética-usabilidad: Kurosu y Kashimura 1995, Tractinsky et al. 2000). El efecto se diluye con
+   el uso, así que lo que sostiene la impresión es la calidad de la interacción.
+2. **Densidad de comportamiento, no de pixeles.** Cada elemento tiene sus estados (normal, cursor,
+   foco, presionado, deshabilitado, cargando), los vacíos y errores son específicos y el movimiento
+   es corto.
+3. **Que la persona sepa qué hacer.** Vacíos que invitan a la primera acción, una lista corta de
+   primeros pasos y una paleta (Ctrl+K) que hace descubrible todo y enseña los atajos.
 
 | Detalle | Cómo se aplica | Dónde |
 |---|---|---|
-| Paleta de comandos | Ctrl+K (Alt+/ dentro del texto, donde Ctrl+K es enlace): documentos de todos los espacios, recientes, espacios, crear, ir a, tema, movimiento, atajos y las acciones del documento abierto. Coincidencia sin acentos y por iniciales; se muestra al instante y los documentos llegan después. | `experiencia.js`, `.paleta` |
-| Barra de carga | Arriba, con degradado de los colores de modo; solo si algo tarda > 160 ms y, si sale, dura ≥ 350 ms (no parpadea). | `NOM.cargando`, `.carga` |
-| Bienvenida | Al entrar: "¡Qué gusto verte, Ana!" con un mensaje según la hora, mientras el inicio se arma detrás. Al registrarse ya no se pide la contraseña otra vez: entra directo con "¡Bienvenido a NOM-COLAB!". | `NOM.bienvenida`, `vista-cuentas.js` |
-| Primeros pasos | Tarjeta con anillo de progreso: crear espacio, primer documento, probar la ruedita, invitar al equipo, ajustar la app. Se marca sola; desaparece al completarla (con un "¡Todo listo!") o al ocultarla. En el celular se desliza de lado. | `NOM.primerosPasos`, `.pasos` |
-| Consejo de la ruedita | La primera vez en cada tipo de documento, una píldora de vidrio explica cómo sale la ruedita; se va al usarla. | `NOM.alAbrirEditor`, `.consejo` |
+| Buscar o ir a | Ctrl+K (Alt+/ dentro del texto, donde Ctrl+K es enlace): documentos de todos los espacios, recientes, espacios, crear, ir a, tema, movimiento, atajos y las acciones del documento abierto. Coincidencia sin acentos y por iniciales; se muestra al instante y los documentos llegan después. | `experiencia.js`, `.paleta` |
+| Barra de carga | Arriba, de 2 px, del naranja de la marca; solo si algo tarda > 160 ms y, si sale, dura ≥ 350 ms (no parpadea). | `NOM.cargando`, `.carga` |
+| Inicio | Primero **Recientes** y **Tus espacios**; después cuánto ocupa la cuenta y los primeros pasos. | `vista-espacios.js · inicio()` |
+| Primeros pasos | Tarjeta con anillo de progreso, debajo de los espacios: crear espacio, primer documento, probar la ruedita, invitar al equipo, ajustar la app. Se marca sola; desaparece al completarla o al ocultarla. En el celular se desliza de lado. | `NOM.primerosPasos`, `.pasos` |
+| Consejo de la ruedita | La primera vez en cada tipo de documento, un recuadro explica cómo sale la ruedita; se va al usarla. | `NOM.alAbrirEditor`, `.consejo` |
 | Atajos | La tecla `?` (o la paleta) abre todos los atajos agrupados. | `NOM.atajos` |
-| Movimiento con resorte | Curva de resorte real (`linear()`) con rebote mínimo en ventanas, menús, avisos, ruedita y paleta; desaceleración larga (`--salida`) en lo demás. Los menús crecen desde su botón. Presionar es inmediato (70 ms) y soltar es suave. | `--resorte`, `--salida`, `nucleo.js` |
-| Tema en círculo | Al cambiar de tema, el nuevo se abre en círculo desde donde se hizo clic (View Transitions); sin soporte, se funde. | `aplicarPreferencias()` |
-| Luz bajo el cursor | Tarjetas y opciones reciben una luz suave que sigue al cursor (solo con mouse). | `.tarjeta::before`, `--lx`, `--ly` |
-| Borde de luz | Las superficies principales (cuenta, primeros pasos, paleta) tienen un borde degradado de 1 px. | `::after` con máscara |
-| Brillo en el botón principal | Un reflejo cruza el botón al pasar el cursor. | `.btn.primario::after` |
-| Textura | Grano muy fino en el fondo (quita las bandas de los degradados, se siente como papel). Apagado en calidad baja. | `--grano` |
 | Tipografía | Títulos balanceados (`text-wrap: balance`), párrafos sin palabras huérfanas, cifras tabulares en contadores, fechas y celdas. | `nom.css` |
-| Avisos | Una línea muestra cuánto les queda; si el cursor se mueve encima se detienen para leerlos (un aviso que aparece bajo el ratón quieto no se congela). | `aviso()` |
-| Miniaturas de documentos | Cada tarjeta muestra una hoja de papel con la forma de su tipo (renglones, cuadrícula, diapositiva o figuras unidas) que se levanta al pasar el cursor; el nombre va en una línea para que todas queden alineadas. | `NOM.miniatura`, `.dmini` |
-| Solo lectura | Con ese permiso la barra del editor solo trae lo que no cambia el documento (buscar, enfoque, descargar) y dice "Solo lectura: puedes ver, buscar y descargar"; buscar no ofrece reemplazar. | `editor.js · pintarHerramientas` |
-| Barras de desplazamiento | Delgadas y redondeadas, del color del borde. | `nom.css` |
+| Avisos | Una línea muestra cuánto les queda; si el cursor se mueve encima se detienen para leerlos. | `aviso()` |
+| Miniaturas de documentos | Cada tarjeta muestra una hoja de papel con la forma de su tipo (renglones, cuadrícula, diapositiva o figuras unidas); el nombre va en una línea para que todas queden alineadas. | `NOM.miniatura`, `.dmini` |
+| Solo lectura | Con ese permiso la barra del editor solo trae lo que no cambia el documento (buscar, descargar) y dice "Solo puedes ver: también buscar y descargar"; buscar no ofrece reemplazar. | `editor.js · pintarHerramientas` |
+| Barras de desplazamiento | Delgadas, del color del borde. | `nom.css` |
+
+### Reglas para cada cambio de interfaz
+
+1. **Solo variables**: ningún color, radio, sombra o duración escrito a mano en un componente.
+2. **Un botón principal por pantalla**; los demás, con borde o planos.
+3. **El color dice algo o no va**: tipo de documento, estado o marca; nunca decoración.
+4. **Sin degradados, desenfoques, resplandores ni texturas** en la interfaz.
+5. **Tres tamaños de título, tres pesos**; lo que deba destacar más recibe espacio.
+6. **El movimiento explica**: si quitarlo no cambia lo que se entiende, se quita.
+7. **Primero lo propio y lo frecuente**; la ayuda y los avisos, después.
+8. **Nombre visible** en toda herramienta cuyo ícono no sea universal.
+9. **Palabras concretas**: si una frase serviría para cualquier otra app, se reescribe.
 
 ## 15. El teléfono como servidor
 
@@ -292,12 +286,14 @@ Qué separa una app "que funciona" de una que se siente como un producto de prim
 
 ## Fuentes
 
+- Lindgaard, Fernandes, Dudek y Brown — *Attention web designers: You have 50 milliseconds to make a good first impression!* (Behaviour & Information Technology, 2006).
+- Tuch, Presslaber, Stöcklin, Opwis y Bargas-Avila — *The role of visual complexity and prototypicality regarding first impression of websites* (IJHCS, 2012): https://research.google/blog/users-love-simple-and-familiar-designs-why-websites-need-to-make-a-great-first-impression/
+- Fogg et al. — *How do people evaluate a web site's credibility?* (Stanford, 2,684 participantes): https://advocacy.consumerreports.org/research/how-do-people-evaluate-a-web-sites-credibility
+- NN/g — Information Scent, Vertical Navigation y 5 Principles of Visual Design: https://www.nngroup.com/articles/information-scent/ · https://www.nngroup.com/articles/vertical-nav/ · https://www.nngroup.com/articles/principles-visual-design/
+
 - Laws of UX (Jakob, Hick, Fitts, Doherty, Von Restorff, estético-usabilidad): https://lawsofux.com/
 - SAP Fiori — Motion design (umbrales de 0.1 s y 1 s, duraciones por tamaño): https://www.sap.com/design-system/fiori-design-web/v1-120/foundations/visual/motion-design
 - Val Head — How fast should your UI animations be?: https://valhead.com/?p=2978
-- Setproduct — Dónde falla neumorphism (contraste): https://www.setproduct.com/blog/neumorphism-design-guide
-- Pixso — Glassmorphism vs neumorphism vs claymorphism: https://pixso.net/articles/glassmorphism-vs-neumorphism-vs-claymorphism/
-- LogRocket — What is claymorphism: https://blog.logrocket.com/ux-design/what-is-claymorphism-web-design/
 - Costo del cambio de tarea y residuo atencional (Leroy 2009; Mark, Gudith y Klocke 2008): https://blog.saner.ai/context-switching-statistics/ · https://concepts.dsebastien.net/concept/task-switching-cost/
 - Callahan, Hopkins, Weiser y Shneiderman — *An empirical comparison of pie vs. linear menus* (CHI 1988).
 - Kurtenbach y Buxton — *The limits of expert performance using hierarchic marking menus* (CHI 1993) y *User learning and performance with marking menus* (CHI 1994).

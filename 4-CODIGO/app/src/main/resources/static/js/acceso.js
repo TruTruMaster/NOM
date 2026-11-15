@@ -176,10 +176,10 @@
     return new Promise((listo) => {
       const guardada = sesionNube();
       const cuerpo = html(`<form class="col" novalidate>
-        <p class="suave" style="font-weight:650">Tienes Internet en este equipo: entra con tu cuenta de <b>NOM-COLAB en Internet</b>. Tu contraseña va directo a la nube por una conexión cifrada; el teléfono que comparte nunca la ve.</p>
+        <p class="suave" style="font-weight:400">Tienes Internet en este equipo: entra con tu cuenta de <b>NOM-COLAB en Internet</b>. Tu contraseña va directo a la nube por una conexión cifrada; el teléfono que comparte nunca la ve.</p>
         <div class="alerta" data-alerta hidden role="alert"></div>
         ${guardada ? `<button type="button" class="btn primario ancho" data-guardada>${ico("log-in")} Seguir como ${esc(guardada.usuario.nombre)}</button>
-          <div class="fila" style="gap:10px;color:var(--tinta-suave);font-size:13px;font-weight:700"><span style="flex:1;height:1px;background:var(--borde-fuerte)"></span>u otra cuenta<span style="flex:1;height:1px;background:var(--borde-fuerte)"></span></div>` : ""}
+          <div class="fila" style="gap:10px;color:var(--tinta-suave);font-size:13px;font-weight:500"><span style="flex:1;height:1px;background:var(--borde-fuerte)"></span>u otra cuenta<span style="flex:1;height:1px;background:var(--borde-fuerte)"></span></div>` : ""}
         <div class="campo"><label for="nu">Usuario</label><div class="entrada">${ico("user")}<input id="nu" name="nombre" autocomplete="username" autocapitalize="none" spellcheck="false" required value="${esc(NOM.leer("nom.ultimoNombre", ""))}"></div></div>
         <div class="campo"><label for="nc">Contraseña</label><div class="entrada">${ico("lock")}<input id="nc" name="contrasena" type="password" autocomplete="current-password" required></div></div>
         <button class="btn ${guardada ? "" : "primario"} ancho" type="submit">${ico("cloud")} Entrar con mi cuenta</button>

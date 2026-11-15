@@ -96,7 +96,7 @@
 
   /** Recibos que se adjuntaron solos al cerrar una entrega (los ve el propietario). */
   function lista(recibos) {
-    const cuerpo = html(`<div class="col"><p class="suave" style="font-weight:650">Se generaron al pasar la fecha límite, uno por cada persona que trabajó en el documento.</p>
+    const cuerpo = html(`<div class="col"><p class="suave" style="font-weight:400">Se generaron al pasar la fecha límite, uno por cada persona que trabajó en el documento.</p>
       <div class="lista">${(recibos || []).map((x, i) => `<button class="lista-item" data-i="${i}" style="text-align:left;width:100%">${ico("shield-check")}<span class="crece"><b>${esc(x.usuario)}</b><small>${esc(fecha(x.generado))} · ${esc((x.recibo && x.recibo.totales && x.recibo.totales.porcentajeTecleado) != null ? x.recibo.totales.porcentajeTecleado + "% tecleado" : "")}</small></span>${ico("chevron-right")}</button>`).join("") || `<p class="suave">Nadie trabajó en el documento.</p>`}</div></div>`);
     const h = hoja({ titulo: "Recibos de la entrega", icono: "shield-check", cuerpo });
     $$("[data-i]", cuerpo).forEach((b) => (b.onclick = () => { h.cerrar(true); ver(recibos[+b.dataset.i].recibo); }));
@@ -104,7 +104,7 @@
 
   function verificar() {
     const cuerpo = html(`<div class="col">
-      <p class="suave" style="font-weight:650">Elige el archivo <b>.json</b> del recibo (o pega su contenido). NOM-COLAB revisa que la huella coincida y que el recibo salió de aquí.</p>
+      <p class="suave" style="font-weight:400">Elige el archivo <b>.json</b> del recibo (o pega su contenido). NOM-COLAB revisa que la huella coincida y que el recibo salió de aquí.</p>
       <button class="btn" data-archivo>${ico("file-up")} Elegir archivo .json</button>
       <textarea data-texto rows="5" placeholder="…o pega aquí el contenido del recibo" style="width:100%;border-radius:12px;border:1px solid var(--borde);background:var(--sup-2);padding:10px;font:500 12px/1.4 var(--mono);color:var(--tinta)"></textarea>
       <div data-resultado></div></div>`);
@@ -141,10 +141,10 @@
     const total = ps.reduce((a, p) => a + peso(p), 0) + (texto ? d.sinAutor || 0 : 0) || 1;
     const yo = (api().usuario() || {}).id;
     cont.innerHTML = `<div class="aportes">
-      <p class="suave chico" style="font-weight:700">${texto ? `Del texto que hay hoy (${n(d.letrasEnDocumento)} letras), cuánto escribió cada quien.` : "Cuántos cambios hizo cada quien."}</p>
+      <p class="suave chico" style="font-weight:500">${texto ? `Del texto que hay hoy (${n(d.letrasEnDocumento)} letras), cuánto escribió cada quien.` : "Cuántos cambios hizo cada quien."}</p>
       <div class="aportes-barra" role="img" aria-label="Aportes por persona">${ps.map((p) => `<i style="width:${(peso(p) / total) * 100}%;background:${esc(p.color || "#6B6875")}" title="${esc(p.usuario)}"></i>`).join("")}${texto && d.sinAutor ? `<i class="otros" style="width:${(d.sinAutor / total) * 100}%" title="Plantilla o importado"></i>` : ""}</div>
       <div class="col" style="gap:6px">${ps.map((p) => `<div class="version" style="cursor:default">${avatar({ nombre: p.usuario, color: p.color })}
-        <span class="crece"><b>${esc(p.usuario)} <span class="suave" style="font-weight:800">${Math.round((peso(p) / total) * 100)}%</span></b>
+        <span class="crece"><b>${esc(p.usuario)} <span class="suave" style="font-weight:600">${Math.round((peso(p) / total) * 100)}%</span></b>
         <small>${texto ? `${n(p.enDocumento)} letras en el documento · escribió ${n(p.escritas)}${p.pegadas ? ` (${n(p.pegadas)} pegadas)` : ""} · borró ${n(p.borradas)}` : `${n(p.operaciones)} cambios${p.pegadas ? ` · ${n(p.pegadas)} letras pegadas` : ""}`} · ${n(p.minutos)} min</small></span>
         ${p.usuarioId === yo || ed.esPropietario ? `<button class="icono-btn chico" data-recibo="${esc(p.usuarioId)}" aria-label="Recibo de ${esc(p.usuario)}" data-micro="Recibo|${p.usuarioId === yo ? "Tu recibo de proceso de escritura" : "El recibo de esta persona (solo el propietario lo ve)"}">${ico("shield-check", "ico-s")}</button>` : ""}</div>`).join("")}
         ${texto && d.sinAutor ? `<div class="version" style="cursor:default"><span class="avatar" style="--c:#B7B4C2">·</span><span class="crece"><b>Plantilla o importado <span class="suave">${Math.round((d.sinAutor / total) * 100)}%</span></b><small>${n(d.sinAutor)} letras que no tecleó nadie del espacio</small></span></div>` : ""}</div></div>`;

@@ -137,7 +137,7 @@
     function pintarHerramientas() {
       const deModo = ed.modoApi.herramientas ? ed.modoApi.herramientas(ed) : [];
       const comunes = [
-        { id: "enfoque", icono: "scan-eye", micro: "Modo enfoque|Oculta todo menos tu contenido.|Ctrl+.", fn: () => enfoque(true), clase: "solo-escritorio" },
+        // El modo enfoque vive en «Más opciones» (y en Ctrl+.): un solo lugar para cada cosa.
         { id: "exportar", icono: "download", micro: "Exportar|Guarda una copia en otro formato.", fn: exportar },
         { id: "ayuda", icono: "circle-help", micro: "Ayuda de este editor|Cómo usar el editor de " + MODOS[tipo].nombre.toLowerCase() + ".", fn: () => NOM.ayuda("editores/" + { TEXTO: "texto", HOJA: "hoja", PRESENTACION: "presentacion", DIAGRAMA: "diagrama" }[tipo]), clase: "solo-escritorio" },
       ];
@@ -160,7 +160,9 @@
         if (it === "|") return ed.herr.append(html(`<span class="sep"></span>`));
         if (it === "->") return ed.herr.append(html(`<span class="relleno"></span>`));
         if (it.html) { const n = html(it.html); ed.herr.append(n); it.montar && it.montar(n); return; }
-        const b = html(`<button class="icono-btn ${it.clase || ""}" data-micro="${esc(it.micro)}" aria-label="${esc(it.micro.split("|")[0])}">${ico(it.icono)}</button>`);
+        // etq: el nombre va a la vista junto al ícono (true = el título del micro-texto). En el celular no cabe.
+        const etq = it.etq === true ? it.micro.split("|")[0] : it.etq;
+        const b = html(`<button class="icono-btn ${etq ? "con-etq" : ""} ${it.clase || ""}" data-micro="${esc(it.micro)}" aria-label="${esc(it.micro.split("|")[0])}">${ico(it.icono)}${etq ? `<span class="etq">${esc(etq)}</span>` : ""}</button>`);
         b.addEventListener("pointerdown", (e) => { if (it.mantenerFoco !== false) e.preventDefault(); });
         b.onclick = (e) => it.fn(e, b);
         b._it = it;
@@ -225,6 +227,8 @@
     if (sinRed) aviso("Sin conexión: abriste la copia guardada en este equipo. Tus cambios se enviarán al volver la red.", { tipo: "aviso", ms: 6000 });
     // B.2: lo que se edite en un documento abierto ya sin Internet se revisa al volver (rama si otros lo cambiaron).
     if (sinRed && !enLocal && NOM.ramas) NOM.ramas.marcar(docId, datos.estado, { abierto: true, meta });
+    // Abierto con red y sin nada por enviar: una marca vieja de «sin conexión» ya no aplica.
+    if (!sinRed && !enLocal && NOM.ramas && !doc.pendientes.length) NOM.ramas.soltar(docId);
 
     // ------------------------------------------------------------ presencia (quién edita qué)
     ed.seleccion = null;
@@ -271,6 +275,9 @@
           } catch (e) { /* siguiente intento */ }
           doc.relojDesconexion = null;
           doc.enviadasSinRed = [];
+          // Volvió la red y no se escribió nada sin conexión: no hay nada que revisar después (si la marca
+          // se quedara, el siguiente cambio, ya con red, se compararía contra una base vieja).
+          if (!doc.pendientes.length && NOM.ramas) NOM.ramas.soltar(docId);
           if (resumen && resumen.length) NOM.reconexion.mostrar(ed, resumen);
           else aviso("Volvió la conexión. Enviando tus cambios…", { tipo: "ok" });
         }
@@ -300,7 +307,7 @@
       expulsado: (x) => { aviso(x.motivo, { tipo: "aviso" }); location.hash = "#/"; },
       rechazo: (e) => {
         if (e.estado === 409) {
-          hoja({ titulo: "Espacio lleno", cuerpo: `<div class="col"><div class="alerta aviso">${ico("users")}<span>${esc(e.message)}</span></div><p class="suave" style="font-weight:650">Puedes seguir viendo y editando tu copia; los cambios se enviarán cuando haya lugar.</p></div>` });
+          hoja({ titulo: "Espacio lleno", cuerpo: `<div class="col"><div class="alerta aviso">${ico("users")}<span>${esc(e.message)}</span></div><p class="suave" style="font-weight:400">Puedes seguir viendo y editando tu copia; los cambios se enviarán cuando haya lugar.</p></div>` });
         }
       },
     });
@@ -329,7 +336,7 @@
       const n = doc.pendientes.length;
       cambiarPermiso("LECTURA");
       const pie = html(`<div style="display:contents"><button class="btn" data-no>Descartarlos</button><button class="btn primario" data-si>${ico("download")} Exportar mi copia</button></div>`);
-      const h = hoja({ titulo: "Tus cambios no se aplicaron", cuerpo: `<p style="font-weight:650">Tu permiso cambió a <b>solo ver</b> mientras trabajabas sin conexión. ${n} cambio(s) quedaron solo en este equipo.</p>`, pie });
+      const h = hoja({ titulo: "Tus cambios no se aplicaron", cuerpo: `<p style="font-weight:400">Tu permiso cambió a <b>solo ver</b> mientras trabajabas sin conexión. ${n} cambio(s) quedaron solo en este equipo.</p>`, pie });
       $("[data-si]", pie).onclick = () => { NOM.formatos.exportar(doc, "nom", (nombre.value || "copia") + " (mi copia)"); doc.descartarCola(); h.cerrar(); };
       $("[data-no]", pie).onclick = () => { doc.descartarCola(); h.cerrar(); };
     }
@@ -341,7 +348,7 @@
       avisadoEliminado = true;
       doc.detenido = true;
       const pie = html(`<div style="display:contents"><button class="btn" data-no>Salir</button><button class="btn primario" data-si>Guardar como nuevo</button></div>`);
-      const h = hoja({ titulo: "Este documento está en la papelera", cuerpo: `<p style="font-weight:650">Otra persona lo mandó a la papelera del espacio: quien edita lo puede restaurar desde ahí durante 30 días. También puedes guardar lo que tienes en pantalla como un documento nuevo.</p>`, pie });
+      const h = hoja({ titulo: "Este documento está en la papelera", cuerpo: `<p style="font-weight:400">Otra persona lo mandó a la papelera del espacio: quien edita lo puede restaurar desde ahí durante 30 días. También puedes guardar lo que tienes en pantalla como un documento nuevo.</p>`, pie });
       $("[data-no]", pie).onclick = () => { h.cerrar(); location.hash = "#/espacio/" + ed.espacio.id; };
       $("[data-si]", pie).onclick = async () => {
         // Todo, también el texto letra por letra (las secuencias).
@@ -415,7 +422,7 @@
       }
       const c = ed.cambiosVisita;
       if (c && c.personas && c.personas.length && !ed.previa) {
-        l.push(`<div class="banda cambios">${ico("sparkles", "ico-s")}<span class="crece">Cambios de <b>${esc(listaNombres(c.personas))}</b> ${esc(desdeCuando(c.desde))}${ed.resaltando ? " · resaltados" : ""}.</span>
+        l.push(`<div class="banda cambios">${ico("history", "ico-s")}<span class="crece">Cambios de <b>${esc(listaNombres(c.personas))}</b> ${esc(desdeCuando(c.desde))}${ed.resaltando ? " · resaltados" : ""}.</span>
           <button class="btn chico" data-a="ver-cambios">${ed.resaltando ? "Quitar resaltado" : "Resaltar"}</button><button class="icono-btn chico" data-a="cerrar-cambios" aria-label="Cerrar">${ico("x", "ico-s")}</button></div>`);
       }
       cont.innerHTML = l.join("");
@@ -495,7 +502,7 @@
       const actual = ed.entrega && ed.entrega.limite ? new Date(ed.entrega.limite) : new Date(Date.now() + 7 * 86400000);
       const local = new Date(actual.getTime() - actual.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
       const cuerpo = html(`<form class="col">
-        <p class="suave" style="font-weight:650">Al llegar la fecha, quien no es el propietario del espacio ya solo puede <b>verlo</b> y se guarda una versión final con el <b>recibo de proceso de escritura</b> de cada persona que trabajó en el documento.</p>
+        <p class="suave" style="font-weight:400">Al llegar la fecha, quien no es el propietario del espacio ya solo puede <b>verlo</b> y se guarda una versión final con el <b>recibo de proceso de escritura</b> de cada persona que trabajó en el documento.</p>
         <div class="campo"><label for="fl">Fecha y hora límite</label><div class="entrada">${ico("calendar")}<input id="fl" type="datetime-local" value="${local}" required></div></div></form>`);
       const pie = html(`<div style="display:contents">${ed.entrega && ed.entrega.limite ? `<button class="btn plano peligro" data-quitar type="button">Quitar la entrega</button>` : ""}<span class="crece"></span><button class="btn" data-no type="button">Cancelar</button><button class="btn primario" data-si>Guardar</button></div>`);
       const h = hoja({ titulo: "Entrega con fecha límite", icono: "calendar", cuerpo, pie });
@@ -537,7 +544,7 @@
     /** Elige a quién asignar una parte. Devuelve el id, "" para quitar la asignación, o null si se canceló. */
     ed.elegirPersona = (titulo, actual) => new Promise(async (ok) => {
       const ms = (await ed.cargarMiembros()).filter((m) => m.permiso !== "LECTURA");
-      const cuerpo = html(`<div class="col"><p class="suave" style="font-weight:650">Solo esa persona (y tú, como propietario) podrá cambiar esta parte. Los demás la ven, pero no la editan.</p>
+      const cuerpo = html(`<div class="col"><p class="suave" style="font-weight:400">Solo esa persona (y tú, como propietario) podrá cambiar esta parte. Los demás la ven, pero no la editan.</p>
         <div class="lista">${ms.map((m) => `<button class="lista-item" data-u="${esc(m.id)}" style="text-align:left;width:100%" ${m.id === actual ? 'aria-pressed="true"' : ""}>${avatar(m)}<span class="crece"><b>${esc(m.nombre)}</b><small>${esc(m.permiso === "PROPIETARIO" ? "Propietario" : "Puede editar")}</small></span>${m.id === actual ? ico("check") : ""}</button>`).join("")}
         ${actual ? `<button class="lista-item" data-u="" style="text-align:left;width:100%">${ico("lock-open")}<span class="crece"><b>Nadie</b><small>Quitar la asignación: todos pueden editarla</small></span></button>` : ""}</div></div>`);
       let elegido = null;
@@ -793,7 +800,7 @@
       ...(enLocal ? [] : [{ texto: "Compartir espacio", icono: "share-2", fn: () => NOM.vistaEspacios.accesos(ed.espacio), claves: "invitar accesos" }]),
       ...(enLocal ? [] : [{ texto: "Recibo de mi trabajo", icono: "shield-check", fn: () => NOM.recibo.mostrar(ed), claves: "prueba autoria tecleado pegado hash" }]),
       ...(enLocal ? [] : [{ texto: "Comentarios", icono: "message-square", fn: () => NOM.comentarios && NOM.comentarios.abrir(ed), claves: "notas sugerencias revisar" }]),
-      ...(ed.cambiosVisita ? [{ texto: ed.resaltando ? "Quitar el resaltado de cambios" : "Resaltar lo que cambió desde mi última visita", icono: "sparkles", fn: () => resaltarCambios(!ed.resaltando), claves: "cambios nuevo visita" }] : []),
+      ...(ed.cambiosVisita ? [{ texto: ed.resaltando ? "Quitar el resaltado de cambios" : "Resaltar lo que cambió desde mi última visita", icono: "highlighter", fn: () => resaltarCambios(!ed.resaltando), claves: "cambios nuevo visita" }] : []),
       ...(ed.esPropietario ? [
         { texto: ed.protegido ? "Quitar la protección contra el borrado" : "Proteger contra el borrado", icono: "lock", fn: () => proteger(!ed.protegido), claves: "no borrar proteger" },
         { texto: "Entrega con fecha límite…", icono: "calendar", fn: dialogoEntrega, claves: "tarea fecha limite entrega" },

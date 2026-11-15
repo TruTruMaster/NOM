@@ -48,6 +48,8 @@
               total += lote.length;
             }
           }
+          // DEF-46: todo lo de este documento ya está en el servidor; termina su corte.
+          if (NOM.ramas && NOM.ramas.marca(id)) NOM.ramas.soltar(id);
         } catch (e) {
           if (e.red) break;   // otra vez sin red: se intenta al volver
           // Documento borrado o permiso de solo lectura: la cola se queda; se resuelve al abrirlo.
@@ -204,7 +206,7 @@
       const valor = typeof x.valor === "string" || typeof x.valor === "number" ? ` («${esc(String(F && /^c:/.test(x.campo) ? x.valor : x.valor).slice(0, 40))}»)` : "";
       return `<li>${ico(/^c:/.test(x.campo) ? "sheet" : "shapes", "ico-s")}<span><b>${esc(cosa(x).replace(/^./, (c) => c.toUpperCase()))}</b>: ${esc(quien(x.nodo))} también la cambió; ${x.gano === "otro" ? `quedó su cambio${valor}` : "quedó el tuyo (fue el más reciente)"}.</span></li>`;
     });
-    NOM.hoja({ titulo: "Mientras no tenías conexión", icono: "wifi", cuerpo: `<div class="col"><p class="suave" style="font-weight:650">Tus cambios ya se enviaron. Esto lo cambiaron también otras personas al mismo tiempo:</p><ul class="resumen-reconexion">${filas.join("")}</ul>${resumen.length > 30 ? `<p class="suave chico">…y ${resumen.length - 30} más.</p>` : ""}</div>` });
+    NOM.hoja({ titulo: "Mientras no tenías conexión", icono: "wifi", cuerpo: `<div class="col"><p class="suave" style="font-weight:400">Tus cambios ya se enviaron. Esto lo cambiaron también otras personas al mismo tiempo:</p><ul class="resumen-reconexion">${filas.join("")}</ul>${resumen.length > 30 ? `<p class="suave chico">…y ${resumen.length - 30} más.</p>` : ""}</div>` });
   }
 
   NOM.reconexion = { calcular, mostrar };

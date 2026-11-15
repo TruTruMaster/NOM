@@ -354,7 +354,9 @@ public class ServicioDocumentos {
         Map<String, Map<String, Object>> porPersona = new LinkedHashMap<>();
         Set<String> bloques = new LinkedHashSet<>(), campos = new LinkedHashSet<>(), clientes = new LinkedHashSet<>();
         for (Map<String, Object> a : repo.actividad(docId, 3000)) {
-            if (num(a.get("t")) <= desde) break;
+            // (no se corta en la primera racha vieja: las que se cierran juntas no quedan en orden de hora, y
+            // con el corte a veces se perdia lo que otra persona acababa de cambiar)
+            if (num(a.get("t")) <= desde) continue;
             String uid = String.valueOf(a.get("usuarioId"));
             if (uid.equals(usuarioId)) continue;
             Map<String, Object> pm = porPersona.computeIfAbsent(uid, k -> {
@@ -367,6 +369,7 @@ public class ServicioDocumentos {
                 x.put("ultima", num(a.get("t")));
                 return x;
             });
+            pm.put("ultima", Math.max(num(pm.get("ultima")), num(a.get("t"))));
             pm.put("escritas", num(pm.get("escritas")) + num(a.get("escritas")));
             pm.put("borradas", num(pm.get("borradas")) + num(a.get("borradas")));
             if (a.get("bloques") instanceof List<?> l) for (Object b : l) bloques.add(String.valueOf(b));
@@ -621,7 +624,10 @@ public class ServicioDocumentos {
     /** Escribe a disco las rachas de la bitacora que ya terminaron (o todas). */
     private void cerrarRachas(String soloDoc, boolean todas) {
         long ahora = System.currentTimeMillis();
-        for (var e : new ArrayList<>(rachas.entrySet())) {
+        // de la mas vieja a la mas nueva, para que la bitacora de actividad quede en orden de hora
+        var pendientes = new ArrayList<>(rachas.entrySet());
+        pendientes.sort(java.util.Comparator.comparingLong(x -> ((Number) x.getValue().get("t")).longValue()));
+        for (var e : pendientes) {
             if (soloDoc != null && !e.getKey().startsWith(soloDoc + "|")) continue;
             if (!todas && ahora - ((Number) e.getValue().get("t")).longValue() < 20_000) continue;
             if (rachas.remove(e.getKey(), e.getValue())) repo.anotarActividad(e.getKey().substring(0, e.getKey().indexOf('|')), e.getValue());

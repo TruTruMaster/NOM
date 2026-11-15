@@ -34,6 +34,7 @@ async ([b64, nombre]) => {
 /*EDICION*/
     })(doc, NOM);
     r.salida = aB64(await exportar(doc));
+    r.docx = ext === "docx" ? NOM.ooxml.ultimoDocx : null;
     // y lo mismo pasando por el formato propio: editar, guardar .nom, abrirlo y exportar
     const nom = NOM.formatos.aNomBytes(doc);
     r.nom = nom.length;
@@ -157,6 +158,30 @@ def d_borrar(r, orig, sale):
     _d_resto(orig, sale, 0.97, salvo=("texto", "parrafos", "notas al pie", "vínculos", "imágenes", "ecuaciones"))
     return f"{len(ta)} -> {len(tb)} párrafos"
 
+# ---- MEJ-1: al editar un párrafo de Word no se pierde lo que la app no guarda
+DOCX_TODOS = sorted(p.name for p in (F.CORPUS / "docx").glob("*.docx")) if (F.CORPUS / "docx").exists() else DOCX_VARIOS
+_NO_PERDER = ["w:bookmarkStart", "w:bookmarkEnd", "w:commentRangeStart", "w:commentRangeEnd", "w:commentReference", "w:fldChar", "w:instrText", "w:hyperlink", "w:footnoteReference",
+              "w:endnoteReference", "w:drawing", "mc:AlternateContent", "w:sdt", "w:ins", "w:del", "w:lang", "w:noProof", "w:rStyle", "w:pStyle", "w:numPr", "w:sectPr", "m:oMath", "w:object", "w:pict", "w:smartTag", "w:fldSimple"]
+
+def d_parche(r, orig, sale):
+    if not r["info"]["n"]: return "(sin texto que editar)"
+    za, zb = zipfile.ZipFile(orig), zipfile.ZipFile(sale)
+    otras = [n for n in za.namelist() if n != "word/document.xml" and (n not in zb.namelist() or za.read(n) != zb.read(n))]
+    assert not otras, f"cambiaron partes que no se tocaron: {otras[:5]}"
+    x, y = za.read("word/document.xml").decode("utf-8"), zb.read("word/document.xml").decode("utf-8")
+    cuenta = lambda t, e: len(re.findall("<" + e + r"[\s>/]", t))
+    perdidos = {e: f"{cuenta(x, e)} -> {cuenta(y, e)}" for e in _NO_PERDER if cuenta(y, e) < cuenta(x, e)}
+    assert not perdidos, f"se perdió al editar: {perdidos} ({r.get('docx')})"
+    for atr in ("w:rsidR=", "w:rsidRDefault=", "w14:paraId=", "w:eastAsia=", "w:cs=", "w:themeColor=", "w:asciiTheme="):
+        assert y.count(atr) >= x.count(atr), f"se perdieron atributos {atr} {x.count(atr)} -> {y.count(atr)}"
+    assert y.count("MEJ1") == r["info"]["insertados"], f"lo escrito aparece {y.count('MEJ1')} veces (debían ser {r['info']['insertados']})"
+    st = r.get("docx") or {}
+    assert st.get("regeneradas", 0) >= 1, f"no cambió ningún párrafo: {st}"
+    assert st.get("parchados", 0) >= max(1, st["regeneradas"] - r["info"].get("tolera", 0)), f"párrafos escritos de nuevo en vez de parchados: {st}"
+    F._docx_modelo(sale)
+    n = _d_resto(orig, sale, 0.97, salvo=("texto", "parrafos", "letra:b"))
+    return f"{st['parchados']} de {st['regeneradas']} párrafos editados salieron parchados sobre su XML original; resto {n.total()*100:.1f}%"
+
 PPTX_VARIOS = ["ms-tipico.pptx", "ms-brownbag.pptx", "ms-of16.pptx", "ms-animacion.pptx", "ms-organigrama.pptx", "ms-tabla-grande.pptx", "poi-temas.pptx", "poi-formas.pptx", "ms-presentation.pptx"]
 
 def _textos(pres):
@@ -224,6 +249,86 @@ def p_agregar(r, orig, sale):
         assert ta[i] == tb[i], f"cambió la diapositiva {i + 1}, que no se tocó"
     return f"{len(ta)} -> {len(tb)} diapositivas"
 
+# ---- DEF-45: lo que no debe perderse al editar una diapositiva importada (animaciones, marcadores, números)
+PPTX_ANIM = ["ms-animacion.pptx", "ms-of16.pptx", "ms-tipico.pptx", "ms-brownbag.pptx"]
+_RE_ID = re.compile(r'<p:cNvPr\b[^>]*?\sid="(\d+)"')
+
+def _diapos(ruta):
+    z = zipfile.ZipFile(ruta)
+    return {n: z.read(n).decode("utf-8") for n in z.namelist() if re.match(r"ppt/slides/[^/]+\.xml$", n)}
+
+def _timing(x):
+    m = re.search(r"<p:timing\b.*?</p:timing>|<p:timing\b[^>]*/>", x, re.S)
+    return m.group(0) if m else ""
+
+def _sin_colgar(x, nombre):
+    """Ninguna animación apunta a una figura (o párrafo) que no esté en la diapositiva."""
+    ids = set(_RE_ID.findall(x)); t = _timing(x)
+    colgadas = sorted(set(re.findall(r'spid="(\d+)"', t)) - ids)
+    assert not colgadas, f"{nombre}: animaciones que apuntan a figuras que ya no están: {colgadas}"
+    for spid, fin in re.findall(r'<p:spTgt spid="(\d+)">\s*<p:txEl>\s*<p:pRg st="\d+" end="(\d+)"', t):
+        i = x.find(f'id="{spid}"'); j = x.find("</p:sp>", i)
+        n = len(re.findall(r"<a:p[\s>/]", x[i:j]))
+        assert int(fin) < n, f"{nombre}: animación del párrafo {fin} de la figura {spid}, que solo tiene {n}"
+
+def _otras_partes_iguales(orig, sale, tocadas):
+    a, b = zipfile.ZipFile(orig), zipfile.ZipFile(sale)
+    distintas = [n for n in a.namelist() if n not in tocadas and (n not in b.namelist() or a.read(n) != b.read(n))]
+    assert not distintas, f"cambiaron partes que no se tocaron: {distintas[:5]}"
+
+def p_solo_formato(r, orig, sale):
+    from pptx import Presentation
+    if not r["info"]["rutas"]: return "(sin títulos)"
+    a, b = _diapos(orig), _diapos(sale)
+    tocadas = set(r["info"]["rutas"])
+    _otras_partes_iguales(orig, sale, tocadas)
+    con_b0 = 0
+    for n in tocadas:
+        x, y = a[n], b[n]
+        assert _timing(x) == _timing(y), f"{n}: cambiaron (o se perdieron) las animaciones"
+        assert _RE_ID.findall(x) == _RE_ID.findall(y), f"{n}: cambiaron los números de las figuras: {_RE_ID.findall(x)} -> {_RE_ID.findall(y)}"
+        for marca in ("<p:ph", "<a:endParaRPr", "smtClean", 'lang="', "<p:spPr", "txBox=", "<a:xfrm", "<a:latin", "<a:solidFill"):
+            assert x.count(marca) == y.count(marca), f"{n}: {marca} {x.count(marca)} -> {y.count(marca)}"
+        # quitando el atributo de negrita, la diapositiva tiene que ser la misma letra por letra
+        sin = lambda t: re.sub(r"<a:rPr/>", "", re.sub(r'\sb="[01]"', "", t))
+        assert sin(x) == sin(y), f"{n}: cambió algo más que la negrita"
+        con_b0 += y.count(' b="0"') - x.count(' b="0"')
+    assert con_b0 > 0, "la negrita no quedó escrita"
+    Presentation(sale)
+    return f"{len(tocadas)} diapositiva(s): solo cambió b=\"0\"; animaciones, marcadores y números intactos"
+
+def p_titulo_formato(r, orig, sale):
+    from pptx import Presentation
+    if not r["info"]["rutas"]: return "(sin títulos)"
+    a, b = _diapos(orig), _diapos(sale)
+    tocadas = set(r["info"]["rutas"])
+    _otras_partes_iguales(orig, sale, tocadas)
+    for n in tocadas:
+        x, y = a[n], b[n]
+        _sin_colgar(y, n)
+        assert _RE_ID.findall(x) == _RE_ID.findall(y), f"{n}: cambiaron los números de las figuras"
+        assert x.count("<p:ph") == y.count("<p:ph"), f"{n}: marcadores {x.count('<p:ph')} -> {y.count('<p:ph')}"
+        assert x.count("txBox=") == y.count("txBox="), f"{n}: un marcador se volvió cuadro de texto suelto"
+        assert ("<p:timing" in x) == ("<p:timing" in y), f"{n}: se perdieron las animaciones"
+        assert "Título nuevo en NOM" in y and 'val="C2372B"' in y and 'sz="' in y, f"{n}: no quedó el texto, el color o el tamaño"
+    Presentation(sale)
+    return f"{len(tocadas)} diapositiva(s): título con texto, color y tamaño nuevos; siguen siendo marcadores, con sus animaciones"
+
+def p_rehacer(r, orig, sale):
+    from pptx import Presentation
+    a, b = _diapos(orig), _diapos(sale)
+    con = 0
+    for n, y in b.items():
+        _sin_colgar(y, n)
+        if n in a and "<p:timing" in a[n] and "<p:timing" in y: con += 1
+    for n in r["info"]["soloColor"]:
+        # diapositivas donde solo se cambió el relleno de figuras sueltas: mismas figuras, mismos números
+        assert sorted(_RE_ID.findall(a[n])) == sorted(_RE_ID.findall(b[n])), f"{n}: cambiaron los números de las figuras: {_RE_ID.findall(a[n])} -> {_RE_ID.findall(b[n])}"
+        assert _timing(a[n]) == _timing(b[n]), f"{n}: cambiaron las animaciones"
+        assert a[n].count("<p:ph") == b[n].count("<p:ph"), f"{n}: se perdieron marcadores"
+    Presentation(sale)
+    return f"{r['info']['color']} figura(s) con otro relleno, {r['info']['borradas']} borrada(s); {con} diapositiva(s) conservan animaciones y ninguna apunta al vacío"
+
 CASOS = {
     "xlsx": [
         ("cambiar celdas y agregar una fórmula", ["ms-financial-sample.xlsx", "ms-complex01.xlsx", "ms-excel14.xlsx", "poi-formato-condicional.xlsx", "ms-dinamica-b1.xlsx", "poi-graficas.xlsx"], """
@@ -273,6 +378,20 @@ CASOS = {
             const borrado = vis.slice(a, b).map((x) => x.c).join("");
             doc.seq("cuerpo", { k: "v", v: false, r: NOM.Secuencia.rangos(vis.slice(a, Math.min(b + 1, vis.length))) });
             return { borrado };""", d_borrar),
+        ("editar varios párrafos como al teclear, sin perder lo que la app no guarda (MEJ-1)", DOCX_TODOS, JS_TEXTO + """
+            const vis = sec.visibles(), ini = [];
+            // dónde termina la letra 12 de cada párrafo que tenga al menos 12 seguidas
+            let n = 0;
+            for (let i = 0; i < vis.length; i++) { if (vis[i].e || vis[i].c === "\\n") n = 0; else if (++n === 12) ini.push(i); }
+            const paso = Math.max(1, Math.floor(ini.length / 6)), elegidos = ini.filter((_, k) => k % paso === 0).slice(0, 6);
+            let insertados = 0;
+            // de atrás para adelante, cada párrafo con una edición distinta: escribir, borrar y poner negrita
+            elegidos.slice().reverse().forEach((i, k) => {
+              if (k % 3 === 0) { doc.seq("cuerpo", { k: "i", iz: vis[i].id, x: " MEJ1 ", a: Object.assign({}, NOM.Secuencia.attrs(vis[i])) }); insertados++; }
+              else if (k % 3 === 1) doc.seq("cuerpo", { k: "v", v: false, r: NOM.Secuencia.rangos(vis.slice(i - 3, i)) });
+              else doc.seq("cuerpo", { k: "f", a: { b: true }, r: NOM.Secuencia.rangos(vis.slice(i - 6, i)) });
+            });
+            return { n: elegidos.length, insertados };""", d_parche),
     ],
     "pptx": [
         ("cambiar el texto de un cuadro", PPTX_VARIOS, """
@@ -294,6 +413,28 @@ CASOS = {
             doc.cambiar("nz1", { tipo: "texto", pagina: "pz", orden: 1, z: 1, x: 80, y: 60, w: 600, h: 80, estilo: "h1", html: "Diapositiva nueva de NOM" });
             doc.cambiar("nz2", { tipo: "forma", figura: "elipse", pagina: "pz", orden: 2, z: 2, x: 200, y: 220, w: 220, h: 140, color: "#F06A3D", texto: "Círculo" });
             return { antes: pags.length, quito: !!quitada };""", p_agregar),
+        ("solo formato: quitar la negrita de los títulos (DEF-45)", PPTX_ANIM, """
+            // lo que hace «Negrita» de la ruedita sobre un título (que se ve en negrita): se la quita a todo el cuadro
+            const ts = doc.vivos().filter((x) => x.tipo === "texto" && (x.estilo === "h1" || x.estilo === "h2") && x.pagina && x.ox != null);
+            ts.forEach((b) => doc.cambiar(b.id, { tNegrita: false }));
+            return { rutas: [...new Set(ts.map((b) => doc.valor("_doc", "os:" + b.pagina)))] };""", p_solo_formato),
+        ("título con texto, color y tamaño nuevos (DEF-45)", PPTX_ANIM, """
+            const vistos = new Set(), ts = doc.vivos().filter((x) => x.tipo === "texto" && (x.estilo === "h1" || x.estilo === "h2") && x.pagina && x.ox != null).filter((b) => !vistos.has(b.pagina) && vistos.add(b.pagina));
+            ts.forEach((b) => doc.cambiar(b.id, { html: "<div>Título nuevo en NOM</div>", tColor: "#C2372B", tTam: 48 }));
+            return { rutas: ts.map((b) => doc.valor("_doc", "os:" + b.pagina)) };""", p_titulo_formato),
+        ("otro relleno en las figuras y borrar la segunda de cada diapositiva (DEF-45)", PPTX_ANIM, """
+            let color = 0, borradas = 0;
+            const soloColor = [];
+            doc.paginas().forEach((pg, n) => {
+                const bs = doc.deLaPagina(pg).filter((b) => b.ox != null).sort((x, y) => (x.z || 0) - (y.z || 0));
+                const unicos = bs.filter((b) => bs.filter((c) => c.ox === b.ox).length === 1);
+                const formas = unicos.filter((b) => b.tipo === "forma" && b.figura !== "linea" && b.figura !== "linea-flecha");
+                formas.forEach((b) => { doc.cambiar(b.id, { color: "#F06A3D" }); color++; });
+                // en las diapositivas pares, además, se borra su segunda figura (suele ser la que tiene animación)
+                if (n % 2 === 1 && unicos.length >= 2) { doc.cambiar(unicos[1].id, { eliminado: true }); borradas++; }
+                else if (formas.length && formas.length === bs.filter((b) => b.tipo === "forma").length) soloColor.push(doc.valor("_doc", "os:" + pg));
+            });
+            return { color, borradas, soloColor };""", p_rehacer),
     ],
 }
 

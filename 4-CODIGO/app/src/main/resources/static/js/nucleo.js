@@ -6,7 +6,7 @@
   const NOM = (window.NOM = window.NOM || {});
   // Versión de esta interfaz. Tienen que ir a la par de nucleo/.../core/Version.java y del APK:
   // INTERFAZ sube cuando cambia el formato de los documentos o lo que la interfaz sabe leer.
-  NOM.VERSION = "0.13.1";
+  NOM.VERSION = "0.14.0";
   NOM.INTERFAZ = 14;
   /** Versión vigente de los Términos y del Aviso de privacidad (Version.LEGAL en el servidor). */
   NOM.LEGAL = "2026-11-13";
@@ -82,7 +82,7 @@
     const p = String(nombre || "?").replace(/[._-]+/g, " ").trim().split(/\s+/);
     return (p[0][0] + (p[1] ? p[1][0] : (p[0][1] || ""))).toUpperCase();
   }
-  const avatar = (u, cls) => `<span class="avatar ${cls || ""}" style="--c:${esc(u.color || "#5B5BD6")}" title="${esc(u.nombre)}">${esc(iniciales(u.nombre))}</span>`;
+  const avatar = (u, cls) => `<span class="avatar ${cls || ""}" style="--c:${esc(u.color || "#5A5D6B")}" title="${esc(u.nombre)}">${esc(iniciales(u.nombre))}</span>`;
   const idCorto = () => Math.random().toString(36).slice(2, 10);
   const leer = (k, def) => { try { const v = localStorage.getItem(k); return v == null ? def : JSON.parse(v); } catch (e) { return def; } };
   const guardar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } };
@@ -195,7 +195,7 @@
     return new Promise((ok) => {
       const pie = html(`<div style="display:contents"><button class="btn" data-no>Cancelar</button><button class="btn ${opc.peligro ? "peligro lleno" : "primario"}" data-si>${esc(opc.si || "Aceptar")}</button></div>`);
       let resuelto = false;
-      const h = hoja({ titulo, cuerpo: `<p class="suave" style="font-weight:650">${esc(texto)}</p>`, pie, alCerrar: () => { if (!resuelto) ok(false); } });
+      const h = hoja({ titulo, cuerpo: `<p class="suave" style="font-weight:400">${esc(texto)}</p>`, pie, alCerrar: () => { if (!resuelto) ok(false); } });
       $("[data-no]", pie).onclick = () => h.cerrar();
       $("[data-si]", pie).onclick = () => { resuelto = true; ok(true); h.cerrar(); };
       setTimeout(() => $("[data-si]", pie).focus(), 50);
@@ -318,8 +318,7 @@
   document.addEventListener("contextmenu", (e) => { if (e.target.closest && e.target.closest("[data-micro]") && e.pointerType !== "mouse") e.preventDefault(); });
 
   // ------------------------------------------------------------ preferencias visuales
-  let tTema = null, ultimoToque = { x: innerWidth / 2, y: 0, t: 0 };
-  document.addEventListener("pointerdown", (e) => { ultimoToque = { x: e.clientX, y: e.clientY, t: Date.now() }; }, true);
+  let tTema = null;
   /** Tamaño de la letra de este equipo (se guarda aquí, no en la cuenta: cada pantalla es distinta).
       En la app lo hace Android (agranda todo el texto); en el navegador, la hoja de estilos. */
   const LETRAS = { normal: 100, grande: 115, "muy-grande": 130 };
@@ -336,26 +335,17 @@
     const oscuro = p.tema === "oscuro" || (p.tema !== "claro" && matchMedia("(prefers-color-scheme: dark)").matches);
     const antes = raiz.dataset.tema, nuevo = oscuro ? "oscuro" : "claro";
     const quieto = !!p.movimientoReducido;
-    if (antes && antes !== nuevo && document.startViewTransition && !quieto) {
-      // El tema nuevo se abre en círculo desde el punto donde se hizo clic (o desde arriba).
-      const o = Date.now() - ultimoToque.t < 3000 ? ultimoToque : { x: innerWidth / 2, y: 0 };
-      const radio = Math.hypot(Math.max(o.x, innerWidth - o.x), Math.max(o.y, innerHeight - o.y));
-      const tr = document.startViewTransition(() => { raiz.dataset.tema = nuevo; });
-      tr.ready.then(() => raiz.animate({ clipPath: [`circle(0px at ${o.x}px ${o.y}px)`, `circle(${radio}px at ${o.x}px ${o.y}px)`] },
-        { duration: 620, easing: "cubic-bezier(.16, 1, .3, 1)", pseudoElement: "::view-transition-new(root)" })).catch(() => {});
-    } else {
-      raiz.dataset.tema = nuevo;
-      // Sin View Transitions: los colores se funden en vez de saltar.
-      if (antes && antes !== nuevo) {
-        raiz.classList.add("cambiando-tema");
-        clearTimeout(tTema);
-        tTema = setTimeout(() => raiz.classList.remove("cambiando-tema"), 480);
-      }
+    raiz.dataset.tema = nuevo;
+    // Los colores se funden un instante en vez de saltar.
+    if (antes && antes !== nuevo && !quieto) {
+      raiz.classList.add("cambiando-tema");
+      clearTimeout(tTema);
+      tTema = setTimeout(() => raiz.classList.remove("cambiando-tema"), 240);
     }
     raiz.dataset.calidad = p.calidad === "baja" ? "baja" : "alta";
     raiz.dataset.movimiento = p.movimientoReducido ? "reducido" : "normal";
     const meta = $('meta[name="theme-color"]');
-    if (meta) meta.content = oscuro ? "#1A1B22" : "#EFECE6";
+    if (meta) meta.content = oscuro ? "#191A20" : "#ECEDF1";
     guardar("nom.pref", p);
   }
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => aplicarPreferencias(leer("nom.pref", {})));
@@ -451,6 +441,13 @@
   Object.assign(NOM, { aplicarLetra, copiarTexto, copiarConAviso, etiquetaEquipo, paleta, COLORES,
     enApp, aqui,
     esc, $, $$, ico, html, debounce, throttle, haceCuanto, bytes, iniciales, avatar, idCorto,
-    avisoNuevo, leer, guardar, quitar, MODOS, miniatura, aviso, hoja, confirmar, cerrarHoja: () => hojaActual && hojaActual.cerrar(true), hayHoja: () => !!hojaActual, pedirTexto, menu, cerrarMenu, ocultarMicro, aplicarPreferencias,
+    avisoNuevo, leer, guardar, quitar, MODOS, miniatura, aviso, hoja, confirmar, cerrarHoja: () => hojaActual && hojaActual.cerrar(true), hayHoja: () => !!hojaActual,
+    /** Tecla Atrás del teléfono: cierra lo que esté encima (menú, ruedita, ventana) y dice si cerró algo. */
+    atras: () => {
+      if (menuActual) { cerrarMenu(); return true; }
+      if (NOM.rueda && NOM.rueda.abierta && NOM.rueda.abierta()) { NOM.rueda.cerrar(); return true; }
+      if (hojaActual) { hojaActual.cerrar(true); return true; }
+      return false;
+    }, pedirTexto, menu, cerrarMenu, ocultarMicro, aplicarPreferencias,
   });
 })();

@@ -1,11 +1,10 @@
-/* NOM-COLAB · Experiencia: lo que hace que la app se sienta cuidada y que cada persona se sienta
-   bienvenida.
+/* NOM-COLAB · Experiencia: encontrar las cosas rápido y saber por dónde empezar.
    - Paleta de comandos (Ctrl+K, o Alt+/ dentro del texto): ir a documentos, espacios y acciones
-     escribiendo unas letras, como en Linear, Vercel o Raycast. Muestra los atajos de cada acción.
+     escribiendo unas letras. Muestra los atajos de cada acción.
    - Barra de carga arriba: solo aparece si algo tarda más de 160 ms y, si aparece, se queda al
      menos 350 ms (nunca parpadea).
    - Primeros pasos en el inicio de una cuenta nueva y un consejo de la ruedita en cada editor.
-   - Bienvenida al entrar, hoja de atajos (tecla ?) y una luz que sigue al cursor en las tarjetas. */
+   - Hoja de atajos (tecla ?). */
 (function () {
   "use strict";
   const NOM = window.NOM;
@@ -154,7 +153,7 @@
     l.push({ grupo: "Apariencia", texto: "Tema oscuro", icono: "moon", marcado: tema === "oscuro", fn: () => cambiarPreferencia({ tema: "oscuro" }, "Tema oscuro"), claves: "noche negro dark" });
     l.push({ grupo: "Apariencia", texto: "Tema claro", icono: "sun", marcado: tema === "claro", fn: () => cambiarPreferencia({ tema: "claro" }, "Tema claro"), claves: "dia blanco light" });
     l.push({ grupo: "Apariencia", texto: "Tema automático (como el sistema)", icono: "monitor", marcado: tema === "auto", fn: () => cambiarPreferencia({ tema: "auto" }, "Tema automático"), claves: "sistema" });
-    l.push({ grupo: "Apariencia", texto: pref.movimientoReducido ? "Activar animaciones" : "Reducir movimiento", icono: "sparkles", fn: () => cambiarPreferencia({ movimientoReducido: !pref.movimientoReducido }, pref.movimientoReducido ? "Animaciones activadas" : "Movimiento reducido"), claves: "animaciones accesibilidad" });
+    l.push({ grupo: "Apariencia", texto: pref.movimientoReducido ? "Activar animaciones" : "Reducir movimiento", icono: "move", fn: () => cambiarPreferencia({ movimientoReducido: !pref.movimientoReducido }, pref.movimientoReducido ? "Animaciones activadas" : "Movimiento reducido"), claves: "animaciones accesibilidad" });
     l.push({ grupo: "Ayuda", texto: "Atajos de teclado", icono: "keyboard", atajo: "?", fn: atajos, claves: "teclas shortcuts ayuda" });
     l.push({ grupo: "Ayuda", texto: "Verificar un recibo de escritura", icono: "circle-check", fn: () => NOM.recibo.verificar(), claves: "recibo autoria hash comprobar" });
     l.push({ grupo: "Ayuda", texto: "Ajustes y preferencias", icono: "settings", fn: () => NOM.vistaEspacios.preferencias(), claves: "configuracion" });
@@ -273,40 +272,6 @@
     if (b) { e.preventDefault(); abrirPaleta(); }
   });
 
-  // ================================================================== luz que sigue al cursor
-  // Una mancha suave de luz bajo el cursor en tarjetas y opciones (solo con mouse).
-  let rafLuz = 0;
-  document.addEventListener("pointermove", (e) => {
-    if (e.pointerType !== "mouse") return;
-    const el = e.target.closest && e.target.closest(".tarjeta, .valor, .modo-opcion, .plantilla, .lista-item, .pasos-item");
-    if (!el) return;
-    cancelAnimationFrame(rafLuz);
-    rafLuz = requestAnimationFrame(() => {
-      const r = el.getBoundingClientRect();
-      el.style.setProperty("--lx", (e.clientX - r.left).toFixed(0) + "px");
-      el.style.setProperty("--ly", (e.clientY - r.top).toFixed(0) + "px");
-    });
-  }, { passive: true });
-
-  // ================================================================== bienvenida al entrar
-  /** Un instante de bienvenida mientras se arma el inicio (no detiene nada: la app carga detrás). */
-  NOM.bienvenida = (u, nuevo) => {
-    if (!u) return;
-    const nombre = esc(u.nombre || "");
-    const h = new Date().getHours();
-    const momento = h < 12 ? "Que tengas un gran día." : h < 19 ? "Que rinda la tarde." : "Gracias por seguir aquí esta noche.";
-    const el = html(`<div class="bienvenida-momento" role="status" aria-live="polite">
-      <div class="bm-tarjeta">
-        <span class="avatar g bm-avatar" style="--c:${esc(u.color || "#5B5BD6")}">${esc(NOM.iniciales(u.nombre))}</span>
-        <h2>${nuevo ? `¡Hola, ${nombre}! Ya estás en <span style="white-space:nowrap">NOM-COLAB</span>` : `¡Qué gusto verte, ${nombre}!`}</h2>
-        <p>${nuevo ? "Tu cuenta está lista. Te mostramos por dónde empezar." : esc(momento)}</p>
-      </div></div>`);
-    document.body.append(el);
-    const dura = reducido() ? 700 : nuevo ? 1700 : 1250;
-    setTimeout(() => { el.classList.add("saliendo"); setTimeout(() => el.remove(), 520); }, dura);
-    el.addEventListener("pointerdown", () => { el.classList.add("saliendo"); setTimeout(() => el.remove(), 520); });
-  };
-
   // ================================================================== primeros pasos
   /** Tarjeta de primeros pasos en el inicio de una cuenta; desaparece al completarla u ocultarla. */
   NOM.primerosPasos = (cont, espacios) => {
@@ -329,7 +294,7 @@
       NOM.guardar(clave("pasos.celebrado"), true);
     }
     const C = 2 * Math.PI * 18;
-    const el = html(`<section class="pasos clay" aria-label="Primeros pasos">
+    const el = html(`<section class="pasos caja" aria-label="Primeros pasos">
       <div class="pasos-cab">
         <svg class="pasos-anillo" viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="18" class="fondo"/><circle cx="22" cy="22" r="18" class="avance" style="stroke-dasharray:${C.toFixed(1)};--fin:${(C * (1 - hechos / pasos.length)).toFixed(1)}"/></svg>
         <div class="crece"><h2>${hechos === pasos.length ? "¡Todo listo! Ya dominas NOM-COLAB" : "Primeros pasos"}</h2>
@@ -349,7 +314,7 @@
   const CONSEJOS = {
     TEXTO: () => (conMouse() ? "Haz clic derecho sobre el texto" : "Mantén presionado sobre el texto") + ": sale la ruedita con negrita, color, estilos y más.",
     HOJA: () => (conMouse() ? "Haz clic derecho en una celda" : "Mantén presionada una celda") + ": sale la ruedita con formato, fórmulas y más.",
-    PRESENTACION: () => (conMouse() ? "Haz clic derecho en una figura: sale su ruedita. Para elegir varias, usa Mayús + clic." : "Mantén presionada una figura: sale su ruedita. Para elegir varias, sostén una y toca las demás."),
+    PRESENTACION: () => (conMouse() ? "Haz clic derecho en una figura: sale su ruedita. Para elegir varias, usa Mayús + clic." : "Toca un cuadro ya elegido para escribir en él. Mantén presionada una figura: sale su ruedita."),
     DIAGRAMA: () => (conMouse() ? "Haz clic derecho en una figura: sale su ruedita. Para elegir varias, usa Mayús + clic." : "Mantén presionada una figura: sale su ruedita. Para elegir varias, sostén una y toca las demás."),
   };
   NOM.alAbrirEditor = (ed, tipo) => {

@@ -209,7 +209,7 @@
       ${opc.grafica ? `<div class="fila" style="flex-wrap:wrap"><div class="campo crece"><label>Tipo</label><div class="entrada"><select data-tipo>${NOM.graficas.TIPOS.map(([v, t]) => `<option value="${v}" ${(b.clase || "barras") === v ? "selected" : ""}>${t}</option>`).join("")}</select></div></div>
         <div class="campo crece"><label>Título</label><div class="entrada"><input data-titulo maxlength="80" value="${esc(b.titulo || "")}"></div></div>
         <div class="campo crece"><label>Colores</label><div class="entrada"><select data-col>${Object.entries(NOM.graficas.PALETAS).map(([k, p]) => `<option value="${k}" ${(b.colores || "clasica") === k ? "selected" : ""}>${p.t}</option>`).join("")}</select></div></div></div>
-        <p class="suave chico" style="font-weight:650">Primera columna: nombres (por ejemplo, meses). Primera fila: nombre de cada serie. Lo demás: números.</p>`
+        <p class="suave chico" style="font-weight:400">Primera columna: nombres (por ejemplo, meses). Primera fila: nombre de cada serie. Lo demás: números.</p>`
       : `<label class="interruptor"><input type="checkbox" data-enc ${b.encabezado ? "checked" : ""}> La primera fila es encabezado (con color)</label>`}
       <div class="editor-datos" data-rejilla></div>
       <div class="fila" style="flex-wrap:wrap"><button type="button" class="btn chico" data-mas="f">${NOM.ico("plus", "ico-s")} Fila</button><button type="button" class="btn chico" data-menos="f">${NOM.ico("minus", "ico-s")} Fila</button>

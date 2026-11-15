@@ -99,12 +99,12 @@
         <div><h1>${esc(NOM.etiquetaEquipo())}</h1>
           <p class="sub">Lo que NOM-COLAB guarda en este ${api.empaquetada ? "teléfono" : "navegador"} y cuánto ocupa</p></div>
       </div>
-      ${!api.empaquetada ? `<section class="clay instalar-caja" data-instalar ${NOM.instalar && NOM.instalar.disponible() ? "" : "hidden"} style="padding:16px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+      ${!api.empaquetada ? `<section class="caja instalar-caja" data-instalar ${NOM.instalar && NOM.instalar.disponible() ? "" : "hidden"} style="padding:16px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
         <span class="modo-insignia" style="background:var(--acento-tenue);color:var(--acento-tinta)">${ico("monitor-down")}</span>
-        <span class="crece" style="min-width:220px"><b>Instalar en esta computadora</b><br><span class="suave chico" style="font-weight:650">Queda como un programa más: se abre desde el escritorio o el menú de inicio, también sin Internet (lo que crees sin red se sube solo al volver).</span></span>
+        <span class="crece" style="min-width:220px"><b>Instalar en esta computadora</b><br><span class="suave chico" style="font-weight:400">Queda como un programa más: se abre desde el escritorio o el menú de inicio, también sin Internet (lo que crees sin red se sube solo al volver).</span></span>
         <button class="btn primario" data-a="instalar">${ico("monitor-down")} Instalar</button></section>` : ""}
-      <section class="clay" style="padding:20px;display:flex;flex-direction:column;gap:12px">
-        <div class="fila-e"><b style="font-size:20px">${esc(bytes(inv.total))} usados</b><span class="suave chico" style="font-weight:700">de ${esc(bytes(limite))} que permite este ${api.empaquetada ? "teléfono" : "navegador"}</span></div>
+      <section class="caja" style="padding:20px;display:flex;flex-direction:column;gap:12px">
+        <div class="fila-e"><b style="font-size:20px">${esc(bytes(inv.total))} usados</b><span class="suave chico" style="font-weight:500">de ${esc(bytes(limite))} que permite este ${api.empaquetada ? "teléfono" : "navegador"}</span></div>
         <div style="height:12px;border-radius:999px;background:var(--sup-2);border:1px solid var(--borde);overflow:hidden" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Espacio usado">
           <div style="height:100%;width:${Math.max(pct, 1)}%;background:${pct > 80 ? "var(--error)" : "var(--acento)"}"></div></div>
         <div class="fila" style="flex-wrap:wrap;gap:8px">
@@ -121,20 +121,20 @@
       <section class="seccion">
         <div class="fila-e"><h2>Para abrir sin Internet</h2>
           ${liberables.length ? `<button class="btn chico" data-a="liberar">${ico("refresh-cw", "ico-s")} Liberar ${esc(bytes(liberables.reduce((n, c) => n + c.bytes, 0)))}</button>` : ""}</div>
-        <p class="suave chico" style="font-weight:650;margin-bottom:12px">Copias de los documentos de tus espacios${conCuenta ? "" : " (inicia sesión para verlas)"}, para abrirlos aunque no haya conexión. Si borras una, no pasa nada: se vuelve a guardar al abrir el documento.</p>
+        <p class="suave chico" style="font-weight:400;margin-bottom:12px">Copias de los documentos de tus espacios${conCuenta ? "" : " (inicia sesión para verlas)"}, para abrirlos aunque no haya conexión. Si borras una, no pasa nada: se vuelve a guardar al abrir el documento.</p>
         <div class="lista">${inv.copias.map((c) => fila(c,
           `${esc(c.espacio || "Espacio")} · ${c.guardado ? "copia de " + esc(haceCuanto(c.guardado)) : "sin copia completa"}${c.pendientes ? ` · <b style="color:var(--aviso)">${c.pendientes} cambio(s) sin enviar</b>` : ""}`,
           `${conCuenta ? `<a class="btn chico" href="#/doc/${esc(c.id)}">Abrir</a>` : ""}
            ${c.pendientes ? "" : `<button class="btn chico" data-a="quitar">Quitar copia</button>`}`)).join("")
-          || `<p class="suave chico" style="padding:4px 12px;font-weight:650">No hay copias guardadas.</p>`}</div>
+          || `<p class="suave chico" style="padding:4px 12px;font-weight:400">No hay copias guardadas.</p>`}</div>
       </section>
 
       <section class="seccion">
         <div class="fila-e"><h2>Solo en este equipo</h2></div>
-        <p class="suave chico" style="font-weight:650;margin-bottom:12px">Documentos que no están en ningún espacio. <b>Es la única copia:</b> si ${NOM.aqui().borrar}, se pierden. Para no perderlos, descárgalos o pásalos a un espacio.</p>
+        <p class="suave chico" style="font-weight:400;margin-bottom:12px">Documentos que no están en ningún espacio. <b>Es la única copia:</b> si ${NOM.aqui().borrar}, se pierden. Para no perderlos, descárgalos o pásalos a un espacio.</p>
         <div class="lista">${inv.locales.map((d) => fila(d, `${d.cifrado ? "cifrado · " : "sin cifrar (sin cuenta) · "}modificado ${esc(haceCuanto(d.modificado))}`,
           `<a class="btn chico" href="#/local/${esc(d.id)}">Abrir</a>`)).join("")
-          || `<p class="suave chico" style="padding:4px 12px;font-weight:650">No hay documentos solo en este equipo.</p>`}</div>
+          || `<p class="suave chico" style="padding:4px 12px;font-weight:400">No hay documentos solo en este equipo.</p>`}</div>
       </section>`;
     const cajaInstalar = $("[data-instalar]", cont);
     if (cajaInstalar) {

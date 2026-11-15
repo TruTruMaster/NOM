@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "mx.wack.nom",
+      "sha256_cert_fingerprints": ["2E:F1:46:F6:40:46:22:7A:7E:20:7A:65:9F:A8:35:D7:50:3E:F3:6F:30:14:DC:02:9A:90:EC:1C:53:BB:B6:C9"]
+    }
+  }
+]

@@ -3,9 +3,44 @@ titulo: Novedades
 descripcion: Qué cambió en cada versión, en palabras sencillas.
 orden: 1
 aplica: Navegador, App Android, Teléfono que comparte
-actualizado: 2026-11-13
-version: 0.13.1
+actualizado: 2026-11-15
+version: 0.14.0
 ---
+## 0.14.0 — noviembre de 2026
+
+- **Apariencia nueva**, más sobria: fondos lisos, bordes finos, letra menos gruesa y un solo color de
+  marca (el azul noche del ícono). El color queda para lo que dice algo: el tipo de documento y los avisos.
+- **Entrar** ahora es una sola columna: usuario, contraseña y, debajo, crear cuenta, el código de
+  invitación y usar sin cuenta.
+- **Inicio**: primero lo último que abriste y tus espacios; cuánto ocupas y los primeros pasos van después.
+- **Barra lateral**: tus espacios quedan arriba y lo guardado (en este equipo y en el servidor), abajo.
+- **Presentaciones**: las herramientas van en el orden en que se arma una presentación (diapositiva,
+  texto y figuras, diseño, transición y animación) con su nombre a la vista, y **Presentar** resalta.
+- **Hoja y diagrama**: Autosuma, Funciones, Ordenar y filtrar, Gráfica, Figuras, Conector y Diagramas
+  listos muestran su nombre junto al ícono.
+- En la computadora ya no quedan herramientas escondidas a la derecha: si no caben, bajan a un
+  segundo renglón.
+- Menos movimiento: las pantallas aparecen ya armadas y la app entra directo, sin pantalla de saludo.
+
+## 0.13.2 — noviembre de 2026
+
+- **Ramas**: lo que escribes sin Internet durante más de 2 minutos ya no se junta solo con el
+  original cuando otra persona también lo cambió: se abre la [rama](ayuda:espacios/ramas), como debe ser.
+- **PowerPoint**: al cambiar el formato o el texto de una diapositiva importada se conservan sus
+  **animaciones**, y los títulos siguen siendo títulos al descargar el archivo.
+- **Word**: al editar un párrafo de un archivo importado ya no se pierde lo que NOM-COLAB no muestra
+  (marcadores, comentarios, campos, idioma del texto, controles de las plantillas).
+- **Códigos de invitación**: se pueden escribir con o sin guion, y también **pegar el enlace
+  completo**; en la app, tocar un enlace de invitación abre la app.
+- En el celular: **toca un cuadro ya elegido para escribir** en él; la tecla Atrás cierra primero el
+  menú abierto; en la hoja, **Enter después de Tab** regresa a la columna donde empezó el renglón.
+- **Hoja de cálculo: 89 funciones nuevas** (ya son 185): financieras (`PAGO`, `VA`, `VF`, `TASA`,
+  `TIR`, `VNA`), de fecha y hora (`HORA`, `NUM.DE.SEMANA`, `DIA.LAB`, `DIAS360`), estadística
+  (`PERCENTIL`, `CUARTIL`, `PENDIENTE`, `PRONOSTICO`, `COEF.DE.CORREL`), texto (`TEXTOANTES`,
+  `TEXTODESPUES`), lógicas (`CAMBIAR`, `SI.ND`, `XO`) y de referencia (`FILA`, `COLUMNA`,
+  `INDIRECTO`, `DESREF`). Ver la [lista de fórmulas](ayuda:editores/formulas).
+- La **versión** de NOM-COLAB ahora se ve en *Ajustes y preferencias*.
+
 ## 0.13.1 — noviembre de 2026
 
 - **Hasta 50 personas a la vez** en cada espacio, también en el mismo documento (antes 5). Ver

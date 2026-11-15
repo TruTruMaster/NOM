@@ -41,6 +41,16 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- DEF-49: un enlace de invitación (https://nomcolab.dpdns.org/unirse?c=…#k=…) que llega por
+                 mensaje abre la app y no el navegador: así la llave de un espacio cifrado (lo que va
+                 después del #) llega a la app sin tener que escanear el QR con la cámara. Android lo
+                 comprueba con /.well-known/assetlinks.json del servidor (huella de la llave del APK). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="nomcolab.dpdns.org" android:path="/unirse" />
+            </intent-filter>
         </activity>
         <service
             android:name=".anfitrion.ServicioAnfitrion"

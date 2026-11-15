@@ -357,7 +357,280 @@
         for (let t = q + 1; t < ps.length && ps[t].pa.lista === tipo; t++) if (ps[t].pa.ox != null && hu[ps[t].pa.ox]) { const n = numDe(ps[t].pa.ox); if (n) return n; }
         return null;
       };
-      const gen = (q, u, mismoPa, ultimo) => {
+      // ---- MEJ-1: un párrafo editado se PARCHA sobre su XML original
+      /**
+       * Antes, el párrafo que cambiaba se escribía otra vez desde el modelo y se perdía lo que el modelo
+       * no guarda (w:rFonts w:cs/w:eastAsia, w:lang, w:noProof, rsid, marcadores, comentarios, campos…).
+       * Ahora se alinea el texto nuevo con el del párrafo original y cada corrida conserva su XML: solo
+       * cambia el texto que la persona tocó y las propiedades de letra que el modelo sí maneja y que ya
+       * no coinciden. Ante cualquier duda regresa null y el párrafo se escribe como antes.
+       */
+      const fuentesTema = (() => {
+        let f = null;
+        return () => {
+          if (f) return f;
+          f = {};
+          const tr = parte(/\/theme$/), tt = tr ? pq.texto(tr) : null;
+          if (tt) ["major", "minor"].forEach((k) => { const m = new RegExp("<a:" + k + "Font>\\s*<a:latin\\b[^>]*\\btypeface=\"([^\"]*)\"").exec(tt); if (m && m[1]) f[k] = O.desescapar(m[1]); });
+          return f;
+        };
+      })();
+      const ORDEN_RPR = ["rStyle", "rFonts", "b", "bCs", "i", "iCs", "caps", "smallCaps", "strike", "dstrike", "outline", "shadow", "emboss", "imprint", "noProof", "snapToGrid", "vanish", "webHidden", "color", "spacing", "w", "kern", "position", "sz", "szCs", "highlight", "u", "effect", "bdr", "shd", "fitText", "vertAlign", "rtl", "cs", "em", "lang", "eastAsianLayout", "specVanish", "oMath"];
+      const GRUPOS_RPR = { fuente: ["rFonts"], b: ["b", "bCs"], i: ["i", "iCs"], mayus: ["caps"], vers: ["smallCaps"], s: ["strike", "dstrike"], color: ["color"], esp: ["spacing"], tam: ["sz", "szCs"], u: ["u"], fondo: ["highlight", "shd"], va: ["vertAlign"] };
+      const cacheRpr = new Map(), baseDoc = doc.valor("_doc", "formato") || {}, clavesA = new WeakMap();
+      /** Dos letras tienen el mismo formato si sus atributos dicen lo mismo (aunque sean objetos distintos). */
+      const claveA = (a) => { if (!a) return ""; let c = clavesA.get(a); if (c == null) { c = O.estable(a); clavesA.set(a, c); } return c; };
+      /** El w:rPr original de una corrida, con lo que pide el modelo (a). Devuelve el mismo texto si no hay nada que cambiar. */
+      const rPrParchado = (rp, a) => {
+        const clave = rp + "\u0001" + O.estable(a);
+        if (cacheRpr.has(clave)) return cacheRpr.get(clave);
+        let hijos = [];
+        if (rp) { const g = O.finEtiqueta(rp, 0); if (rp.charCodeAt(g - 1) !== 47) hijos = O.hijosXml(rp, g + 1, rp.lastIndexOf("</")).map((h) => ({ n: O.local(h.n), x: rp.slice(h.i, h.f), h })); }
+        const el = (n) => hijos.find((h) => h.n === n) || null;
+        const at = (h, k) => (h ? O.attr(rp, h.h, "w:" + k) : null);
+        const activo = (h) => !!h && !["0", "false", "none"].includes(at(h, "val") || "1");
+        // lo que el importador lee de ESTE w:rPr (sin lo heredado), igual que attrsRun
+        const d0 = {};
+        if (el("b")) d0.b = activo(el("b"));
+        if (el("i")) d0.i = activo(el("i"));
+        if (el("u")) d0.u = activo(el("u"));
+        if (el("strike") || el("dstrike")) d0.s = activo(el("strike") || el("dstrike"));
+        if (el("caps")) d0.mayus = activo(el("caps"));
+        if (el("smallCaps")) d0.vers = activo(el("smallCaps"));
+        const va = at(el("vertAlign"), "val");
+        if (va) d0.va = va === "superscript" ? "sup" : va === "subscript" ? "sub" : null;
+        const c = at(el("color"), "val");
+        if (c) d0.color = /^[0-9a-f]{6}$/i.test(c) ? "#" + c.toUpperCase() : null;
+        const hl = at(el("highlight"), "val"), fill = at(el("shd"), "fill");
+        if (hl) d0.fondo = RESALTE_WORD[hl] || null;
+        if (fill && /^[0-9a-f]{6}$/i.test(fill)) d0.fondo = "#" + fill.toUpperCase(); else if (el("shd") && d0.fondo === undefined) d0.fondo = null;
+        const sz = at(el("sz"), "val");
+        if (sz) d0.tam = +sz / 2;
+        if (el("spacing")) d0.esp = Math.round((+at(el("spacing"), "val") / 20) * 100) / 100 || null;
+        const rf = el("rFonts");
+        if (rf) { const t = at(rf, "asciiTheme") || at(rf, "hAnsiTheme"); d0.fuente = (t && fuentesTema()[/^major/.test(t) ? "major" : "minor"]) || at(rf, "ascii") || at(rf, "hAnsi") || null; }
+        const igual = (k, v, w) => (k === "tam" || k === "esp" ? Math.abs(+v - +w) < 0.005 : k === "color" || k === "fondo" ? String(v).toUpperCase() === String(w).toUpperCase() : v === w);
+        const nuevo = {
+          fuente: (v) => {
+            if (!rf) return [{ n: "rFonts", x: `<w:rFonts w:ascii="${x(v)}" w:hAnsi="${x(v)}" w:cs="${x(v)}"/>` }];
+            // se conserva lo que el modelo no toca (w:eastAsia, w:hint) y se cambia la fuente latina
+            let ats = rf.x.slice("<w:rFonts".length, rf.x.lastIndexOf("/")).replace(/\s+w:(ascii|hAnsi|cs|asciiTheme|hAnsiTheme|cstheme)="[^"]*"/g, "").replace(/\s+$/, "");
+            return [{ n: "rFonts", x: `<w:rFonts w:ascii="${x(v)}" w:hAnsi="${x(v)}" w:cs="${x(v)}"${ats}/>` }];
+          },
+          b: () => [{ n: "b", x: "<w:b/>" }, { n: "bCs", x: "<w:bCs/>" }],
+          i: () => [{ n: "i", x: "<w:i/>" }, { n: "iCs", x: "<w:iCs/>" }],
+          mayus: () => [{ n: "caps", x: "<w:caps/>" }],
+          vers: () => [{ n: "smallCaps", x: "<w:smallCaps/>" }],
+          s: () => [{ n: "strike", x: "<w:strike/>" }],
+          color: (v) => (hexW(v) ? [{ n: "color", x: `<w:color w:val="${hexW(v)}"/>` }] : []),
+          esp: (v) => (+v ? [{ n: "spacing", x: `<w:spacing w:val="${Math.round(+v * 20)}"/>` }] : []),
+          tam: (v) => [{ n: "sz", x: `<w:sz w:val="${Math.round(v * 2)}"/>` }, { n: "szCs", x: `<w:szCs w:val="${Math.round(v * 2)}"/>` }],
+          u: () => [{ n: "u", x: '<w:u w:val="single"/>' }],
+          fondo: (v) => (hexW(v) ? [{ n: "shd", x: `<w:shd w:val="clear" w:color="auto" w:fill="${hexW(v)}"/>` }] : []),
+          va: (v) => [{ n: "vertAlign", x: `<w:vertAlign w:val="${v === "sup" ? "superscript" : "subscript"}"/>` }],
+        };
+        let toco = false;
+        for (const k in GRUPOS_RPR) {
+          const v = a[k] == null || a[k] === false || a[k] === "" ? undefined : a[k], hay = GRUPOS_RPR[k].some((n) => el(n));
+          if (!hay) { if (v !== undefined) { hijos.push(...nuevo[k](v)); toco = true; } continue; }
+          if (v !== undefined && d0[k] != null && d0[k] !== false && igual(k, d0[k], v)) continue;
+          // sin valor en el modelo: un «apagado» explícito no se anota, ni la fuente o el tamaño que son
+          // los del formato base del documento. Lo demás (negrita, color, otro tamaño…) es que la persona
+          // lo quitó («Borrar formato»).
+          if (v === undefined && (d0[k] == null || d0[k] === false || ((k === "fuente" || k === "tam") && baseDoc[k] != null && igual(k, d0[k], baseDoc[k])))) continue;
+          hijos = hijos.filter((h) => !GRUPOS_RPR[k].includes(h.n) || (k === "fuente" && v !== undefined));
+          if (v !== undefined) { if (k === "fuente") hijos = hijos.filter((h) => h.n !== "rFonts"); hijos.push(...nuevo[k](v)); }
+          toco = true;
+        }
+        let r = rp;
+        if (toco) {
+          const pos = (h, i) => { const k = ORDEN_RPR.indexOf(h.n); return (k < 0 ? 1000 : k) * 10000 + i; };
+          hijos = hijos.map((h, i) => [pos(h, i), h]).sort((p1, p2) => p1[0] - p2[0]).map((p1) => p1[1]);
+          r = hijos.length ? `<w:rPr>${hijos.map((h) => h.x).join("")}</w:rPr>` : "";
+        }
+        cacheRpr.set(clave, r);
+        return r;
+      };
+      const ENVOLTURAS = ["hyperlink", "ins", "smartTag", "fldSimple", "customXml", "sdt", "sdtContent", "bdo", "dir"];
+      const OBJ = "\uFFFC";
+      /** Lo que hay dentro de un párrafo del original, en el orden y con el mismo criterio con que lo lee el importador. */
+      const desarmar = (xp, ini, fin) => {
+        const R = { nodos: [], runs: [], s: "", raro: false, fuera: 0 };
+        const andar = (i0, f0, lista, enlace) => {
+          for (const h of O.hijosXml(xp, i0, f0)) {
+            const ln = O.local(h.n);
+            if (ln === "pPr") continue;
+            if (ln === "r") {
+              const run = { tipo: "r", h, abre: xp.slice(h.i, h.ci), rpr: "", items: [], enlace };
+              for (const c of O.hijosXml(xp, h.ci, h.cf)) {
+                const cn = O.local(c.n), xml = xp.slice(c.i, c.f);
+                if (cn === "rPr") { run.rpr = xml; continue; }
+                let t = null, obj = false;
+                if (cn === "t") t = c.ci === c.cf ? "" : O.desescapar(xp.slice(c.ci, c.cf));
+                else if (cn === "tab") t = "\t";
+                else if (cn === "br" || cn === "cr") { if (O.attr(xp, c, "w:type") === "page") R.raro = true; t = "\u2028"; }
+                else if (cn === "sym") t = String.fromCharCode(parseInt(O.attr(xp, c, "w:char") || "20", 16) & 0xFFF);
+                else if (["drawing", "pict", "AlternateContent", "object", "footnoteReference"].includes(cn)) obj = true;
+                if (t != null && /[<&]/.test(xp.slice(c.ci, c.cf)) && cn === "t" && /<!\[CDATA\[|<[a-zA-Z]/.test(xp.slice(c.ci, c.cf))) R.raro = true;
+                if (t == null && !obj && cn !== "lastRenderedPageBreak") R.fuera++;
+                const it = { xml, t: obj ? OBJ : t, cn, de: R.s.length };
+                if (it.t != null) R.s += it.t;
+                run.items.push(it);
+              }
+              R.runs.push(run); lista.push(run);
+            } else if (ENVOLTURAS.includes(ln)) {
+              let en = enlace;
+              if (ln === "hyperlink") { const rid = O.attr(xp, h, "r:id"), rel = rid ? relsD.find((q) => q.id === rid) : null; if (rel && /^(https?:|mailto:)/i.test(rel.destino || "")) en = rel.destino; }
+              const env = { tipo: "env", abre: xp.slice(h.i, h.ci), cierra: xp.slice(h.cf, h.f), hijos: [], vacio: h.ci === h.cf && xp.charCodeAt(h.f - 2) === 47, xml: xp.slice(h.i, h.f) };
+              if (!env.vacio) andar(h.ci, h.cf, env.hijos, en);
+              lista.push(env);
+            } else {
+              if (ln === "oMath" || ln === "oMathPara") R.raro = true;
+              if (ln !== "proofErr") R.fuera++;   // marcadores, comentarios, campos…: van una sola vez
+              lista.push({ tipo: "x", xml: xp.slice(h.i, h.f) });
+            }
+          }
+        };
+        andar(ini, fin, R.nodos, null);
+        return R;
+      };
+      const textoXml = (t) => t.split(/(\t|\u2028)/).filter((z) => z !== "").map((z) => (z === "\t" ? "<w:tab/>" : z === "\u2028" ? "<w:br/>" : `<w:t xml:space="preserve">${x(z)}</w:t>`)).join("");
+      const parchar = (p, u, completo, partido) => {
+        if (typeof completo !== "string" || !completo.startsWith("<w:p>")) return null;
+        if (p.pa.lista === "tareas" || p.pa.hecho) return null;
+        const xp = xd, D = desarmar(xp, u.ci, u.cf);
+        if (D.raro || (partido && D.fuera)) return null;
+        // el texto nuevo, letra por letra, con el formato de cada una
+        let s1 = "";
+        const A = [];
+        for (const t of p.tramos) {
+          if (t.e) { if (!["imagen", "objeto", "nota"].includes(t.e.tipo) || t.e.pie) return null; s1 += OBJ; A.push(null); continue; }
+          const a = t.a || {};
+          if (a.sug || a.sugBorrar) return null;
+          for (let k = 0; k < t.x.length; k++) A.push(a);
+          s1 += t.x;
+        }
+        const s0 = D.s, n0 = s0.length, n1 = s1.length;
+        // ---- alinear: qué letras del original se conservan (y dónde quedaron) y qué se escribió nuevo
+        let pre = 0;
+        while (pre < n0 && pre < n1 && s0.charCodeAt(pre) === s1.charCodeAt(pre)) pre++;
+        let suf = 0;
+        while (suf < n0 - pre && suf < n1 - pre && s0.charCodeAt(n0 - 1 - suf) === s1.charCodeAt(n1 - 1 - suf)) suf++;
+        const queda = new Int32Array(n0).fill(-1);   // letra del original → su lugar en el texto nuevo (-1: se borró)
+        for (let i = 0; i < pre; i++) queda[i] = i;
+        for (let i = 0; i < suf; i++) queda[n0 - 1 - i] = n1 - 1 - i;
+        const ma = n0 - pre - suf, mb = n1 - pre - suf;
+        if (ma > 0 && mb > 0 && ma * mb <= 1500000) {
+          // en medio hubo más de un cambio: la subsecuencia común más larga dice qué letras son las mismas
+          const W1 = mb + 1, L = new Uint16Array((ma + 1) * W1);
+          for (let i = ma - 1; i >= 0; i--) {
+            const c = s0.charCodeAt(pre + i);
+            for (let j = mb - 1; j >= 0; j--) L[i * W1 + j] = c === s1.charCodeAt(pre + j) ? L[(i + 1) * W1 + j + 1] + 1 : Math.max(L[(i + 1) * W1 + j], L[i * W1 + j + 1]);
+          }
+          for (let i = 0, j = 0; i < ma && j < mb;) {
+            if (s0.charCodeAt(pre + i) === s1.charCodeAt(pre + j) && L[i * W1 + j] === L[(i + 1) * W1 + j + 1] + 1) { queda[pre + i] = pre + j; i++; j++; }
+            else if (L[(i + 1) * W1 + j] >= L[i * W1 + j + 1]) i++; else j++;
+          }
+        }
+        // lo escrito nuevo: tramos seguidos del texto nuevo que no vienen de ninguna letra del original
+        const usada = new Uint8Array(n1);
+        for (let i = 0; i < n0; i++) { if (queda[i] >= 0) usada[queda[i]] = 1; else if (s0[i] === OBJ) return null; }
+        const enlaceDe = (i) => { const r = D.runs.find((q) => q.items.some((it) => it.t != null && it.t !== OBJ && i >= it.de && i < it.de + it.t.length)); return r ? r.enlace || null : null; };
+        const insAntes = new Map(), insDespues = new Map();
+        let alFinal = null, sig = 0;   // sig: primera letra del original que queda después de lo que se va recorriendo
+        for (let j = 0; j < n1;) {
+          if (usada[j]) { while (sig < n0 && queda[sig] !== j) sig++; sig++; j++; continue; }
+          let m = j;
+          while (m < n1 && !usada[m]) { if (s1[m] === OBJ) return null; m++; }
+          // entra pegado a la letra anterior (como al teclear); si esa no puede (es un objeto, o es de otro
+          // enlace), antes de la siguiente; en un párrafo sin texto, al final
+          const quiere = (A[j] || {}).enlace || null, ins = { j, n: m - j };
+          const ant = sig - 1, siguiente = (() => { let k = sig; while (k < n0 && queda[k] < 0) k++; return k; })();
+          // (las letras borradas entre la anterior y la siguiente también sirven de sitio: su corrida sigue ahí)
+          let puesto = false;
+          for (let k = Math.max(0, ant); k < siguiente && !puesto; k++) if (s0[k] !== OBJ && enlaceDe(k) === quiere && !insDespues.has(k)) { insDespues.set(k, ins); puesto = true; }
+          if (!puesto && siguiente < n0 && s0[siguiente] !== OBJ && enlaceDe(siguiente) === quiere && !insAntes.has(siguiente)) { insAntes.set(siguiente, ins); puesto = true; }
+          if (!puesto) { if (n0 === 0 && !alFinal && !quiere) alFinal = ins; else return null; }
+          j = m;
+        }
+        let ok = true;
+        const armarRun = (run) => {
+          // piezas: { a, xml | txt } con el formato del modelo (a = null: lo que no es texto y va pegado a su vecina)
+          const piezas = [];
+          let igual = true;
+          const pon = (txt, i1, entero, it) => {
+            // parte el texto donde cambia el formato
+            let k = 0;
+            while (k < txt.length) {
+              let m = k + 1;
+              while (m < txt.length && (A[i1 + m] === A[i1 + k] || claveA(A[i1 + m]) === claveA(A[i1 + k]))) m++;
+              const a = A[i1 + k] || {};
+              if ((a.enlace || null) !== (run.enlace || null)) ok = false;
+              piezas.push(entero && k === 0 && m === txt.length ? { a, xml: it.xml } : { a, txt: txt.slice(k, m) });
+              if (!(entero && k === 0 && m === txt.length)) igual = false;
+              k = m;
+            }
+          };
+          for (const it of run.items) {
+            if (it.t == null || it.t === OBJ) { piezas.push({ a: null, xml: it.xml }); continue; }
+            const ini = it.de, fin = it.de + it.t.length;
+            let a0 = -1;   // dónde empezó el trozo conservado que se está juntando
+            const cierra = (hasta) => { if (a0 >= 0) { pon(it.t.slice(a0 - ini, hasta - ini), queda[a0], a0 === ini && hasta === fin, it); a0 = -1; } };
+            const escribe = (ins) => { pon(s1.slice(ins.j, ins.j + ins.n), ins.j, false, it); };
+            for (let i = ini; i < fin; i++) {
+              if (insAntes.has(i)) { cierra(i); escribe(insAntes.get(i)); }
+              if (queda[i] >= 0) { if (a0 >= 0 && queda[i] !== queda[i - 1] + 1) cierra(i); if (a0 < 0) a0 = i; }
+              else { cierra(i); igual = false; }
+              if (insDespues.has(i)) { cierra(i + 1); escribe(insDespues.get(i)); }
+            }
+            cierra(fin);
+          }
+          const conTexto = piezas.filter((q) => q.a);
+          if (!conTexto.length) {
+            // sin letras: queda solo lo que no es texto (campos, saltos, objetos); si tampoco hay, la corrida desaparece
+            const resto = piezas.map((q) => q.xml || "").join("");
+            return resto ? (igual ? xp.slice(run.h.i, run.h.f) : run.abre + run.rpr + resto + "</w:r>") : "";
+          }
+          // corridas nuevas: una por cada formato distinto seguido
+          const grupos = [];
+          let pend = [];
+          // dos trozos de texto seguidos (lo de antes y lo de después de algo borrado) quedan en un solo w:t
+          const junta = (g, q) => { const u2 = g.partes[g.partes.length - 1]; if (q.txt != null && u2 && u2.txt != null) u2.txt += q.txt; else g.partes.push(q.txt != null ? { txt: q.txt } : { xml: q.xml }); };
+          for (const q of piezas) {
+            if (!q.a) { if (grupos.length) grupos[grupos.length - 1].partes.push({ xml: q.xml }); else pend.push({ xml: q.xml }); continue; }
+            let g = grupos[grupos.length - 1];
+            if (!g || !(g.a === q.a || claveA(g.a) === claveA(q.a))) { g = { a: q.a, partes: pend }; grupos.push(g); pend = []; }
+            junta(g, q);
+          }
+          const salida = grupos.map((g) => ({ rpr: rPrParchado(run.rpr, g.a), xml: g.partes.map((q) => (q.xml != null ? q.xml : textoXml(q.txt))).join("") }));
+          if (igual && salida.length === 1 && salida[0].rpr === run.rpr) return xp.slice(run.h.i, run.h.f);
+          return salida.map((g) => run.abre + g.rpr + g.xml + "</w:r>").join("");
+        };
+        const armar = (lista) => lista.map((nd) => {
+          if (nd.tipo === "x") return nd.xml;
+          if (nd.tipo === "r") return armarRun(nd);
+          if (nd.vacio) return nd.xml;
+          const dentro = armar(nd.hijos);
+          // un enlace (u otra envoltura) al que se le borró todo el texto no se deja vacío
+          return dentro || !nd.hijos.some((h) => h.tipo === "r") ? nd.abre + dentro + nd.cierra : "";
+        }).join("");
+        let cuerpoP = armar(D.nodos);
+        if (!ok) return null;
+        if (alFinal) {
+          // el párrafo no tenía texto: lo escrito se agrega al final, como corridas nuevas
+          let k = alFinal.j;
+          const tope = alFinal.j + alFinal.n;
+          while (k < tope) { let m = k + 1; while (m < tope && claveA(A[m]) === claveA(A[k])) m++; if ((A[k] || {}).enlace) return null; cuerpoP += texto(s1.slice(k, m), A[k] || {}); k = m; }
+        }
+        // comprobación: lo armado tiene que decir exactamente lo que dice el modelo
+        const pr = O.hijosXml(completo, 5)[0], ppr = pr && O.local(pr.n) === "pPr" ? completo.slice(pr.i, pr.f) : "";
+        const abre = partido ? "<w:p>" : xp.slice(u.i, u.ci);
+        const fin = "<w:p>" + cuerpoP + "</w:p>", V = desarmar(fin, 5, fin.length - 6);
+        if (V.s !== s1) return null;
+        return abre + conEstilos(ppr) + cuerpoP + "</w:p>";
+      };
+      let parchados = 0;
+      const gen = (q, u, mismoPa, ultimo, partido) => {
         const U = { ppr: null, sect: "", objeto: u ? objetoDe(u) : null, numId: null };
         if (u && O.local(u.n) === "p") {
           const pp = O.hijoXml(xd, "pPr", u.ci, u.cf);
@@ -368,7 +641,13 @@
             U.numId = numVecino(q);
           }
         } else U.numId = numVecino(q);
-        return conEstilos(xmlParrafo(ps[q], q, U));
+        const completo = xmlParrafo(ps[q], q, U);
+        if (u && O.local(u.n) === "p" && u.n === "w:p" && u.ci !== u.cf && NOM.ooxml.parcharParrafos !== false) {
+          let t = null;
+          try { t = parchar(ps[q], u, completo, !!partido); } catch (e) { if (typeof console !== "undefined") console.warn("Word: un párrafo no se pudo parchar; se escribe de nuevo.", e); }
+          if (t != null) { parchados++; return t; }
+        }
+        return conEstilos(completo);
       };
       // ---- recorrer el documento actual y decidir unidad por unidad
       const piezas = [], usados = new Set(), cacheEl = new Map();
@@ -392,9 +671,84 @@
       // así un documento que no cambió sale idéntico byte por byte aunque se arme pieza por pieza.
       const antesDe = (el) => { const idx = us.indexOf(el); if (idx < 0) return ""; const g = xd.slice(idx === 0 ? body.ci : us[idx - 1].f, el.i); return /^\s*$/.test(g) ? g : ""; };
       const sueltas = (hasta) => { for (; suelta < hasta; suelta++) { const u = us[suelta]; if (!modeladas.has(suelta) && O.local(u.n) !== "sectPr") piezas.push(antesDe(u) + xd.slice(u.i, u.f)); } };
+      /** Escribe en `sale` la unidad que empieza en el párrafo i (uno nuevo, o todos los que salieron de la misma unidad del original). Devuelve dónde sigue. */
+      const emitirUnidad = (i, sale) => {
+        const k = ps[i].pa.ox, u = k != null && hu[k] != null && !usados.has(String(k)) ? elDe(k) : null;
+        if (!u) { sale.push(gen(i, null, false, true)); regeneradas++; return i + 1; }
+        let j = i;
+        while (j + 1 < ps.length && ps[j + 1].pa.ox === k) j++;
+        usados.add(String(k));
+        const grupo = ps.slice(i, j + 1);
+        if (huellaGrupo(grupo) === hu[k][0]) { sale.push(antesDe(u) + xd.slice(u.i, u.f)); textuales++; }
+        else {
+          // La unidad cambió (se editó, o se partió con Enter). Párrafo por párrafo: el que sigue igual
+          // que el original sale textual; los demás se parchan sobre su XML original (o se escriben de nuevo).
+          let textual = false;
+          for (let q = i; q <= j; q++) {
+            const p = ps[q], unico = p.tramos.length === 1 && p.tramos[0].e;
+            if (!textual && grupo.length > 1 && huellaGrupo([p]) === hu[k][0]) { sale.push(xd.slice(u.i, u.f)); textual = true; textuales++; continue; }
+            const ant = sale[sale.length - 1];
+            if (unico && unico.tipo === "salto" && q > i && ant && ant.endsWith("</w:p>") && !textual) { sale[sale.length - 1] = ant.slice(0, -6) + '<w:r><w:br w:type="page"/></w:r></w:p>'; continue; }
+            sale.push(gen(q, u, H(sinOx(p.pa)) === hu[k][1], q === j, grupo.length > 1)); regeneradas++;
+          }
+        }
+        return j + 1;
+      };
+      const viva = (q) => { const ox = q < ps.length ? ps[q].pa.ox : null; return ox != null && hu[ox] != null && !usados.has(String(ox)) ? String(ox) : null; };
+      /**
+       * Un control de contenido (w:sdt: título de portada, campos de una plantilla…) al que se le editó
+       * algo por dentro conserva su envoltura: antes sus párrafos salían sueltos y el control se perdía.
+       * Se le quita el enlace a datos (w:dataBinding) y la marca de «texto de ejemplo» para que Word
+       * muestre lo que la persona escribió y no lo vuelva a cambiar por el valor viejo.
+       */
+      const conModelo = new Set();   // cada clave del modelo y cada control que la contiene ("0.5.0" → "0", "0.5", "0.5.0")
+      Object.keys(hu).forEach((c) => { const pt = c.split("."); for (let d = 1; d <= pt.length; d++) conModelo.add(pt.slice(0, d).join(".")); });
+      const contenidoDe = (el) => (el && O.local(el.n) === "sdt" ? O.hijoXml(xd, "sdtContent", el.ci, el.cf) : null);
+      /** ¿Todas las claves de este control llevan a algo que existe, pasando solo por controles de contenido? */
+      const armable = (top) => hojas[top].every((c) => {
+        const pt = c.split(".");
+        let el = us[top];
+        for (let d = 1; d < pt.length; d++) { const cont = contenidoDe(el); el = cont ? O.hijosXml(xd, cont.ci, cont.cf)[+pt[d]] : null; if (!el) return false; }
+        return true;
+      });
+      const envolverNodo = (pref, el, q0) => {
+        const cont = contenidoDe(el), hijosC = O.hijosXml(xd, cont.ci, cont.cf), dentro = [];
+        let q = q0, sueltaC = 0, ult = -1, cambio = false;
+        const reg0 = regeneradas;
+        const sueltasC = (hasta) => { for (; sueltaC < hasta && sueltaC < hijosC.length; sueltaC++) { if (!conModelo.has(pref + "." + sueltaC)) dentro.push(xd.slice(hijosC[sueltaC].i, hijosC[sueltaC].f)); else cambio = true; } };
+        while (q < ps.length) {
+          const s = viva(q);
+          if (s == null) {
+            // un párrafo nuevo queda dentro solo si después sigue otro del mismo control
+            let r = q + 1;
+            while (r < ps.length && viva(r) == null) r++;
+            const s2 = viva(r) || "";
+            if (!(s2.startsWith(pref + ".") && +s2.slice(pref.length + 1).split(".")[0] > ult)) break;
+            q = emitirUnidad(q, dentro);
+            continue;
+          }
+          if (!s.startsWith(pref + ".")) break;
+          const resto = s.slice(pref.length + 1), c = +resto.split(".")[0];
+          if (c <= ult) break;
+          sueltasC(c); sueltaC = c + 1; ult = c;
+          if (!resto.includes(".")) q = emitirUnidad(q, dentro);
+          else { const n = envolverNodo(pref + "." + c, hijosC[c], q); dentro.push(n.xml); q = n.sig; if (n.cambio) cambio = true; }
+        }
+        sueltasC(hijosC.length);
+        if (regeneradas !== reg0) cambio = true;
+        let cabeza = xd.slice(el.i, cont.ci);
+        if (cambio) cabeza = cabeza.replace(/<w(?:15)?:dataBinding\b[^>]*\/>/g, "").replace(/<w:showingPlcHdr\b[^>]*\/>/g, "");
+        return { xml: cabeza + dentro.join("") + xd.slice(cont.cf, el.f), sig: q, cambio };
+      };
+      const envolver = (i, top) => {
+        if (!contenidoDe(us[top]) || !armable(top)) return null;
+        const r = envolverNodo(String(top), us[top], i);
+        hojas[top].forEach((hk) => usados.add(hk));
+        return r;
+      };
       for (let i = 0; i < ps.length;) {
         const k = ps[i].pa.ox, u = k != null && hu[k] != null && !usados.has(String(k)) ? elDe(k) : null;
-        if (!u) { piezas.push(gen(i, null, false, true)); regeneradas++; i++; continue; }
+        if (!u) { i = emitirUnidad(i, piezas); continue; }
         const top = topDe(k);
         sueltas(top);
         // Un control de contenido (portada, índice…) con todo su contenido intacto sale entero, con su envoltura.
@@ -409,24 +763,11 @@
           }
           if (entero) { piezas.push(antesDe(us[top]) + xd.slice(us[top].i, us[top].f)); hojas[top].forEach((hk) => usados.add(hk)); textuales++; i = q; continue; }
         }
-        let j = i;
-        while (j + 1 < ps.length && ps[j + 1].pa.ox === k) j++;
-        usados.add(String(k));
-        const grupo = ps.slice(i, j + 1);
-        if (huellaGrupo(grupo) === hu[k][0]) { piezas.push(antesDe(u) + xd.slice(u.i, u.f)); textuales++; }
-        else {
-          // La unidad cambió (se editó, o se partió con Enter). Párrafo por párrafo: el que sigue igual
-          // que el original sale textual; los demás se escriben de nuevo con el formato de párrafo original.
-          let textual = false;
-          for (let q = i; q <= j; q++) {
-            const p = ps[q], unico = p.tramos.length === 1 && p.tramos[0].e;
-            if (!textual && grupo.length > 1 && huellaGrupo([p]) === hu[k][0]) { piezas.push(xd.slice(u.i, u.f)); textual = true; textuales++; continue; }
-            const ant = piezas[piezas.length - 1];
-            if (unico && unico.tipo === "salto" && q > i && ant && ant.endsWith("</w:p>") && !textual) { piezas[piezas.length - 1] = ant.slice(0, -6) + '<w:r><w:br w:type="page"/></w:r></w:p>'; continue; }
-            piezas.push(gen(q, u, H(sinOx(p.pa)) === hu[k][1], q === j)); regeneradas++;
-          }
+        if (String(k).includes(".") && hojas[top]) {
+          const env = envolver(i, top);
+          if (env) { piezas.push(antesDe(us[top]) + env.xml); i = env.sig; continue; }
         }
-        i = j + 1;
+        i = emitirUnidad(i, piezas);
       }
       sueltas(us.length);
       const cuerpo = piezas.join("");
@@ -515,7 +856,7 @@
         }
         return pq.zip();
       }
-      return { cuerpo, ensamblar, textuales, regeneradas };
+      return { cuerpo, ensamblar, textuales, regeneradas, parchados };
     }
     const titulos = ps.filter((p) => /^h[1-3]$/.test(p.pa.estilo || ""));
     const xmlParrafo = (p, i, U) => {
@@ -534,6 +875,9 @@
       if (U && U.numId && (pa.lista === "vinetas" || pa.lista === "numeros")) {
         // sigue la lista del archivo original (misma numeración que sus vecinos)
         ppr += `<w:numPr><w:ilvl w:val="${pa.nivel || 0}"/><w:numId w:val="${U.numId}"/></w:numPr>`;
+      } else if (U && U.ppr != null && (pa.lista === "vinetas" || pa.lista === "numeros")) {
+        // sale el w:pPr del archivo original, con su numeración: no hace falta una lista nueva (antes se
+        // agregaba a numbering.xml una definición que nadie usaba)
       } else if (pa.lista === "vinetas") {
         if (!numActual || numActual.tipo !== "v" + (pa.vineta || "")) numActual = { tipo: "v" + (pa.vineta || ""), id: nuevaInstancia("v" + (pa.vineta || "•")) };
         ppr += `<w:numPr><w:ilvl w:val="${pa.nivel || 0}"/><w:numId w:val="${numActual.id}"/></w:numPr>`;
@@ -593,6 +937,8 @@
       return `<w:p>${pprXml}${runs}</w:p>${despues}`;
     };
     const OGR = og ? cuerpoConOrigen() : null;
+    // para las pruebas: cuántas unidades salieron tal cual, cuántas cambiaron y cuántas de esas se parcharon
+    if (OGR) NOM.ooxml.ultimoDocx = { textuales: OGR.textuales, regeneradas: OGR.regeneradas, parchados: OGR.parchados };
     const cuerpo = OGR ? OGR.cuerpo : ps.map((p, i) => xmlParrafo(p, i, null)).join("\n");
 
     // Página, encabezado y pie (8.2: número donde se elija, "Página 1 de 5", primera página distinta,
@@ -2297,7 +2643,120 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       a[k] = b[k];
       if (!P_TXT.includes(k)) c[k] = b[k];
     }
-    return [NOM.origen.huella(a), NOM.origen.huella(c), NOM.origen.huella(g)];
+    const r = [NOM.origen.huella(a), NOM.origen.huella(c), NOM.origen.huella(g)];
+    // El formato de texto de todo el cuadro que ya traía al importar (solo si traía alguno): con eso se
+    // sabe después cuál cambió la persona.
+    const f = {};
+    P_FMT.forEach((k) => { if (b[k] != null) f[k] = b[k]; });
+    if (Object.keys(f).length) r.push(f);
+    return r;
+  }
+  /** Formato de texto que vale para todo el cuadro (lienzo.js). */
+  const P_FMT = ["tNegrita", "tCursiva", "tSubrayado", "tColor", "tFuente", "tTam", "tAlin"];
+  /**
+   * DEF-45: ¿lo único que cambió en un cuadro importado (además, tal vez, de su texto o su lugar) fue el
+   * formato de texto de todo el cuadro? Devuelve { fmt: lo que la persona puso, texto, geo } o null.
+   * q son las huellas de cuando se importó; q[3], si está, el formato que ya traía. En lo importado con
+   * una versión anterior no viene: se prueba con «no traía ninguno» y con «traía ese mismo color».
+   */
+  function formatoCambiadoPptx(b, q) {
+    const intentos = q[3] && typeof q[3] === "object" ? [q[3]] : [{}].concat(b.tColor != null ? [{ tColor: b.tColor }] : []);
+    for (const f0 of intentos) {
+      const b0 = Object.assign({}, b);
+      P_FMT.forEach((k) => { if (f0[k] != null) b0[k] = f0[k]; else delete b0[k]; });
+      const pc = parcialesPptx(b0);
+      if (pc[1] !== q[1]) continue;
+      const fmt = {};
+      let quitado = false;
+      P_FMT.forEach((k) => { const v = b[k] == null ? null : b[k], v0 = f0[k] == null ? null : f0[k]; if (v !== v0) { if (v == null) quitado = true; else fmt[k] = v; } });
+      // quitar un formato que el archivo traía no se puede escribir como parche: ese cuadro se rehace
+      if (quitado || !Object.keys(fmt).length) return null;
+      return { fmt, texto: pc[0] !== q[0], geo: pc[2] !== q[2] };
+    }
+    return null;
+  }
+  /** Pone (o cambia) un atributo en el texto de atributos de una etiqueta. */
+  const ponAttr = (ats, n, v) => { const re = new RegExp("\\s" + n + '="[^"]*"'); return re.test(ats) ? ats.replace(re, ` ${n}="${v}"`) : ats + ` ${n}="${v}"`; };
+  const A_RELLENOS = ["noFill", "solidFill", "gradFill", "blipFill", "pattFill", "grpFill"], A_TRAS_LATIN = ["ea", "cs", "sym", "hlinkClick", "hlinkMouseOver", "rtl", "extLst"];
+  /**
+   * DEF-45: el formato de todo el cuadro escrito sobre el p:txBody ORIGINAL de una figura: solo se tocan
+   * los atributos de a:rPr (y algn de a:pPr) que la persona cambió; idioma, revisión ortográfica,
+   * a:endParaRPr, viñetas y todo lo demás quedan como en el archivo. sz ya viene en centésimas de punto.
+   */
+  function conFormatoPptx(t, fmt, sz) {
+    const O = NOM.origen, a = t.indexOf("<p:txBody>"), z = t.lastIndexOf("</p:txBody>");
+    if (a < 0 || z < a) return null;
+    const rPr = (rp) => {
+      let ats = "", hijos = [];
+      if (rp) {
+        const g = O.finEtiqueta(rp, 0), vacio = rp.charCodeAt(g - 1) === 47;
+        ats = rp.slice("<a:rPr".length, vacio ? g - 1 : g).replace(/\s+$/, "");
+        if (!vacio) { const fin = rp.lastIndexOf("</a:rPr>"); hijos = O.hijosXml(rp, g + 1, fin).map((h) => ({ n: O.local(h.n), x: rp.slice(h.i, h.f) })); }
+      }
+      if (fmt.tNegrita != null) ats = ponAttr(ats, "b", fmt.tNegrita ? 1 : 0);
+      if (fmt.tCursiva != null) ats = ponAttr(ats, "i", fmt.tCursiva ? 1 : 0);
+      if (fmt.tSubrayado != null) ats = ponAttr(ats, "u", fmt.tSubrayado ? "sng" : "none");
+      if (sz) ats = ponAttr(ats, "sz", sz);
+      if (fmt.tColor) {
+        hijos = hijos.filter((h) => !A_RELLENOS.includes(h.n));
+        const k = hijos.findIndex((h) => h.n === "ln");
+        hijos.splice(k + 1, 0, { n: "solidFill", x: `<a:solidFill><a:srgbClr val="${color(fmt.tColor, "000000")}"/></a:solidFill>` });
+      }
+      if (fmt.tFuente) {
+        hijos = hijos.filter((h) => h.n !== "latin");
+        const k = hijos.findIndex((h) => A_TRAS_LATIN.includes(h.n));
+        hijos.splice(k < 0 ? hijos.length : k, 0, { n: "latin", x: `<a:latin typeface="${x(fmt.tFuente)}"/>` });
+      }
+      return hijos.length ? `<a:rPr${ats}>${hijos.map((h) => h.x).join("")}</a:rPr>` : `<a:rPr${ats}/>`;
+    };
+    let cuerpo = t.slice(a, z);
+    if (fmt.tNegrita != null || fmt.tCursiva != null || fmt.tSubrayado != null || sz || fmt.tColor || fmt.tFuente)
+      cuerpo = cuerpo.replace(/(<a:(?:r|fld)(?:\s[^>]*)?>\s*)(<a:rPr\b[^>]*\/>|<a:rPr\b[^>]*>[\s\S]*?<\/a:rPr>)?/g, (m, abre, rp) => abre + rPr(rp || ""));
+    const al = fmt.tAlin && { izq: "l", centro: "ctr", der: "r", just: "just" }[fmt.tAlin];
+    if (al) cuerpo = cuerpo.replace(/(<a:p>\s*)(<a:pPr\b[^>]*>)?/g, (m, abre, pp) => {
+      if (!pp) return abre + `<a:pPr algn="${al}"/>`;
+      const vacio = pp.charCodeAt(pp.length - 2) === 47, ats = pp.slice("<a:pPr".length, pp.length - (vacio ? 2 : 1));
+      return abre + "<a:pPr" + ponAttr(ats.replace(/\s+$/, ""), "algn", al) + (vacio ? "/>" : ">");
+    });
+    return t.slice(0, a) + cuerpo + t.slice(z);
+  }
+  const TM_LISTAS = new Set(["childTnLst", "tnLst", "subTnLst", "bldLst", "stCondLst", "endCondLst", "nextCondLst", "prevCondLst", "tmplLst"]);
+  /**
+   * DEF-45: las animaciones (p:timing) de una diapositiva editada. Se conservan; solo se quitan los
+   * efectos que apuntan a una figura que ya no está (si se quedaran, PowerPoint pide reparar el
+   * archivo). vivo(spid, ultimoParrafo|null) dice si el destino sigue existiendo. Al quitar un efecto
+   * se quita también lo que quede vacío hacia arriba (un grupo «al hacer clic» sin efectos, etc.).
+   * Devuelve el p:timing nuevo ("" si no queda nada).
+   */
+  function podarTiming(xt, vivo) {
+    const O = NOM.origen;
+    const podar = (h) => {
+      const loc = O.local(h.n);
+      if (loc === "spTgt" || loc === "inkTgt" || /^bld(P|Dgm|OleChart|Graphic)$/.test(loc)) {
+        const spid = O.attr(xt, h, "spid");
+        if (spid == null) return xt.slice(h.i, h.f);
+        const pr = loc === "spTgt" ? /<p:pRg\b[^>]*\bend="(\d+)"/.exec(xt.slice(h.i, h.f)) : null;
+        return vivo(spid, pr ? +pr[1] : null) ? xt.slice(h.i, h.f) : null;
+      }
+      if (h.ci === h.cf) return xt.slice(h.i, h.f);
+      const hs = O.hijosXml(xt, h.ci, h.cf);
+      if (!hs.length) return xt.slice(h.i, h.f);
+      let dentro = "", pos = h.ci, quitados = 0, quedan = 0, queda = {};
+      for (const c of hs) {
+        const r = podar(c);
+        dentro += xt.slice(pos, c.i); pos = c.f;
+        if (r == null) quitados++; else { dentro += r; quedan++; queda[O.local(c.n)] = true; }
+      }
+      dentro += xt.slice(pos, h.cf);
+      if (!quitados) return xt.slice(h.i, h.f);
+      // de una lista se puede quitar un elemento; de lo demás no (le faltaría una parte obligatoria)
+      if (loc === "timing" ? !queda.tnLst : TM_LISTAS.has(loc) ? !quedan : true) return null;
+      return xt.slice(h.i, h.ci) + dentro + xt.slice(h.cf, h.f);
+    };
+    const raiz = O.hijosXml(xt)[0];
+    if (!raiz) return xt;
+    const r = podar(raiz);
+    return r == null ? "" : r;
   }
   function pptxArmar(doc, esDiagrama, og) {
     let PRE = "", heredar = false;
@@ -2364,7 +2823,9 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         if (!ps.length) return "<a:p/>";
         const algnBase = opcT.alin ? { izq: "l", centro: "ctr", der: "r" }[opcT.alin] : null;
         return ps.map((pp) => {
-          const algn = pp.al ? { izq: "l", centro: "ctr", der: "r", just: "just" }[pp.al] : algnBase;
+          // FH: lo que la persona le puso a todo el cuadro de una figura del archivo original (DEF-45)
+          const FH = heredar || {};
+          const algn = pp.al ? { izq: "l", centro: "ctr", der: "r", just: "just" }[pp.al] : heredar ? (FH.tAlin ? { izq: "l", centro: "ctr", der: "r", just: "just" }[FH.tAlin] : null) : algnBase;
           const sangria = pp.lista ? ` marL="${342900 + pp.nivel * 342900}" indent="-342900"` : "";
           const vineta = pp.lista === "v" ? '<a:buFont typeface="Arial"/><a:buChar char="•"/>' : pp.lista === "n" ? '<a:buAutoNum type="arabicPeriod"/>' : "<a:buNone/>";
           // "heredar": el texto va dentro de una figura del archivo original; solo se escribe el formato
@@ -2372,7 +2833,11 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
           const ppr = heredar && pp.lista === "v" ? `<a:pPr${pp.nivel ? ` lvl="${Math.min(8, pp.nivel)}"` : ""}${algn ? ` algn="${algn}"` : ""}/>` : `<a:pPr${algn ? ` algn="${algn}"` : ""}${sangria}>${vineta}</a:pPr>`;
           const runs = pp.runs.filter((r) => r.t).map((r) => {
             const t2 = r.tam ? (/px$/.test(r.tam) ? parseFloat(r.tam) / 1.333 : /pt$/.test(r.tam) ? parseFloat(r.tam) : tam) : tam;
-            if (heredar) return `<a:r><a:rPr lang="es-MX"${r.tam ? ` sz="${Math.round(t2 * k * 100)}"` : ""}${r.b ? ' b="1"' : ""}${r.i ? ' i="1"' : ""}${r.u ? ' u="sng"' : ""}${r.s ? ' strike="sngStrike"' : ""} dirty="0">${r.color ? `<a:solidFill><a:srgbClr val="${hexCss(r.color, "000000")}"/></a:solidFill>` : ""}</a:rPr><a:t>${x(r.t)}</a:t></a:r>`;
+            if (heredar) {
+              const szH = r.tam ? Math.round(t2 * k * 100) : FH.tTam ? Math.round((FH.tTam / 1.333) * k * 100) : 0;
+              const bH = r.b ? ' b="1"' : FH.tNegrita != null ? ` b="${FH.tNegrita ? 1 : 0}"` : "", colH = r.color ? hexCss(r.color, "000000") : FH.tColor ? color(FH.tColor, "000000") : null;
+              return `<a:r><a:rPr lang="es-MX"${szH ? ` sz="${szH}"` : ""}${bH}${r.i || FH.tCursiva ? ' i="1"' : ""}${r.u || FH.tSubrayado ? ' u="sng"' : ""}${r.s ? ' strike="sngStrike"' : ""} dirty="0">${colH ? `<a:solidFill><a:srgbClr val="${colH}"/></a:solidFill>` : ""}${FH.tFuente ? `<a:latin typeface="${x(FH.tFuente)}"/>` : ""}</a:rPr><a:t>${x(r.t)}</a:t></a:r>`;
+            }
             return `<a:r><a:rPr lang="es-MX" sz="${Math.round(t2 * k * 100)}" b="${r.b || negrita ? 1 : 0}" i="${r.i || opcT.i ? 1 : 0}"${r.u || opcT.u ? ' u="sng"' : ""}${r.s ? ' strike="sngStrike"' : ""} dirty="0"><a:solidFill><a:srgbClr val="${hexCss(r.color, opcT.color || "1F1E26")}"/></a:solidFill><a:latin typeface="${x(opcT.fuente || "Calibri")}"/></a:rPr><a:t>${x(r.t)}</a:t></a:r>`;
           }).join("");
           return `<a:p>${ppr}${runs}</a:p>`;
@@ -2406,7 +2871,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       };
       const figurasL = bs.map((b) => {
         if (O && O.genera && !O.genera(b)) return "";
-        heredar = !!(O && O.hereda && O.hereda(b));
+        heredar = (O && O.hereda && O.hereda(b)) || false;
         try { return figura1(b); } finally { heredar = false; }
       });
       function figura1(b) {
@@ -2646,7 +3111,10 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         (xs.match(/<p:cNvPr\b[^>]*?\bid="\d+"/g) || []).forEach((m) => { maxId = Math.max(maxId, +/\bid="(\d+)"/.exec(m)[1]); });
         // Qué le pasó a cada elemento importado: "igual", "geo" (solo se movió o cambió de tamaño),
         // "texto" (cambió lo escrito) o "nuevo" (hay que escribirlo otra vez desde el modelo).
-        const modos = {};
+        // DEF-45: "fmt" = solo cambió el formato de texto de todo el cuadro (negrita, color, tamaño…): se
+        // parcha el p:txBody original. Con "texto" puede venir además ese formato (fmts[k]).
+        const modos = {}, fmts = {};
+        const unoAUno = (k) => { const a = hp.e[k] || [], v = vivos[k] || []; return a.length === 1 && v.length === 1 && v[0] === a[0]; };
         const modo = (k) => {
           if (modos[k]) return modos[k];
           let m = "nuevo";
@@ -2656,6 +3124,10 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
             const pc = parcialesPptx(doc.bloque(a[0]));
             if (pc[0] === q[0]) m = "geo";
             else if (pc[1] === q[1] && O.local(el.n) === "sp" && O.hijoXml(xs, "txBody", el.ci, el.cf)) m = pc[2] === q[2] ? "texto" : "texto+geo";
+            else if (O.local(el.n) === "sp" && O.hijoXml(xs, "txBody", el.ci, el.cf)) {
+              const fc = formatoCambiadoPptx(doc.bloque(a[0]), q);
+              if (fc) { fmts[k] = fc.fmt; m = (fc.texto ? "texto" : "fmt") + (fc.geo ? "+geo" : ""); }
+            }
           }
           return (modos[k] = m);
         };
@@ -2682,9 +3154,31 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
           const cabeza = O.hijosXml(xs, tx.ci, tx.cf).filter((h) => ["bodyPr", "lstStyle"].includes(O.local(h.n))).map((h) => xs.slice(h.i, h.f)).join("");
           return xs.slice(el.i, tx.i) + "<p:txBody>" + (cabeza || "<a:bodyPr/>") + ps3 + "</p:txBody>" + xs.slice(tx.f, el.f);
         };
+        /**
+         * DEF-45: una figura que hubo que escribir de nuevo sigue siendo LA MISMA figura del archivo:
+         * conserva su número, su nombre y su marcador de posición (p:nv…Pr del original), para que las
+         * animaciones, el esquema y el diseño la sigan reconociendo. Un cuadro de texto conserva además
+         * su p:spPr y su a:bodyPr (el modelo no guarda nada de eso: solo dónde está).
+         */
+        const NV = { sp: "nvSpPr", pic: "nvPicPr", cxnSp: "nvCxnSpPr", graphicFrame: "nvGraphicFramePr" };
+        const conIdentidad = (el, fig, b) => {
+          const nl = O.local(el.n), nv = NV[nl];
+          if (!nv || !fig || !fig.startsWith("<p:" + nl + ">")) return fig;
+          if (nl === "sp" && b.tipo === "texto") {
+            const t = conTexto(el, fig);
+            if (t) { const q = og.h.q && og.h.q[b.id]; return q && parcialesPptx(b)[2] === q[2] ? t : conGeo(t, b); }
+          }
+          const o = O.hijoXml(xs, nv, el.ci, el.cf), i0 = fig.indexOf("<p:" + nv + ">"), i1 = fig.indexOf("</p:" + nv + ">");
+          if (!o || i0 < 0 || i1 < i0) return fig;
+          let orig = xs.slice(o.i, o.f);
+          // el texto alternativo sí está en el modelo: si la persona lo cambió, sale el nuevo
+          const d = /<p:cNvPr\b[^>]*?\sdescr="([^"]*)"/.exec(fig.slice(i0, i1));
+          if (d) orig = orig.replace(/(<p:cNvPr\b[^>]*?)\sdescr="[^"]*"/, "$1").replace(/<p:cNvPr\b/, `<p:cNvPr descr="${d[1]}"`);
+          return fig.slice(0, i0) + orig + fig.slice(i1 + nv.length + 5);
+        };
         const r = armar(p, n, Object.assign({ idBase: maxId + 1,
           genera: (b) => !mismas && (b.ox == null || !hp.e[b.ox] || !us[b.ox] || /^(nuevo|texto)/.test(modo(b.ox))),
-          hereda: (b) => b.ox != null && hp.e[b.ox] && us[b.ox] && /^texto/.test(modo(b.ox)) }, esc));
+          hereda: (b) => (b.ox != null && hp.e[b.ox] && us[b.ox] && /^texto/.test(modo(b.ox)) ? fmts[b.ox] || {} : false) }, esc));
         if (!mismas) {
           const figDe = new Map(r.bs.map((b, i) => [b.id, r.figurasL[i]])), enBs = new Set(r.bs.map((b) => b.ox).filter((k) => k != null));
           const sale = [], puestos = new Set();
@@ -2702,12 +3196,32 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
             if (md === "igual") t = xs.slice(us[k].i, us[k].f);
             else if (md === "geo") t = conGeo(xs.slice(us[k].i, us[k].f), b);
             else if (md === "texto" || md === "texto+geo") { t = conTexto(us[k], figDe.get(b.id)); if (t && md === "texto+geo") t = conGeo(t, b); if (!t) modos[k] = "nuevo"; }
-            sale.push(t != null ? t : figDe.get(b.id) || "");
+            else if (md === "fmt" || md === "fmt+geo") {
+              const f = fmts[k];
+              t = conFormatoPptx(xs.slice(us[k].i, us[k].f), f, f.tTam ? Math.round((f.tTam / 1.333) * esc.k * 100) : 0);
+              if (t && md === "fmt+geo") t = conGeo(t, b);
+            }
+            sale.push(t != null ? t : unoAUno(k) ? conIdentidad(us[k], figDe.get(b.id) || "", b) : figDe.get(b.id) || "");
           });
           sueltas(us.length);
-          ps2.push([arbol.ci, arbol.cf, sale.join("")]);
-          // las animaciones apuntan a figuras por número: si alguna se rehízo o se quitó, ya no corresponden
-          if (Object.keys(hp.e).some((k) => modo(k) === "nuevo")) { const tm = O.hijoXml(xs, "timing", raiz.ci, raiz.cf); if (tm) ps2.push([tm.i, tm.f, ""]); }
+          const arbolNuevo = sale.join("");
+          ps2.push([arbol.ci, arbol.cf, arbolNuevo]);
+          // Las animaciones apuntan a figuras por número. Como cada figura conserva el suyo, se quedan;
+          // solo se quitan los efectos de las figuras (o párrafos) que ya no están.
+          const tm = O.hijoXml(xs, "timing", raiz.ci, raiz.cf);
+          if (tm) {
+            const donde = new Map(), re = /<p:cNvPr\b[^>]*?\sid="(\d+)"/g;
+            let mm;
+            while ((mm = re.exec(arbolNuevo))) if (!donde.has(mm[1])) donde.set(mm[1], mm.index);
+            const vivo = (spid, ultimo) => {
+              if (!donde.has(spid)) return false;
+              if (ultimo == null) return true;
+              const i0 = donde.get(spid), i1 = arbolNuevo.indexOf("</p:sp>", i0);
+              return ((i1 < 0 ? "" : arbolNuevo.slice(i0, i1)).match(/<a:p(?=[\s>\/])/g) || []).length > ultimo;
+            };
+            const antes = xs.slice(tm.i, tm.f), despues = podarTiming(antes, vivo);
+            if (despues !== antes) ps2.push([tm.i, tm.f, despues]);
+          }
         }
         r.rels.filter((q) => q.tipo !== T.diseno).forEach((q) => { if (!mismas || cF) pq.agregaRel(ruta0, q.id, q.tipo, q.destino); });
         if (cF) { const bg = O.hijoXml(xs, "bg", cSld.ci, cSld.cf); ps2.push(bg ? [bg.i, bg.f, r.fondo] : [cSld.ci, cSld.ci, r.fondo]); }

@@ -100,7 +100,10 @@
   async function decidir(ctx) {
     const m = marca(ctx.docId);
     if (!m || !ctx.pendientes || !ctx.pendientes.length) { if (m && (!ctx.pendientes || !ctx.pendientes.length)) soltar(ctx.docId); return "enviar"; }
-    if (!m.abierto && Date.now() - m.desde <= UMBRAL) { soltar(ctx.docId); return "enviar"; }
+    // DEF-46: un corte corto se manda tal cual, pero la marca NO se suelta aquí: sin red, cada reintento
+    // pasa por este punto y soltarla hacía que el siguiente fallo la volviera a poner con «desde = ahora»
+    // (nunca cumplía los 2 minutos). La suelta quien manda, cuando el envío de verdad salió bien.
+    if (!m.abierto && Date.now() - m.desde <= UMBRAL) return "enviar";
     const nodos = [...new Set(ctx.pendientes.map((o) => o.n).concat(ctx.nodo ? [ctx.nodo] : []))];
     let r;
     try { r = await api().post(`/api/documentos/${ctx.docId}/cambios-desde`, { base: m.base, nodos, desde: m.desde }, { ms: 15000 }); }
@@ -240,7 +243,7 @@
     };
     const estado = dr.documento.ramaEstado;
     const cuerpo = html(`<div class="col comparar">
-      <p class="suave" style="font-weight:650">«${esc(dr.documento.nombre)}» es lo que ${esc(dr.documento.ramaAutor || "alguien")} tenía al volver la conexión. Aquí ves en qué difiere del original <b>«${esc(dorig.documento.nombre)}»</b>.
+      <p class="suave" style="font-weight:400">«${esc(dr.documento.nombre)}» es lo que ${esc(dr.documento.ramaAutor || "alguien")} tenía al volver la conexión. Aquí ves en qué difiere del original <b>«${esc(dorig.documento.nombre)}»</b>.
         ${conflictos.length ? `En ${conflictos.length === 1 ? "un lugar" : conflictos.length + " lugares"} cambiaron <b>los dos</b>: elige qué se queda.` : ""}</p>
       ${filas.length ? `<div class="comp-lista">${filas.slice(0, 200).map(fila).join("")}</div>${filas.length > 200 ? `<p class="suave chico">…y ${filas.length - 200} diferencias más.</p>` : ""}`
         : `<div class="alerta ok">${ico("circle-check")}<span>La rama y el original ya dicen lo mismo.</span></div>`}
@@ -285,7 +288,7 @@
     let l;
     try { l = await api().get(`/api/documentos/${docId}/ramas`); } catch (e) { return aviso(e.message, { tipo: "error" }); }
     const motivo = { entrega: "editada después de la fecha límite", protegido: "lo protegieron mientras tanto", telefono: "desde el teléfono que comparte" };
-    const cuerpo = html(`<div class="col"><p class="suave" style="font-weight:650">Versiones de este documento que alguien editó sin conexión mientras otros lo cambiaban. El original no se tocó: compáralas y fusiónalas, o déjalas aparte.</p>
+    const cuerpo = html(`<div class="col"><p class="suave" style="font-weight:400">Versiones de este documento que alguien editó sin conexión mientras otros lo cambiaban. El original no se tocó: compáralas y fusiónalas, o déjalas aparte.</p>
       <div class="lista">${l.length ? l.map((x) => `<div class="lista-item">${ico("git-branch")}<span class="crece"><b>${esc(x.nombre)}</b><small>${esc(x.autor || "")}${x.motivo && motivo[x.motivo] ? " · " + esc(motivo[x.motivo]) : ""} · ${esc(NOM.haceCuanto(x.creada))}${x.estado === "fusionada" ? ` · fusionada por ${esc(x.fusionadaPor || "")}` : ""}</small></span>
         <a class="btn chico" href="#/doc/${esc(x.id)}">Abrir</a>${x.estado === "abierta" ? `<button class="btn chico primario" data-comparar="${esc(x.id)}">${ico("git-compare", "ico-s")} Comparar</button>` : `<span class="chip chico ok">Fusionada</span>`}</div>`).join("")
         : `<p class="suave">Este documento ya no tiene ramas.</p>`}</div></div>`);

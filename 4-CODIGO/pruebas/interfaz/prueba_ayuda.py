@@ -76,8 +76,8 @@ def main():
         check("la página Buscar da resultados con ?q=", "contraseña" in p.evaluate("() => document.querySelector('[data-pagina-buscar]').innerText").lower(), "")
         p.goto(N.B + "/ayuda/editores/formulas/")
         n = p.evaluate("() => document.querySelectorAll('table tbody tr').length")
-        total = len(re.findall(r'^\s+(?:"[A-ZÑ.]+"|[A-ZÑ][A-ZÑ0-9.]*):\s*\[', open(os.path.join(STATIC, "js", "formulas.js"), encoding="utf-8").read().split("const FIRMAS = {")[1].split("\n  };")[0], re.M)) or 1
-        total = max(total, len(re.findall(r'(?:"[A-ZÑ.]+"|\b[A-ZÑ][A-ZÑ0-9.]*):\s*\["', open(os.path.join(STATIC, "js", "formulas.js"), encoding="utf-8").read().split("const FIRMAS = {")[1].split("\n  };")[0])))
+        total = len(re.findall(r'^\s+(?:"[A-ZÑ0-9.]+"|[A-ZÑ][A-ZÑ0-9.]*):\s*\[', open(os.path.join(STATIC, "js", "formulas.js"), encoding="utf-8").read().split("const FIRMAS = {")[1].split("\n  };")[0], re.M)) or 1
+        total = max(total, len(re.findall(r'(?:"[A-ZÑ0-9.]+"|\b[A-ZÑ][A-ZÑ0-9.]*):\s*\["', open(os.path.join(STATIC, "js", "formulas.js"), encoding="utf-8").read().split("const FIRMAS = {")[1].split("\n  };")[0])))
         check(f"la referencia de fórmulas trae todas las funciones ({total})", n == total, [n, total])
         # lo legal y security.txt sin sesión
         st = urllib.request.urlopen(N.B + "/.well-known/security.txt").read().decode()

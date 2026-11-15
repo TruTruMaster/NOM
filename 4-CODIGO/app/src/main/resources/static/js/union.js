@@ -17,7 +17,9 @@
 
   /** Lo que trae un QR o lo que se escribió: { tipo: "unirse"|"proyectar", codigo, origen? } */
   function leer(texto) {
-    const t = String(texto || "").trim();
+    let t = String(texto || "").trim();
+    // DEF-49: un enlace de invitación pegado sin «https://» (como llega en algunos mensajes) también vale
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(t) && /[/?#]/.test(t) && /(\/(unirse|proyectar)\b|[?&]c=)/.test(t)) t = "https://" + t.replace(/^\/+/, "");
     try {
       const u = new URL(t);
       // Fase 15: un espacio cifrado lleva su llave después del # (#k=…), que nunca llega al servidor.
@@ -35,6 +37,17 @@
     const c = limpiarCodigo(t);
     return { tipo: c.length === 6 ? "proyectar" : "unirse", codigo: c };
   }
+  /**
+   * DEF-48: ¿lo escrito es un código y no la dirección de un equipo? Un código son 6 u 8 letras y
+   * números (con o sin guion, espacios, mayúsculas o minúsculas); una dirección lleva punto, dos
+   * puntos o diagonal. Un enlace de invitación completo también cuenta como «código».
+   */
+  const esCodigo = (texto) => {
+    const t = String(texto || "").trim();
+    if (/^[A-Za-z0-9][A-Za-z0-9 \-]*$/.test(t)) { const c = limpiarCodigo(t); return (c.length === 8 || c.length === 6) && !/^\d+$/.test(c); }
+    const r = leer(t);
+    return !!(r.origen && r.tipo && r.codigo);
+  };
   const validar = (texto) => {
     const r = leer(texto);
     if (r.tipo && r.codigo && r.codigo.length >= 6) return null;
@@ -96,7 +109,7 @@
   // ================================================================== pantalla /#/unirse/<código>
   async function pantalla(raiz, codigo) {
     codigo = limpiarCodigo(codigo);
-    raiz.innerHTML = `<main class="union"><section class="union-tarjeta clay" data-t><div class="esqueleto" style="height:180px"></div></section></main>`;
+    raiz.innerHTML = `<main class="union"><section class="union-tarjeta caja" data-t><div class="esqueleto" style="height:180px"></div></section></main>`;
     const t = $("[data-t]", raiz);
     let info, srv = null;
     try {
@@ -113,7 +126,7 @@
       t.innerHTML = `<div class="col" style="align-items:center;text-align:center">
         <div class="burbuja">${ico(e.red ? "wifi-off" : "triangle-alert")}</div>
         <h2>${e.red ? "No hay conexión" : "No se puede entrar"}</h2>
-        <p class="suave" style="font-weight:650">${esc(e.red ? "Revisa que estés en la misma red Wi-Fi que el equipo que comparte (o conectado a su punto de acceso)." : e.message)}</p>
+        <p class="suave" style="font-weight:400">${esc(e.red ? "Revisa que estés en la misma red Wi-Fi que el equipo que comparte (o conectado a su punto de acceso)." : e.message)}</p>
         <div class="fila" style="flex-wrap:wrap;justify-content:center"><a class="btn" href="#/">Ir al inicio</a>${NOM.qr.hayCamara() ? `<button class="btn primario" data-esc>${ico("qr-code")} Escanear otro</button>` : ""}</div></div>`;
       const b = $("[data-esc]", t); if (b) b.onclick = escanear;
       return () => {};
@@ -125,13 +138,13 @@
     const aliasAjeno = conSesion && u.alias && u.invitado;
     // ¿Este equipo ya tiene un alias en este espacio? (se guarda por servidor y espacio)
     const mismo = srv && info.espacioId ? NOM.acceso.aliasGuardado(srv.servidor, info.espacioId) : null;
-    const opcionAlias = info.invitados ? `<button class="btn ${conSesion && !aliasAjeno ? "" : "primario"} ancho" data-alias>${ico("sparkles")} <span class="btn-sub">${mismo ? "Entrar otra vez como " + esc(mismo.nombre) : "Entrar con un alias"}<small>${mismo ? "El alias que este equipo ya tiene en este espacio" : "Sin escribir nada: te toca un nombre al azar, como «Colibrí 37»"}</small></span></button>
+    const opcionAlias = info.invitados ? `<button class="btn ${conSesion && !aliasAjeno ? "" : "primario"} ancho" data-alias>${ico("user-check")} <span class="btn-sub">${mismo ? "Entrar otra vez como " + esc(mismo.nombre) : "Entrar con un alias"}<small>${mismo ? "El alias que este equipo ya tiene en este espacio" : "Sin escribir nada: te toca un nombre al azar, como «Colibrí 37»"}</small></span></button>
         ${mismo ? `<p class="suave chico" style="text-align:center"><a href="#" data-otro-alias>Quiero otro alias</a></p>` : ""}` : "";
     t.innerHTML = `<div class="col">
       <div class="fila" style="gap:14px;align-items:center">
         <span class="icono-espacio grande" style="background:${esc(info.color || "#7AA7FF")}">${esc((info.espacio || "?").trim()[0].toUpperCase())}</span>
         <div class="crece"><span class="etiqueta">Te invitan a</span><h2 style="margin-top:2px">${esc(info.espacio)}</h2>
-          <span class="suave chico" style="font-weight:700">de ${esc(info.propietario)} · ${esc(PERMISO[info.permiso] || info.permiso)} · el código sirve hasta el ${esc(new Date(info.caduca).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}</span></div>
+          <span class="suave chico" style="font-weight:500">de ${esc(info.propietario)} · ${esc(PERMISO[info.permiso] || info.permiso)} · el código sirve hasta el ${esc(new Date(info.caduca).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}</span></div>
       </div>
       ${info.e2e ? `<div class="alerta ${info.sinLlave ? "aviso" : "info"} chico">${ico("lock-keyhole")}<span>Espacio <b>cifrado de extremo a extremo</b>.${info.sinLlave ? " Este código no trae la llave: entra con el QR o la dirección completa, o pide a alguien del espacio que lo abra después." : " La llave viene en el código QR y no pasa por el servidor."}</span></div>` : ""}
       ${telefono ? `<div class="alerta info chico">${ico("smartphone")}<span>Este espacio está en un <b>teléfono que comparte</b>, sin Internet. Aquí no se crean cuentas: entra con un alias, o con tu cuenta si este equipo tiene Internet.</span>${NOM.botonAyuda("sin-internet/alias", "Alias al azar")}</div>` : ""}
@@ -141,7 +154,7 @@
       : `${opcionAlias}
         ${telefono ? `<button class="btn ancho" data-mi-cuenta hidden>${ico("cloud")} <span class="btn-sub">Entrar con mi cuenta<small>Este equipo tiene Internet: lo tuyo queda a tu nombre</small></span></button>
           <p class="suave chico" data-sin-internet style="text-align:center">${ico("wifi-off", "ico-s")} Revisando si este equipo tiene Internet…</p>`
-        : `${info.invitados ? `<div class="fila" style="gap:10px;color:var(--tinta-suave);font-size:13px;font-weight:700"><span style="flex:1;height:1px;background:var(--borde-fuerte)"></span>o con tu cuenta<span style="flex:1;height:1px;background:var(--borde-fuerte)"></span></div>` : ""}
+        : `${info.invitados ? `<div class="fila" style="gap:10px;color:var(--tinta-suave);font-size:13px;font-weight:500"><span style="flex:1;height:1px;background:var(--borde-fuerte)"></span>o con tu cuenta<span style="flex:1;height:1px;background:var(--borde-fuerte)"></span></div>` : ""}
         <div class="fila"><button class="btn crece" data-cuenta="entrar">${ico("log-in")} Iniciar sesión</button><button class="btn crece ${info.invitados ? "" : "primario"}" data-cuenta="registro">${ico("user-plus")} Crear cuenta</button></div>`}`}
     </div>`;
     const err = $("[data-err]", t);
@@ -225,7 +238,7 @@
         <div class="qr-caja">${url ? NOM.qr.svg(url, { titulo: "Código QR para unirse a " + (esp.nombre || "") }) : `<div class="qr-sin">${ico("wifi-off")}</div>`}</div>
         <div class="col" style="gap:8px;min-width:0">
           <span class="etiqueta">Código</span><b class="qr-codigo">${esc(enlace.codigo.slice(0, 4))}-${esc(enlace.codigo.slice(4))}</b>
-          <span class="suave chico" style="font-weight:700">${esc(PERMISO[enlace.permiso] || "")}${enlace.invitados ? " · con apodo, sin cuenta" : ""} · hasta ${esc(new Date(enlace.caduca).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}</span>
+          <span class="suave chico" style="font-weight:500">${esc(PERMISO[enlace.permiso] || "")}${enlace.invitados ? " · con apodo, sin cuenta" : ""} · hasta ${esc(new Date(enlace.caduca).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}</span>
           ${bs.length > 1 ? `<select class="mini-select" data-base aria-label="Dirección">${bs.map((b) => `<option ${b === base ? "selected" : ""}>${esc(b.replace(/^https?:\/\//, ""))}</option>`).join("")}</select>` : url ? `<span class="chico qr-url">${esc(url)}</span>` : ""}
           ${url ? "" : `<div class="alerta aviso chico">${ico("wifi-off")}<span>${api().lan === false
             ? "Para que el QR funcione, abre NOM-COLAB con la dirección que usan los demás (la de Internet). Mientras, el código sí sirve escrito a mano."
@@ -269,7 +282,7 @@
 
   async function invitar(esp) {
     const cuerpo = html(`<div class="col">
-      <p class="suave" style="font-weight:650">Quien escanee este código (o escriba sus 8 letras) entra a <b>${esc(esp.nombre)}</b> directo, sin pedirte permiso. Funciona aunque no haya Internet, si están en el mismo Wi-Fi.</p>
+      <p class="suave" style="font-weight:400">Quien escanee este código (o escriba sus 8 letras) entra a <b>${esc(esp.nombre)}</b> directo, sin pedirte permiso. Funciona aunque no haya Internet, si están en el mismo Wi-Fi.</p>
       <div class="segmentado lleno" role="group" aria-label="Permiso" data-permiso>
         <button type="button" data-p="EDICION" aria-pressed="true">${ico("pencil", "ico-s")} Puede editar</button>
         <button type="button" data-p="LECTURA" aria-pressed="false">${ico("eye", "ico-s")} Solo ver</button></div>
@@ -313,5 +326,5 @@
     try { const d = await api().get(`/api/espacios/${esp.id}/enlaces`); if (!lista.childElementCount) pintarLista(d); } catch (e) { /* sin lista */ }
   }
 
-  NOM.union = { leer, usar, escanear, desdeDireccion, pendiente, pantalla, invitar, grande, bases, limpiarCodigo };
+  NOM.union = { esCodigo, leer, usar, escanear, desdeDireccion, pendiente, pantalla, invitar, grande, bases, limpiarCodigo };
 })();

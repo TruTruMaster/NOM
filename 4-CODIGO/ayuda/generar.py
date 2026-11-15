@@ -29,7 +29,7 @@ FORMULAS = os.path.join(STATIC, "js", "formulas.js")
 SW = os.path.join(STATIC, "sw.js")
 PUBLICO = "https://nomcolab.dpdns.org"
 REPO = "https://github.com/TruTruMaster/NOM-COLAB"
-VERSION = "0.13.1"
+VERSION = "0.13.2"
 
 # Datos del responsable y contacto (un solo lugar). G.2: el equipo todavía no crea el correo del
 # proyecto; mientras, el contacto es por GitHub (reportes y avisos privados de seguridad).
@@ -245,18 +245,18 @@ def markdown(cuerpo, desde, todos, especiales):
 def tabla_formulas():
     js = open(FORMULAS, encoding="utf-8").read()
     i = js.index("const FIRMAS = {"); f = js.index("\n  };", i)
-    firmas = re.findall(r'(?:"([A-ZÑ.]+)"|([A-ZÑ][A-ZÑ0-9.]*)):\s*\["((?:[^"\\]|\\.)*)",\s*"((?:[^"\\]|\\.)*)"\]', js[i:f])
+    firmas = re.findall(r'(?:"([A-ZÑ0-9.]+)"|([A-ZÑ][A-ZÑ0-9.]*)):\s*\["((?:[^"\\]|\\.)*)",\s*"((?:[^"\\]|\\.)*)"\]', js[i:f])
     j = js.index("const ALIAS = {"); g = js.index("\n  };", j)
-    alias = re.findall(r'(?:"([A-Z.]+)"|([A-Z][A-Z0-9.]*)):\s*"([A-ZÑÁÉÍÓÚ.]+)"', js[j:g])
+    alias = re.findall(r'(?:"([A-Z0-9.]+)"|([A-Z][A-Z0-9.]*)):\s*"([A-ZÑÁÉÍÓÚ0-9.]+)"', js[j:g])
     ingles = {}
     for a1, a2, es in alias:
         en = a1 or a2
-        if es not in ingles and re.match(r"^[A-Z.]+$", en): ingles[es] = en
+        if es not in ingles and re.match(r"^[A-Z0-9.]+$", en): ingles[es] = en
     filas = []
     for n1, n2, args, desc in firmas:
         n = n1 or n2
         args = args.replace('\\"', '"'); desc = desc.replace('\\"', '"')
-        filas.append(f"<tr><td><code>{html.escape(n)}</code></td><td><code>{html.escape(ingles.get(n, n if n in ('MIN', 'MAX', 'ABS', 'PI', 'EXP', 'LN', 'LOG', 'LOG10', 'COS', 'TAN', 'VAR', 'VARP') else '—'))}</code></td><td><code>{html.escape(args)}</code></td><td>{html.escape(desc)}</td></tr>")
+        filas.append(f"<tr><td><code>{html.escape(n)}</code></td><td><code>{html.escape(ingles.get(n, n if n in ('MIN', 'MAX', 'ABS', 'PI', 'EXP', 'LN', 'LOG', 'LOG10', 'COS', 'TAN', 'VAR', 'VARP', 'CONCAT', 'N', 'T', 'UNICODE', 'FACT', 'ACOS', 'ATAN', 'ATAN2', 'COSH', 'TANH', 'MAXA', 'MINA', 'NPER', 'SLN') else '—'))}</code></td><td><code>{html.escape(args)}</code></td><td>{html.escape(desc)}</td></tr>")
     return ('<div class="tabla"><table><thead><tr><th>Función</th><th>En inglés (Excel)</th><th>Qué pide</th><th>Qué hace</th></tr></thead><tbody>'
             + "".join(filas) + f"</tbody></table></div><p class=\"pie-tabla\">{len(filas)} funciones. Se escriben en español o en inglés; los argumentos se separan con <code>;</code> o con <code>,</code>.</p>")
 

@@ -37,6 +37,9 @@
       api().limpiarSesion();
     }
     api().fijarServidor(local);
+    // DEF-47: ya se sabe que es un teléfono que comparte (sin cuentas): la pantalla de entrar pasa directo
+    // a «entrar como dueño», sin enseñar antes el formulario de usuario y contraseña.
+    try { NOM.guardar("nom.infoServidor", { servidor: api().servidor(), telefono: true, cuentas: false }); } catch (e) { /* sin almacenamiento */ }
   }
 
   function detener() {
@@ -101,8 +104,8 @@
       const e = estado();
       const dirs = e.direcciones || [];
       sec.innerHTML = `<div class="fila-e"><h2>Trabajar sin Internet con este teléfono ${NOM.botonAyuda("sin-internet/telefono-servidor", "El teléfono que comparte")}</h2><span class="chip ${e.activo ? "ok" : ""}">${e.activo ? `<span class="punto vivo"></span>Encendido` : "Apagado"}</span></div>
-        <div class="clay anfitrion-caja">
-          <p class="suave" style="font-weight:650">${e.activo
+        <div class="caja anfitrion-caja">
+          <p class="suave" style="font-weight:400">${e.activo
             ? `Listo: los demás pueden entrar si están en el mismo Wi-Fi que este teléfono (o conectados a su punto de acceso)${e.equipo ? `; lo verán como <b>${esc(e.equipo)}</b>` : ""}. Lo más fácil: invítalos con un código QR.`
             : "Este teléfono puede guardar los espacios y los documentos de tu equipo para que trabajen juntos sin Internet y sin computadora. Aquí no hay cuentas: quien llega entra con un alias al azar (o con su cuenta, si su equipo tiene Internet). Mientras esté encendido verás un aviso arriba y gasta un poco más de batería."}</p>
           ${e.activo ? (dirs.length
@@ -156,7 +159,7 @@
     NOM.hoja({ titulo: "Entrar a este teléfono", icono: "qr-code", cuerpo: `<div class="col" style="align-items:center;text-align:center">
       <div class="qr-caja" style="width:min(280px,70vw)">${NOM.qr ? NOM.qr.svg(dir, { titulo: "QR para entrar a este teléfono" }) : ""}</div>
       <b style="font-family:var(--mono);font-size:18px">${esc(dir.replace(/^http:\/\//, ""))}</b>
-      <p class="suave" style="font-weight:650">Hay que estar en el mismo Wi-Fi, o conectado al punto de acceso de este teléfono. Para entrar directo a un espacio, usa “Invitar a un espacio con QR”.</p></div>` });
+      <p class="suave" style="font-weight:400">Hay que estar en el mismo Wi-Fi, o conectado al punto de acceso de este teléfono. Para entrar directo a un espacio, usa “Invitar a un espacio con QR”.</p></div>` });
   }
   /** El QR para unirse se crea por espacio: se elige cuál (de los que este teléfono comparte y son tuyos). */
   async function invitarEspacio() {
@@ -173,9 +176,9 @@
     if (!window.NomAndroid || !window.NomAndroid.respaldos) return "";
     let l = [];
     try { l = JSON.parse(window.NomAndroid.respaldos() || "[]"); } catch (e) { l = []; }
-    return `<div class="clay anfitrion-caja" style="margin-top:12px">
+    return `<div class="caja anfitrion-caja" style="margin-top:12px">
       <div class="fila-e"><b>${ico("archive", "ico-s")} Copias de seguridad</b><button class="btn chico" data-exportar>${ico("archive")} Descargar todo</button></div>
-      <p class="suave chico" style="font-weight:650">Una copia por día de todo (cuentas, espacios, documentos y versiones), se guardan las últimas 7 dentro de la app. “Exportar todo” guarda una copia de este momento en Descargas.</p>
+      <p class="suave chico" style="font-weight:400">Una copia por día de todo (cuentas, espacios, documentos y versiones), se guardan las últimas 7 dentro de la app. “Exportar todo” guarda una copia de este momento en Descargas.</p>
       ${l.length ? `<div class="lista">${l.map((r) => `<div class="lista-item">${ico("archive", "ico-s")}<span class="crece"><b>${esc(r.nombre)}</b><small>${esc(new Date(r.fecha).toLocaleString("es-MX"))} · ${esc(NOM.bytes(r.bytes))}</small></span></div>`).join("")}</div>` : `<p class="suave chico">Todavía no hay respaldos (el primero se hace en unos segundos con el servidor encendido).</p>`}</div>`;
   }
 

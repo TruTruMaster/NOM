@@ -454,6 +454,242 @@
     ELEGIR: (a) => { const i = Math.floor(num(a[0])); if (i < 1 || i >= a.length) return E("#VALOR!"); return a[i]; },
   };
   FUNCS.CONCAT = FUNCS.CONCATENAR;
+
+  // ------------------------------------------------------------ más funciones (0.13.2)
+  const oDef = (v, def) => (v === undefined || v === "" ? def : v);
+  const fraccionDia = (v) => { const n = num(v); return n - Math.floor(n + 1e-9); };
+  const segundosDia = (v) => Math.round(fraccionDia(v) * 86400) % 86400;
+  const entero = (v) => Math.floor(num(v) + 1e-9);
+  /** Los pares (x, y) con número en los dos lados, para regresión y correlación. */
+  function pares(ry, rx) {
+    const ys = lista(ry), xs = rx === undefined ? ys.map((_, i) => i + 1) : lista(rx);
+    if (ys.length !== xs.length) throw E("#N/A");
+    const p = [];
+    for (let i = 0; i < ys.length; i++) { if (ys[i] instanceof ErrorF) throw ys[i]; if (xs[i] instanceof ErrorF) throw xs[i]; if (esNum(xs[i]) && esNum(ys[i])) p.push([+xs[i], +ys[i]]); }
+    if (!p.length) throw E("#DIV/0!");
+    const mx = media(p.map((q) => q[0])), my = media(p.map((q) => q[1]));
+    let sxx = 0, syy = 0, sxy = 0;
+    p.forEach(([x, y]) => { sxx += (x - mx) * (x - mx); syy += (y - my) * (y - my); sxy += (x - mx) * (y - my); });
+    return { n: p.length, mx, my, sxx, syy, sxy };
+  }
+  const recta = (ry, rx) => { const q = pares(ry, rx); if (q.sxx === 0) throw E("#DIV/0!"); const m = q.sxy / q.sxx; return { m, b: q.my - m * q.mx, q }; };
+  function percentil(r, k) {
+    const n = nums([r]).sort((x, y) => x - y);
+    if (!n.length || !(k >= 0 && k <= 1)) throw E("#NUM!");
+    const pos = k * (n.length - 1), i = Math.floor(pos + 1e-12), fr = pos - i;
+    return fr < 1e-12 || i + 1 >= n.length ? n[i] : n[i] + fr * (n[i + 1] - n[i]);
+  }
+  /** Los valores como los cuentan PROMEDIOA, MAXA y MINA: el texto vale 0, VERDADERO 1, lo vacío no cuenta. */
+  const valoresA = (a) => plano(a).filter((v) => v !== "" && v != null).map((v) => { if (v instanceof ErrorF) throw v; return esNum(v) ? +v : typeof v === "boolean" ? +v : 0; });
+  const festivos = (r) => new Set(r === undefined ? [] : plano([r]).filter(esNum).map((v) => Math.floor(+v)));
+  const laboral = (serie, fest) => { const d = fechaDe(serie).getUTCDay(); return d !== 0 && d !== 6 && !fest.has(serie); };
+  function mcd(x, y) { while (y) { [x, y] = [y, x % y]; } return x; }
+  const enterosPos = (a) => { const n = nums(a).map((v) => Math.floor(v)); if (n.some((v) => v < 0)) throw E("#NUM!"); return n; };
+  function factorial(n) { n = Math.floor(n); if (n < 0 || n > 170) throw E("#NUM!"); let r = 1; for (let i = 2; i <= n; i++) r *= i; return r; }
+  const conMiles = (n, dec, miles) => { const d = Math.max(0, Math.min(20, Math.floor(dec))), x = redondeo(Math.abs(n), Math.floor(dec)); return x.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d, useGrouping: miles }); };
+  /** Texto antes o después de un separador (TEXTOANTES y TEXTODESPUES). */
+  function partirEn(a, antes) {
+    const t = texto(a[0]), sep = texto(a[1]), k = a[2] === undefined ? 1 : Math.trunc(num(a[2])), sinMayus = a[3] !== undefined && num(a[3]) === 1;
+    if (k === 0) throw E("#VALOR!");
+    if (!sep) return antes ? (k > 0 ? "" : t) : (k > 0 ? t : "");
+    const T = sinMayus ? t.toLowerCase() : t, S = sinMayus ? sep.toLowerCase() : sep, pos = [];
+    for (let i = T.indexOf(S); i >= 0; i = T.indexOf(S, i + S.length)) pos.push(i);
+    const i = k > 0 ? pos[k - 1] : pos[pos.length + k];
+    if (i === undefined) { if (a[5] !== undefined) return a[5]; throw E("#N/A"); }
+    return antes ? t.slice(0, i) : t.slice(i + sep.length);
+  }
+  // ---- financieras (los pagos que salen de tu bolsillo son negativos, como en Excel)
+  const fin = {
+    vf: (r, n, pago, va, tipo) => (r === 0 ? -(va + pago * n) : -(va * Math.pow(1 + r, n) + pago * (1 + r * tipo) * (Math.pow(1 + r, n) - 1) / r)),
+    va: (r, n, pago, vf, tipo) => (r === 0 ? -(vf + pago * n) : -(vf + pago * (1 + r * tipo) * (Math.pow(1 + r, n) - 1) / r) / Math.pow(1 + r, n)),
+    pago: (r, n, va, vf, tipo) => { if (n === 0) throw E("#NUM!"); return r === 0 ? -(va + vf) / n : -(r * (va * Math.pow(1 + r, n) + vf)) / ((1 + r * tipo) * (Math.pow(1 + r, n) - 1)); },
+    interes: (r, per, n, va, vf, tipo) => {
+      if (per < 1 || per > n) throw E("#NUM!");
+      if (tipo === 1 && per === 1) return 0;
+      const i = fin.vf(r, per - 1, fin.pago(r, n, va, vf, tipo), va, tipo) * r;
+      return tipo === 1 ? i / (1 + r) : i;
+    },
+  };
+  const args5 = (a, i) => [a[i] === undefined ? 0 : num(a[i]), a[i + 1] !== undefined && num(a[i + 1]) !== 0 ? 1 : 0];
+  /** Raíz de f cerca de x0 (Newton con derivada numérica; si no llega, bisección entre -0.99 y 10). */
+  function raiz(f, x0) {
+    let x = x0;
+    for (let k = 0; k < 60; k++) {
+      const y = f(x), h = Math.max(1e-7, Math.abs(x) * 1e-7), d = (f(x + h) - y) / h;
+      if (!isFinite(y) || !isFinite(d) || d === 0) break;
+      const x1 = x - y / d;
+      if (!isFinite(x1) || x1 <= -1) break;
+      if (Math.abs(x1 - x) < 1e-11) return x1;
+      x = x1;
+    }
+    let lo = -0.99, hi = 10, flo = f(lo), fhi = f(hi);
+    if (!isFinite(flo) || !isFinite(fhi) || flo * fhi > 0) throw E("#NUM!");
+    for (let k = 0; k < 200; k++) { const m = (lo + hi) / 2, fm = f(m); if (Math.abs(fm) < 1e-12 || hi - lo < 1e-12) return m; if (flo * fm <= 0) { hi = m; fhi = fm; } else { lo = m; flo = fm; } }
+    return (lo + hi) / 2;
+  }
+  const ROMANOS = [[1000, "M"], [900, "CM"], [500, "D"], [400, "CD"], [100, "C"], [90, "XC"], [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]];
+  Object.assign(FUNCS, {
+    // fecha y hora
+    HORA: (a) => Math.floor(segundosDia(a[0]) / 3600),
+    MINUTO: (a) => Math.floor((segundosDia(a[0]) % 3600) / 60),
+    SEGUNDO: (a) => segundosDia(a[0]) % 60,
+    NSHORA: (a) => { const s = num(a[0]) * 3600 + num(a[1]) * 60 + num(oDef(a[2], 0)); if (s < 0) throw E("#NUM!"); return (s % 86400) / 86400; },
+    HORANUMERO: (a) => {
+      const m = /^(?:.*\s)?(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap])?\.?\s*m?\.?$/i.exec(texto(a[0]).trim());
+      if (!m) throw E("#VALOR!");
+      let h = +m[1];
+      if (m[4]) h = (h % 12) + (/p/i.test(m[4]) ? 12 : 0);
+      if (h > 23 || +m[2] > 59 || +(m[3] || 0) > 59) throw E("#VALOR!");
+      return (h * 3600 + +m[2] * 60 + +(m[3] || 0)) / 86400;
+    },
+    FECHANUMERO: (a) => { const f = a[0] instanceof FechaF ? a[0] : leerFecha(texto(a[0]).trim()); if (!f) throw E("#VALOR!"); return Math.floor(+f); },
+    "NUM.DE.SEMANA": (a) => {
+      const s = entero(a[0]), tipo = a[1] === undefined ? 1 : Math.floor(num(a[1]));
+      if (tipo === 21) return FUNCS["ISO.NUM.DE.SEMANA"]([a[0]]);
+      const inicio = { 1: 0, 2: 1, 11: 1, 12: 2, 13: 3, 14: 4, 15: 5, 16: 6, 17: 0 }[tipo];
+      if (inicio === undefined) throw E("#NUM!");
+      const d = fechaDe(s), ene1 = serieDe(d.getUTCFullYear(), 1, 1);
+      return Math.floor((s - ene1 + ((fechaDe(ene1).getUTCDay() - inicio + 7) % 7)) / 7) + 1;
+    },
+    "ISO.NUM.DE.SEMANA": (a) => {
+      const s = entero(a[0]), jueves = s + 3 - ((fechaDe(s).getUTCDay() + 6) % 7);
+      return Math.floor((jueves - serieDe(fechaDe(jueves).getUTCFullYear(), 1, 1)) / 7) + 1;
+    },
+    DIAS360: (a) => {
+      const d1 = deFecha(a[0]), d2 = deFecha(a[1]), europeo = a[2] !== undefined && verdad(a[2]) && a[2] !== 0;
+      let x1 = d1.getUTCDate(), x2 = d2.getUTCDate();
+      const m1 = d1.getUTCMonth(), m2 = d2.getUTCMonth(), y1 = d1.getUTCFullYear(), y2 = d2.getUTCFullYear();
+      if (europeo) { if (x1 === 31) x1 = 30; if (x2 === 31) x2 = 30; }
+      else {
+        if (x1 === ultimoDia(y1, m1)) x1 = 30;
+        if (x2 === 31 && x1 >= 30) x2 = 30;
+      }
+      return (y2 - y1) * 360 + (m2 - m1) * 30 + (x2 - x1);
+    },
+    "DIA.LAB": (a) => {
+      let s = entero(a[0]), faltan = Math.trunc(num(a[1]));
+      const fest = festivos(a[2]), paso = faltan < 0 ? -1 : 1;
+      for (let k = 0; faltan !== 0 && k < 200000; k++) { s += paso; if (laboral(s, fest)) faltan -= paso; }
+      return new FechaF(s);
+    },
+    "DIAS.LAB": (a) => {
+      let i = entero(a[0]), f = entero(a[1]), sg = 1;
+      if (f < i) { [i, f] = [f, i]; sg = -1; }
+      const fest = festivos(a[2]);
+      let n = 0;
+      for (let s = i; s <= f && s - i < 200000; s++) if (laboral(s, fest)) n++;
+      return n * sg;
+    },
+    // información y lógicas
+    ESNOD: (a) => a[0] instanceof ErrorF && a[0].codigo === "#N/A",
+    ESERR: (a) => a[0] instanceof ErrorF && a[0].codigo !== "#N/A",
+    NOD: () => E("#N/A"),
+    "SI.ND": (a) => { if (a[0] instanceof ErrorF) { if (a[0].codigo === "#N/A") return a[1] === undefined ? "" : a[1]; throw a[0]; } return a[0]; },
+    "ES.PAR": (a) => Math.floor(Math.abs(num(a[0]))) % 2 === 0,
+    "ES.IMPAR": (a) => Math.floor(Math.abs(num(a[0]))) % 2 === 1,
+    ESLOGICO: (a) => typeof a[0] === "boolean",
+    ESNOTEXTO: (a) => !(typeof a[0] === "string" && a[0] !== ""),
+    CAMBIAR: (a) => {
+      if (a[0] instanceof ErrorF) throw a[0];
+      const igual = (x, y) => (esNum(x) && esNum(y) ? +x === +y : typeof x === typeof y && texto(x).toLowerCase() === texto(y).toLowerCase());
+      for (let i = 1; i + 1 < a.length; i += 2) if (igual(a[0], a[i])) return a[i + 1];
+      return a.length % 2 === 0 ? a[a.length - 1] : E("#N/A");
+    },
+    XO: (a) => plano(a).filter(verdad).length % 2 === 1,
+    N: (a) => { if (a[0] instanceof ErrorF) throw a[0]; return esNum(a[0]) ? +a[0] : a[0] === true ? 1 : 0; },
+    T: (a) => { if (a[0] instanceof ErrorF) throw a[0]; return typeof a[0] === "string" ? a[0] : ""; },
+    TIPO: (a) => (a[0] instanceof ErrorF ? 16 : Array.isArray(a[0]) ? 64 : typeof a[0] === "boolean" ? 4 : esNum(a[0]) || a[0] === "" || a[0] == null ? 1 : 2),
+    // texto
+    TEXTOANTES: (a) => partirEn(a, true),
+    TEXTODESPUES: (a) => partirEn(a, false),
+    LIMPIAR: (a) => Array.from(texto(a[0])).filter((c) => c.charCodeAt(0) >= 32).join(""),
+    CODIGO: (a) => { const t = texto(a[0]); if (!t) throw E("#VALOR!"); return t.codePointAt(0); },
+    UNICODE: (a) => { const t = texto(a[0]); if (!t) throw E("#VALOR!"); return t.codePointAt(0); },
+    UNICAR: (a) => { const n = Math.floor(num(a[0])); if (n < 1 || n > 0x10FFFF) throw E("#VALOR!"); return String.fromCodePoint(n); },
+    MONEDA: (a) => { const n = num(a[0]), d = a[1] === undefined ? 2 : num(a[1]); return (redondeo(n, Math.floor(d)) < 0 ? "-" : "") + "$" + conMiles(n, d, true); },
+    DECIMAL: (a) => { const n = num(a[0]), d = a[1] === undefined ? 2 : num(a[1]); return (redondeo(n, Math.floor(d)) < 0 ? "-" : "") + conMiles(n, d, !(a[2] !== undefined && verdad(a[2]) && a[2] !== 0)); },
+    "NUMERO.ROMANO": (a) => { let n = Math.floor(num(a[0])), r = ""; if (n < 0 || n > 3999) throw E("#VALOR!"); for (const [v, t] of ROMANOS) while (n >= v) { r += t; n -= v; } return r; },
+    // matemáticas
+    "MULTIPLO.SUPERIOR": (a) => { const n = num(a[0]), m = a[1] === undefined ? 1 : num(a[1]); if (m === 0) return 0; if (n > 0 && m < 0) throw E("#NUM!"); return Math.ceil(n / m - 1e-10) * m; },
+    "MULTIPLO.INFERIOR": (a) => { const n = num(a[0]), m = a[1] === undefined ? 1 : num(a[1]); if (m === 0) { if (n === 0) return 0; throw E("#DIV/0!"); } if (n > 0 && m < 0) throw E("#NUM!"); return Math.floor(n / m + 1e-10) * m; },
+    "MULTIPLO.SUPERIOR.MAT": (a) => { const n = num(a[0]), m = Math.abs(a[1] === undefined ? 1 : num(a[1])), lejos = a[2] !== undefined && num(a[2]) !== 0; if (m === 0) return 0; return n < 0 && lejos ? -Math.ceil(-n / m - 1e-10) * m : Math.ceil(n / m - 1e-10) * m; },
+    "MULTIPLO.INFERIOR.MAT": (a) => { const n = num(a[0]), m = Math.abs(a[1] === undefined ? 1 : num(a[1])), cerca = a[2] !== undefined && num(a[2]) !== 0; if (m === 0) return 0; return n < 0 && cerca ? -Math.floor(-n / m + 1e-10) * m : Math.floor(n / m + 1e-10) * m; },
+    "REDOND.MULT": (a) => { const n = num(a[0]), m = num(a[1]); if (m === 0) return 0; if (n * m < 0) throw E("#NUM!"); return Math.round(n / m + 1e-10) * m; },
+    "REDONDEA.PAR": (a) => { const n = num(a[0]); return Math.sign(n) * Math.ceil(Math.abs(n) / 2 - 1e-10) * 2; },
+    "REDONDEA.IMPAR": (a) => { const n = num(a[0]), x = Math.abs(n); return (n < 0 ? -1 : 1) * (Math.ceil((x - 1) / 2 - 1e-10) * 2 + 1); },
+    "M.C.D": (a) => enterosPos(a).reduce((x, y) => mcd(x, y), 0),
+    "M.C.M": (a) => enterosPos(a).reduce((x, y) => (x === 0 || y === 0 ? 0 : (x / mcd(x, y)) * y), 1),
+    FACT: (a) => factorial(num(a[0])),
+    COMBINAT: (a) => { const n = Math.floor(num(a[0])), k = Math.floor(num(a[1])); if (n < 0 || k < 0 || k > n) throw E("#NUM!"); let r = 1; for (let i = 1; i <= Math.min(k, n - k); i++) r = (r * (n - Math.min(k, n - k) + i)) / i; return Math.round(r); },
+    PERMUTACIONES: (a) => { const n = Math.floor(num(a[0])), k = Math.floor(num(a[1])); if (n < 0 || k < 0 || k > n) throw E("#NUM!"); let r = 1; for (let i = 0; i < k; i++) r *= n - i; return r; },
+    COCIENTE: (a) => { const d = num(a[1]); if (d === 0) throw E("#DIV/0!"); return Math.trunc(num(a[0]) / d); },
+    "SUMA.CUADRADOS": (a) => nums(a).reduce((x, y) => x + y * y, 0),
+    ASENO: (a) => { const n = num(a[0]); if (n < -1 || n > 1) throw E("#NUM!"); return Math.asin(n); },
+    ACOS: (a) => { const n = num(a[0]); if (n < -1 || n > 1) throw E("#NUM!"); return Math.acos(n); },
+    ATAN: (a) => Math.atan(num(a[0])),
+    ATAN2: (a) => { const x = num(a[0]), y = num(a[1]); if (x === 0 && y === 0) throw E("#DIV/0!"); return Math.atan2(y, x); },
+    SENOH: (a) => Math.sinh(num(a[0])),
+    COSH: (a) => Math.cosh(num(a[0])),
+    TANH: (a) => Math.tanh(num(a[0])),
+    PROMEDIOA: (a) => { const n = valoresA(a); return n.length ? media(n) : E("#DIV/0!"); },
+    MAXA: (a) => { const n = valoresA(a); return n.length ? Math.max(...n) : 0; },
+    MINA: (a) => { const n = valoresA(a); return n.length ? Math.min(...n) : 0; },
+    // estadística
+    PERCENTIL: (a) => percentil(a[0], num(a[1])),
+    CUARTIL: (a) => { const q = Math.floor(num(a[1])); if (q < 0 || q > 4) throw E("#NUM!"); return percentil(a[0], q / 4); },
+    "MEDIA.GEOM": (a) => { const n = nums(a); if (!n.length || n.some((v) => v <= 0)) throw E("#NUM!"); return Math.exp(media(n.map(Math.log))); },
+    "MEDIA.ARMO": (a) => { const n = nums(a); if (!n.length || n.some((v) => v <= 0)) throw E("#NUM!"); return n.length / n.reduce((x, y) => x + 1 / y, 0); },
+    DESVPROM: (a) => { const n = nums(a); if (!n.length) throw E("#NUM!"); const m = media(n); return media(n.map((v) => Math.abs(v - m))); },
+    PENDIENTE: (a) => recta(a[0], a[1]).m,
+    "INTERSECCION.EJE": (a) => recta(a[0], a[1]).b,
+    PRONOSTICO: (a) => { const r = recta(a[1], a[2]); return r.b + r.m * num(a[0]); },
+    TENDENCIA: (a) => { const r = recta(a[0], a[1]), x = a[2] === undefined ? (a[1] === undefined ? 1 : lista(a[1]).find(esNum)) : (Array.isArray(a[2]) ? a[2][0] : a[2]); return r.b + r.m * num(x); },
+    "COEF.DE.CORREL": (a) => { const q = pares(a[0], a[1]); if (q.sxx === 0 || q.syy === 0) throw E("#DIV/0!"); return q.sxy / Math.sqrt(q.sxx * q.syy); },
+    "COEFICIENTE.R2": (a) => { const q = pares(a[0], a[1]); if (q.sxx === 0 || q.syy === 0) throw E("#DIV/0!"); return (q.sxy * q.sxy) / (q.sxx * q.syy); },
+    "COVARIANZA.P": (a) => { const q = pares(a[0], a[1]); return q.sxy / q.n; },
+    "COVARIANZA.M": (a) => { const q = pares(a[0], a[1]); if (q.n < 2) throw E("#DIV/0!"); return q.sxy / (q.n - 1); },
+    "JERARQUIA.MEDIA": (a) => {
+      const n = num(a[0]), l = nums([a[1]]), asc = a[2] !== undefined && verdad(a[2]) && a[2] !== 0, iguales = l.filter((x) => x === n).length;
+      if (!iguales) return E("#N/A");
+      return l.filter((x) => (asc ? x < n : x > n)).length + (iguales + 1) / 2;
+    },
+    // financieras
+    PAGO: (a) => fin.pago(num(a[0]), num(a[1]), num(a[2]), ...args5(a, 3)),
+    VF: (a) => fin.vf(num(a[0]), num(a[1]), num(oDef(a[2], 0)), ...args5(a, 3)),
+    VA: (a) => fin.va(num(a[0]), num(a[1]), num(oDef(a[2], 0)), ...args5(a, 3)),
+    NPER: (a) => {
+      const r = num(a[0]), pago = num(a[1]), va = num(a[2]), [vf, tipo] = args5(a, 3);
+      if (r === 0) { if (pago === 0) throw E("#NUM!"); return -(va + vf) / pago; }
+      const x = (pago * (1 + r * tipo) - vf * r) / (pago * (1 + r * tipo) + va * r);
+      if (!(x > 0)) throw E("#NUM!");
+      return Math.log(x) / Math.log(1 + r);
+    },
+    TASA: (a) => {
+      const n = num(a[0]), pago = num(a[1]), va = num(a[2]), [vf, tipo] = args5(a, 3), x0 = a[5] === undefined ? 0.1 : num(a[5]);
+      return raiz((r) => (Math.abs(r) < 1e-10 ? va + pago * n + vf : va * Math.pow(1 + r, n) + pago * (1 + r * tipo) * (Math.pow(1 + r, n) - 1) / r + vf), x0);
+    },
+    VNA: (a) => { const r = num(a[0]); return nums(a.slice(1)).reduce((s2, v, i) => s2 + v / Math.pow(1 + r, i + 1), 0); },
+    TIR: (a) => {
+      const v = nums([a[0]]);
+      if (!v.some((x) => x > 0) || !v.some((x) => x < 0)) throw E("#NUM!");
+      return raiz((r) => v.reduce((s2, x, i) => s2 + x / Math.pow(1 + r, i), 0), a[1] === undefined ? 0.1 : num(a[1]));
+    },
+    PAGOINT: (a) => fin.interes(num(a[0]), num(a[1]), num(a[2]), num(a[3]), ...args5(a, 4)),
+    PAGOPRIN: (a) => { const r = num(a[0]), per = num(a[1]), n = num(a[2]), va = num(a[3]), [vf, tipo] = args5(a, 4); return fin.pago(r, n, va, vf, tipo) - fin.interes(r, per, n, va, vf, tipo); },
+    SLN: (a) => { const v = num(a[2]); if (v === 0) throw E("#DIV/0!"); return (num(a[0]) - num(a[1])) / v; },
+    "INT.EFECTIVO": (a) => { const t = num(a[0]), n = Math.floor(num(a[1])); if (t <= 0 || n < 1) throw E("#NUM!"); return Math.pow(1 + t / n, n) - 1; },
+    "TASA.NOMINAL": (a) => { const t = num(a[0]), n = Math.floor(num(a[1])); if (t <= 0 || n < 1) throw E("#NUM!"); return n * (Math.pow(1 + t, 1 / n) - 1); },
+    // referencias (FILA, COLUMNA, FILAS, COLUMNAS, INDIRECTO y DESREF necesitan la referencia misma: van en el evaluador)
+    DIRECCION: (a) => {
+      const f = Math.floor(num(a[0])), c = Math.floor(num(a[1])), abs = a[2] === undefined ? 1 : Math.floor(num(a[2]));
+      if (f < 1 || c < 1 || abs < 1 || abs > 4) throw E("#VALOR!");
+      const r = (abs === 1 || abs === 3 ? "$" : "") + colLetra(c - 1) + (abs === 1 || abs === 2 ? "$" : "") + f;
+      return (a[4] !== undefined && texto(a[4]) ? prefijoHoja(texto(a[4])) : "") + r;
+    },
+  });
+  /** Funciones que trabajan con la referencia y no con su valor (las resuelve el evaluador). */
+  const DE_REFERENCIA = new Set(["FILA", "COLUMNA", "FILAS", "COLUMNAS", "INDIRECTO", "DESREF"]);
+  DE_REFERENCIA.forEach((n) => { FUNCS[n] = () => E("#VALOR!"); });
   const ALIAS = {
     SUM: "SUMA", AVERAGE: "PROMEDIO", COUNT: "CONTAR", COUNTA: "CONTARA", COUNTBLANK: "CONTAR.BLANCO", PRODUCT: "PRODUCTO", SUMPRODUCT: "SUMAPRODUCTO",
     IF: "SI", IFS: "SI.CONJUNTO", AND: "Y", OR: "O", NOT: "NO", ISERROR: "ESERROR", IFERROR: "SIERROR", ISBLANK: "ESBLANCO", ISNUMBER: "ESNUMERO", ISTEXT: "ESTEXTO",
@@ -470,6 +706,24 @@
     TODAY: "HOY", NOW: "AHORA", DATE: "FECHA", DAYS: "DIAS", "DÍAS": "DIAS", YEAR: "AÑO", MONTH: "MES", DAY: "DIA", "DÍA": "DIA", WEEKDAY: "DIASEM", EOMONTH: "FIN.MES",
     EDATE: "FECHA.MES", NETWORKDAYS: "DIAS.LAB", "DÍAS.LAB": "DIAS.LAB", DATEDIF: "SIFECHA",
     VLOOKUP: "BUSCARV", HLOOKUP: "BUSCARH", XLOOKUP: "BUSCARX", INDEX: "INDICE", "ÍNDICE": "INDICE", MATCH: "COINCIDIR", CHOOSE: "ELEGIR",
+    // 0.13.2
+    HOUR: "HORA", MINUTE: "MINUTO", SECOND: "SEGUNDO", TIME: "NSHORA", TIMEVALUE: "HORANUMERO", DATEVALUE: "FECHANUMERO", "FECHANÚMERO": "FECHANUMERO", "HORANÚMERO": "HORANUMERO",
+    WEEKNUM: "NUM.DE.SEMANA", ISOWEEKNUM: "ISO.NUM.DE.SEMANA", "ISONUM.DE.SEMANA": "ISO.NUM.DE.SEMANA", DAYS360: "DIAS360", "DÍAS360": "DIAS360", WORKDAY: "DIA.LAB", "DÍA.LAB": "DIA.LAB",
+    ISNA: "ESNOD", ISERR: "ESERR", NA: "NOD", IFNA: "SI.ND", ISEVEN: "ES.PAR", ISODD: "ES.IMPAR", ISLOGICAL: "ESLOGICO", "ESLÓGICO": "ESLOGICO", ISNONTEXT: "ESNOTEXTO",
+    SWITCH: "CAMBIAR", XOR: "XO", TYPE: "TIPO",
+    TEXTBEFORE: "TEXTOANTES", TEXTAFTER: "TEXTODESPUES", "TEXTODESPUÉS": "TEXTODESPUES", CLEAN: "LIMPIAR", CODE: "CODIGO", "CÓDIGO": "CODIGO", UNICHAR: "UNICAR",
+    DOLLAR: "MONEDA", FIXED: "DECIMAL", FIJO: "DECIMAL", ROMAN: "NUMERO.ROMANO", "NÚMERO.ROMANO": "NUMERO.ROMANO",
+    CEILING: "MULTIPLO.SUPERIOR", FLOOR: "MULTIPLO.INFERIOR", "MÚLTIPLO.SUPERIOR": "MULTIPLO.SUPERIOR", "MÚLTIPLO.INFERIOR": "MULTIPLO.INFERIOR",
+    "CEILING.MATH": "MULTIPLO.SUPERIOR.MAT", "FLOOR.MATH": "MULTIPLO.INFERIOR.MAT", "MÚLTIPLO.SUPERIOR.MAT": "MULTIPLO.SUPERIOR.MAT", "MÚLTIPLO.INFERIOR.MAT": "MULTIPLO.INFERIOR.MAT",
+    MROUND: "REDOND.MULT", EVEN: "REDONDEA.PAR", ODD: "REDONDEA.IMPAR", GCD: "M.C.D", LCM: "M.C.M", COMBIN: "COMBINAT", PERMUT: "PERMUTACIONES", QUOTIENT: "COCIENTE",
+    SUMSQ: "SUMA.CUADRADOS", ASIN: "ASENO", SINH: "SENOH", AVERAGEA: "PROMEDIOA",
+    PERCENTILE: "PERCENTIL", "PERCENTILE.INC": "PERCENTIL", "PERCENTIL.INC": "PERCENTIL", QUARTILE: "CUARTIL", "QUARTILE.INC": "CUARTIL", "CUARTIL.INC": "CUARTIL",
+    GEOMEAN: "MEDIA.GEOM", HARMEAN: "MEDIA.ARMO", AVEDEV: "DESVPROM", SLOPE: "PENDIENTE", INTERCEPT: "INTERSECCION.EJE", "INTERSECCIÓN.EJE": "INTERSECCION.EJE",
+    FORECAST: "PRONOSTICO", "FORECAST.LINEAR": "PRONOSTICO", "PRONOSTICO.LINEAL": "PRONOSTICO", "PRONÓSTICO": "PRONOSTICO", "PRONÓSTICO.LINEAL": "PRONOSTICO", TREND: "TENDENCIA",
+    CORREL: "COEF.DE.CORREL", PEARSON: "COEF.DE.CORREL", RSQ: "COEFICIENTE.R2", "COVARIANCE.P": "COVARIANZA.P", COVAR: "COVARIANZA.P", "COVARIANCE.S": "COVARIANZA.M",
+    "RANK.AVG": "JERARQUIA.MEDIA", "JERARQUÍA.MEDIA": "JERARQUIA.MEDIA",
+    PMT: "PAGO", PV: "VA", FV: "VF", RATE: "TASA", NPV: "VNA", IRR: "TIR", IPMT: "PAGOINT", PPMT: "PAGOPRIN", EFFECT: "INT.EFECTIVO", NOMINAL: "TASA.NOMINAL",
+    ROW: "FILA", COLUMN: "COLUMNA", ROWS: "FILAS", COLUMNS: "COLUMNAS", ADDRESS: "DIRECCION", "DIRECCIÓN": "DIRECCION", INDIRECT: "INDIRECTO", OFFSET: "DESREF",
   };
   const NOMBRES = Object.keys(FUNCS);
   /** Nombre en inglés para Excel (.xlsx); las funciones nuevas de Excel llevan el prefijo _xlfn. */
@@ -478,6 +732,11 @@
   Object.assign(INGLES, { MIN: "MIN", MAX: "MAX", ABS: "ABS", PI: "PI", EXP: "EXP", LN: "LN", LOG: "LOG", LOG10: "LOG10", COS: "COS", TAN: "TAN",
     "SI.CONJUNTO": "_xlfn.IFS", BUSCARX: "_xlfn.XLOOKUP", CONCAT: "_xlfn.CONCAT", UNIRCADENAS: "_xlfn.TEXTJOIN", "MAX.SI.CONJUNTO": "_xlfn.MAXIFS",
     "MIN.SI.CONJUNTO": "_xlfn.MINIFS", DIAS: "_xlfn.DAYS", CONCATENAR: "CONCATENATE", DESVEST: "STDEV", DESVESTP: "STDEVP", VAR: "VAR", VARP: "VARP", JERARQUIA: "RANK", MODA: "MODE" });
+  Object.assign(INGLES, { DIAS360: "DAYS360", "ISO.NUM.DE.SEMANA": "_xlfn.ISOWEEKNUM", "SI.ND": "_xlfn.IFNA", CAMBIAR: "_xlfn.SWITCH", XO: "_xlfn.XOR", N: "N", T: "T",
+    TEXTOANTES: "_xlfn.TEXTBEFORE", TEXTODESPUES: "_xlfn.TEXTAFTER", UNICAR: "_xlfn.UNICHAR", UNICODE: "_xlfn.UNICODE", DECIMAL: "FIXED",
+    "MULTIPLO.SUPERIOR.MAT": "_xlfn.CEILING.MATH", "MULTIPLO.INFERIOR.MAT": "_xlfn.FLOOR.MATH", FACT: "FACT", ACOS: "ACOS", ATAN: "ATAN", ATAN2: "ATAN2", COSH: "COSH", TANH: "TANH",
+    MAXA: "MAXA", MINA: "MINA", PERCENTIL: "PERCENTILE", CUARTIL: "QUARTILE", PRONOSTICO: "FORECAST", "COEF.DE.CORREL": "CORREL", "COVARIANZA.P": "_xlfn.COVARIANCE.P",
+    "COVARIANZA.M": "_xlfn.COVARIANCE.S", "JERARQUIA.MEDIA": "_xlfn.RANK.AVG", NPER: "NPER", SLN: "SLN" });
 
   /** Ayuda al escribir: qué pide cada función y qué hace. */
   const FIRMAS = {
@@ -521,12 +780,57 @@
     HOY: ["", "La fecha de hoy."], AHORA: ["", "La fecha y la hora de ahora."], FECHA: ["año; mes; día", "Arma una fecha."], DIAS: ["fecha_final; fecha_inicial", "Días entre dos fechas."],
     "AÑO": ["fecha", "El año."], MES: ["fecha", "El mes (1 a 12)."], DIA: ["fecha", "El día del mes."], DIASEM: ["fecha; [tipo]", "Día de la semana (1 = domingo; tipo 2: 1 = lunes)."],
     "FIN.MES": ["fecha; meses", "El último día del mes."], "FECHA.MES": ["fecha; meses", "La misma fecha unos meses después."],
-    "DIAS.LAB": ["inicio; fin", "Días hábiles (lunes a viernes)."], SIFECHA: ["inicio; fin; \"Y\" | \"M\" | \"D\"", "Años, meses o días entre dos fechas (sirve para la edad)."],
+ SIFECHA: ["inicio; fin; \"Y\" | \"M\" | \"D\"", "Años, meses o días entre dos fechas (sirve para la edad)."],
     BUSCARV: ["buscado; tabla; columna; [aproximada]", "Busca en la primera columna y devuelve otra (FALSO = exacta)."],
     BUSCARH: ["buscado; tabla; fila; [aproximada]", "Busca en la primera fila y devuelve otra."],
     BUSCARX: ["buscado; donde_buscar; que_devolver; [si_no_está]", "Busca y devuelve lo que está a la par."],
     INDICE: ["matriz; fila; [columna]", "El valor en esa fila y columna."], COINCIDIR: ["buscado; matriz; [tipo]", "En qué posición está (0 = exacta)."],
     ELEGIR: ["n; valor1; [valor2]; …", "El valor número n de la lista."],
+    // 0.13.2
+    HORA: ["hora", "La hora (0 a 23) de una fecha con hora."], MINUTO: ["hora", "Los minutos (0 a 59)."], SEGUNDO: ["hora", "Los segundos (0 a 59)."],
+    NSHORA: ["hora; minuto; segundo", "Arma una hora (como fracción del día)."], HORANUMERO: ["texto", "Convierte un texto como \"14:30\" en hora."],
+    FECHANUMERO: ["texto", "Convierte un texto como \"07/11/2026\" en el número de esa fecha."],
+    "NUM.DE.SEMANA": ["fecha; [tipo]", "El número de semana del año (tipo 2 = la semana empieza en lunes)."], "ISO.NUM.DE.SEMANA": ["fecha", "El número de semana según la norma ISO."],
+    DIAS360: ["inicio; fin; [europeo]", "Días entre dos fechas con años de 360 días (contabilidad)."],
+    "DIA.LAB": ["inicio; días; [festivos]", "La fecha después de tantos días hábiles."],
+    "DIAS.LAB": ["inicio; fin; [festivos]", "Días hábiles (lunes a viernes) entre dos fechas."],
+    ESNOD: ["valor", "VERDADERO si es el error #N/A."], ESERR: ["valor", "VERDADERO si es un error que no sea #N/A."], NOD: ["", "El error #N/A (dato no disponible)."],
+    "SI.ND": ["valor; si_no_está", "Otro valor si el resultado es #N/A."], "ES.PAR": ["número", "VERDADERO si es par."], "ES.IMPAR": ["número", "VERDADERO si es impar."],
+    ESLOGICO: ["valor", "VERDADERO si es VERDADERO o FALSO."], ESNOTEXTO: ["valor", "VERDADERO si no es texto."],
+    CAMBIAR: ["expresión; valor1; resultado1; …; [si_ninguno]", "Compara con una lista de valores y devuelve el resultado del que coincida."],
+    XO: ["lógico1; [lógico2]; …", "VERDADERO si se cumple una cantidad impar de condiciones."], N: ["valor", "El valor como número (el texto vale 0)."],
+    T: ["valor", "El valor si es texto; si no, vacío."], TIPO: ["valor", "1 número, 2 texto, 4 lógico, 16 error."],
+    TEXTOANTES: ["texto; separador; [cuál]", "Lo que está antes del separador."], TEXTODESPUES: ["texto; separador; [cuál]", "Lo que está después del separador."],
+    LIMPIAR: ["texto", "Quita los caracteres que no se imprimen."], CODIGO: ["texto", "El número del primer carácter."], UNICODE: ["texto", "El número Unicode del primer carácter."],
+    UNICAR: ["número", "El carácter Unicode de ese número."], MONEDA: ["número; [decimales]", "El número como texto con $ y comas."],
+    DECIMAL: ["número; [decimales]; [sin_comas]", "El número como texto con decimales fijos."], "NUMERO.ROMANO": ["número", "El número en romano (hasta 3999)."],
+    "MULTIPLO.SUPERIOR": ["número; múltiplo", "Redondea hacia arriba al múltiplo más cercano."], "MULTIPLO.INFERIOR": ["número; múltiplo", "Redondea hacia abajo al múltiplo más cercano."],
+    "MULTIPLO.SUPERIOR.MAT": ["número; [múltiplo]; [modo]", "Hacia arriba al múltiplo (o al entero) más cercano."], "MULTIPLO.INFERIOR.MAT": ["número; [múltiplo]; [modo]", "Hacia abajo al múltiplo (o al entero) más cercano."],
+    "REDOND.MULT": ["número; múltiplo", "Redondea al múltiplo más cercano."], "REDONDEA.PAR": ["número", "Al par siguiente (alejándose de cero)."],
+    "REDONDEA.IMPAR": ["número", "Al impar siguiente (alejándose de cero)."], "M.C.D": ["número1; [número2]; …", "Máximo común divisor."], "M.C.M": ["número1; [número2]; …", "Mínimo común múltiplo."],
+    FACT: ["número", "El factorial (5! = 120)."], COMBINAT: ["n; k", "De cuántas formas se eligen k de n (sin orden)."], PERMUTACIONES: ["n; k", "De cuántas formas se ordenan k de n."],
+    COCIENTE: ["número; divisor", "La parte entera de una división."], "SUMA.CUADRADOS": ["número1; [número2]; …", "Suma los cuadrados."],
+    ASENO: ["número", "El arco seno (en radianes)."], ACOS: ["número", "El arco coseno (en radianes)."], ATAN: ["número", "El arco tangente (en radianes)."],
+    ATAN2: ["x; y", "El ángulo del punto (x, y), en radianes."], SENOH: ["número", "Seno hiperbólico."], COSH: ["número", "Coseno hiperbólico."], TANH: ["número", "Tangente hiperbólica."],
+    PROMEDIOA: ["valor1; [valor2]; …", "Promedio contando el texto como 0 y VERDADERO como 1."], MAXA: ["valor1; [valor2]; …", "El mayor, contando texto y lógicos."],
+    MINA: ["valor1; [valor2]; …", "El menor, contando texto y lógicos."],
+    PERCENTIL: ["rango; k", "El valor bajo el cual queda la fracción k (0 a 1) de los datos."], CUARTIL: ["rango; cuartil", "El cuartil 0 a 4 (2 = la mediana)."],
+    "MEDIA.GEOM": ["número1; [número2]; …", "La media geométrica."], "MEDIA.ARMO": ["número1; [número2]; …", "La media armónica."], DESVPROM: ["número1; [número2]; …", "Promedio de las distancias a la media."],
+    PENDIENTE: ["conocido_y; conocido_x", "La pendiente de la recta que mejor ajusta."], "INTERSECCION.EJE": ["conocido_y; conocido_x", "Dónde corta esa recta al eje y."],
+    PRONOSTICO: ["x; conocido_y; conocido_x", "El valor que predice la recta para x."], TENDENCIA: ["conocido_y; [conocido_x]; [nueva_x]", "El valor de la recta de tendencia en nueva_x."],
+    "COEF.DE.CORREL": ["rango1; rango2", "La correlación entre dos listas (-1 a 1)."], "COEFICIENTE.R2": ["conocido_y; conocido_x", "Qué tan bien ajusta la recta (0 a 1)."],
+    "COVARIANZA.P": ["rango1; rango2", "Covarianza (población)."], "COVARIANZA.M": ["rango1; rango2", "Covarianza (muestra)."],
+    "JERARQUIA.MEDIA": ["número; referencia; [orden]", "El lugar en la lista; los empates comparten el promedio de sus lugares."],
+    PAGO: ["tasa; periodos; préstamo; [valor_final]; [tipo]", "El pago fijo de un préstamo."], VA: ["tasa; periodos; pago; [valor_final]; [tipo]", "Cuánto vale hoy una serie de pagos."],
+    VF: ["tasa; periodos; pago; [valor_actual]; [tipo]", "Cuánto se junta al final ahorrando un pago fijo."], NPER: ["tasa; pago; valor_actual; [valor_final]; [tipo]", "Cuántos pagos hacen falta."],
+    TASA: ["periodos; pago; valor_actual; [valor_final]; [tipo]; [estimar]", "La tasa de interés por periodo."], VNA: ["tasa; valor1; [valor2]; …", "Valor neto actual de una serie de flujos."],
+    TIR: ["flujos; [estimar]", "La tasa interna de retorno."], PAGOINT: ["tasa; periodo; periodos; préstamo; [valor_final]; [tipo]", "Lo que se paga de interés en un periodo."],
+    PAGOPRIN: ["tasa; periodo; periodos; préstamo; [valor_final]; [tipo]", "Lo que se abona a capital en un periodo."], SLN: ["costo; valor_residual; vida", "Depreciación en línea recta por periodo."],
+    "INT.EFECTIVO": ["tasa_nominal; periodos_al_año", "La tasa efectiva anual."], "TASA.NOMINAL": ["tasa_efectiva; periodos_al_año", "La tasa nominal anual."],
+    FILA: ["[referencia]", "El número de fila (de esta celda si no dices otra)."], COLUMNA: ["[referencia]", "El número de columna."],
+    FILAS: ["rango", "Cuántas filas tiene el rango."], COLUMNAS: ["rango", "Cuántas columnas tiene el rango."],
+    DIRECCION: ["fila; columna; [tipo]", "El nombre de la celda como texto ($A$1)."], INDIRECTO: ["texto", "El valor de la celda cuyo nombre está escrito en el texto."],
+    DESREF: ["referencia; filas; columnas; [alto]; [ancho]", "El valor que está a tantas filas y columnas de una celda."],
   };
 
   function num(v) {
@@ -582,7 +886,7 @@
       if (pila.has(kp)) throw E("#CICLO!");
       pila.add(kp);
       let v;
-      try { v = calcular(h.obtener(c, f), h); } catch (e) { v = e instanceof ErrorF ? e : E("#VALOR!"); }
+      try { v = calcular(h.obtener(c, f), h, { c, f }); } catch (e) { v = e instanceof ErrorF ? e : E("#VALOR!"); }
       pila.delete(kp);
       h.cache.set(k, v);
       return v;
@@ -605,7 +909,7 @@
       return out;
     }
 
-    function calcular(crudo, h) {
+    function calcular(crudo, h, donde) {
       if (crudo == null || crudo === "") return "";
       const s = String(crudo);
       if (s[0] !== "=") return calcularLiteral(s.trim()) === s.trim() ? s : calcularLiteral(s.trim());
@@ -677,13 +981,16 @@
         }
         if (x.k === "id") {
           i++;
-          if (x.v === "VERDADERO" || x.v === "TRUE") return true;
-          if (x.v === "FALSO" || x.v === "FALSE") return false;
+          if (x.v === "VERDADERO" || x.v === "TRUE" || x.v === "FALSO" || x.v === "FALSE") {
+            if (es("(")) { toma("("); toma(")"); }   // también como función: =VERDADERO()
+            return x.v === "VERDADERO" || x.v === "TRUE";
+          }
           if (es("(")) {
             toma("(");
             const nombre = ALIAS[x.v] || x.v;
             const fn = FUNCS[nombre];
             if (!fn) throw E("#NOMBRE?");
+            if (DE_REFERENCIA.has(nombre)) return deReferencia(nombre);
             const args = [];
             if (ver() && !es(")")) {
               args.push(argumento());
@@ -697,6 +1004,57 @@
           throw E("#NOMBRE?");
         }
         throw E("#VALOR!");
+      }
+      /** El valor de una referencia ya armada (una celda o un rango). */
+      function valorDeRef(r) {
+        if (r.tipo === "celda") { const hh = hojaDe(r.hoja, h); if (!hh) throw E("#REF!"); const v = valorEn(hh, r.a.c, r.a.f); if (v instanceof ErrorF) throw v; return v; }
+        return rango(r, h);
+      }
+      /** Filas y columnas que abarca una referencia: { f1, f2, c1, c2 }. */
+      function cajaDeRef(r) {
+        const hh = hojaDe(r.hoja, h);
+        if (!hh) throw E("#REF!");
+        if (r.tipo === "col") return { c1: Math.min(r.a.c, r.b.c), c2: Math.max(r.a.c, r.b.c), f1: 0, f2: Math.max(1, hh.filas) - 1 };
+        if (r.tipo === "fila") return { f1: Math.min(r.a.f, r.b.f), f2: Math.max(r.a.f, r.b.f), c1: 0, c2: Math.max(1, hh.cols) - 1 };
+        return { c1: Math.min(r.a.c, r.b.c), c2: Math.max(r.a.c, r.b.c), f1: Math.min(r.a.f, r.b.f), f2: Math.max(r.a.f, r.b.f) };
+      }
+      /** FILA, COLUMNA, FILAS, COLUMNAS, INDIRECTO y DESREF: el primer argumento es una referencia, no su valor. */
+      function deReferencia(nombre) {
+        // ¿el argumento que sigue es una referencia sola? (A1, B2:C5, Hoja2!A1)
+        const refSola = () => { const t = tk[i], sig = tk[i + 1]; if (t && t.k === "ref" && sig && sig.k === "op" && (sig.v === ")" || sig.v === "," || sig.v === ";")) { i++; return t.v; } return null; };
+        const resto = () => { const l = []; while (es(",") || es(";")) { toma(); l.push(es(")") || es(",") || es(";") ? undefined : expr()); } toma(")"); return l; };
+        if (nombre === "FILA" || nombre === "COLUMNA") {
+          if (es(")")) { toma(")"); if (!donde) throw E("#VALOR!"); return (nombre === "FILA" ? donde.f : donde.c) + 1; }
+          const r = refSola();
+          if (!r) throw E("#VALOR!");
+          toma(")");
+          const c = cajaDeRef(r);
+          return (nombre === "FILA" ? c.f1 : c.c1) + 1;
+        }
+        if (nombre === "FILAS" || nombre === "COLUMNAS") {
+          const r = refSola();
+          if (r) { toma(")"); const c = cajaDeRef(r); return nombre === "FILAS" ? c.f2 - c.f1 + 1 : c.c2 - c.c1 + 1; }
+          const v = expr(); toma(")");
+          if (!Array.isArray(v)) return 1;
+          const cols = v.cols || 1;
+          return nombre === "FILAS" ? Math.ceil(v.length / cols) : cols;
+        }
+        if (nombre === "INDIRECTO") {
+          const t = texto(expr()).trim(); resto();
+          const r = leerRef(t, 0);
+          if (!r || r.fin !== t.length) throw E("#REF!");
+          return valorDeRef(r.ref);
+        }
+        // DESREF(referencia; filas; columnas; [alto]; [ancho])
+        const r0 = refSola();
+        if (!r0) throw E("#VALOR!");
+        const a = resto(), c = cajaDeRef(r0);
+        const df = Math.trunc(num(a[0] === undefined ? 0 : a[0])), dc = Math.trunc(num(a[1] === undefined ? 0 : a[1]));
+        const alto = a[2] === undefined ? c.f2 - c.f1 + 1 : Math.trunc(num(a[2])), ancho = a[3] === undefined ? c.c2 - c.c1 + 1 : Math.trunc(num(a[3]));
+        const f1 = c.f1 + df, c1 = c.c1 + dc;
+        if (alto < 1 || ancho < 1 || f1 < 0 || c1 < 0) throw E("#REF!");
+        const A = { c: c1, f: f1 }, B = { c: c1 + ancho - 1, f: f1 + alto - 1 };
+        return valorDeRef(alto === 1 && ancho === 1 ? { tipo: "celda", a: A, b: A, hoja: r0.hoja } : { tipo: "rango", a: A, b: B, hoja: r0.hoja });
       }
       // Un error dentro de un argumento se guarda como valor (así SI y SIERROR pueden ignorarlo)
       // y se saltan los tokens que quedaron de ese argumento.

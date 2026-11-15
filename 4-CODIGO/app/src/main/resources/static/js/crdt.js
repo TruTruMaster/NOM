@@ -322,6 +322,8 @@
           }
         }
         const r = await NOM.api.post(`/api/documentos/${this.id}/ops`, { cliente: this.nodo, ops: lote, dispositivo: NOM.api.dispositivo }, { ms: 12000 });
+        // DEF-46: el envío salió bien, así que el corte terminó: hasta aquí se suelta la marca de «sin conexión».
+        if (NOM.ramas && !this.opc.local && !this.opc.soloMemoria && NOM.ramas.marca(this.id)) NOM.ramas.soltar(this.id);
         // 3.5: partes con dueño. El servidor no aplicó esas operaciones; el editor vuelve a cargar.
         if (r && r.rechazadas && r.rechazadas.length) setTimeout(() => this.opc.alRechazadas && this.opc.alRechazadas(r), 0);
         if (r && r.reloj) this.relojServidor = Math.max(this.relojServidor || 0, r.reloj);

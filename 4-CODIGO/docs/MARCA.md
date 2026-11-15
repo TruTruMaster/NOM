@@ -13,8 +13,9 @@ juntas. La separación en S entre las dos es el punto donde se encuentran sus cu
 
 - Recoge el lema del equipo, *We carry the flame*, y el color `--llama` (#F06A3D) que la
   interfaz ya reservaba para la marca.
-- La otra lengua es índigo, el acento de toda la interfaz (`--acento`), así que el ícono y la
-  app se ven como una sola cosa.
+- La otra lengua es índigo. Desde la 0.14.0 el color de la interfaz (`--acento`) es el azul noche
+  del fondo del ícono (`#2B2952`), así que el ícono y la app se ven como una sola cosa; el naranja
+  queda para el avance (barra de carga) y la marca.
 - El fondo es una noche índigo: el fuego se ve de noche, y es donde la gente se reúne a su
   alrededor.
 

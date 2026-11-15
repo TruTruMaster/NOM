@@ -48,10 +48,10 @@ class Pagina:
         p.goto(url(self.base, "/")); p.wait_for_selector("#u", timeout=40000)
         p.fill("#u", c["nombre"]); p.fill("#c", N.CL); p.click("button[type=submit]")
         p.wait_for_function("() => !!localStorage.getItem('nom.token')", timeout=40000)
-        # La bienvenida sale cuando ya se abrió la bóveda (después de guardar el token): se espera a que salga y se vaya.
-        try: p.wait_for_selector(".bienvenida-momento", timeout=6000)
+        # El inicio se pinta cuando ya se abrió la bóveda (después de guardar el token): se espera a que esté.
+        try: p.wait_for_selector(".riel, .barra-movil", state="attached", timeout=10000)
         except Exception: pass
-        p.wait_for_function("() => !document.querySelector('.bienvenida-momento')", timeout=10000); self.t(300)
+        self.t(600)
         self.ev("() => document.querySelectorAll('.velo').forEach(v => v.remove())")
 
     def abrir(self, doc):
@@ -141,6 +141,10 @@ def prueba_hoja(P, c, e):
         ('=BUSCARV("Eva";A2:C5;2;FALSO)', "10"), ('=VLOOKUP("Luis",A2:C5,3,FALSE)', "3"), ('=CONTAR.SI(D2:D5;"A")', "2"),
         ('=SUMAR.SI(D2:D5;"B";B2:B5)', "13.5"), ('=PROMEDIO.SI(D2:D5;"A";B2:B5)', "9.5"), ('=CONTAR.SI.CONJUNTO(D2:D5;"B";B2:B5;">6")', "1"),
         ('=SUMAR.SI.CONJUNTO(C2:C5;D2:D5;"A";B2:B5;">9")', "0"), ('=SI.CONJUNTO(B5>=9;"A";B5>=7;"B";VERDADERO;"C")', "C"),
+        # 0.13.2 (cada función nueva se compara además con LibreOffice en pruebas/office/funciones_lo.py)
+        ("=REDONDEAR(PAGO(5%/12;60;100000);2)", "-1887.12"), ("=FILAS(A1:D5)&\"x\"&COLUMNAS(A1:D5)", "5x4"), ('=SI.ND(BUSCARV("Zoe";A2:C5;2;FALSO);"no está")', "no está"),
+        ("=PERCENTIL(B2:B5;0.5)", "8.25"), ('=CAMBIAR(D3;"A";"mañana";"B";"tarde")', "tarde"), ('=TEXTOANTES("uno-dos";"-")', "uno"), ("=NUM.DE.SEMANA(FECHA(2026;11;14))", "46"),
+        ('=SUMA(INDIRECTO("B2:B5"))', "32.5"), ("=SUMA(DESREF(B1;1;0;2;1))", "16.5"), ("=M.C.D(12;18)", "6"), ("=ES.PAR(C2)", "FALSO"),
         ("=SIERROR(1/0;\"nada\")", "nada"), ("=MEDIANA(B2:B5)", "8.25"), ("=MODA(1;2;2;3)", "2"), ("=JERARQUIA(B3;B2:B5)", "3"),
         ("=K.ESIMO.MAYOR(B2:B5;2)", "9"), ('=CONCATENAR(A2;" ";D2)', "Ana A"), ("=IZQUIERDA(A3;2)", "Lu"), ("=DERECHA(A3;2)", "is"),
         ("=EXTRAE(A4;2;2)", "va"), ("=MAYUSC(A5)", "JUAN"), ('=ESPACIOS("  hola   mundo ")', "hola mundo"), ('=SUSTITUIR("a-b-c";"-";"+")', "a+b+c"),
@@ -812,6 +816,118 @@ def prueba_cuentas(P, c, e, salida):
     check("sin errores de JavaScript (sin red y de regreso)", not [x for x in P.errores if "Failed to fetch" not in x and "ERR_INTERNET" not in x and "net::" not in x], P.errores[-3:])
 
 
+def prueba_relevo(P, c, e, salida, movil):
+    """Lo corregido en la 0.13.2 (relevo del 14 de noviembre): DEF-43, 44, 47, 48, 49 y lo visto al usar la app."""
+    print("\n== 0.13.2: códigos y enlaces, Atrás, Tab y Enter en la hoja, tocar para escribir, cambios desde la última visita", flush=True)
+    p = P.p
+    # ---- DEF-48 / DEF-49: qué es un código y qué es una dirección
+    casos = {"V5MP4CWE": True, "V5MP-4CWE": True, "v5mp4cwe": True, " v5mp 4cwe ": True, "ABC234": True, "192.168.1.20:8080": False, "192.168.1.20": False, "salon.local": False,
+             "localhost:8099": False, "12345678": False, "hola": False, "https://nomcolab.dpdns.org/unirse?c=V5MP4CWE#k=" + "a" * 43: True, "nomcolab.dpdns.org/unirse?c=V5MP4CWE": True}
+    r = P.ev("(cs) => Object.fromEntries(cs.map((t) => [t, NOM.union.esCodigo(t)]))", list(casos))
+    check("un código (con o sin guion, minúsculas, espacios, o el enlace completo) no se confunde con una dirección", r == casos, {k: v for k, v in r.items() if casos[k] != v})
+    esp2 = N.api("POST", "/api/espacios", {"nombre": "Con código " + str(int(time.time()) % 100000)}, c["token"])[1]
+    cod = N.api("POST", f"/api/espacios/{esp2['id']}/enlaces", {"permiso": "EDICION"}, c["token"])[1]["codigo"]
+    def unirse_con(texto, campo):
+        p.goto(url(P.base, "/#/")); P.t(900); P.cerrar_hojas()
+        P.ev("() => NOM.vistaEspacios.unirse()"); P.t(700)
+        if campo == "direccion":
+            if not P.ev("() => !!document.querySelector('.velo .hoja [data-manual]')"): return None   # servidor sin red local: no hay ese campo
+            P.ev("() => { document.querySelector('.velo .hoja details').open = true; }"); P.t(150)
+            p.fill(".velo .hoja [data-manual] input[name=dir]", texto); p.press(".velo .hoja [data-manual] input[name=dir]", "Enter")
+        else:
+            p.click(".velo .hoja [data-codigo]"); p.wait_for_selector("#pt", timeout=5000); p.fill("#pt", texto); p.click(".velo .hoja [data-si]")
+        P.t(1300)
+        return [P.ev("() => location.hash"), P.hoja_abierta() or "", P.avisos()]
+    for etq, texto in (("sin guion", cod), ("con guion", cod[:4] + "-" + cod[4:]), ("en minúsculas", cod.lower()), ("con espacios", f" {cod[:4]} {cod[4:]} ")):
+        r = unirse_con(texto, "codigo")
+        check(f"«Escribir código», {etq}: lleva al espacio", r[0] == "#/unirse/" + cod, r)
+    r = unirse_con(cod, "direccion")
+    if r is None: print("  --   (el servidor de pruebas no se anuncia en la red: sin campo de dirección)", flush=True)
+    else:
+        check("DEF-48: el código escrito donde va la dirección entra al espacio (no «Abrir otro equipo»)", r[0] == "#/unirse/" + cod and "otro equipo" not in r[1], r)
+        r = unirse_con("hola mundo", "direccion")
+        check("…y algo que no es dirección ni código avisa en vez de abrir «http://hola…»", "otro equipo" not in r[1] and "no parece una dirección" in " ".join(r[2] or []), r)
+    llave = "K" * 43
+    enlace = P.ev("() => location.origin") + "/unirse?c=" + cod + "#k=" + llave
+    r = unirse_con(enlace, "codigo")
+    check("DEF-49: en «Escribir código» se puede pegar el enlace completo (más de 12 letras)", r[0] == "#/unirse/" + cod, r)
+    check("…y la llave que trae después del # se guarda para ese código", P.ev("(c) => { try { return sessionStorage.getItem('nom.e2e.inv.' + c); } catch (e) { return null; } }", cod) == llave, "sin llave")
+    al = N.api("GET", "/.well-known/assetlinks.json", None, None)
+    check("DEF-49: el servidor publica /.well-known/assetlinks.json con la app y su huella", al[0] == 200 and isinstance(al[1], list) and al[1][0]["target"]["package_name"] == "mx.wack.nom" and len(al[1][0]["target"]["sha256_cert_fingerprints"][0]) == 95, str(al)[:200])
+    P.cerrar_hojas()
+
+    # ---- Ajustes: la versión a la vista (B-1) y el pie sin botones cortados (DEF-43)
+    p.goto(url(P.base, "/#/")); P.t(700); P.cerrar_hojas()
+    P.ev("() => NOM.vistaEspacios.preferencias()"); P.t(1500)   # (la ventana sube con una animación: se mide ya quieta)
+    ver = P.ev("() => (document.querySelector('.velo .hoja [data-version]') || {}).innerText || ''")
+    check("Ajustes dice la versión de NOM-COLAB", P.ev("() => NOM.VERSION") in ver, ver)
+    cortados = P.ev("() => [...document.querySelectorAll('.velo .hoja-pie .btn, .velo .hoja [data-tema] button')].filter(b => { const r = document.createRange(); r.selectNodeContents(b); const t = r.getBoundingClientRect(), q = b.getBoundingClientRect(); return t.left < q.left - 1 || t.right > q.right + 1 || q.right > innerWidth + 1; }).map(b => b.innerText.trim())")
+    check("DEF-43: en Ajustes ningún botón sale cortado («Valores de fábrica», «Oscuro»)", not cortados, cortados)
+    P.cerrar_hojas()
+
+    # ---- Hoja: Tab, Tab, Enter regresa a la columna donde empezó el renglón (como Excel)
+    dh = N.documento(c["token"], e, "HOJA", "Tab y Enter")
+    P.abrir(dh)
+    P.clic(celda(P, 1, 1))
+    for t in ("uno", "dos", "tres"): p.keyboard.type(t); p.keyboard.press("Tab"); P.t(60)
+    p.keyboard.type("cuatro"); p.keyboard.press("Enter"); P.t(150)
+    sel = P.ev("() => { const td = document.querySelector('td.sel'); return td ? [+td.dataset.c, +td.dataset.f] : null; }")
+    check("hoja: tras Tab, Tab, Tab y Enter queda en la columna donde empezó, un renglón abajo", sel == [1, 2], sel)
+    check("…y lo escrito quedó en su celda", [visto(P, 1, 1), visto(P, 4, 1)] == ["uno", "cuatro"], [visto(P, 1, 1), visto(P, 4, 1)])
+    p.keyboard.type("x"); p.keyboard.press("Enter"); P.t(120)
+    sel = P.ev("() => { const td = document.querySelector('td.sel'); return td ? [+td.dataset.c, +td.dataset.f] : null; }")
+    check("…sin Tab, Enter solo baja (misma columna)", sel == [1, 3], sel)
+
+    # ---- Atrás del teléfono: con un menú abierto solo cierra el menú
+    P.ev("() => NOM.menu(document.querySelector('.ed-herramientas') || document.body, [{ texto: 'Prueba', fn: () => {} }])"); P.t(250)
+    hay = P.ev("() => !!document.querySelector('.menu')")
+    antes = P.ev("() => location.hash")
+    r = P.ev("() => NOM.atras()"); P.t(200)
+    check("Atrás con un menú abierto cierra el menú y se queda en el documento", hay and r is True and not P.ev("() => !!document.querySelector('.menu')") and P.ev("() => location.hash") == antes, [hay, r])
+    check("…y sin nada abierto dice que no cerró nada (entonces sí regresa de pantalla)", P.ev("() => NOM.atras()") is False)
+
+    # ---- Diapositiva en el celular: un toque sobre el cuadro ya elegido es «escribir aquí»
+    if movil:
+        dp = N.documento(c["token"], e, "PRESENTACION", "Tocar para escribir")
+        P.abrir(dp); P.quitar_consejo()
+        P.doc("doc.cambiar('toc1', { tipo: 'texto', pagina: doc.paginas()[0], orden: 9, z: 9, x: 120, y: 150, w: 420, h: 90, estilo: 'p', html: 'Texto de prueba' }); return 1;"); P.t(500)
+        xy = fig_xy(P, "toc1")
+        p.touchscreen.tap(*xy); P.t(900)
+        check("celular: el primer toque elige el cuadro (todavía no escribe)", P.doc("return !document.querySelector('.bl [contenteditable=true]');"), "ya estaba escribiendo")
+        xy = fig_xy(P, "toc1")
+        p.touchscreen.tap(*xy); P.t(700)
+        check("celular: otro toque (sin prisa) sobre el cuadro elegido abre el texto para escribir", P.doc("return !!document.querySelector('.bl [contenteditable=true], .bl.editando');"), "no entró a escribir")
+        p.keyboard.type(" más"); P.t(300)
+        P.ev("() => document.activeElement && document.activeElement.blur()"); P.t(500)
+        check("…y lo escrito queda en el cuadro", "más" in (P.doc("return (doc.bloque('toc1') || {}).html || '';") or ""), P.doc("return (doc.bloque('toc1') || {}).html || '';"))
+
+    # ---- DEF-44: «lo que cambió desde tu última visita» mientras otra persona borra y escribe al final
+    otro = N.cuenta()
+    N.api("PUT", f"/api/espacios/{e}/accesos", {"usuario": otro["nombre"], "permiso": "EDICION"}, c["token"])
+    dt = N.documento(c["token"], e, "TEXTO", "Última visita")
+    P.abrir(dt); p.keyboard.type("Primer renglón de la dueña. Segundo."); P.t(900)
+    p.goto(url(P.base, "/#/")); P.t(900)   # se va: desde aquí, lo que cambien otros es «desde su visita»
+    B = otra_pagina(movil=False)
+    try:
+        B.entrar(otro); B.abrir(dt); B.t(500)
+        B.ev("() => { const ed = [...document.querySelectorAll('[contenteditable=true]')].find(x => x.offsetParent); ed.focus(); const r = document.createRange(); r.selectNodeContents(ed); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }")
+        B.p.keyboard.type(" Agregado por otra persona."); B.t(500)
+        B.p.keyboard.press("Control+a"); B.p.keyboard.press("Control+b"); B.t(500)
+        # formato del ÚLTIMO párrafo (su marca es el fin del documento: ahí estaba el error)
+        B.p.keyboard.press("Control+End"); B.barra("Alinear"); B.menu("Centrar"); B.t(700)
+        antes_err = len(P.errores)
+        P.abrir(dt); P.t(900)
+        P.ev("() => { const ed = NOM.editorActual; if (ed.cambiosVisita && ed.modoApi.resaltarCambios) ed.modoApi.resaltarCambios({ visita: ed.visita, cambios: ed.cambiosVisita }); }"); P.t(400)
+        check("al volver, se sabe qué cambió desde la última visita", bool(P.ev("() => !!NOM.editorActual.cambiosVisita")), "sin cambiosVisita")
+        # la otra persona sigue: borra el final y escribe (rangos que llegan hasta el fin del documento)
+        B.p.keyboard.press("Control+End"); B.p.keyboard.press("Shift+Home"); B.p.keyboard.press("Backspace"); B.p.keyboard.type("Final nuevo"); B.t(1500)
+        nuevos = P.errores[antes_err:]
+        check("DEF-44: resaltar los cambios mientras otra persona borra y escribe al final no da errores", not nuevos, nuevos[:3])
+        check("…y el párrafo que tocaron queda marcado", P.ev("() => document.querySelectorAll('.wd-cambiado').length") >= 1, P.ev("() => document.querySelectorAll('.wd-cambiado').length"))
+    finally:
+        B.p.context.close()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("salida")
@@ -834,7 +950,8 @@ def main():
         P = Pagina(p, a.base)
         OTRO["pw"] = pw; OTRO["base_local"] = os.environ.get("NOM_BASE_LOCAL", a.base)
         P.entrar(c)
-        secciones = {"hoja": prueba_hoja, "texto": prueba_texto, "colaboracion": lambda P, c, e: prueba_colaboracion(P, c, e, a.salida), "lienzo": prueba_lienzo, "cuentas": lambda P, c, e: prueba_cuentas(P, c, e, a.salida)}
+        secciones = {"hoja": prueba_hoja, "texto": prueba_texto, "colaboracion": lambda P, c, e: prueba_colaboracion(P, c, e, a.salida), "lienzo": prueba_lienzo, "cuentas": lambda P, c, e: prueba_cuentas(P, c, e, a.salida),
+                     "relevo": lambda P, c, e: prueba_relevo(P, c, e, a.salida, a.movil)}
         for nombre, fn in secciones.items():
             if a.solo and nombre not in a.solo: continue
             try: fn(P, c, e)

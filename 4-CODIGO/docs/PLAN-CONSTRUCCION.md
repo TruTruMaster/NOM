@@ -470,11 +470,13 @@ comandos y criterios, en `docs/RELEVO-REVISION-PROFUNDA.md`.
 - [ ] Bloque B: lo nuevo de 0.13.0 en el A55, el escritorio y la Pi (B-1 a B-15).
 - [x] 14-nov, equipos reales (`docs/RELEVO-PARIDAD-Y-PRUEBAS-REALES.md`): B-1, B-2, B-3, B-4, B-5, B-8, B-9, B-16
       y tiempo real con 4 equipos, correctos; validador de Microsoft en las pruebas (511 de 511 sin errores nuevos).
-- [ ] 0.13.2: DEF-46 (ramas: la marca se reinicia con cada reintento sin red), DEF-45 (PowerPoint: editar una
+- [x] 0.13.2: DEF-46 (ramas: la marca se reinicia con cada reintento sin red), DEF-45 (PowerPoint: editar una
       diapositiva importada borra animaciones y marcadores), DEF-44 (error en `aplicarResaltado` con `FIN`),
       DEF-47 (encender el teléfono con otro servidor elegido), DEF-48 (código sin guion = dirección), DEF-49
       (la llave de un espacio cifrado no llega a la app sin cámara), DEF-43 (botón cortado en Ajustes del A55);
       decidir H-8 (la app elige sola un servidor del Wi-Fi). Cada uno con su prueba; luego B-6 y B-7 reales.
+      Hecho el 14-nov (LOG 59), más MEJ-1 (Word se parcha) y 89 funciones de hoja. **Falta** repetir B-6 y B-7 en el
+      escritorio real, y DEF-47 y DEF-49 en el A55 (solo se probaron en el emulador y en el navegador).
 - [ ] Recoger la investigación terminada del escritorio en `docs/paridad/` y hacer `docs/PARIDAD-OFFICE.md`.
 - [ ] Bloque C: red de la escuela y varios dispositivos.
 - [ ] Bloque D: carga en la Pi con tope mayor y en el teléfono como servidor.
@@ -486,6 +488,23 @@ comandos y criterios, en `docs/RELEVO-REVISION-PROFUNDA.md`.
 - [ ] Bloque K: documentos hechos en la app a Word, Excel y PowerPoint, abiertos en Office real.
 - [ ] T2 de `docs/RELEVO-REVISION-PROFUNDA.md`: inventario de funciones, cada una con su prueba.
 - [ ] T3 de `docs/RELEVO-REVISION-PROFUNDA.md`: paridad con Office (matriz por pestaña y lista de faltantes).
+
+## Fase 17. Apariencia y orden de la interfaz (15 de noviembre de 2026, versión 0.14.0)
+
+Por qué y con qué fuentes: el documento «UI and Psychology» del equipo; lo decidido, en `docs/DISENO-UI.md`
+(secciones 1, 5 y 14, con las reglas para cada cambio de interfaz).
+
+- [x] Variables nuevas: grises neutros, un color de marca (azul noche del ícono), radios 4-12, tres sombras, movimiento de 90-200 ms sin rebote (`css/nom.css`).
+- [x] Sin «arcilla» ni «vidrio»: superficies planas con borde; sin degradados, grano, luz bajo el cursor ni brillo en el botón.
+- [x] Pesos de letra 400/600/700 en la interfaz (el contenido de los documentos no cambia).
+- [x] Entrar y crear cuenta en una columna; «¿Olvidaste tu contraseña?» junto a su campo; sin pantalla de saludo.
+- [x] Inicio: Recientes, Tus espacios, almacenamiento, primeros pasos. Riel: espacios arriba, lo guardado abajo.
+- [x] Editores: herramientas con nombre a la vista, barra que baja de renglón en la computadora, presentación en orden de trabajo con «Presentar» resaltado; sin el ícono de destellos.
+- [x] Celular: pestañas pegadas abajo. Ayuda y app Android con los mismos colores.
+- [x] Regresión rápida: todo bien salvo `rastreo` (los mismos 27 casos de la ruedita de la 0.13.2); `prueba_funciones` 201 de 201 (204 de 204 a ancho de celular).
+- [ ] Verla en el A55 (barras del sistema, pestañas abajo) y en el escritorio real.
+- [ ] Prueba de cinco segundos y tareas con cinco personas (bloque H) con la apariencia nueva.
+- [ ] Commit y publicar la 0.14.0 (Pi, release de GitHub, push); incluye lo de la 0.13.2 que no se había publicado.
 
 ## Cómo quedó (8 de noviembre de 2026)
 
@@ -532,6 +551,9 @@ sesión anterior: `./desplegar.sh roles` para las columnas nuevas de usuarios.
 - La copia de trabajo `~/NOM-COLAB` no se actualizó en esta sesión (es más vieja que `~/NOM`).
 
 ## Orden recomendado para la siguiente sesión
+
+**Desde el 15 de noviembre de 2026:** la 0.14.0 (fase 17, apariencia y orden) está hecha y probada en local, sin commit ni
+publicar: revisarla en el A55, hacer el commit y publicarla junto con la 0.13.2. Después sigue lo de abajo.
 
 **Desde el 14 de noviembre de 2026 (madrugada):** leer primero `docs/RELEVO-PARIDAD-Y-PRUEBAS-REALES.md`.
 Orden: (1) versión 0.13.2 con DEF-46 (ramas), DEF-45 (PowerPoint), DEF-44, DEF-48, DEF-49, DEF-47 y

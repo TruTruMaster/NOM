@@ -61,7 +61,7 @@
       const cuerpo = html(`<div class="col qr-escaner">
         <div class="qr-camara" data-camara><video playsinline muted autoplay></video><div class="qr-mira" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
           <div class="qr-estado" data-estado><span class="cargando"></span> Abriendo la cámara…</div></div>
-        <p class="suave chico" style="font-weight:650;text-align:center">${esc(opc.ayuda || "Apunta al código QR que muestra la pantalla del propietario.")}</p>
+        <p class="suave chico" style="font-weight:400;text-align:center">${esc(opc.ayuda || "Apunta al código QR que muestra la pantalla del propietario.")}</p>
         <form class="fila" data-manual>
           <div class="entrada crece">${ico("keyboard")}<input name="codigo" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="${esc(opc.manual || "O escribe el código (8 letras)")}" aria-label="Código"></div>
           <button class="btn primario">Entrar</button>

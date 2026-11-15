@@ -194,7 +194,7 @@
     const ancla = m && m.ancla ? m.ancla() : null;
     if (!ancla) return aviso("Elige primero el texto, la celda o la figura que quieres comentar", { tipo: "info", ms: 3200 });
     const cuerpo = html(`<form class="col"><div class="hilo-cita estatica">${ico("quote", "ico-s")}<span class="recorta">${esc(ancla.cita || "")}</span></div>
-      <textarea name="texto" rows="4" maxlength="2000" placeholder="Escribe tu comentario…" style="width:100%;border-radius:12px;border:1px solid var(--borde);background:var(--sup-2);padding:10px;font:600 15px/1.4 var(--fuente);color:var(--tinta)"></textarea></form>`);
+      <textarea name="texto" rows="4" maxlength="2000" placeholder="Escribe tu comentario…" style="width:100%;border-radius:var(--r-s);border:1px solid var(--borde);background:var(--sup-2);padding:10px;font:600 15px/1.4 var(--fuente);color:var(--tinta)"></textarea></form>`);
     const pie = html(`<div style="display:contents"><button class="btn" data-no type="button">Cancelar</button><button class="btn primario" data-si>${ico("message-square", "ico-s")} Comentar</button></div>`);
     const h = NOM.hoja({ titulo: "Nuevo comentario", icono: "message-square", cuerpo, pie });
     setTimeout(() => cuerpo.texto.focus(), 60);

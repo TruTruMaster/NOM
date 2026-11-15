@@ -11,7 +11,7 @@
       <header class="ver-cab"><svg class="logo" aria-hidden="true"><use href="#logo"/></svg>
         <div class="crece ver-titulo"><b data-nombre>Abriendo…</b><small class="suave" data-sub></small></div>
         <button class="btn chico" type="button" data-imprimir hidden>${ico("download", "ico-s")} <span>Imprimir o guardar PDF</span></button></header>
-      <main class="ver-cuerpo" data-cuerpo><div class="esqueleto" style="height:60vh;border-radius:18px"></div></main>
+      <main class="ver-cuerpo" data-cuerpo><div class="esqueleto" style="height:60vh;border-radius:var(--r-l)"></div></main>
       <footer class="ver-pie suave">Hecho con NOM-COLAB · Solo lectura</footer></div>`;
     const cuerpo = $("[data-cuerpo]", raiz);
     let r;

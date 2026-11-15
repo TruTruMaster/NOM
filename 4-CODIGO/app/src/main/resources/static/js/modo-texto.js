@@ -1386,7 +1386,10 @@
         const reg = doc().estado.seq[B];
         if (reg) [...reg.vis, ...reg.fmt].forEach((o) => {
           if (o.t <= R || !nodos.has(o.n)) return;
-          (o.r || []).slice(0, 50).forEach(([n, t1]) => { const it = sec().item(n === FIN ? FIN : S().clave(t1, n)); if (!it) return; let k = sec().indice(it); while (k < sec().items.length && !(sec().items[k].v)) k++; const p = k < sec().items.length ? sec().posicion(sec().items[k].id) : visPintado.length; if (p >= 0) tocados.add(parrafoEn(p)); });
+          (o.r || []).slice(0, 50).forEach(([n, t1]) => { const it = sec().item(n === FIN ? FIN : S().clave(t1, n)); if (!it) return; let k = sec().indice(it);
+            // DEF-44: el fin de la secuencia no está en la lista de elementos (indice da -1): es el último párrafo.
+            if (k < 0) { if (visPintado.length) tocados.add(parrafoEn(visPintado.length - 1)); return; }
+            while (k < sec().items.length && !(sec().items[k].v)) k++; const p = k < sec().items.length ? sec().posicion(sec().items[k].id) : visPintado.length; if (p >= 0) tocados.add(parrafoEn(p)); });
         });
         tocados.forEach((pi) => { const el = cuerpo.children[pi]; if (el) el.classList.add("wd-cambiado"); });
         if (resaltar && nuevos.length) {
@@ -3088,7 +3091,7 @@
       function dialogoFormato() {
         const fb = formatoBase(), esp = (ed.espacio && ed.espacio.formatoBase) || null;
         const cuerpoH = html(`<form class="col">
-          <p class="suave" style="font-weight:650">El texto sin formato propio usa esta fuente, este tamaño, este interlineado y esta sangría de primera línea (como el estilo Normal de Word). Para APA: Times New Roman 12, doble y 1.27 cm.</p>
+          <p class="suave" style="font-weight:400">El texto sin formato propio usa esta fuente, este tamaño, este interlineado y esta sangría de primera línea (como el estilo Normal de Word). Para APA: Times New Roman 12, doble y 1.27 cm.</p>
           <div class="campo"><label>Fuente</label><div class="entrada"><select data-f><option value="">Calibri (la de siempre)</option>${Object.keys(FUENTES).filter((f) => f !== "Calibri").map((f) => `<option ${fb.fuente === f ? "selected" : ""}>${esc(f)}</option>`).join("")}</select></div></div>
           <div class="fila"><div class="campo crece"><label>Tamaño (pt)</label><div class="entrada"><input data-t inputmode="decimal" value="${esc(fb.tam || "")}" placeholder="11"></div></div>
             <div class="campo crece"><label>Primera línea (cm)</label><div class="entrada"><input data-pr inputmode="decimal" value="${esc(fb.primera || "")}" placeholder="0"></div></div>

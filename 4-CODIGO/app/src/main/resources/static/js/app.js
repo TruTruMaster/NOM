@@ -48,23 +48,26 @@
     raiz.innerHTML = "";
     const c = html(`<div class="app con-riel">
       <aside class="riel" aria-label="Navegación">
-        <a class="marca" href="#/" style="text-decoration:none;color:inherit"><svg class="logo"><use href="#logo"/></svg><div>NOM-COLAB<small>Trabajo en equipo, con o sin Internet</small></div></a>
-        <button class="riel-buscar" type="button" data-a="paleta" aria-label="Buscar o ir a (Ctrl+K)">${ico("search")}<span class="crece">Buscar o ir a…</span><kbd>Ctrl K</kbd></button>
+        <a class="marca" href="#/" style="text-decoration:none;color:inherit"><svg class="logo"><use href="#logo"/></svg>NOM-COLAB</a>
+        <button class="riel-buscar" type="button" data-a="paleta" aria-label="Buscar o ir a (Ctrl+K)">${ico("search", "ico-s")}<span class="crece">Buscar o ir a…</span><kbd>Ctrl K</kbd></button>
         <a class="riel-item" href="#/" ${actual === "inicio" ? 'aria-current="page"' : ""}>${ico("house")} Inicio</a>
-        <a class="riel-item" href="#/dispositivo" ${actual === "dispositivo" ? 'aria-current="page"' : ""} data-micro="${esc(NOM.etiquetaEquipo())}|Lo guardado aquí para abrirlo sin Internet y cuánto ocupa.${api.empaquetada ? " También: compartir sin Internet desde este teléfono." : ""}">${ico(api.empaquetada ? "smartphone" : "hard-drive")} ${esc(NOM.etiquetaEquipo())}</a>
-        ${sinCuenta || u.invitado ? "" : `<button class="riel-item" data-a="almacen" data-micro="En el servidor|Lo de tus espacios: cuánto ocupa en ${esc(NOM.vistaEspacios.nombreServidor())} y cuánto te queda.">${ico("cloud")} En el servidor</button>`}
         ${sinCuenta ? `
-        <div class="clay" style="margin-top:12px;padding:14px;display:flex;flex-direction:column;gap:10px">
+        <a class="riel-item" href="#/dispositivo" ${actual === "dispositivo" ? 'aria-current="page"' : ""} data-micro="${esc(NOM.etiquetaEquipo())}|Lo guardado aquí para abrirlo sin Internet y cuánto ocupa.${api.empaquetada ? " También: compartir sin Internet desde este teléfono." : ""}">${ico(api.empaquetada ? "smartphone" : "hard-drive")} ${esc(NOM.etiquetaEquipo())}</a>
+        <div class="caja" style="margin-top:12px;padding:14px;display:flex;flex-direction:column;gap:10px;box-shadow:none">
           <b style="font-size:14px">Sin cuenta</b>
-          <span class="chico suave" style="font-weight:650">Tus documentos viven solo ${NOM.aqui().en}. Con una cuenta los guardas en un espacio y colaboras con tu equipo.</span>
+          <span class="chico suave">Tus documentos viven solo ${NOM.aqui().en}. Con una cuenta los guardas en un espacio y colaboras con tu equipo.</span>
           <button class="btn primario chico" data-a="ir-cuenta">${ico("user-plus", "ico-s")} Crear cuenta</button>
         </div><span class="crece"></span>` : `
+        <div class="riel-titulo fila-e">Tus espacios <button class="icono-btn" data-a="nuevo" style="width:28px;height:28px" aria-label="Nuevo espacio" data-micro="Nuevo espacio">${ico("plus", "ico-s")}</button></div>
+        <nav class="riel-lista" data-riel-espacios aria-label="Tus espacios"></nav>
         <button class="riel-item" data-a="unirse" data-micro="Unirse a un espacio|Con el código o el QR que te dieron, o buscándolo en el mismo Wi-Fi.">${ico("qr-code")} Unirse a un espacio</button>
-        <div class="riel-titulo fila-e">Tus espacios <button class="icono-btn" data-a="nuevo" style="width:30px;height:30px" aria-label="Nuevo espacio" data-micro="Nuevo espacio">${ico("plus", "ico-s")}</button></div>
-        <nav class="riel-lista" data-riel-espacios></nav>`}
+        <span class="crece"></span>
+        <div class="riel-titulo">Guardado</div>
+        <a class="riel-item" href="#/dispositivo" ${actual === "dispositivo" ? 'aria-current="page"' : ""} data-micro="${esc(NOM.etiquetaEquipo())}|Lo guardado aquí para abrirlo sin Internet y cuánto ocupa.${api.empaquetada ? " También: compartir sin Internet desde este teléfono." : ""}">${ico(api.empaquetada ? "smartphone" : "hard-drive")} ${esc(api.empaquetada ? "En este teléfono" : "En este equipo")}</a>
+        ${u.invitado ? "" : `<button class="riel-item" data-a="almacen" data-micro="En el servidor|Lo de tus espacios: cuánto ocupa en ${esc(NOM.vistaEspacios.nombreServidor())} y cuánto te queda.">${ico("cloud")} En el servidor</button>`}`}
         <div class="riel-pie">
           ${avatar(u)}
-          <div class="crece"><div class="recorta" style="font-weight:800">${esc(u.nombre || "")}</div><div class="chico suave recorta" ${sinCuenta ? "" : "data-red-texto"} style="font-weight:700">${sinCuenta ? "Solo en este equipo" : api.enLinea ? "Conectado" : "Sin conexión"}</div>${!sinCuenta && NOM.tipoCuenta(u) ? `<div class="chico suave recorta" style="font-weight:800">${esc(NOM.tipoCuenta(u))}</div>` : !sinCuenta && u.empresa ? `<div class="chico suave recorta" style="font-weight:800">${esc(u.empresa)}</div>` : ""}</div>
+          <div class="crece"><div class="recorta" style="font-weight:600;font-size:14px">${esc(u.nombre || "")}</div><div class="chico suave recorta" ${sinCuenta ? "" : "data-red-texto"}>${sinCuenta ? "Solo en este equipo" : api.enLinea ? "Conectado" : "Sin conexión"}</div>${!sinCuenta && NOM.tipoCuenta(u) ? `<div class="chico suave recorta">${esc(NOM.tipoCuenta(u))}</div>` : !sinCuenta && u.empresa ? `<div class="chico suave recorta">${esc(u.empresa)}</div>` : ""}</div>
           <button class="icono-btn" data-a="cuenta" aria-label="Cuenta y ajustes" data-micro="Cuenta|Preferencias y cerrar sesión.">${ico("settings")}</button>
         </div>
       </aside>
@@ -107,6 +110,7 @@
       { texto: "Privacidad y términos", icono: "shield", fn: () => NOM.ayuda("legal") },
       ...(api.empaquetada ? [{ texto: "Cambiar dónde trabaja tu equipo", icono: "server", fn: async () => {
         // La sesión de la nube se guarda (sirve para el pase y para volver sin contraseña).
+        NOM.guardar("nom.eligeServidor", true);   // H-8: lo pidió la persona, así que elige ella (no se conecta sola al primero del Wi-Fi)
         if (NOM.acceso && NOM.acceso.guardarSesionNube()) { await NOM.boveda.cerrar(false); api.limpiarSesion(); app.espacios = []; api.fijarServidor(""); location.hash = "#/"; ruta(); return; }
         api.fijarServidor(""); cerrarSesion(true);
       } }] : []),
@@ -129,7 +133,7 @@
     l.innerHTML = app.espacios.map((e) => `<a class="riel-item" href="#/espacio/${esc(e.id)}" ${e.id === actualId ? 'aria-current="page"' : ""}>
       <span class="punto-color" style="background:${esc(e.color)}"></span><span class="crece recorta">${esc(e.nombre)}</span>
       ${e.conexion ? `<span class="chip ok" style="height:20px;padding:0 6px" title="Visible en el Wi-Fi" aria-label="Visible en el Wi-Fi"><span class="punto"></span></span>` : ""}</a>`).join("")
-      || `<p class="chico suave" style="padding:4px 12px;font-weight:650">Aún no tienes espacios.</p>`;
+      || `<p class="chico suave" style="padding:4px 12px">Aún no tienes espacios.</p>`;
   }
 
   api.alCambiarRed((ok) => {
@@ -271,6 +275,12 @@
   async function arrancar() {
     // Se abrió desde un QR (/unirse?c=… o /proyectar?c=…): se pasa a la ruta de la app.
     if (NOM.union) NOM.union.desdeDireccion();
+    // DEF-49, app Android: se abrió tocando un enlace de invitación (trae el código y, si el espacio es
+    // cifrado, su llave después del #). Se usa ya con la pantalla armada.
+    try {
+      const en = window.NomAndroid && NomAndroid.enlacePendiente ? NomAndroid.enlacePendiente() : "";
+      if (en && NOM.union) setTimeout(() => NOM.union.usar(en), 700);
+    } catch (e) { /* sin puente */ }
     // App Android: si este teléfono era el servidor y Android lo cerró, se vuelve a encender.
     if (NOM.anfitrion) NOM.anfitrion.reanudar();
     // El navegador se cerró de golpe y localStorage no alcanzó a guardar la sesión: se recupera de la

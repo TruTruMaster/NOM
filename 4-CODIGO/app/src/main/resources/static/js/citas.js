@@ -165,7 +165,7 @@
       if (!f.fecha && f.anio) f.fecha = f.anio;
       const cuerpo = html(`<form class="col fuente-form" novalidate>
         <div class="campo"><label for="ff-auto">Llenar solo (DOI, ISBN o dirección web)</label>
-          <div class="fila" style="gap:8px"><div class="entrada crece">${ico("wand-sparkles")}<input id="ff-auto" data-auto placeholder="10.1038/nature12373 · 978-607-… · https://…" autocomplete="off"></div><button type="button" class="btn" data-llenar>Buscar datos</button></div></div>
+          <div class="fila" style="gap:8px"><div class="entrada crece">${ico("file-search")}<input id="ff-auto" data-auto placeholder="10.1038/nature12373 · 978-607-… · https://…" autocomplete="off"></div><button type="button" class="btn" data-llenar>Buscar datos</button></div></div>
         <div class="campo"><label for="ff-tipo">Tipo de fuente</label><select id="ff-tipo" data-tipo class="select">${TIPOS.map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join("")}</select></div>
         <div class="campo"><span class="etiqueta">Autores <span class="suave" style="font-weight:600">(si es una institución, escribe su nombre completo y marca la casilla)</span></span><div class="col" data-autores style="gap:6px"></div>
           <button type="button" class="btn chico" data-mas-autor style="align-self:flex-start">${ico("plus", "ico-s")} Otro autor</button></div>
@@ -185,7 +185,7 @@
       const previa = () => { leer(); $("[data-previa]", cuerpo).innerHTML = apaHtml(f); $("[data-en-texto]", cuerpo).textContent = enTexto(f); };
       const filaAutor = (a) => html(`<div class="autor-fila fila" style="gap:6px;align-items:center"><div class="entrada crece"><input data-fam placeholder="Apellidos (o institución)" value="${esc(a.literal || a.familia || "")}" autocomplete="off"></div>
         <div class="entrada crece"><input data-nom placeholder="Nombres" value="${esc(a.nombres || "")}" autocomplete="off"${a.literal ? " disabled" : ""}></div>
-        <label class="chico suave" style="display:flex;gap:4px;align-items:center;font-weight:700"><input type="checkbox" data-inst${a.literal ? " checked" : ""}> Institución</label>
+        <label class="chico suave" style="display:flex;gap:4px;align-items:center;font-weight:500"><input type="checkbox" data-inst${a.literal ? " checked" : ""}> Institución</label>
         <button type="button" class="icono-btn" data-quitar aria-label="Quitar autor">${ico("x")}</button></div>`);
       function pintar() {
         $("[data-tipo]", cuerpo).value = f.tipo;
@@ -281,7 +281,7 @@
         <div class="segmentado lleno" role="group" aria-label="Tipo de ficha" data-tipos>${TIPOS_FICHA.map(([v, t]) => `<button type="button" data-t="${v}" aria-pressed="${fi.tipo === v}">${t}</button>`).join("")}</div>
         <p class="suave chico" data-ayuda style="margin:0"></p>
         ${fi.original ? `<div class="ficha-original"><span class="suave chico">Lo que dice la fuente</span><blockquote>${esc(fi.original)}</blockquote></div>` : ""}
-        <div class="campo"><label for="fi-t" data-et>Texto</label><textarea id="fi-t" rows="5" data-texto style="width:100%;border-radius:12px;border:1px solid var(--borde);background:var(--sup-2);padding:10px;font:600 15px/1.45 var(--fuente);color:var(--tinta)">${esc(fi.texto)}</textarea></div>
+        <div class="campo"><label for="fi-t" data-et>Texto</label><textarea id="fi-t" rows="5" data-texto style="width:100%;border-radius:var(--r-s);border:1px solid var(--borde);background:var(--sup-2);padding:10px;font:600 15px/1.45 var(--fuente);color:var(--tinta)">${esc(fi.texto)}</textarea></div>
         <div class="fila" style="gap:10px;flex-wrap:wrap">
           <div class="campo crece"><label for="fi-f">Fuente</label><select id="fi-f" class="select" data-fuente>${fs.map((f) => `<option value="${esc(f.id)}"${f.id === fi.fuente ? " selected" : ""}>${esc(enTexto(f))} ${esc(corto(f.titulo))}</option>`).join("")}<option value="">Sin fuente todavía</option></select></div>
           <div class="campo" style="width:110px"><label for="fi-p">Página</label><div class="entrada"><input id="fi-p" data-pagina value="${esc(fi.pagina || "")}" placeholder="23" autocomplete="off"></div></div></div>
@@ -381,7 +381,7 @@
     const r = panel.resultados;
     if (!r) { res.innerHTML = `<div class="inv-ayuda"><p><b>Busca</b> en Wikipedia, libros y artículos. Abre un resultado, elige un pedazo y haz una <b>ficha</b>: textual, paráfrasis o resumen.</p><p>Las fichas se insertan en tu texto <b>con su cita</b> y la lista de referencias se arma sola en APA.</p></div>`; return; }
     if (r.error) { res.innerHTML = `<div class="alerta aviso">${ico("wifi-off")}<span>${esc(r.error)}</span></div>`; return; }
-    if (!r.l.length) { res.innerHTML = `<p class="suave" style="font-weight:650">${r.donde === "biblioteca" ? "La biblioteca del espacio está vacía (o nada coincide). Guarda ahí lo que encuentres para leerlo sin Internet." : "No se encontró nada. Prueba con otras palabras."}</p>`; return; }
+    if (!r.l.length) { res.innerHTML = `<p class="suave" style="font-weight:400">${r.donde === "biblioteca" ? "La biblioteca del espacio está vacía (o nada coincide). Guarda ahí lo que encuentres para leerlo sin Internet." : "No se encontró nada. Prueba con otras palabras."}</p>`; return; }
     res.innerHTML = r.l.map((x, i) => {
       if (r.donde === "wikipedia") return `<article class="inv-res"><b>${esc(x.titulo)}</b><p>${esc(x.resumen || "")}…</p><div class="fila"><button class="btn chico" data-leer="${i}">${ico("book-open", "ico-s")} Leer</button></div></article>`;
       const fu = x.fuente || {};
@@ -525,7 +525,7 @@
       <div class="campo"><span class="etiqueta">Secciones (con sus preguntas guía)</span><div class="col" data-secciones style="gap:6px"></div>
         <button type="button" class="btn chico" data-mas style="align-self:flex-start">${ico("plus", "ico-s")} Otra sección</button></div>
       ${fis.length ? `<div class="campo"><span class="etiqueta">¿En qué sección va cada ficha?</span><div class="col" data-fichas style="gap:6px"></div></div>` : `<p class="suave chico" style="margin:0">Aún no hay fichas: el reporte saldrá con las preguntas guía y tus referencias.</p>`}
-      <label class="fila chico" style="gap:6px;font-weight:700"><input type="checkbox" data-portada checked> Portada e índice</label></form>`);
+      <label class="fila chico" style="gap:6px;font-weight:500"><input type="checkbox" data-portada checked> Portada e índice</label></form>`);
     const pie = html(`<div style="display:contents"><button class="btn" type="button" data-no>Cancelar</button><button class="btn primario" data-si>${ico("list-tree", "ico-s")} Armar al final del documento</button></div>`);
     const h = NOM.hoja({ titulo: "Armar reporte", icono: "list-tree", cuerpo, pie, ancha: true });
     const secs = () => $$(".ar-sec", cuerpo).map((r) => [$("[data-n]", r).value.trim(), $("[data-q]", r).value.trim()]).filter((x) => x[0]);

@@ -203,7 +203,7 @@
         const lista = [...valores.entries()].sort((a, b) => a[0].localeCompare(b[0], "es", { numeric: true })).slice(0, 300);
         const actual = (v.filtros || {})[c];
         const cuerpo = html(`<div class="col">
-          <p class="suave chico" style="font-weight:650">Solo cambia lo que <b>tú</b> ves; los demás siguen viendo todas las filas.</p>
+          <p class="suave chico" style="font-weight:400">Solo cambia lo que <b>tú</b> ves; los demás siguen viendo todas las filas.</p>
           <label class="lista-item"><span class="crece"><b>La fila 1 es encabezado</b><small>No se filtra ni se ordena</small></span><span class="interruptor"><input type="checkbox" data-enc ${enc ? "checked" : ""}><span></span></span></label>
           <div class="entrada">${ico("search")}<input data-contiene placeholder="Que contenga…" value="${esc(actual && actual.contiene || "")}"></div>
           <div class="fila"><button class="btn chico" data-todos type="button">Todas</button><button class="btn chico" data-ninguna type="button">Ninguna</button></div>
@@ -618,7 +618,13 @@
         return true;
       }
       /** Moverse por la vista (con filtro u orden, la fila de abajo es la que se ve abajo). Salta las combinadas. */
+      // Como en Excel: después de avanzar con Tab, Enter baja y regresa a la columna donde empezó el renglón
+      // (así se captura una tabla renglón por renglón sin tocar la pantalla). Cualquier otro movimiento lo olvida.
+      let colTab = null;
+      const conTab = (atras) => { if (colTab == null) colTab = sel.c; mover(atras ? -1 : 1, 0); };
+      const bajarTrasEnter = () => { const c0 = colTab; colTab = null; mover(0, 1); if (c0 != null && c0 !== sel.c) { sel = visible(c0, sel.f); pintarSeleccion(); } };
       function mover(dc, df, extender) {
+        if (!dc) colTab = null;
         if (extender) { if (!ancla) ancla = { ...sel }; } else ancla = null;
         const desde = visible(sel.c, sel.f);
         let c = sel.c, f = sel.f;
@@ -664,8 +670,8 @@
       }
       function teclaEditor(e) {
         if (["Enter", "Tab", "Escape"].includes(e.key)) e.stopPropagation();   // si no, la rejilla mueve otra vez
-        if (e.key === "Enter") { e.preventDefault(); cerrarEditor(true); mover(0, e.shiftKey ? -1 : 1); rej.focus(); }
-        else if (e.key === "Tab") { e.preventDefault(); cerrarEditor(true); mover(e.shiftKey ? -1 : 1, 0); rej.focus(); }
+        if (e.key === "Enter") { e.preventDefault(); cerrarEditor(true); if (e.shiftKey) mover(0, -1); else bajarTrasEnter(); rej.focus(); }
+        else if (e.key === "Tab") { e.preventDefault(); cerrarEditor(true); conTab(e.shiftKey); rej.focus(); }
         else if (e.key === "Escape") { e.preventDefault(); cerrarEditor(false); pintarSeleccion(); rej.focus(); }
       }
       /** Mientras se escribe una fórmula, las celdas que usa se marcan. */
@@ -775,9 +781,9 @@
         if (editor || !t) return;
         const mod = e.ctrlKey || e.metaKey;
         const flechas = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
-        if (flechas[e.key]) { e.preventDefault(); mover(...flechas[e.key], e.shiftKey); return; }
+        if (flechas[e.key]) { e.preventDefault(); colTab = null; mover(...flechas[e.key], e.shiftKey); return; }
         if (e.key === "Enter") { e.preventDefault(); e.shiftKey ? mover(0, -1) : abrirEditor(null, true); return; }
-        if (e.key === "Tab") { e.preventDefault(); mover(e.shiftKey ? -1 : 1, 0); return; }
+        if (e.key === "Tab") { e.preventDefault(); conTab(e.shiftKey); return; }
         if (e.key === "F2") { e.preventDefault(); abrirEditor(null, true); return; }
         if (e.key === "Escape") { if (portapapeles) { portapapeles = null; marcarCopiado(); } return; }
         if ((e.key === "Delete" || e.key === "Backspace") && !ed.soloLectura) { e.preventDefault(); vaciarRango(); return; }
@@ -1166,6 +1172,7 @@
         for (let f = r.f1; f <= r.f2; f++) campos["ah:" + (f + 1)] = h === ALTO ? null : h;
         doc().cambiar(t.id, campos);
       }
+      rej.addEventListener("pointerdown", () => { colTab = null; }, true);
       rej.addEventListener("pointerdown", (e) => {
         const rc = e.target.closest && e.target.closest("[data-redim-c]"), rf = e.target.closest && e.target.closest("[data-redim-f]");
         if ((!rc && !rf) || ed.soloLectura) return;
@@ -1610,7 +1617,7 @@
           { texto: "Copiar", icono: "copy", fn: () => copiarRango(false) },
           { texto: "Formato", icono: "paintbrush", off: lect, sub: [
             { texto: "Autosuma", icono: "sigma", fn: autosuma },
-            { texto: "Funciones", icono: "wand-sparkles", sub: ["SUMA", "PROMEDIO", "SI", "BUSCARV", "CONTAR.SI", "SUMAR.SI", "HOY", "MAX"].map(funcion) },
+            { texto: "Funciones", icono: "square-function", sub: ["SUMA", "PROMEDIO", "SI", "BUSCARV", "CONTAR.SI", "SUMAR.SI", "HOY", "MAX"].map(funcion) },
             { texto: "Número", icono: "hash", sub: [["General", "General"], ["0", "Entero"], ["#,##0.00", "2 decimales"], ["$#,##0.00", "Moneda"], ["0%", "Porcentaje"], ["dd/mm/yyyy", "Fecha"], ["@", "Texto"]].map(([cod, tx]) => ({ texto: tx, icono: "hash", marcado: (t && t["f:" + ref] || "General") === cod, fn: () => formatoNumero(cod) })) },
             { texto: "Alinear", icono: "align-center", sub: [{ texto: "Izquierda", icono: "align-left", fn: () => alinear("izq") }, { texto: "Centro", icono: "align-center", fn: () => alinear("centro") }, { texto: "Derecha", icono: "align-right", fn: () => alinear("der") }, { texto: "Automático", icono: "x", fn: () => alinear(null) }] },
             { texto: "Bordes", icono: "grid-3x3", sub: [{ texto: "Todos", icono: "grid-3x3", fn: () => bordes("todos") }, { texto: "Contorno", icono: "square", fn: () => bordes("contorno") }, { texto: "Abajo", icono: "arrow-down", fn: () => bordes("abajo") }, { texto: "Sin bordes", icono: "x", fn: () => bordes("ninguno") }] },
@@ -1723,12 +1730,12 @@
         { id: "bordes", icono: "grid-3x3", micro: "Bordes", fn: (e, b) => menuBordes(b) },
         { id: "combinar", icono: "table-cells-merge", micro: "Combinar celdas|Une las celdas elegidas (para títulos). Otra vez para separarlas.", fn: combinar },
         "|",
-        { id: "suma", icono: "sigma", micro: "Autosuma|Suma los números que están arriba de la celda.", fn: autosuma },
-        { id: "funciones", icono: "wand-sparkles", micro: "Funciones|Más de 80: SUMA, PROMEDIO, SI, BUSCARV, CONTAR.SI…", fn: (e, b) => menuFunciones(b) },
+        { etq: true, id: "suma", icono: "sigma", micro: "Autosuma|Suma los números que están arriba de la celda.", fn: autosuma },
+        { etq: true, id: "funciones", icono: "square-function", micro: "Funciones|Más de 80: SUMA, PROMEDIO, SI, BUSCARV, CONTAR.SI…", fn: (e, b) => menuFunciones(b) },
         "|",
-        { id: "filtro", icono: "filter", micro: "Ordenar y filtrar|Solo cambia lo que tú ves. Toca la letra de una columna.", fn: (e, b) => menuColumna(b, sel.c), activo: () => !!vistaActual() },
+        { etq: true, id: "filtro", icono: "filter", micro: "Ordenar y filtrar|Solo cambia lo que tú ves. Toca la letra de una columna.", fn: (e, b) => menuColumna(b, sel.c), activo: () => !!vistaActual() },
         { id: "fijar", icono: "snowflake", micro: "Fijar filas y columnas|Se quedan a la vista al desplazarte (para todos).", fn: (e, b) => menuFijar(b), off: () => ed.soloLectura, clase: "solo-escritorio" },
-        { id: "grafica", icono: "bar-chart", micro: "Gráfica|De las celdas elegidas (o de la tabla donde estás).", fn: (e, b) => NOM.menu(b, [{ titulo: "Nueva gráfica" }, ...G().TIPOS.map(([v, tx, i]) => ({ texto: tx, icono: i, fn: () => nuevaGrafica(v) }))]) },
+        { etq: true, id: "grafica", icono: "bar-chart", micro: "Gráfica|De las celdas elegidas (o de la tabla donde estás).", fn: (e, b) => NOM.menu(b, [{ titulo: "Nueva gráfica" }, ...G().TIPOS.map(([v, tx, i]) => ({ texto: tx, icono: i, fn: () => nuevaGrafica(v) }))]) },
         { id: "buscar", icono: "search", micro: "Buscar y reemplazar||Ctrl+F", fn: () => buscar(false) },
         "|",
         { id: "insertar", icono: "between-horizontal-start", micro: "Insertar o eliminar filas y columnas|Donde está la celda elegida.|Ctrl+Mayús++", fn: (e, b) => menuInsertar(b) },

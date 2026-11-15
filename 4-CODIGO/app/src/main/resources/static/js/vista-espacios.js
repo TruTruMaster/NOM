@@ -7,10 +7,6 @@
 
   const PERMISOS = { PROPIETARIO: "Propietario", EDICION: "Puede editar", LECTURA: "Solo puede ver" };
   const inicial = (s) => esc((String(s || "?").trim()[0] || "?").toUpperCase());
-  function saludo() {
-    const h = new Date().getHours();
-    return h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches";
-  }
   const recientes = () => NOM.leer(api.clave("recientes"), []);
   NOM.anotarReciente = (doc, espacio) => {
     const r = recientes().filter((x) => x.id !== doc.id);
@@ -23,19 +19,18 @@
     if (NOM.local.activo()) return inicioSinCuenta(cont);
     const u = api.usuario() || {};
     cont.innerHTML = `
-      <div class="encabezado">
-        <div><h1>${saludo()}, ${esc(u.nombre || "")}</h1>
-          <p class="sub">${esc(new Date().toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" }))}</p></div>
-        <div class="fila solo-escritorio" data-acciones-inicio>
+      <div class="encabezado solo-escritorio">
+        <h1>Inicio</h1>
+        <div class="fila" data-acciones-inicio>
           <button class="btn" data-a="unirse" data-micro="Unirse a un espacio|Entra al espacio de otra persona con su código o su QR.">${ico("qr-code")} Tengo un código</button>
           <button class="btn primario" data-a="nuevo">${ico("plus")} Nuevo espacio</button>
         </div>
       </div>
       <div data-recientes></div>
-      <section class="seccion">
-        <div class="fila-e"><h2>Tus espacios</h2><span class="chip" data-cuantos></span></div>
+      <section class="seccion" data-seccion-espacios>
+        <div class="fila-e"><h2>Tus espacios</h2><span class="suave chico" data-cuantos></span></div>
+        <div class="rejilla" data-espacios>${'<div class="esqueleto" style="height:132px"></div>'.repeat(3)}</div>
         <div data-almacen-linea></div>
-        <div class="rejilla" data-espacios>${'<div class="esqueleto" style="height:150px"></div>'.repeat(3)}</div>
       </section>
       <section class="seccion" data-locales></section>`;
     seccionLocal($("[data-locales]", cont), true);
@@ -44,15 +39,15 @@
 
     const rec = recientes().slice(0, 3);
     if (rec.length) {
-      const cajas = rec.map((r, i) => `
-        <a class="continuar clay tarjeta modo-${esc(r.modo)}" href="#/doc/${esc(r.id)}" style="${i ? "padding:14px 18px" : ""}">
+      // Lo último que se abrió va primero: casi siempre se entra para seguir con eso.
+      const cajas = rec.map((r) => `
+        <a class="continuar caja tarjeta modo-${esc(r.modo)}" href="#/doc/${esc(r.id)}">
           <span class="modo-insignia">${ico(MODOS[r.modo] ? MODOS[r.modo].icono : "file-text")}</span>
-          <span class="crece"><span class="suave chico" style="font-weight:800">${i ? "" : "Continúa donde lo dejaste · "}${esc(r.espacio || "")}</span>
-            <span class="titulo recorta" style="display:block">${esc(r.nombre)}</span>
-            <span class="suave chico">${esc(haceCuanto(r.cuando))}</span></span>
-          ${ico("chevron-right")}
+          <span class="crece"><span class="titulo recorta" style="display:block">${esc(r.nombre)}</span>
+            <span class="suave chico recorta" style="display:block">${r.espacio ? esc(r.espacio) + " · " : ""}${esc(haceCuanto(r.cuando))}</span></span>
         </a>`).join("");
-      $("[data-recientes]", cont).innerHTML = `<div class="rejilla" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">${cajas}</div>`;
+      $("[data-recientes]", cont).innerHTML = `<section class="seccion" style="margin-top:0"><div class="fila-e"><h2>Recientes</h2></div>
+        <div class="rejilla" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">${cajas}</div></section>`;
     }
 
     let lista;
@@ -68,7 +63,7 @@
     if (!rej) return;
     // Sin espacios, la tarjeta de primeros pasos y los botones de arriba repetirían lo mismo que el
     // aviso de abajo: se deja un solo lugar con las dos opciones.
-    if (NOM.primerosPasos && lista.length) NOM.primerosPasos($(".encabezado", cont), lista);
+    if (NOM.primerosPasos && lista.length) NOM.primerosPasos($("[data-seccion-espacios]", cont), lista);
     $("[data-cuantos]", cont).textContent = lista.length ? lista.length + (lista.length === 1 ? " espacio" : " espacios") : "";
     $("[data-cuantos]", cont).hidden = !lista.length;
     if (!lista.length) {
@@ -111,7 +106,7 @@
     if (!caja || (api.usuario() || {}).invitado) return;
     const a = await usoServidor();
     if (!a || !caja.isConnected) return;
-    const b = html(`<button type="button" class="almacen-linea clay" data-micro="Tu almacenamiento|Cuánto ocupan tus espacios en el servidor y cuánto te queda. Toca para ver el detalle.">
+    const b = html(`<button type="button" class="almacen-linea caja" data-micro="Tu almacenamiento|Cuánto ocupan tus espacios en el servidor y cuánto te queda. Toca para ver el detalle.">
       <span class="modo-insignia" style="background:var(--acento-tenue);color:var(--acento-tinta)">${ico("cloud")}</span>
       <span class="crece"><b>Guardados en ${esc(nombreServidor())}</b><small>Los ves en cualquier equipo con tu cuenta. Aquí solo se guardan documentos de NOM-COLAB, comprimidos.</small></span>
       <span class="almacen-uso"><span class="chip ${claseUso(a)}" data-uso>${esc(textoUso(a))}</span>${a.cuota > 0 ? `<span class="barra-uso"><i style="width:${Math.min(100, Math.max(1, (a.uso / a.cuota) * 100))}%"></i></span>` : ""}</span>
@@ -130,9 +125,9 @@
     const max = Math.max(1, ...a.espacios.map((e) => e.bytes));
     const locales = NOM.local.lista().length;
     cuerpo.innerHTML = `
-      <div class="clay col" style="padding:16px 18px;gap:10px">
-        <div class="fila-e" style="flex-wrap:wrap;gap:8px"><div><div style="font-size:26px;font-weight:900">${esc(bytes(a.uso))}${a.cuota > 0 ? ` <span class="suave" style="font-size:16px;font-weight:800">de ${esc(bytes(a.cuota))}</span>` : ""}</div>
-          <div class="suave chico" style="font-weight:700">${a.cuota > 0 ? (libre > 0 ? "Te quedan " + esc(bytes(libre)) : "Ya no queda espacio") : "Este servidor no pone límite por cuenta"} · ${a.documentos} documento${a.documentos === 1 ? "" : "s"} en ${a.espacios.length} espacio${a.espacios.length === 1 ? "" : "s"} tuyo${a.espacios.length === 1 ? "" : "s"}</div></div>
+      <div class="caja col" style="padding:16px 18px;gap:10px">
+        <div class="fila-e" style="flex-wrap:wrap;gap:8px"><div><div style="font-size:26px;font-weight:700">${esc(bytes(a.uso))}${a.cuota > 0 ? ` <span class="suave" style="font-size:16px;font-weight:600">de ${esc(bytes(a.cuota))}</span>` : ""}</div>
+          <div class="suave chico" style="font-weight:500">${a.cuota > 0 ? (libre > 0 ? "Te quedan " + esc(bytes(libre)) : "Ya no queda espacio") : "Este servidor no pone límite por cuenta"} · ${a.documentos} documento${a.documentos === 1 ? "" : "s"} en ${a.espacios.length} espacio${a.espacios.length === 1 ? "" : "s"} tuyo${a.espacios.length === 1 ? "" : "s"}</div></div>
           <span class="chip ${claseUso(a)}">${ico("cloud", "ico-s")} ${esc(nombreServidor())}</span></div>
         ${a.cuota > 0 ? `<div class="barra-uso"><i style="width:${Math.min(100, Math.max(1, (a.uso / a.cuota) * 100))}%"></i></div>` : ""}
         ${a.cuota > 0 && a.uso >= a.cuota ? `<div class="alerta error">${ico("triangle-alert")}<span>Lleno: los cambios nuevos se quedan en cada equipo hasta que liberes espacio.</span></div>` : ""}
@@ -147,8 +142,8 @@
         <button type="button" class="lista-item" data-esp="${esc(e.id)}" style="text-align:left;width:100%;flex-wrap:wrap">
           <span class="crece"><b>${esc(e.nombre)}</b><small>${esc(bytes(e.bytes))} · ${e.documentos} documento${e.documentos === 1 ? "" : "s"} y su historial</small>
             <span class="barra-uso" style="margin-top:6px"><i style="width:${Math.max(2, (e.bytes / max) * 100)}%"></i></span></span>${ico("chevron-right")}
-        </button>`).join("") || `<p class="suave" style="font-weight:650">Todavía no tienes espacios propios: lo que guardes en un espacio tuyo aparecerá aquí.</p>`}</div></div>
-      ${a.espacios.length ? `<p class="suave chico" style="font-weight:650">${ico("info", "ico-s")} Para liberar espacio, abre un espacio: ahí puedes borrar versiones antiguas y vaciar su papelera.</p>` : ""}`;
+        </button>`).join("") || `<p class="suave" style="font-weight:400">Todavía no tienes espacios propios: lo que guardes en un espacio tuyo aparecerá aquí.</p>`}</div></div>
+      ${a.espacios.length ? `<p class="suave chico" style="font-weight:400">${ico("info", "ico-s")} Para liberar espacio, abre un espacio: ahí puedes borrar versiones antiguas y vaciar su papelera.</p>` : ""}`;
     $$("[data-esp]", cuerpo).forEach((b) => (b.onclick = () => { h.cerrar(true); almacenamiento({ id: b.dataset.esp }); }));
     const ir = $("[data-ir-equipo]", cuerpo); if (ir) ir.onclick = () => h.cerrar(true);
   }
@@ -167,9 +162,9 @@
     return new Promise((listo) => {
       let elegido = null;
       const cuerpo = html(`<div class="col">
-        <p class="suave" style="font-weight:650">En un espacio queda guardado en ${esc(nombreServidor())} y lo ves en todos tus equipos.</p>
-        <div class="lista">${editables.map((e, i) => `<button type="button" class="lista-item" data-esp="${esc(e.id)}" style="text-align:left;width:100%" ${i ? "" : "autofocus"}><span class="icono-espacio" style="width:36px;height:36px;border-radius:12px;display:grid;place-items:center;color:#fff;font-weight:900;background:${esc(e.color)}">${inicial(e.nombre)}</span><span class="crece"><b>${esc(e.nombre)}</b><small>${ico("cloud", "ico-s")} En el servidor · ${esc(PERMISOS[e.permiso] || "")}</small></span>${ico("chevron-right")}</button>`).join("")}
-          <button type="button" class="lista-item" data-local style="text-align:left;width:100%"><span class="modo-insignia" style="width:36px;height:36px;border-radius:12px">${ico(api.empaquetada ? "smartphone" : "hard-drive")}</span><span class="crece"><b>Solo en este equipo</b><small>Cifrado con tu contraseña. No se ve en tus otros equipos ni lo ve nadie más.</small></span>${ico("chevron-right")}</button>
+        <p class="suave" style="font-weight:400">En un espacio queda guardado en ${esc(nombreServidor())} y lo ves en todos tus equipos.</p>
+        <div class="lista">${editables.map((e, i) => `<button type="button" class="lista-item" data-esp="${esc(e.id)}" style="text-align:left;width:100%" ${i ? "" : "autofocus"}><span class="icono-espacio" style="width:36px;height:36px;border-radius:var(--r-s);display:grid;place-items:center;color:#fff;font-weight:700;background:${esc(e.color)}">${inicial(e.nombre)}</span><span class="crece"><b>${esc(e.nombre)}</b><small>${ico("cloud", "ico-s")} En el servidor · ${esc(PERMISOS[e.permiso] || "")}</small></span>${ico("chevron-right")}</button>`).join("")}
+          <button type="button" class="lista-item" data-local style="text-align:left;width:100%"><span class="modo-insignia" style="width:36px;height:36px;border-radius:var(--r-s)">${ico(api.empaquetada ? "smartphone" : "hard-drive")}</span><span class="crece"><b>Solo en este equipo</b><small>Cifrado con tu contraseña. No se ve en tus otros equipos ni lo ve nadie más.</small></span>${ico("chevron-right")}</button>
         </div></div>`);
       const h = hoja({ titulo: titulo || "¿Dónde lo guardamos?", icono: "cloud", cuerpo, alCerrar: () => listo(elegido) });
       $$("[data-esp]", cuerpo).forEach((b) => (b.onclick = () => { elegido = editables.find((e) => e.id === b.dataset.esp); h.cerrar(true); }));
@@ -179,14 +174,14 @@
 
   function tarjetaEspacio(e) {
     const con = (e.conectados || []).slice(0, 4);
-    return `<a class="tarjeta tarjeta-espacio clay" href="#/espacio/${esc(e.id)}">
+    return `<a class="tarjeta tarjeta-espacio caja" href="#/espacio/${esc(e.id)}">
       <div class="fila-e">
         <span class="icono-espacio" style="background:${esc(e.color)};--c:${esc(e.color)}">${inicial(e.nombre)}</span>
         <span class="fila">${e.conexion ? `<span class="chip ok" data-micro="Visible en el Wi-Fi|Quienes estén en el mismo Wi-Fi pueden encontrarlo."><span class="punto vivo"></span>En el Wi-Fi</span>` : ""}
         ${e.solicitudes ? `<span class="chip aviso">${e.solicitudes} solicitud${e.solicitudes > 1 ? "es" : ""}</span>` : ""}
         ${e.avisos ? `<span class="chip acento" data-micro="Menciones|Te mencionaron en comentarios de este espacio.">${ico("at-sign", "ico-s")} ${e.avisos}</span>` : ""}</span>
       </div>
-      <div><div class="titulo recorta">${esc(e.nombre)}</div><div class="suave chico" style="font-weight:700">${esc(PERMISOS[e.permiso] || "")}${e.permiso !== "PROPIETARIO" ? " · de " + esc(e.propietario) : ""}</div></div>
+      <div><div class="titulo recorta">${esc(e.nombre)}</div><div class="suave chico" style="font-weight:500">${esc(PERMISOS[e.permiso] || "")}${e.permiso !== "PROPIETARIO" ? " · de " + esc(e.propietario) : ""}</div></div>
       <div class="meta">
         <span>${ico("file-text", "ico-s")} ${e.documentos}</span>
         <span>${ico("users", "ico-s")} ${e.miembros}</span>
@@ -233,7 +228,7 @@
   function listoParaInvitar(esp) {
     const cuerpo = html(`<div class="col">
       <div class="exito-check">${ico("check")}</div>
-      <p style="text-align:center;font-weight:650"><b>${esc(esp.nombre)}</b> ya está listo.<br><span class="suave">¿Invitas a tu equipo? Les das un código y entran desde su celular o su computadora.</span></p>
+      <p style="text-align:center;font-weight:400"><b>${esc(esp.nombre)}</b> ya está listo.<br><span class="suave">¿Invitas a tu equipo? Les das un código y entran desde su celular o su computadora.</span></p>
     </div>`);
     const pie = html(`<div style="display:contents"><button class="btn" data-no>Después</button><button class="btn primario" data-si>${ico("user-plus")} Invitar ahora</button></div>`);
     const h = hoja({ titulo: "Espacio creado", cuerpo, pie });
@@ -283,11 +278,11 @@
   function unirse() {
     if (!api.lan) {
       const c0 = html(`<div class="col">
-        <p style="font-weight:650">Pídele a quien creó el espacio <b>su código de invitación</b> (un QR o 8 letras). También te puede agregar con tu nombre de usuario: <b>${esc((api.usuario() || {}).nombre || "")}</b>.</p>
+        <p style="font-weight:400">Pídele a quien creó el espacio <b>su código de invitación</b> (un QR o 8 letras). También te puede agregar con tu nombre de usuario: <b>${esc((api.usuario() || {}).nombre || "")}</b>.</p>
         <div class="fila"><button class="btn primario crece" data-qr>${ico("qr-code")} Escanear código QR</button><button class="btn crece" data-codigo>${ico("keyboard")} Escribir código</button></div></div>`);
       const h0 = hoja({ titulo: "Entrar a un espacio", icono: "qr-code", cuerpo: c0 });
       $("[data-qr]", c0).onclick = () => { h0.cerrar(true); NOM.union.escanear(); };
-      $("[data-codigo]", c0).onclick = async () => { const c = await NOM.pedirTexto("Escribe el código", { etiqueta: "Las 8 letras y números que te dieron", ph: "ABCD-2345", si: "Entrar", max: 12 }); if (c) { h0.cerrar(true); NOM.union.usar(c); } };
+      $("[data-codigo]", c0).onclick = async () => { const c = await NOM.pedirTexto("Escribe el código", { etiqueta: "Las 8 letras y números que te dieron (o pega el enlace completo)", ph: "ABCD-2345", si: "Entrar", max: 400 }); if (c) { h0.cerrar(true); NOM.union.usar(c); } };
       return;
     }
     const cuerpo = html(`<div class="col">
@@ -296,7 +291,7 @@
         <button class="btn crece" type="button" data-codigo>${ico("keyboard")} Escribir código</button></div>
       <div class="fila-e"><span class="etiqueta">Espacios en este Wi-Fi</span><span class="chip" data-buscando><span class="cargando" style="width:12px;height:12px;border-width:2px"></span> Buscando…</span></div>
       <div class="lista" data-lista></div>
-      <details style="margin-top:4px"><summary class="etiqueta" style="cursor:pointer">¿No aparece? Escribe la dirección que te dieron</summary>
+      <details style="margin-top:4px"><summary class="etiqueta" style="cursor:pointer">¿No aparece? Escribe la dirección del equipo (no el código)</summary>
         <form class="fila" style="margin-top:10px" data-manual>
           <div class="entrada crece">${ico("server")}<input name="dir" placeholder="192.168.1.20:8080" inputmode="url" autocapitalize="none"></div>
           <button class="btn">Abrir</button>
@@ -306,7 +301,7 @@
     const h = hoja({ titulo: "Entrar a un espacio", icono: "qr-code", cuerpo, alCerrar: () => clearInterval(t) });
     $("[data-qr]", cuerpo).onclick = () => { h.cerrar(true); NOM.union.escanear(); };
     $("[data-codigo]", cuerpo).onclick = async () => {
-      const c = await NOM.pedirTexto("Escribe el código", { etiqueta: "Las 8 letras y números que te dieron", ph: "ABCD-2345", si: "Entrar", max: 12 });
+      const c = await NOM.pedirTexto("Escribe el código", { etiqueta: "Las 8 letras y números que te dieron (o pega el enlace completo)", ph: "ABCD-2345", si: "Entrar", max: 400 });
       if (c) { h.cerrar(true); NOM.union.usar(c); }
     };
     const lista = $("[data-lista]", cuerpo);
@@ -326,7 +321,7 @@
           items.forEach((e) => {
             const ya = mios.has(e.id);
             const it = html(`<button class="lista-item" style="text-align:left;width:100%">
-              <span class="icono-espacio" style="width:40px;height:40px;border-radius:14px;display:grid;place-items:center;color:#fff;font-weight:900;background:${esc(e.color || "#7AA7FF")}">${inicial(e.nombre)}</span>
+              <span class="icono-espacio" style="width:40px;height:40px;border-radius:var(--r-m);display:grid;place-items:center;color:#fff;font-weight:700;background:${esc(e.color || "#7AA7FF")}">${inicial(e.nombre)}</span>
               <span class="crece"><b>${esc(e.nombre)}</b><small>de ${esc(e.propietario)}${e.local ? "" : " · en " + esc(e.equipo)}</small></span>
               ${ya ? `<span class="chip ok">Ya eres miembro</span>` : `<span class="chip acento">Entrar</span>`}
             </button>`);
@@ -345,6 +340,10 @@
       e.preventDefault();
       const dir = e.target.dir.value.trim();
       if (!dir) return;
+      // DEF-48: aquí mucha gente escribe el código (8 letras, sin guion) o pega el enlace de invitación:
+      // eso no es la dirección de un equipo, es para entrar al espacio.
+      if (NOM.union && NOM.union.esCodigo(dir)) { h.cerrar(true); NOM.union.usar(dir); return; }
+      if (!/^(https?:\/\/)?(localhost|[a-z0-9-]+(\.[a-z0-9-]+)+|\[[0-9a-f:]+\])(:\d{1,5})?(\/.*)?$/i.test(dir)) { aviso("Eso no parece una dirección. Se ve así: 192.168.1.20:8080. Si lo que tienes es un código, usa «Escribir código».", { tipo: "error", ms: 7000 }); return; }
       abrirOtroEquipo({ host: dir.replace(/^https?:\/\//, "").split(":")[0], puerto: (dir.split(":")[2] || dir.split(":")[1] || "8080").replace(/\D/g, "") || 8080, equipo: dir });
     };
   }
@@ -358,7 +357,7 @@
       hoja({
         titulo: "Solicitud enviada",
         cuerpo: `<div class="col" style="align-items:center;text-align:center"><div class="exito-check">${ico("check")}</div>
-          <p style="font-weight:650">Le avisamos a <b>${esc(r.propietario)}</b> que quieres entrar a <b>${esc(e.nombre)}</b>.<br><span class="suave">Cuando te dé acceso, el espacio aparecerá en tu inicio.</span></p></div>`,
+          <p style="font-weight:400">Le avisamos a <b>${esc(r.propietario)}</b> que quieres entrar a <b>${esc(e.nombre)}</b>.<br><span class="suave">Cuando te dé acceso, el espacio aparecerá en tu inicio.</span></p></div>`,
       });
     } catch (err) { aviso(err.message, { tipo: "error" }); }
   }
@@ -384,7 +383,7 @@
     function pintar() {
       const dueno = datos.miPermiso === "PROPIETARIO";
       cuerpo.innerHTML = `
-        ${dueno ? `<div class="compartir-codigo clay">
+        ${dueno ? `<div class="compartir-codigo caja">
           <span class="modo-insignia">${ico("qr-code")}</span>
           <span class="crece"><b>Invitar con un código</b><small>Lo más fácil: escanean un QR o escriben 8 letras y entran desde su celular o computadora.</small></span>
           <button class="btn primario" type="button" data-codigo-inv>${ico("qr-code")} Crear código</button>
@@ -412,7 +411,7 @@
         <div class="col"><span class="etiqueta">Miembros (${datos.miembros.length})</span><div class="lista">${datos.miembros.map((m) => `
           <div class="lista-item">${avatar(m)}<span class="crece"><b>${esc(m.nombre)}${m.id === (api.usuario() || {}).id ? " (tú)" : ""}</b><small>${m.conectado ? `<span style="color:var(--ok)">● conectado</span>` : esc(m.empresa || "")}</small></span>
             ${m.permiso === "PROPIETARIO" ? `<span class="chip acento">${ico("crown", "ico-s")} Propietario</span>`
-              : dueno ? `<select class="mini-select" data-cambiar="${esc(m.nombre)}" aria-label="Permiso de ${esc(m.nombre)}" style="height:36px;border-radius:12px;border:1px solid var(--borde);background:var(--sup-2);padding:0 8px;font-weight:700">
+              : dueno ? `<select class="mini-select" data-cambiar="${esc(m.nombre)}" aria-label="Permiso de ${esc(m.nombre)}" style="height:36px;border-radius:var(--r-s);border:1px solid var(--borde);background:var(--sup-2);padding:0 8px;font-weight:500">
                   <option value="EDICION" ${m.permiso === "EDICION" ? "selected" : ""}>Puede editar</option>
                   <option value="LECTURA" ${m.permiso === "LECTURA" ? "selected" : ""}>Solo puede ver</option>
                   <option value="NINGUNO">Quitar acceso</option></select>`
@@ -461,12 +460,12 @@
       let d;
       try { d = await api.get(`/api/espacios/${esp.id}/almacenamiento`); } catch (e) { cuerpo.innerHTML = `<div class="alerta error">${ico("triangle-alert")}<span>${esc(e.message)}</span></div>`; return; }
       const max = Math.max(1, ...d.documentos.map((x) => x.bytesDocumento + x.bytesVersiones));
-      const cuota = d.cuota > 0 ? `<div class="clay col" style="padding:14px 16px;gap:8px"><div class="fila-e"><b>Espacio en la nube de ${d.esPropietario ? "tu cuenta" : "quien es propietario"}</b><span class="chip ${d.usoPropietario >= d.cuota ? "error" : d.usoPropietario > d.cuota * 0.8 ? "aviso" : ""}">${bytes(d.usoPropietario)} de ${bytes(d.cuota)}</span></div>
-          <div class="barra-uso"><i style="width:${Math.min(100, (d.usoPropietario / d.cuota) * 100)}%"></i></div>${d.usoPropietario >= d.cuota ? `<span class="suave chico" style="font-weight:700">Lleno: los cambios nuevos se quedan en cada equipo hasta liberar espacio (depura versiones abajo).</span>` : ""}</div>` : "";
+      const cuota = d.cuota > 0 ? `<div class="caja col" style="padding:14px 16px;gap:8px"><div class="fila-e"><b>Espacio en la nube de ${d.esPropietario ? "tu cuenta" : "quien es propietario"}</b><span class="chip ${d.usoPropietario >= d.cuota ? "error" : d.usoPropietario > d.cuota * 0.8 ? "aviso" : ""}">${bytes(d.usoPropietario)} de ${bytes(d.cuota)}</span></div>
+          <div class="barra-uso"><i style="width:${Math.min(100, (d.usoPropietario / d.cuota) * 100)}%"></i></div>${d.usoPropietario >= d.cuota ? `<span class="suave chico" style="font-weight:500">Lleno: los cambios nuevos se quedan en cada equipo hasta liberar espacio (depura versiones abajo).</span>` : ""}</div>` : "";
       cuerpo.innerHTML = cuota + `
-        <div class="clay" style="padding:18px;display:flex;align-items:center;gap:16px">
-          <span class="modo-insignia" style="width:52px;height:52px;border-radius:18px;background:var(--acento-tenue);color:var(--acento-tinta)">${ico("hard-drive", "ico-l")}</span>
-          <div class="crece"><div style="font-size:26px;font-weight:900">${bytes(d.total)}</div><div class="suave chico" style="font-weight:700">en ${d.documentos.length} documento(s) y su historial</div></div>
+        <div class="caja" style="padding:18px;display:flex;align-items:center;gap:16px">
+          <span class="modo-insignia" style="width:52px;height:52px;border-radius:var(--r-l);background:var(--acento-tenue);color:var(--acento-tinta)">${ico("hard-drive", "ico-l")}</span>
+          <div class="crece"><div style="font-size:26px;font-weight:700">${bytes(d.total)}</div><div class="suave chico" style="font-weight:500">en ${d.documentos.length} documento(s) y su historial</div></div>
         </div>
         <div class="lista">${d.documentos.map((x) => `
           <div class="lista-item modo-${esc(x.modo)}" style="flex-wrap:wrap">
@@ -474,11 +473,11 @@
             <span class="crece"><b>${esc(x.nombre)}</b><small>${bytes(x.bytesDocumento)} documento · ${bytes(x.bytesVersiones)} en ${x.versiones} versiones${x.abiertoPorOtros ? " · abierto por otra persona" : ""}</small>
               <div class="barra-uso" style="margin-top:6px"><i style="width:${Math.max(2, ((x.bytesDocumento + x.bytesVersiones) / max) * 100)}%"></i></div></span>
           </div>`).join("") || `<p class="suave">Todavía no hay documentos.</p>`}</div>
-        ${d.esPropietario ? `<div class="clay col" style="padding:16px">
+        ${d.esPropietario ? `<div class="caja col" style="padding:16px">
           <span class="etiqueta">Depurar versiones antiguas</span>
-          <p class="suave chico" style="font-weight:650">Se conservan las versiones más recientes de cada documento; las demás se borran. Los documentos abiertos por otras personas se dejan para después.</p>
+          <p class="suave chico" style="font-weight:400">Se conservan las versiones más recientes de cada documento; las demás se borran. Los documentos abiertos por otras personas se dejan para después.</p>
           <div class="fila" style="flex-wrap:wrap">
-            <label class="fila crece" style="font-weight:750">Conservar <input type="number" min="1" max="200" value="${d.conservar}" style="width:84px;height:40px;border-radius:12px;border:1px solid var(--borde);background:var(--sup-2);padding:0 10px;font-weight:800"> versiones</label>
+            <label class="fila crece" style="font-weight:600">Conservar <input type="number" min="1" max="200" value="${d.conservar}" style="width:84px;height:40px;border-radius:var(--r-s);border:1px solid var(--borde);background:var(--sup-2);padding:0 10px;font-weight:600"> versiones</label>
             <button class="btn peligro" data-depurar>${ico("trash-2")} Depurar</button>
           </div></div>` : `<div class="alerta info">${ico("info")}<span>Solo el propietario puede depurar versiones.</span></div>`}`;
       const b = $("[data-depurar]", cuerpo);
@@ -510,7 +509,7 @@
     let modo = modoInicial || "TEXTO", plantilla = null;
     const cuerpo = html(`<form class="col" novalidate>
       <div class="campo"><label for="nd">Nombre</label><div class="entrada"><input id="nd" name="nombre" maxlength="120" placeholder="Documento sin título" autocomplete="off"></div></div>
-      <div class="col" style="gap:8px"><span class="etiqueta">¿Qué tipo de documento? <span class="suave" style="font-weight:650">(no cambia después)</span></span>
+      <div class="col" style="gap:8px"><span class="etiqueta">¿Qué tipo de documento? <span class="suave" style="font-weight:400">(no cambia después)</span></span>
         <div class="modo-opciones">${Object.keys(MODOS).map((m) => `<button type="button" class="modo-opcion modo-${m}" data-modo="${m}" aria-pressed="${m === modo}" data-micro="${esc(MODOS[m].nombre)}|${esc(MODOS[m].micro)} El tipo queda fijo para conservar su formato."><span class="modo-insignia">${ico(MODOS[m].icono, "ico-l")}</span>${esc(MODOS[m].nombre)}</button>`).join("")}</div></div>
       <div class="col" style="gap:8px"><span class="etiqueta">Plantilla</span><div class="plantillas" data-plantillas></div></div>
     </form>`);
@@ -594,7 +593,7 @@
   // ================================================================== Sin cuenta (documentos en este equipo)
   function tarjetaLocal(d) {
     const m = MODOS[d.modo] || MODOS.TEXTO;
-    return `<a class="tarjeta doc-tarjeta clay modo-${esc(d.modo)}" href="#/local/${esc(d.id)}">
+    return `<a class="tarjeta doc-tarjeta caja modo-${esc(d.modo)}" href="#/local/${esc(d.id)}">
       <div class="miniatura">${NOM.miniatura(d.modo)}</div>
       <div class="cuerpo"><span class="titulo recorta" style="font-size:15px">${esc(d.nombre)}</span>
         <span class="meta">${d.destino ? `<span class="chip chico aviso" data-micro="Esperando conexión|Lo creaste sin Internet dentro de este espacio. Se sube solo en cuanto vuelva la red.">${ico("cloud-off", "ico-s")} Se sube a ${esc(d.destinoNombre || "su espacio")} al volver la red</span>` : `<span>${ico("hard-drive", "ico-s")} En este equipo</span>`}<span>${esc(haceCuanto(d.modificado))}</span></span></div>
@@ -615,7 +614,7 @@
       <div class="fila-e"><h2>${conCuenta ? "En este equipo" : "Tus documentos en este equipo"}</h2>
         <div class="fila"><button class="btn chico" data-importar-local>${ico("upload", "ico-s")} Importar</button>
         <button class="btn chico ${conCuenta ? "" : "primario"}" data-nuevo-local>${ico("plus", "ico-s")} Nuevo documento</button></div></div>
-      ${conCuenta ? `<p class="suave chico" style="font-weight:650;margin:-6px 0 14px">${ico("lock", "ico-s")} Solo en este equipo y protegidos con tu contraseña. Nadie más los ve: para trabajarlos en equipo, pásalos a un espacio.</p>` : ""}
+      ${conCuenta ? `<p class="suave chico" style="font-weight:400;margin:-6px 0 14px">${ico("lock", "ico-s")} Solo en este equipo y protegidos con tu contraseña. Nadie más los ve: para trabajarlos en equipo, pásalos a un espacio.</p>` : ""}
       ${sueltos.length ? `<div class="alerta info" style="margin-bottom:12px">${ico("info")}<span class="crece">Hay ${sueltos.length} documento(s) creados sin cuenta ${NOM.aqui().en}, sin cifrar.</span><button class="btn chico" data-mover-local>Pasarlos a mi cuenta</button></div>` : ""}
       ${docs.length ? `<div class="rejilla doc-rejilla" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">${docs.map(tarjetaLocal).join("")}</div>`
         : `<div class="vacio"><div class="burbuja">${ico("file-text")}</div><h3>Aún no tienes documentos</h3>
@@ -660,7 +659,7 @@
   function inicioSinCuenta(cont) {
     cont.innerHTML = `
       <div class="encabezado">
-        <div><h1>${saludo()}</h1><p class="sub">Estás usando NOM-COLAB sin cuenta</p></div>
+        <div><h1>Inicio</h1><p class="sub">Estás usando NOM-COLAB sin cuenta</p></div>
         <div class="fila solo-escritorio"><button class="btn primario" data-cuenta>${ico("user-plus")} Crear cuenta o iniciar sesión</button></div>
       </div>
       <div class="alerta aviso" style="margin-bottom:8px" data-aviso-local>${ico("triangle-alert")}<span>Tus documentos se guardan <b>solo ${NOM.aqui().en}</b>. Si ${NOM.aqui().borrar}, <b>se pierden</b>. Descárgalos (menú … → Descargar copia) o crea una cuenta para guardarlos en un espacio y trabajar con tu equipo.</span></div>
@@ -683,8 +682,8 @@
     try { espacios = await api.get("/api/espacios"); } catch (e) { /* se usa la lista en memoria */ }
     const editables = espacios.filter((e) => e.permiso !== "LECTURA");
     if (!editables.length) return aviso("Primero crea un espacio (o pide permiso de edición en uno) para subir el documento.", { tipo: "info", ms: 5000 });
-    const cuerpo = html(`<div class="col"><p class="suave" style="font-weight:650">Elige el espacio. Al subirlo quedará guardado en ese espacio y se quitará de este equipo.</p>
-      <div class="lista">${editables.map((e) => `<button class="lista-item" data-esp="${esc(e.id)}" style="text-align:left;width:100%"><span class="icono-espacio" style="width:36px;height:36px;border-radius:12px;display:grid;place-items:center;color:#fff;font-weight:900;background:${esc(e.color)}">${inicial(e.nombre)}</span><span class="crece"><b>${esc(e.nombre)}</b><small>${esc(PERMISOS[e.permiso])}</small></span>${ico("chevron-right")}</button>`).join("")}</div></div>`);
+    const cuerpo = html(`<div class="col"><p class="suave" style="font-weight:400">Elige el espacio. Al subirlo quedará guardado en ese espacio y se quitará de este equipo.</p>
+      <div class="lista">${editables.map((e) => `<button class="lista-item" data-esp="${esc(e.id)}" style="text-align:left;width:100%"><span class="icono-espacio" style="width:36px;height:36px;border-radius:var(--r-s);display:grid;place-items:center;color:#fff;font-weight:700;background:${esc(e.color)}">${inicial(e.nombre)}</span><span class="crece"><b>${esc(e.nombre)}</b><small>${esc(PERMISOS[e.permiso])}</small></span>${ico("chevron-right")}</button>`).join("")}</div></div>`);
     const h = hoja({ titulo: "Subir a un espacio", icono: "upload", cuerpo });
     $$("[data-esp]", cuerpo).forEach((b) => (b.onclick = async () => {
       try {
@@ -720,7 +719,7 @@
     cont.innerHTML = `
       <div class="encabezado">
         <div class="fila" style="gap:16px;align-items:center">
-          <span class="icono-espacio" style="width:60px;height:60px;border-radius:20px;display:grid;place-items:center;color:#fff;font-weight:900;font-size:26px;background:${esc(d.color)};box-shadow:inset 0 2px 0 rgba(255,255,255,.35),inset 0 -3px 0 rgba(0,0,0,.12),0 10px 20px -8px ${esc(d.color)}">${inicial(d.nombre)}</span>
+          <span class="icono-espacio" style="width:60px;height:60px;border-radius:var(--r-l);display:grid;place-items:center;color:#fff;font-weight:700;font-size:26px;background:${esc(d.color)}">${inicial(d.nombre)}</span>
           <div><h1>${esc(d.nombre)}</h1>
             <div class="fila" style="margin-top:6px;flex-wrap:wrap">
               <span class="chip ${dueno ? "acento" : ""}">${ico(dueno ? "crown" : d.permiso === "EDICION" ? "pencil" : "eye", "ico-s")} ${esc(PERMISOS[d.permiso])}</span>
@@ -793,7 +792,7 @@
       return c ? `<span class="meta">${c}</span>` : "";
     }
     const tarjetaDoc = (x) => `
-        <a class="tarjeta doc-tarjeta clay modo-${esc(x.modo)}${x.plantilla ? " es-plantilla" : ""}" href="#/doc/${esc(x.id)}" data-doc="${esc(x.id)}"${edita && !x.plantilla ? ' draggable="true"' : ""}>
+        <a class="tarjeta doc-tarjeta caja modo-${esc(x.modo)}${x.plantilla ? " es-plantilla" : ""}" href="#/doc/${esc(x.id)}" data-doc="${esc(x.id)}"${edita && !x.plantilla ? ' draggable="true"' : ""}>
           <div class="miniatura">${NOM.miniatura(x.modo)}${esDestacado(x) ? `<span class="doc-estrella" title="Destacado">${ico("star", "ico-s")}</span>` : ""}${x.plantilla ? `<span class="doc-plantilla">${ico("copy-plus", "ico-s")} Plantilla</span>` : ""}</div>
           <div class="cuerpo"><span class="titulo recorta" style="font-size:15px">${esc(x.nombre)}</span>
             <span class="meta"><span>${ico(MODOS[x.modo].icono, "ico-s")} ${esc(MODOS[x.modo].nombre)}</span><span>${esc(haceCuanto(x.modificado))}</span></span>
@@ -840,7 +839,7 @@
       if (busqueda.length < 3) return "";
       if (enContenido == null) return `<h3 class="busqueda-titulo">${ico("file-search", "ico-s")} Dentro de los documentos</h3><div class="esqueleto" style="height:56px"></div>`;
       const l = enContenido.filter((x) => x.encontrado);
-      if (!l.length) return `<h3 class="busqueda-titulo">${ico("file-search", "ico-s")} Dentro de los documentos</h3><p class="suave" style="font-weight:650">Ningún documento dice “${esc(busqueda)}”.</p>`;
+      if (!l.length) return `<h3 class="busqueda-titulo">${ico("file-search", "ico-s")} Dentro de los documentos</h3><p class="suave" style="font-weight:400">Ningún documento dice “${esc(busqueda)}”.</p>`;
       return `<h3 class="busqueda-titulo">${ico("file-search", "ico-s")} Dentro de los documentos</h3><div class="lista-resultados">${l.map((x) => `<a class="resultado" href="#/doc/${esc(x.id)}">
         <span class="resultado-ico modo-${esc(x.modo)}">${ico(MODOS[x.modo] ? MODOS[x.modo].icono : "file-text", "ico-s")}</span>
         <span class="crece"><b>${esc(x.nombre)}</b>${x.plantilla ? ` <small class="chip chico">${ico("copy-plus", "ico-s")} Plantilla</small>` : ""}${x.veces > 1 ? ` <small class="suave">${x.veces} veces</small>` : ""}<span class="fragmento">${esc(x.antes || "")}<mark>${esc(x.encontrado || "")}</mark>${esc(x.despues || "")}</span></span></a>`).join("")}</div>`;
@@ -877,7 +876,7 @@
       }
       let h = "";
       if (!docs.length) {
-        h += `<p class="suave" style="padding:18px 4px;font-weight:650">${busqueda ? "Ningún nombre coincide." : soloDestacados ? "Aún no destacas documentos: usa la estrella en su menú (⋯)." : carpetaSel != null ? "Esta carpeta está vacía: arrastra documentos aquí o usa «Mover a carpeta» en su menú." : "Nada coincide con lo que elegiste."}</p>`;
+        h += `<p class="suave" style="padding:18px 4px;font-weight:400">${busqueda ? "Ningún nombre coincide." : soloDestacados ? "Aún no destacas documentos: usa la estrella en su menú (⋯)." : carpetaSel != null ? "Esta carpeta está vacía: arrastra documentos aquí o usa «Mover a carpeta» en su menú." : "Nada coincide con lo que elegiste."}</p>`;
       } else h += `<div class="rejilla doc-rejilla" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">${docs.map(tarjetaDoc).join("")}</div>`;
       if (busqueda.length >= 3) h += `<div class="busqueda-contenido" data-contenido>${pintarResultados()}</div>`;
       if (plantillas.length && !busqueda && carpetaSel == null && !soloDestacados) {
@@ -1132,7 +1131,7 @@
     const fb = esp.formatoBase || {};
     const FUENTES = (NOM.textoRico && NOM.textoRico.FUENTES) || {};
     const cuerpo = html(`<form class="col">
-      <p class="suave" style="font-weight:650">Los documentos de texto <b>nuevos</b> de este espacio nacen con este formato (por ejemplo, para APA: Times New Roman 12 a doble espacio). Cada documento lo puede cambiar después en Más → Formato del documento.</p>
+      <p class="suave" style="font-weight:400">Los documentos de texto <b>nuevos</b> de este espacio nacen con este formato (por ejemplo, para APA: Times New Roman 12 a doble espacio). Cada documento lo puede cambiar después en Más → Formato del documento.</p>
       <div class="campo"><label>Fuente</label><div class="entrada"><select data-f><option value="">Calibri (la de siempre)</option>${Object.keys(FUENTES).filter((f) => f !== "Calibri").map((f) => `<option ${fb.fuente === f ? "selected" : ""}>${esc(f)}</option>`).join("")}</select></div></div>
       <div class="fila"><div class="campo crece"><label>Tamaño (pt)</label><div class="entrada"><input data-t inputmode="decimal" value="${esc(fb.tam || "")}" placeholder="11"></div></div>
         <div class="campo crece"><label>Primera línea (cm)</label><div class="entrada"><input data-pr inputmode="decimal" value="${esc(fb.primera || "")}" placeholder="0"></div></div>
@@ -1159,7 +1158,7 @@
   function sincronia(esp, listo) {
     const s = esp.sincronia;
     const cuerpo = html(`<div class="col">
-      <p class="suave" style="font-weight:650">Por ejemplo, el teléfono del salón (que trabajó sin Internet) con NOM-COLAB en Internet. Cuando haya conexión, los documentos de este espacio se copian en los dos lugares cada 5 minutos: nada se borra y los permisos de cada lugar no cambian.</p>
+      <p class="suave" style="font-weight:400">Por ejemplo, el teléfono del salón (que trabajó sin Internet) con NOM-COLAB en Internet. Cuando haya conexión, los documentos de este espacio se copian en los dos lugares cada 5 minutos: nada se borra y los permisos de cada lugar no cambian.</p>
       ${s ? `<div class="lista-item">${ico(s.estado === "ok" ? "cloud" : "cloud-off")}<span class="crece"><b>${esc((s.servidor || "").replace(/^https?:\/\//, ""))}</b><small>como ${esc(s.usuario || "")} · ${s.ultima ? "última copia " + esc(haceCuanto(s.ultima)) : "aún sin copiar"} · ${s.documentos} documento(s)${s.error ? " · " + esc(s.error) : ""}</small></span></div>` : ""}
       <form class="col" data-f ${s && s.estado !== "sesion" ? "hidden" : ""}>
         <div class="campo"><label for="ss">Dirección del otro NOM-COLAB</label><div class="entrada">${ico("server")}<input id="ss" name="servidor" placeholder="nomcolab.dpdns.org o 192.168.1.20:8080" value="${esc(s ? s.servidor : "")}" autocapitalize="none"></div></div>
@@ -1232,13 +1231,16 @@
       <div class="campo"><label class="etiqueta" for="pv">Conservar <b data-vv>${p.versionesConservar}</b> versiones por documento</label>
         <input id="pv" type="range" min="5" max="200" step="5" value="${p.versionesConservar}" style="accent-color:var(--acento)"></div>
       <div class="lista">
-        <label class="lista-item">${ico("sparkles")}<span class="crece"><b>Calidad visual alta</b><small>Desactívala si el equipo se siente lento</small></span><span class="interruptor"><input type="checkbox" data-calidad ${p.calidad === "alta" ? "checked" : ""}><span></span></span></label>
+        <label class="lista-item">${ico("monitor")}<span class="crece"><b>Calidad visual alta</b><small>Desactívala si el equipo se siente lento</small></span><span class="interruptor"><input type="checkbox" data-calidad ${p.calidad === "alta" ? "checked" : ""}><span></span></span></label>
         <label class="lista-item">${ico("hand")}<span class="crece"><b>Reducir movimiento</b><small>Quita animaciones y transiciones</small></span><span class="interruptor"><input type="checkbox" data-mov ${p.movimientoReducido ? "checked" : ""}><span></span></span></label>
         <label class="lista-item">${ico("scan-eye")}<span class="crece"><b>Atenuar en modo enfoque</b><small>Resalta solo el párrafo que escribes</small></span><span class="interruptor"><input type="checkbox" data-atenuar ${p.enfoqueAtenuar ? "checked" : ""}><span></span></span></label>
       </div>
       ${sinCuenta ? "" : `<div class="lista-item">${ico("download")}<span class="crece"><b>Descargar los datos de mi cuenta</b><small>Lo que este servidor guarda de ti, en un archivo JSON (sin tu contraseña).</small></span><button type="button" class="btn chico" data-mis-datos>Descargar</button></div>`}
       ${sinCuenta || NOM.sinContrasena(u) ? "" : `<div class="lista-item">${ico("key-round")}<span class="crece"><b>Código para recuperar tu contraseña</b><small data-rec>${recuperacion === false ? "Aún no tienes uno: genéralo y guárdalo en un lugar seguro." : "Si olvidas tu contraseña, con él pones una nueva."}</small></span><button type="button" class="btn chico" data-recuperacion>${recuperacion === false ? "Generar" : "Generar otro"}</button></div>`}
+      <p class="suave chico" style="text-align:center;font-weight:400" data-version>NOM-COLAB ${esc(NOM.VERSION || "")}${api.empaquetada ? " · app para Android" : ""}<span data-version-servidor></span></p>
     </div>`);
+    // B-1: la versión, a la vista (también la del servidor, si es otra)
+    if (NOM.acceso && !sinCuenta) NOM.acceso.infoServidor().then((i) => { const el = $("[data-version-servidor]", cuerpo); if (el && i && i.version && i.version !== NOM.VERSION) el.textContent = " · servidor " + i.version; }).catch(() => {});
     const pie = html(`<div style="display:contents"><button class="btn plano" data-fabrica>Valores de fábrica</button><span class="crece"></span><button class="btn primario" data-guardar>Guardar</button></div>`);
     let guardado = false;
     const original = Object.assign({}, p);

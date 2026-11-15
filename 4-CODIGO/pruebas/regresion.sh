@@ -56,6 +56,10 @@ if [ "$MODO" != rapido ]; then
   corre office_modelo    bash -c "\"$PY\" pruebas/office/fidelidad.py --modelo $CORPUS"
   corre office_ediciones "$PY" pruebas/office/ediciones.py --office
   corre office_raros     "$PY" pruebas/office/raros.py
+  corre funciones_lo     "$PY" pruebas/office/funciones_lo.py     # las funciones de la hoja contra LibreOffice
+  # Lo editado y exportado, con el validador oficial de Microsoft (Open XML SDK): 0 errores nuevos contra el original.
+  if [ -x "$HOME/.dotnet/dotnet" ]; then corre office_openxml python3 pruebas/office/validar_openxml.py "$CACHE/office-ediciones"
+  else echo "AVISO: sin .NET 8 en ~/.dotnet no corre el validador de Microsoft (ver pruebas/office/validar_openxml.py)" | tee -a "$RES"; fi
 fi
 echo "Resumen: $RES"
 grep -c " FALLA " "$RES" | xargs -I{} echo "{} suite(s) con falla"

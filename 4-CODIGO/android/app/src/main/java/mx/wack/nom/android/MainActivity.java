@@ -73,10 +73,10 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle guardado) {
         super.onCreate(guardado);
         web = new Hoja(this);
-        web.setBackgroundColor(Color.parseColor("#F5F3EF"));
+        web.setBackgroundColor(Color.parseColor("#F4F5F7"));
         // El WebView no respeta su propio padding: el margen de las barras va en un contenedor.
         FrameLayout raiz = new FrameLayout(this);
-        raiz.setBackgroundColor(Color.parseColor("#EFECE6"));
+        raiz.setBackgroundColor(Color.parseColor("#ECEDF1"));
         raiz.addView(web, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         setContentView(raiz);
         respetarBarrasDelSistema(raiz);
@@ -144,7 +144,27 @@ public class MainActivity extends Activity {
         }
 
         if (guardado != null) web.restoreState(guardado);
-        else web.loadUrl("file:///android_asset/index.html");
+        else { tomarEnlace(getIntent(), false); web.loadUrl("file:///android_asset/index.html"); }
+    }
+
+    /** DEF-49: el enlace de invitación con el que se abrió la app (la página lo pide al arrancar). */
+    private volatile String enlacePendiente;
+
+    /** La app ya estaba abierta y se tocó un enlace de invitación: se le pasa a la página. */
+    @Override
+    protected void onNewIntent(Intent intento) {
+        super.onNewIntent(intento);
+        setIntent(intento);
+        tomarEnlace(intento, true);
+    }
+
+    private void tomarEnlace(Intent intento, boolean abierta) {
+        Uri u = intento != null && Intent.ACTION_VIEW.equals(intento.getAction()) ? intento.getData() : null;
+        if (u == null) return;
+        String s = u.toString();
+        if (!s.startsWith("https://") || s.length() > 2000) return;
+        if (abierta) web.evaluateJavascript("window.NOM && NOM.union && NOM.union.usar(" + org.json.JSONObject.quote(s) + ")", null);
+        else enlacePendiente = s;
     }
 
     /** Desde Android 15 la app dibuja bajo las barras; se deja el margen que ocupan. */
@@ -180,7 +200,9 @@ public class MainActivity extends Activity {
     /** Botón o gesto Atrás: primero se cierra la ventana o el menú que esté abierto; si no hay, se
      *  regresa de pantalla; y solo en la primera pantalla se sale (la app queda en segundo plano). */
     private void atras(boolean nuevo) {
-        web.evaluateJavascript("(window.NOM && NOM.hayHoja && NOM.hayHoja()) ? (NOM.cerrarHoja(), 'cerrada') : 'no'", r -> {
+        // Primero se cierra lo que esté encima: un menú, la ruedita o una ventana (antes, con un menú
+        // abierto, Atrás lo cerraba y además salía del documento).
+        web.evaluateJavascript("(window.NOM && NOM.atras) ? (NOM.atras() ? 'cerrada' : 'no') : ((window.NOM && NOM.hayHoja && NOM.hayHoja()) ? (NOM.cerrarHoja(), 'cerrada') : 'no')", r -> {
             if (r != null && r.contains("cerrada")) return;
             if (web.canGoBack()) web.goBack();
             else if (nuevo) moveTaskToBack(true);
@@ -235,6 +257,14 @@ public class MainActivity extends Activity {
 
     /** Lo que la interfaz web puede pedirle al teléfono (window.NomAndroid). */
     private class Puente {
+
+        /** DEF-49: el enlace de invitación con el que se abrió la app ("" si no hubo). Se entrega una sola vez. */
+        @JavascriptInterface
+        public String enlacePendiente() {
+            String s = enlacePendiente;
+            enlacePendiente = null;
+            return s == null ? "" : s;
+        }
 
         /**
          * Identificador de este teléfono para el tope de cuentas nuevas por hora del servidor. La MAC

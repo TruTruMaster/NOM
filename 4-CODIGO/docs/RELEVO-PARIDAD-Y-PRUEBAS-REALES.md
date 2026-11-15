@@ -355,3 +355,28 @@ done
   **D-5** (A55 como servidor: `carga.py` con alias).
 - **C** (red de la escuela), **H** (SUS con 5 personas), **I** (ensayo).
 - Pasar todo al registro de `PLAN-PRUEBAS-PRESENTACION.md` y al plan de pruebas (PDF del 27-nov).
+
+## 8. Qué se corrigió en la 0.13.2 (14 de noviembre, tarde) y qué falta comprobar con equipos reales
+
+| Qué | Cómo quedó | Prueba automática | Falta con equipos reales |
+|---|---|---|---|
+| DEF-46 | `decidir()` ya no suelta la marca en un corte corto; la sueltan `enviar()` (crdt.js) y `vaciar()` (cola.js) cuando el envío salió bien, y el editor al volver la red sin nada pendiente | `prueba_sin_internet.py` B.3 y B.4 (reintentos reales, sin adelantar el reloj) | B-6 y B-7 con `pruebas/reales/rama.py` |
+| DEF-45 | Modo «fmt» (parche de `a:rPr`/`a:pPr` sobre el `p:txBody` original), figura rehecha con su `p:nv…Pr` original, `p:timing` conservado y podado solo de lo que ya no existe (`podarTiming`) | `ediciones.py`: tres casos «(DEF-45)» con `ms-animacion`, `ms-of16`, `ms-tipico`, `ms-brownbag` | Abrir en PowerPoint real y ver correr las animaciones |
+| MEJ-1 | `parchar()` en `cuerpoConOrigen` (ooxml.js): alinea el texto nuevo con el del párrafo y conserva cada corrida; `envolver()` conserva los controles de contenido (se les quita `w:dataBinding`). Si algo no cuadra, el párrafo se escribe como antes. Se apaga con `NOM.ooxml.parcharParrafos = false` | `ediciones.py` «(MEJ-1)», 21 documentos; `NOM.ooxml.ultimoDocx` dice cuántos se parcharon | Word real |
+| DEF-44 | Guarda en `aplicarResaltado` | `prueba_funciones.py`, sección `relevo` (falla si se quita el arreglo) | — |
+| DEF-47 | Al elegir, la pantalla de entrar se decide otra vez completa; `pasarAlTelefono` anota que es un teléfono | Ninguna (necesita la app con su servidor) | **Repetir en el A55** con otro servidor anunciándose |
+| DEF-48 | `NOM.union.esCodigo`; el campo de dirección reconoce códigos y enlaces, y rechaza lo que no es dirección | `prueba_funciones.py`, sección `relevo` | A55 |
+| DEF-49 | «Escribir código» acepta el enlace completo (400 letras); `intent-filter` con `autoVerify` para `https://nomcolab.dpdns.org/unirse`; `/.well-known/assetlinks.json` (va dentro del jar); `NomAndroid.enlacePendiente()` | `prueba_funciones.py`; emulador con `am start -a android.intent.action.VIEW -d <enlace> mx.wack.nom` (en frío y con la app abierta) | En el A55, tocar un enlace en un mensaje **después** de publicar el jar en la Pi (Android comprueba `assetlinks.json` al instalar: `adb shell pm get-app-links mx.wack.nom` debe decir `verified`) |
+| DEF-43 | Pie de las ventanas en el celular: cada botón mide lo que su texto; control segmentado con menos margen | `prueba_funciones.py --movil` | Verlo en el A55 |
+| H-8 | Al pedir «Cambiar dónde trabaja tu equipo» ya no se conecta sola; aviso arriba del formulario al entrar a un equipo del Wi-Fi. **La primera vez (app recién instalada) todavía se conecta sola si hay un solo servidor**: decidir con el dueño si también se quita | — | A55 |
+| 3.4 del relevo | Versión en Ajustes; tocar un cuadro elegido = escribir; Atrás cierra el menú (`NOM.atras`); Enter tras Tab en la hoja | `prueba_funciones.py`, sección `relevo` | A55 (toque real y tecla Atrás con un menú de la hoja) |
+
+Funciones de hoja: 185 (antes 96). `pruebas/office/funciones_lo.py` las compara con LibreOffice; está en
+`regresion.sh` junto con `validar_openxml.py`. Faltan de la lista de T3: `TRANSPONER`, `FILTRAR`,
+`ORDENAR`, `ORDENARPOR`, `UNICOS`, `SECUENCIA`, `MMULT` y `DIVIDIRTEXTO` (devuelven varias celdas: el
+motor todavía no desborda resultados) y `LET`.
+
+Sigue pendiente de este relevo: recoger la investigación terminada del escritorio (5.2) y hacer
+`docs/PARIDAD-OFFICE.md`; lo que se ve de Office (herencia de PowerPoint, encabezados de Word,
+gráficas y formato condicional de Excel); y la sección 7.
+
