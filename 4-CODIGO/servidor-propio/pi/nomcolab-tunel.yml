@@ -8,8 +8,11 @@ ingress:
     service: http://127.0.0.1:8080
   - hostname: www.nomcolab.dpdns.org
     service: http://127.0.0.1:8080
-  # El nombre corto (docs/DOMINIO-Y-BUSCADORES.md): llega por Cloudflare for SaaS, con el
-  # origen de respaldo origen.nomcolab.dpdns.org, que apunta a este mismo túnel.
+  # El nombre corto (docs/DOMINIO-Y-BUSCADORES.md): www.nom.qd.je llega por Cloudflare for SaaS
+  # (CNAME a origen.nomcolab.dpdns.org, que apunta a este mismo túnel). nom.qd.je solo (la raíz)
+  # no puede ser CNAME: redirige a www.nom.qd.je desde fuera.
+  - hostname: www.nom.qd.je
+    service: http://127.0.0.1:8080
   - hostname: nom.qd.je
     service: http://127.0.0.1:8080
   - service: http_status:404

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "https://nomcolab.dpdns.org/$1",
+      "headers": { "x-vercel-enable-rewrite-caching": "0" },
+      "transforms": [
+        {
+          "type": "request.headers",
+          "op": "set",
+          "target": { "key": "x-nom-proxy" },
+          "args": "$NOM_PROXY_SECRETO",
+          "env": ["NOM_PROXY_SECRETO"]
+        }
+      ]
+    }
+  ]
+}

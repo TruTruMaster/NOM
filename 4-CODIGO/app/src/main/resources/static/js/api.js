@@ -153,7 +153,7 @@
   }
 
   api.eventos = function (ruta, cliente, manejadores) {
-    let es, cerrado = false, reintento = 1000, timer;
+    let es, cerrado = false, reintento = 1000, timer, abierto = 0;
     const reintentar = () => { timer = setTimeout(abrir, reintento); reintento = Math.min(reintento * 2, 4000); };
     const abrir = async () => {
       let url;
@@ -167,7 +167,7 @@
       }
       if (cerrado) return;
       es = new EventSource(url);
-      es.addEventListener("hola", (e) => { reintento = 1000; marcarRed(true); manejadores.hola && manejadores.hola(JSON.parse(e.data)); });
+      es.addEventListener("hola", (e) => { reintento = 1000; abierto = Date.now(); marcarRed(true); manejadores.hola && manejadores.hola(JSON.parse(e.data)); });
       Object.keys(manejadores).forEach((ev) => {
         if (ev === "hola" || ev === "caido") return;
         es.addEventListener(ev, (e) => { try { manejadores[ev](JSON.parse(e.data)); } catch (x) { console.error(x); } });
@@ -175,6 +175,11 @@
       es.onerror = () => {
         if (cerrado) return;
         es.close();
+        // Un canal que llevaba un buen rato abierto y se corta suele ser el reenvío del nombre corto
+        // (Vercel corta toda conexión a los 2 minutos): se vuelve a abrir de inmediato, sin avisar.
+        // Si de verdad no hay red, el siguiente intento falla y entonces sí se avisa.
+        if (abierto && Date.now() - abierto > 90000) { abierto = 0; reintento = 1000; return abrir(); }
+        abierto = 0;
         manejadores.caido && manejadores.caido();
         // Puede ser red caída, sesión vencida o espacio lleno: se pregunta al servidor qué pasó.
         sondear().finally(() => { if (!cerrado) reintentar(); });

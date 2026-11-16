@@ -37,7 +37,7 @@ estado() {
   done
   if contesta 5; then echo "servidor:  contesta en http://127.0.0.1:$P"; else echo "servidor:  NO contesta en el puerto $P"; fi
   t=$(wget -q -O - -T 5 http://127.0.0.1:20242/ready 2>/dev/null | sed -n 's/.*"readyConnections":\([0-9]*\).*/\1/p')
-  echo "túnel:     ${t:-0} conexiones con Cloudflare (nomcolab.dpdns.org$(grep -q 'nom.qd.je' /etc/cloudflared/nomcolab.yml 2>/dev/null && echo ' y nom.qd.je'))"
+  echo "túnel:     ${t:-0} conexiones con Cloudflare (nomcolab.dpdns.org$(grep -q 'nom.qd.je' /etc/cloudflared/nomcolab.yml 2>/dev/null && echo ' y www.nom.qd.je'))"
   echo "principal: $(sed -n 's/^export NOM_CANONICO=//p' /etc/nomcolab.conf 2>/dev/null | tail -1 | grep . || echo 'la de cada nombre (sin NOM_CANONICO)')"
   echo "jar:       $(ls -l $JAR 2>/dev/null | awk '{print $5" bytes, "$6" "$7" "$8}')"
   echo "datos:     $(du -sh $VAR/datos 2>/dev/null | cut -f1) en $VAR/datos"

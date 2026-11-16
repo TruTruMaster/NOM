@@ -41,6 +41,19 @@ public final class Origen {
         return esquema + "://" + host.trim().toLowerCase(java.util.Locale.ROOT);
     }
 
+    /** La IP de la persona si la peticion viene del reenvio de Vercel con la clave correcta; si no, null. */
+    static String deVercel(HttpServletRequest req) {
+        String secreto = System.getenv("NOM_PROXY_SECRETO");
+        String clave = req.getHeader("X-Nom-Proxy");
+        if (secreto == null || secreto.length() < 32 || clave == null) return null;
+        if (!java.security.MessageDigest.isEqual(secreto.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                clave.getBytes(java.nio.charset.StandardCharsets.UTF_8))) return null;
+        String ip = req.getHeader("X-Real-IP");
+        if (ip == null || ip.isBlank()) return null;
+        ip = ip.trim();
+        return ip.matches("[0-9a-fA-F:.]{2,45}") ? ip : null;
+    }
+
     /** ¿Es un origen de la red local (10.x, 192.168.x, 172.16-31.x), con cualquier puerto? */
     public static boolean deRedPrivada(String origen) {
         if (origen == null) return false;
@@ -60,6 +73,11 @@ public final class Origen {
             enlace = a != null && a.isLinkLocalAddress();
         } catch (Exception e) { local = false; }
         if (!local && !enlace) return remota;
+        // El nombre corto (nom.qd.je) llega por Vercel, que reenvia a la nube por Cloudflare: la
+        // direccion de la persona viene en X-Real-IP, y solo se cree si trae la clave que Vercel
+        // agrega en cada peticion (NOM_PROXY_SECRETO; Vercel reemplaza la que mande cualquiera).
+        String ip = deVercel(req);
+        if (ip != null) return ip;
         String r = req.getHeader("CF-Connecting-IP");
         if (r == null || r.isBlank()) {
             r = req.getHeader("X-Forwarded-For");
