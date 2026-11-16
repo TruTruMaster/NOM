@@ -45,36 +45,43 @@ def main():
         errores = []
         p.on("pageerror", lambda e: errores.append(str(e)))
         p.on("console", lambda m: errores.append(m.text) if m.type == "error" else None)
-        rotos, anchas, sin_titulo = [], [], []
+        rotos, anchas, sin_titulo, con_index, mal_dir = [], [], [], [], []
         for u in ps:
-            p.goto(N.B + "/" + u)
+            limpia = re.sub(r"/?index\.html$", "", u)
+            p.goto(N.B + "/" + limpia)
+            if not p.url.split("?")[0].endswith("/" + limpia): mal_dir.append(f"{limpia} → {p.url}")
             ancho = p.evaluate("() => document.documentElement.scrollWidth - document.documentElement.clientWidth")
             if ancho > 1: anchas.append(f"{u} (+{ancho}px)")
             if not p.evaluate("() => (document.querySelector('h1') || {}).textContent"): sin_titulo.append(u)
             for h in p.evaluate("() => [...document.querySelectorAll('a[href]')].map(a => a.href).filter(h => h.startsWith(location.origin))"):
                 h = h.split("#")[0]
-                if h.endswith("/"): h += "index.html"
                 ruta = h[len(N.B) + 1:].split("?")[0]
-                if ruta and ruta != "index.html" and not os.path.exists(os.path.join(STATIC, ruta)): rotos.append(f"{u} → {ruta}")
+                if "index.html" in ruta or ruta.endswith("/"): con_index.append(f"{u} → {ruta}")
+                if ruta and "." not in ruta.rsplit("/", 1)[-1]: ruta = ruta.rstrip("/") + "/index.html"
+                if ruta and not os.path.exists(os.path.join(STATIC, ruta)): rotos.append(f"{u} → {ruta}")
         check("todas las páginas tienen título", not sin_titulo, sin_titulo[:5])
         check("ningún enlace interno está roto", not rotos, sorted(set(rotos))[:8])
+        check("cada página se muestra en su dirección limpia (sin index.html ni diagonal final)", not mal_dir, mal_dir[:5])
+        check("ningún enlace interno lleva index.html ni diagonal final", not con_index, sorted(set(con_index))[:8])
         check("a 360 px ninguna página se desplaza de lado", not anchas, anchas[:8])
         check("sin errores de JavaScript en ninguna página", not errores, errores[:5])
         # direcciones bonitas
-        for u, esperado in (("/ayuda", "/ayuda/"), ("/legal/privacidad", "/legal/privacidad/")):
+        for u, esperado in (("/ayuda/", "/ayuda"), ("/ayuda/index.html", "/ayuda"), ("/legal/privacidad/", "/legal/privacidad"), ("/legal/terminos/index.html", "/legal/terminos"), ("/ayuda/empezar/que-es/index.html", "/ayuda/empezar/que-es")):
             p.goto(N.B + u)
             check(f"{u} lleva a {esperado}", p.url.endswith(esperado) and p.evaluate("() => !!document.querySelector('h1')"), p.url)
         # buscador
-        p.goto(N.B + "/ayuda/")
+        p.goto(N.B + "/ayuda")
         p.fill("[data-buscar]", "alias"); p.wait_for_timeout(600)
         res = p.evaluate("() => [...document.querySelectorAll('[data-resultados] a')].map(a => a.textContent)")
         check("el buscador encuentra «alias»", any("Alias" in r for r in res), res[:4])
         p.fill("[data-buscar]", "rama fusionar"); p.wait_for_timeout(400)
         res = p.evaluate("() => [...document.querySelectorAll('[data-resultados] a')].map(a => a.textContent)")
         check("…y «rama fusionar» trae el artículo de ramas", any("Ramas" in r for r in res), res[:4])
-        p.goto(N.B + "/ayuda/buscar/index.html?q=contraseña"); p.wait_for_timeout(700)
+        dirs = p.evaluate("() => [...document.querySelectorAll('[data-resultados] a')].map(a => a.getAttribute('href'))")
+        check("los resultados del buscador llevan a direcciones limpias", dirs and not any("index.html" in d for d in dirs), dirs[:3])
+        p.goto(N.B + "/ayuda/buscar?q=contraseña"); p.wait_for_timeout(700)
         check("la página Buscar da resultados con ?q=", "contraseña" in p.evaluate("() => document.querySelector('[data-pagina-buscar]').innerText").lower(), "")
-        p.goto(N.B + "/ayuda/editores/formulas/")
+        p.goto(N.B + "/ayuda/editores/formulas")
         n = p.evaluate("() => document.querySelectorAll('table tbody tr').length")
         total = len(re.findall(r'^\s+(?:"[A-ZÑ0-9.]+"|[A-ZÑ][A-ZÑ0-9.]*):\s*\[', open(os.path.join(STATIC, "js", "formulas.js"), encoding="utf-8").read().split("const FIRMAS = {")[1].split("\n  };")[0], re.M)) or 1
         total = max(total, len(re.findall(r'(?:"[A-ZÑ0-9.]+"|\b[A-ZÑ][A-ZÑ0-9.]*):\s*\["', open(os.path.join(STATIC, "js", "formulas.js"), encoding="utf-8").read().split("const FIRMAS = {")[1].split("\n  };")[0])))
@@ -82,7 +89,7 @@ def main():
         # lo legal y security.txt sin sesión
         st = urllib.request.urlopen(N.B + "/.well-known/security.txt").read().decode()
         check("security.txt con contacto y vencimiento", "Contact:" in st and "Expires:" in st, st[:120])
-        p.goto(N.B + "/legal/privacidad/")
+        p.goto(N.B + "/legal/privacidad")
         t = p.evaluate("() => document.body.innerText")
         check("el aviso integral tiene responsable, datos, finalidades, derechos y cambios", all(x in t for x in ("responsable", "Qué datos", "finalidades", "ARCO", "Cambios a este aviso")), "")
         # los «?» de la app y los enlaces del registro
@@ -100,18 +107,20 @@ def main():
         p2.goto(N.B + "/"); p2.wait_for_selector("[data-ir=registro]", timeout=20000); p2.click("[data-ir=registro]")
         p2.wait_for_selector("input[name=acepto]")
         check("el registro tiene la casilla de Términos y Aviso de privacidad", p2.evaluate("() => !!document.querySelector('.acepto a[data-ayuda=\"legal/privacidad\"]')"), "")
-        check("la pantalla de entrar lleva Ayuda · Privacidad · Términos", "Privacidad" in p2.evaluate("() => (document.querySelector('.pie-legal') || {}).innerText || ''"), "")
+        pie = p2.evaluate("() => [...document.querySelectorAll('footer.pie-legal a')].map(a => [a.textContent, a.getAttribute('href')])")
+        check("entrar y crear cuenta tienen un pie con Ayuda, Preguntas frecuentes, Privacidad, Términos y lo legal",
+              [x[1] for x in pie] == ["/ayuda", "/ayuda/preguntas-frecuentes", "/legal/privacidad", "/legal/terminos", "/legal"], pie)
         p2.fill("#ru", "sinacepto" + str(os.getpid() % 10000)); p2.fill("#rc", N.CL); p2.click("button[type=submit]"); p2.wait_for_timeout(600)
         check("sin marcar la casilla no se crea la cuenta", "acepta" in p2.evaluate("() => document.body.innerText").lower(), "")
         # Sin Internet, con el service worker (localhost cuenta como seguro)
         p3 = ctx.new_page()
-        p3.goto(N.B + "/ayuda/"); p3.wait_for_timeout(500)
+        p3.goto(N.B + "/ayuda"); p3.wait_for_timeout(500)
         p3.evaluate("() => navigator.serviceWorker.register('/sw.js')")
         listo = p3.wait_for_function("() => navigator.serviceWorker.ready.then(() => caches.keys()).then(k => k.length > 0)", timeout=60000) and True
         p3.wait_for_timeout(4000)
         ctx.set_offline(True)
         abiertas = []
-        for u in ("/legal/privacidad/index.html", "/ayuda/sin-internet/alias/index.html", "/ayuda/preguntas-frecuentes/index.html"):
+        for u in ("/legal/privacidad", "/ayuda/sin-internet/alias", "/ayuda/preguntas-frecuentes"):
             try: p3.goto(N.B + u); abiertas.append(bool(p3.evaluate("() => (document.querySelector('h1') || {}).textContent")))
             except Exception: abiertas.append(False)
         ctx.set_offline(False)

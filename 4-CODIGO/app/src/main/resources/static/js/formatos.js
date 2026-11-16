@@ -6,6 +6,14 @@
   const F = () => NOM.formulas;
 
   const IMPORTABLES = [".docx", ".xlsx", ".pptx", ".nom", ".json", ".md", ".txt", ".csv", ".tsv", ".html", ".htm"];
+  // Formatos que la gente sí tiene pero que todavía no se abren: se dejan elegir en el selector para
+  // decirle exactamente qué hacer (si no, el teléfono ni los mostraba y no se sabía por qué).
+  const VIEJOS = {
+    ".doc": ["Word 97-2003", "Word", ".docx"], ".xls": ["Excel 97-2003", "Excel", ".xlsx"], ".ppt": ["PowerPoint 97-2003", "PowerPoint", ".pptx"],
+    ".odt": ["LibreOffice Writer", "LibreOffice", ".docx"], ".ods": ["LibreOffice Calc", "LibreOffice", ".xlsx"], ".odp": ["LibreOffice Impress", "LibreOffice", ".pptx"],
+    ".rtf": ["texto enriquecido (RTF)", "Word", ".docx"],
+  };
+  const ACEPTAR = IMPORTABLES.concat(Object.keys(VIEJOS));
   const MAX_BYTES = 10 * 1024 * 1024;
 
   // ------------------------------------------------------------ utilidades
@@ -588,6 +596,10 @@ ${formas.join("\n")}
   async function importar(archivo) {
     const nombre = archivo.name.replace(/\.[^.]+$/, "");
     const ext = (archivo.name.match(/\.[^.]+$/) || [""])[0].toLowerCase();
+    if (VIEJOS[ext]) {
+      const [que, prog, nuevo] = VIEJOS[ext];
+      throw new Error(`Los archivos ${ext} (${que}) todavía no se abren aquí. Ábrelo en ${prog}, LibreOffice o Google Drive y guárdalo como ${nuevo}: ese sí se importa completo.`);
+    }
     if (!IMPORTABLES.includes(ext)) throw new Error(`Formato no soportado. Puedes importar: ${IMPORTABLES.join(", ")}`);
     if (ext === ".docx") return importarDocx(archivo, nombre);
     if (ext === ".xlsx") return importarXlsx(archivo, nombre);
@@ -733,5 +745,5 @@ ${formas.join("\n")}
     });
   }
 
-  NOM.formatos = { IMPORTABLES, EXPORTABLES, paraTipo, exportar, importar, aNom, aNomBytes, deNomBytes, fotoModelo, docDeOps, huellaBloque, imagenADataUrl, elegirArchivo, aHtml, aMarkdown, aSvg, textoPlano, descargar, descargarBytes, MIME, limpioNombre };
+  NOM.formatos = { IMPORTABLES, ACEPTAR, EXPORTABLES, paraTipo, exportar, importar, aNom, aNomBytes, deNomBytes, fotoModelo, docDeOps, huellaBloque, imagenADataUrl, elegirArchivo, aHtml, aMarkdown, aSvg, textoPlano, descargar, descargarBytes, MIME, limpioNombre };
 })();

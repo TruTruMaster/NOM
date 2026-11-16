@@ -6,16 +6,18 @@
   const NOM = (window.NOM = window.NOM || {});
   // Versión de esta interfaz. Tienen que ir a la par de nucleo/.../core/Version.java y del APK:
   // INTERFAZ sube cuando cambia el formato de los documentos o lo que la interfaz sabe leer.
-  NOM.VERSION = "0.14.0";
-  NOM.INTERFAZ = 14;
+  NOM.VERSION = "0.14.2";
+  NOM.INTERFAZ = 15;
   /** Versión vigente de los Términos y del Aviso de privacidad (Version.LEGAL en el servidor). */
   NOM.LEGAL = "2026-11-13";
-  /** Dirección de una página de la ayuda o de lo legal (relativa: sirve en el servidor y en la app). */
+  /** Dirección de una página de la ayuda o de lo legal. En el navegador es la dirección limpia
+      (/legal/terminos); dentro de la app, que abre sus propios archivos, termina en index.html. */
   NOM.urlAyuda = (ruta) => {
     const r = String(ruta || "").replace(/^\/+|\/+$/g, "");
     const [camino, ancla] = r.split("#");
     const base = camino.startsWith("legal") ? camino : "ayuda" + (camino ? "/" + camino : "");
-    return base + "/index.html" + (ancla ? "#" + ancla : "");
+    const enArchivos = location.protocol === "file:";
+    return (enArchivos ? base + "/index.html" : "/" + base) + (ancla ? "#" + ancla : "");
   };
   /** Abre la ayuda: en la app, en la misma pantalla (Atrás regresa); en el navegador, en otra pestaña. */
   NOM.ayuda = (ruta) => {

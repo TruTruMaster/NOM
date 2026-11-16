@@ -1046,3 +1046,129 @@ investigación completa, con fuentes y capturas de antes y después, está en el
 - **Publicada el mismo día:** Raspberry (prueba de humo 30 de 30 en `nomcolab.dpdns.org`), release
   v0.14.0 en GitHub con el APK y `main` al día; el despliegue a Azure salió bien (la Web App sigue apagada).
 - **Falta:** verla en la app real (A55 y escritorio) para el visto bueno del equipo, y probarla con personas.
+
+## 61. Direcciones limpias, pie de ayuda en la entrada y entregables de la presentación (0.14.1, 15 de noviembre de 2026)
+
+**En la página y la app (0.14.1):**
+
+- La ayuda y lo legal se muestran en su dirección limpia: `/legal/terminos`, `/ayuda/preguntas-frecuentes`,
+  sin `index.html` ni diagonal final. Las formas anteriores redirigen (301) a la nueva. Los archivos
+  siguen con enlaces relativos que terminan en `index.html`, porque la app Android los abre desde sus
+  archivos; el servidor (y el teléfono que comparte) los cambia por direcciones completas al servirlos
+  (`PaginasLimpias.java`, en el núcleo). El mapa del sitio, `security.txt`, lo que guarda el service
+  worker y los resultados del buscador usan la dirección limpia.
+- Entrar y crear cuenta tienen un pie fijo, debajo de la tarjeta, con Ayuda, Preguntas frecuentes,
+  Privacidad, Términos y Todo lo legal (antes eran tres enlaces pequeños dentro de la tarjeta).
+- Pruebas: `PaginasLimpiasTest` (4 casos nuevos; 13 unitarias en total), `prueba_ayuda.py` 24 de 24,
+  `seguridad.py` 375 de 375, `prueba_limites.py` 18 de 18 y la regresión rápida (ver resultados abajo).
+- Jar y APK 0.14.1 (versionCode 24) compilados y copiados a `2-PAGINA-Servidor/` y `3-APP-Android/`.
+  **No se publicó nada** (ni commit, ni Raspberry, ni release): queda a decisión del equipo.
+
+**Entregables (carpeta `ENTREGA/`):**
+
+- `5IM7_WACK_Casos_de_Uso.docx` y `.pdf`: 12 casos de uso en 5 módulos, con el formato de la materia
+  (el del archivo «Especificación de Casos de uso-VACIO») y un diagrama por caso. Se agregó el CU-30
+  (consultar la ayuda y los avisos legales), que ocupa el lugar del módulo «Conoce NOM».
+- `5IM7_WACK_Presentacion.pdf`: 20 diapositivas con lo que pide la materia (empresa, misión y visión,
+  organigrama, proyecto, problemática, mapa de navegación con el avance de cada módulo, casos de uso
+  por módulo y demostración). El avance sale de las casillas de `PLAN-CONSTRUCCION.md`: 143 de 150 (95 %).
+- `5IM7_WACK_PP.pdf`, revisión 2: el plan de pruebas se rehízo más corto (27 páginas en vez de 36) y
+  solo con lo visto en clase: caja blanca en las unitarias y caja negra en lo demás (ya no menciona
+  «caja gris»), cinco módulos y casos que cuatro personas pueden repetir en una tarde: 13 unitarias,
+  14 de integración (`casos_integracion.py`), 18 de límites, 30 combinaciones de permisos
+  (`casos_permisos.py`), 28 requerimientos y las tres pruebas de sistema. Registros en
+  `6-PLAN-DE-PRUEBAS/registros/15-nov/`.
+
+**Defecto nuevo, abierto:** DEF-50 (baja). Una petición con un método que no existe (por ejemplo `POST`
+en vez de `PUT` a `/api/espacios/{id}/accesos`) responde 500 en lugar de 405; no cambia ningún dato.
+
+**Falta:** que el equipo repita a mano los casos del plan y confirme los responsables de cada ficha y las
+calificaciones de usabilidad; corregir DEF-50; probar la 0.14.1 en el A55 y publicar cuando se decida.
+
+## 62. Presentación y casos de uso como documentos de la empresa; ideas de formatos decididas (15 de noviembre de 2026, tarde)
+
+- La presentación y la especificación de casos de uso ya no llevan logotipos ni menciones de la
+  escuela, del grupo, del número de equipo ni de la materia: se presentan como documentos de WACK. En
+  las portadas va el logotipo de WACK; los pies dicen «WACK · «We carry the flame»» y «NOM-COLAB ·
+  Especificación de casos de uso · WACK».
+- Las capturas de la app que usa la presentación se repitieron, porque el espacio de ejemplo llevaba
+  el nombre del grupo; ahora se llama «Proyecto de Ciencias». El guion quedó en
+  `7-PRESENTACION/fuentes/capturas.py` (antes no estaba guardado en el proyecto).
+- Se conservaron los nombres de archivo (`5IM7_WACK_…`, la nomenclatura obligatoria de entrega) y, en la
+  presentación, las frases que hablan de salones y escuelas como clientes del producto.
+- El plan de pruebas también quedó como documento de WACK: subportada y pie de página con el logotipo de
+  WACK y el número de documento (PP-NOMCOLAB-01, revisión 2), sin los logotipos de la escuela; «la red de
+  la escuela» pasó a «una misma red local»; las referencias a las diapositivas ya no nombran a la
+  institución. Las capturas de evidencia se repitieron con `6-PLAN-DE-PRUEBAS/fuentes/evidencias.py`
+  (nuevo): el espacio de ejemplo ya no lleva el nombre del grupo, la de crear cuenta tiene escrito el
+  campo de organización y la de términos termina en el índice del artículo. Siguen siendo 27 páginas.
+- Pendiente de decidir: la app misma todavía dice «Proyecto escolar» en las páginas de ayuda y legales,
+  y el campo de organización pone de ejemplo un CECyT.
+- Ideas de formatos: quedaron como fase 20 del plan de construcción (texto fuente con vista previa,
+  Markdown, imágenes y SVG, Typst, LaTeX en el servidor, PDF a texto y OCR). El OCR pasó de opcional a
+  obligatorio; el motor se elegirá midiendo con un juego de prueba propio. Se construye después del 27
+  de noviembre.
+
+## 63. Revisión para la entrega del 20 de noviembre: la tesis, Office reales y equipos conectados (0.14.2, 15 de noviembre de 2026, noche)
+
+Petición: la entrega del primer semestre es el **20 de noviembre**; no se hace nada de la fase 20 (LaTeX,
+OCR…) antes; solo que **todo lo ya hecho funcione**, sobre todo la conexión entre equipos y la edición. El
+equipo dio un archivo real para probar el texto: una tesis de 2005 en Word 97-2003 (`Tesis.doc`, 32 MB,
+46 600 palabras, 39 tablas, 153 imágenes).
+
+- **Entorno de pruebas:** `~/.cache` de la laptop se había vaciado (Playwright, navegadores, corpus,
+  validador). Se rehízo y quedó `4-CODIGO/pruebas/preparar.sh`, que lo reconstruye todo desde cero (los
+  archivos de prueba se bajan de Microsoft, Apache POI, LibreOffice y officer, con su origen anotado).
+- **La tesis.** La app no abre `.doc` (nunca lo hizo); se pasó a `.docx` como lo haría cualquiera y se probó
+  completa con `pruebas/office/documento_grande.py`. Encontró tres defectos, ya corregidos:
+  - **DEF-51 (alta):** escribir en un documento largo congelaba la página 5-6 s cada vez que se acomodaban
+    las hojas: la paginación volvía a medir todo el documento por cada página partida (358 veces). Ahora mide
+    una vez, calcula todo, escribe al final y comprueba que cada párrafo quedó donde se calculó (si no, usa
+    la forma anterior). Tesis: 0.2 s por paginación; cada letra aparece en ~50 ms (máximo 177 ms).
+  - **DEF-52 (alta):** hojas en blanco de más. Si el corte de página caía dentro de un texto con formato, el
+    pedazo de ese texto junto al corte contaba como una línea que no cabe y se volvía a cortar hasta 40 veces:
+    la tesis se veía de 358 páginas (LibreOffice: 180; ahora 184) y un informe de Microsoft de 78, de 312.
+  - **DEF-53 (media):** un subíndice al final de un renglón (C<sub>B</sub>) hacía que el corte quedara antes
+    de él, y la llamada de una nota al pie se contaba en la página anterior. Ahora se ubican por su centro.
+  - Además, en documentos muy grandes la copia para abrirlos sin Internet se guarda más espaciada y el
+    conteo de palabras se rehace al dejar de escribir (bloqueos de la página al escribir seguido: 14 → 5).
+  - Resultado: importar en 5.8 s, escribir sin trabarse, otra persona en Firefox la abre en 2 s y ve todo,
+    al recargar no se pierde nada, y el Word descargado conserva las 39 tablas, las 179 imágenes y el texto
+    letra por letra; abre en LibreOffice y el validador de Microsoft no encuentra errores nuevos (17 de 17).
+- **La paginación nueva contra la anterior:** en la tesis y 34 Word del corpus, 33 idénticas y dos con
+  diferencias de 1 px; ningún renglón queda fuera de su hoja (salvo tablas más altas que lo que queda de la
+  hoja, que no se parten: igual que antes).
+- **Excel y PowerPoint complejos:** se juntó un corpus nuevo (`corpus-reales`, 33 archivos): plantillas
+  oficiales de Microsoft (tutorial de tablas dinámicas, presupuesto universitario con formato condicional y
+  gráfica, registro escolar, tutorial de fórmulas, Gantt, ventas, activos y una presentación de 13
+  diapositivas) y archivos de usuarios de las pruebas de LibreOffice (SmartArt, animaciones, secciones,
+  video, sonido en las transiciones, grupos girados, tablas con estilo).
+  - Abrir y descargar sin tocar: 33 de 33 completos. Por la app completa (servidor y recargar): 32 de 33 con
+    todas sus partes idénticas; el otro llevó a **DEF-54 (media):** un Excel de otro programa con las rutas
+    internas al revés (`xl\workbook.xml`) y en minúsculas no se podía ni abrir. Ahora se normalizan y cada
+    parte toma el nombre que declara el archivo; lo descargado lo leen el validador y LibreOffice.
+  - Editados por dos personas a la vez (Chromium y Firefox) con teclado y mouse, recargados y descargados
+    (`pruebas/office/editar_real.py`): los 37 archivos (con la tesis y tres Word largos) bien; validador de
+    Microsoft: 60 de 60 sin errores nuevos. LibreOffice se cuelga con tres originales de Microsoft
+    (también sin tocarlos), así que ahí no dice nada de la exportación.
+  - Lo que la app todavía no **muestra** de esos archivos (se conserva al descargar): gráficas, imágenes,
+    formato condicional, comentarios y filtros de Excel, y la herencia de tamaños del patrón de PowerPoint
+    (medido: la app entiende el 71 % de esos archivos; el resto sale del original).
+- **Conexión entre equipos:** la app en el emulador de Android contra el servidor de la laptop (entrar con
+  cuenta, escribir los dos, modo avión y de regreso, hoja con fórmula) 13 de 13; el **teléfono que comparte**
+  (servidor dentro de la app) con una computadora sin Internet que entra con alias, 8 de 8; **más de 2
+  minutos sin red** mientras otra persona escribe: se abre la rama, el original no se toca y la app avisa,
+  6 de 6 (era B-6, pendiente desde el 14-nov). La Raspberry: humo 30 de 30. La APK 0.14.2 se instaló encima
+  de la 0.13.2 sin desinstalar (misma firma).
+- **DEF-50:** un método equivocado o una petición mal hecha ya responde 405, 400 o 415 (no 500).
+  `seguridad.py` 380 de 380.
+- `.doc`, `.xls`, `.ppt`, `.odt`, `.ods`, `.odp` y `.rtf` ya se pueden elegir al importar y el aviso dice
+  qué hacer; la ayuda lo explica.
+- **Pruebas corregidas** (eran ellas, no la app): `rastreo.py` (las 27 acciones de la ruedita que «no
+  abrían»: revisadas a mano, todas funcionan), `ediciones.py` (LibreOffice se cuelga con el original de
+  `ms-brownbag.pptx`), comparación de partes sin distinguir mayúsculas.
+- **Investigación de Office en el escritorio:** no terminó; se cortó el 14-nov por el límite semanal de uso
+  (Word casi completo, PowerPoint solo dos pestañas, Excel solo la lista de 528 funciones). Detalle en
+  `4-CODIGO/docs/paridad/LEEME.md`.
+- **Falta:** repetir en el A55 real (su depuración inalámbrica perdió el emparejamiento) y abrir lo
+  descargado en Microsoft Office de verdad (el escritorio arrancó en Windows, sin acceso remoto).

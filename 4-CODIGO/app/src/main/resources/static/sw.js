@@ -2,7 +2,7 @@
    Red primero (el servidor siempre tiene la versión más nueva) y, si no responde en 3 s o no hay
    red, la copia guardada. La API (/api/...) nunca se guarda: los documentos sin red viven en la
    bóveda cifrada de cada cuenta. Al cambiar VERSION se descarta la caché anterior. */
-const VERSION = "nom-colab-0.14.0";
+const VERSION = "nom-colab-0.14.2";
 const BASE = [
   "./", "index.html", "manifest.webmanifest",
   "css/nom.css", "css/editor.css", "css/fuentes.css",
@@ -20,7 +20,7 @@ const BASE = [
   "js/vista-dispositivo.js", "js/editor.js", "js/modo-texto.js", "js/modo-hoja.js", "js/diapositivas.js", "js/iconos.js", "js/lienzo.js", "js/diagramas.js", "js/vista-ver.js", "js/citas.js", "js/datos.js", "js/experiencia.js",
   "js/anfitrion.js", "js/app.js", "js/vendor/qrcode.js", "js/qr.js", "js/acceso.js", "js/union.js", "js/cola.js", "js/ramas.js", "js/chat.js", "js/recibo.js",
   "js/comentarios.js",
-  /* ayuda:inicio (lo escribe ayuda/generar.py) */ "ayuda/ayuda.css", "ayuda/ayuda.js", "ayuda/indice.json", "ayuda/index.html", "ayuda/buscar/index.html", "ayuda/preguntas-frecuentes/index.html", "ayuda/sin-internet/al-volver/index.html", "ayuda/sin-internet/alias/index.html", "ayuda/sin-internet/como-funciona/index.html", "ayuda/sin-internet/con-mi-cuenta/index.html", "ayuda/sin-internet/crear-sin-internet/index.html", "ayuda/sin-internet/index.html", "ayuda/sin-internet/que-se-puede/index.html", "ayuda/sin-internet/telefono-servidor/index.html", "legal/accesibilidad/index.html", "legal/almacenamiento/index.html", "legal/denuncias/index.html", "legal/index.html", "legal/licencias/index.html", "legal/permisos-android/index.html", "legal/privacidad-corto/index.html", "legal/privacidad/index.html", "legal/seguridad/index.html", "legal/terminos/index.html", "legal/uso-aceptable/index.html", /* ayuda:fin */ "js/proyector.js", "js/vendor/jsQR.js",
+  /* ayuda:inicio (lo escribe ayuda/generar.py) */ "ayuda/ayuda.css", "ayuda/ayuda.js", "ayuda/indice.json", "ayuda", "ayuda/buscar", "ayuda/preguntas-frecuentes", "ayuda/sin-internet", "ayuda/sin-internet/al-volver", "ayuda/sin-internet/alias", "ayuda/sin-internet/como-funciona", "ayuda/sin-internet/con-mi-cuenta", "ayuda/sin-internet/crear-sin-internet", "ayuda/sin-internet/que-se-puede", "ayuda/sin-internet/telefono-servidor", "legal", "legal/accesibilidad", "legal/almacenamiento", "legal/denuncias", "legal/licencias", "legal/permisos-android", "legal/privacidad", "legal/privacidad-corto", "legal/seguridad", "legal/terminos", "legal/uso-aceptable", /* ayuda:fin */ "js/proyector.js", "js/vendor/jsQR.js",
 ];
 
 self.addEventListener("install", (e) => {

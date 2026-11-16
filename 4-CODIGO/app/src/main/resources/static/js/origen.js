@@ -231,14 +231,44 @@
       if (off + 46 > u8.length || dv.getUint32(off, true) !== 0x02014b50) break;
       const metodo = dv.getUint16(off + 10, true), crc = dv.getUint32(off + 16, true), comp = dv.getUint32(off + 20, true), tam = dv.getUint32(off + 24, true);
       const ln = dv.getUint16(off + 28, true), le = dv.getUint16(off + 30, true), lc = dv.getUint16(off + 32, true), loc = dv.getUint32(off + 42, true);
-      const nombre = dec.decode(u8.subarray(off + 46, off + 46 + ln));
+      // Algunos programas (no Office) guardan las rutas con diagonal invertida (xl\workbook.xml): Excel
+      // y LibreOffice los abren igual, así que se normalizan.
+      const nombre = dec.decode(u8.subarray(off + 46, off + 46 + ln)).replace(/\\/g, "/");
       if (loc + 30 <= u8.length) {
         const ini = loc + 30 + dv.getUint16(loc + 26, true) + dv.getUint16(loc + 28, true);
         if (!nombre.endsWith("/")) entradas.set(nombre, { metodo, crc, datos: u8.subarray(ini, ini + comp), tam });
       }
       off += 46 + ln + le + lc;
     }
+    // La norma de Office (OPC) dice que los nombres de las partes no distinguen mayúsculas: hay archivos
+    // con «[content_types].xml» o «xl/sharedstrings.xml». Cada parte toma el nombre exacto con que la
+    // declara el propio archivo en [Content_Types].xml (así lo exportado lo lee también el validador de
+    // Microsoft, que sí distingue mayúsculas); el orden de las partes no cambia. En un archivo de Office
+    // normal los nombres ya coinciden y no se toca nada.
+    {
+      const ctn = [...entradas.keys()].find((k) => k.toLowerCase() === "[content_types].xml");
+      const nuevoNombre = new Map();
+      if (ctn && ctn !== "[Content_Types].xml") nuevoNombre.set(ctn, "[Content_Types].xml");
+      const e = ctn && entradas.get(ctn);
+      let ct = null;
+      try { ct = e ? dec.decode(e.metodo === 0 ? e.datos : C().inflar(e.datos, { tam: e.tam })) : null; } catch (x) { ct = null; }
+      if (ct) {
+        const porMinus = new Map([...entradas.keys()].map((k) => [k.toLowerCase(), k]));
+        const re = /PartName\s*=\s*["']\/?([^"'%]+)["']/g;
+        let m;
+        while ((m = re.exec(ct))) { const ex = porMinus.get(m[1].toLowerCase()); if (ex && ex !== m[1] && !entradas.has(m[1])) nuevoNombre.set(ex, m[1]); }
+      }
+      if (nuevoNombre.size) {
+        const antes = [...entradas];
+        entradas.clear();
+        antes.forEach(([k, v]) => entradas.set(nuevoNombre.get(k) || k, v));
+      }
+    }
+    const minus = new Map();
+    for (const k of entradas.keys()) if (!minus.has(k.toLowerCase())) minus.set(k.toLowerCase(), k);
+    const real = (nm) => (entradas.has(nm) ? nm : minus.get(String(nm).toLowerCase()) || nm);
     function bytes(nombre) {
+      nombre = real(nombre);
       if (listos.has(nombre)) return listos.get(nombre);
       const e = entradas.get(nombre);
       if (!e) return null;
@@ -256,12 +286,13 @@
     }
     /** Las partes que no se pudieron descomprimir, para copiarlas sin tocar: { datos (comprimidos), crc, tam }. */
     function crudo(nombre) {
+      nombre = real(nombre);
       const e = entradas.get(nombre);
       if (!e) return null;
       if (!listos.has(nombre)) bytes(nombre);
       return e.danada ? { datos: e.datos, crc: e.crc, tam: e.tam } : null;
     }
-    const z = { entradas, nombres: () => [...entradas.keys()], tiene: (nm) => entradas.has(nm), bytes, crudo, texto: (nm) => { const b = bytes(nm); return b ? dec.decode(b) : null; } };
+    const z = { entradas, nombres: () => [...entradas.keys()], tiene: (nm) => entradas.has(real(nm)), bytes, crudo, texto: (nm) => { const b = bytes(nm); return b ? dec.decode(b) : null; } };
     // nombres de antes (los lectores de Office los usan con await; devolver el valor directo también sirve)
     z.leer = bytes;
     return z;

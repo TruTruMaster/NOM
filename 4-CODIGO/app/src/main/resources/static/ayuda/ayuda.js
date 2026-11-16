@@ -11,6 +11,10 @@
 
   const yo = document.currentScript && document.currentScript.src;
   const base = yo ? yo.replace(/ayuda\/ayuda\.js(\?.*)?$/, "") : "";
+  // En el navegador las páginas se muestran sin index.html (/ayuda/empezar/que-es); dentro de la
+  // app, que abre sus propios archivos, el nombre del archivo hace falta.
+  const enArchivos = location.protocol === "file:";
+  const dir = (u) => base + (enArchivos ? u : u.replace(/\/?index\.html(?=$|[#?])/, ""));
   const sinAcentos = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   let indice = null;
@@ -46,8 +50,8 @@
   function pintar(cont, lista, q) {
     cont.hidden = false;
     cont.innerHTML = lista.length
-      ? lista.slice(0, 8).map((a, i) => `<a href="${esc(base + a.u)}" ${i === 0 ? 'aria-selected="true"' : ""}><b>${esc(a.t)}</b><span>${esc(a.s)}${a.d ? " · " + esc(a.d) : ""}</span></a>`).join("")
-      : `<p>No encontramos «${esc(q)}». Prueba con otras palabras, o revisa las <a href="${esc(base)}ayuda/preguntas-frecuentes/index.html">preguntas frecuentes</a>.</p>`;
+      ? lista.slice(0, 8).map((a, i) => `<a href="${esc(dir(a.u))}" ${i === 0 ? 'aria-selected="true"' : ""}><b>${esc(a.t)}</b><span>${esc(a.s)}${a.d ? " · " + esc(a.d) : ""}</span></a>`).join("")
+      : `<p>No encontramos «${esc(q)}». Prueba con otras palabras, o revisa las <a href="${esc(dir("ayuda/preguntas-frecuentes/index.html"))}">preguntas frecuentes</a>.</p>`;
   }
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -81,7 +85,7 @@
       cargar().then(() => {
         const l = buscar(q);
         pag.innerHTML = `<p class="entrada">${l.length ? l.length + (l.length === 1 ? " página" : " páginas") + " para «" + esc(q) + "»:" : "No encontramos «" + esc(q) + "»."}</p>`
-          + `<ul class="lista-articulos">${l.map((a) => `<li><a href="${esc(base + a.u)}"><b>${esc(a.t)}</b><span>${esc(a.s)}${a.d ? " · " + esc(a.d) : ""}</span></a></li>`).join("")}</ul>`;
+          + `<ul class="lista-articulos">${l.map((a) => `<li><a href="${esc(dir(a.u))}"><b>${esc(a.t)}</b><span>${esc(a.s)}${a.d ? " · " + esc(a.d) : ""}</span></a></li>`).join("")}</ul>`;
       });
     }
     // Dentro de la app: «Abrir NOM-COLAB» regresa a donde estaba (la página anterior).

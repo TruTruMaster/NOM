@@ -266,6 +266,12 @@
           <div class="marca bienvenida-marca"><svg class="logo"><use href="#logo"/></svg>NOM-COLAB</div>
           <div class="tarjeta-cuenta caja" data-tarjeta></div>
           <p class="bienvenida-que">Documentos de texto, hojas de cálculo, presentaciones y diagramas para trabajar en equipo, con Internet o en el mismo Wi-Fi.</p>
+          <footer class="pie-legal">
+            <nav aria-label="Ayuda y legal">
+              ${[["", "Ayuda"], ["preguntas-frecuentes", "Preguntas frecuentes"], ["legal/privacidad", "Privacidad"], ["legal/terminos", "Términos"], ["legal", "Todo lo legal"]]
+                .map(([r, t]) => `<a href="${NOM.urlAyuda(r)}" data-ayuda="${r}">${t}</a>`).join("")}
+            </nav>
+          </footer>
         </div>
       </main>`);
     raiz.append(vista);
@@ -366,8 +372,7 @@
     const SEPARADOR = `<div class="separador" aria-hidden="true">o</div>`;
 
     function enlazarComunes(f) {
-      // F.5 Ayuda, privacidad y términos, sin iniciar sesión.
-      f.append(html(`<p class="pie-legal"><a href="${NOM.urlAyuda("")}" data-ayuda="">Ayuda</a> · <a href="${NOM.urlAyuda("legal/privacidad")}" data-ayuda="legal/privacidad">Privacidad</a> · <a href="${NOM.urlAyuda("legal/terminos")}" data-ayuda="legal/terminos">Términos</a></p>`));
+      // F.5 La ayuda, las preguntas frecuentes y lo legal están en el pie de la pantalla (ver pintar).
       f.querySelectorAll("[data-sin-cuenta]").forEach((b) => (b.onclick = () => NOM.app.sinCuenta()));
       f.querySelectorAll("[data-ir]").forEach((b) => (b.onclick = () => { if (modo === b.dataset.ir) return; modo = b.dataset.ir; render(); }));
       f.querySelectorAll("[data-ver]").forEach((b) => (b.onclick = () => {

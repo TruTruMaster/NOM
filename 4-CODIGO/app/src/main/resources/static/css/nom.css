@@ -858,8 +858,11 @@ p, .sub, small { text-wrap: pretty; }
 /* Fase 14 (F.5): aceptar los términos al registrarse y el pie con la ayuda. */
 .acepto { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--tinta-2); }
 .acepto input { width: 18px; height: 18px; margin-top: 2px; flex: none; accent-color: var(--acento); }
-.pie-legal { text-align: center; font-size: 13px; color: var(--tinta-suave); margin: 0; }
-.pie-legal a { color: var(--tinta-suave); }
+.pie-legal { border-top: 1px solid var(--borde); padding-top: var(--e3); margin: 0; }
+.pie-legal nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px var(--e2); }
+.pie-legal a { color: var(--tinta-2); font-size: 14px; padding: 6px 8px; border-radius: 6px; text-decoration: none; }
+.pie-legal a:hover { text-decoration: underline; }
+@media (pointer: coarse) { .pie-legal a { padding: 10px 8px; } }
 .boton-ayuda { display: inline-grid; place-items: center; vertical-align: middle; color: var(--tinta-suave); }
 
 /* Fase 15: chat del espacio */

@@ -2366,15 +2366,21 @@
           m.textContent = e.marca;
         } else if (m) m.remove();
       }
-      let tPag = null;
-      function programarPaginar() { clearTimeout(tPag); tPag = setTimeout(paginar, 120); }
+      // La paginación corre un momento después del último cambio. En documentos largos (una tesis de
+      // 300 páginas) se espera más, para no repaginar a media palabra mientras alguien escribe seguido.
+      let tPag = null, msPaginar = 0, tamPaginado = "";
+      function programarPaginar() { clearTimeout(tPag); tPag = setTimeout(paginar, msPaginar > 40 ? Math.min(900, 120 + msPaginar * 3) : 120); }
       let numPaginas = 1;
-      function paginar() {
-        const kids = cuerpo.children;
-        for (const el of kids) if (el.dataset.empuje) { el.style.marginTop = ""; delete el.dataset.empuje; }
-        // 8.2 Los cortes de la paginación anterior se quitan (se calculan de nuevo).
+      /** Quita los empujes y los cortes de la paginación anterior (se calculan de nuevo). */
+      function quitarPaginacion() {
+        for (const el of cuerpo.children) if (el.dataset.empuje) { el.style.marginTop = ""; delete el.dataset.empuje; }
         $$(".wd-corte", cuerpo).forEach((x) => { const p = x.parentNode; x.remove(); if (p) p.normalize(); });
         cuerpo.style.minHeight = "";
+      }
+      function paginar() {
+        clearTimeout(tPag); tPag = null;
+        const t0 = performance.now();
+        quitarPaginacion();
         const pg = pagina();
         if (vista !== "paginas") {
           pintarNotasFinales();
@@ -2382,59 +2388,18 @@
           numPaginas = Math.max(1, Math.ceil(cuerpo.offsetHeight / pg.h));
           pintarEstado(); pintarCursores();
           if (seguirCursor) { seguirCursor = false; desplazarAlCursor(); }
+          msPaginar = 0; tamPaginado = cuerpo.offsetWidth + "x" + cuerpo.offsetHeight;
           return;
         }
-        const H = pg.h, paso = H + GAP, util = H - pg.m.s - pg.m.i;
-        const tops = [], altos = [];
-        for (const el of kids) { tops.push(el.offsetTop); altos.push(el.offsetHeight); }
-        // 8.2 Notas al pie: cuánto mide cada una (para dejarle lugar al final de su página).
-        const anchoTexto = pg.w - pg.m.iz - pg.m.d;
-        const medidor = medirNotas(anchoTexto);
-        const notasPag = {};   // página → [{ id, n, texto, alto }]
-        const reservado = (p) => (notasPag[p] || []).reduce((s, x) => s + x.alto, 0) + ((notasPag[p] || []).length ? 14 : 0);
-        let corr = 0, forzar = null, pagEscrita = -1;   // pagEscrita: última hoja que ya tiene algo escrito
-        for (let i = 0; i < kids.length; i++) {
-          const el = kids[i], top = tops[i] + corr, h = altos[i];
-          const pi = Math.floor(top / paso), arriba = pi * paso + pg.m.s;
-          const notasEl = $$(".wd-nota[data-obj]", el);
-          const altoNotasEl = notasEl.reduce((s, o) => s + medidor(o.dataset.id), 0);
-          const abajo = pi * paso + H - pg.m.i - reservado(pi) - (altoNotasEl ? altoNotasEl + (reservado(pi) ? 0 : 14) : 0);
-          let destino = null;
-          // Una sección de Word que empieza en hoja nueva: su primer párrafo baja a la hoja siguiente
-          // (si en esta hoja ya hay algo escrito; tras puros renglones vacíos no se deja una hoja en blanco).
-          if (forzar == null && i > 0 && (el.dataset.sec || "")[0] === "p" && top > arriba + 1) {
-            if (pagEscrita >= pi) forzar = (pi + 1) * paso + pg.m.s;
-          }
-          if (forzar != null && top < forzar) destino = forzar;
-          else if (top < arriba - 1) destino = arriba;
-          else if (top + h > abajo + 1) {
-            // Un párrafo que no cabe se parte (si deja al menos 2 líneas en cada página); si no, pasa completo.
-            const extra = partirParrafo(el, top, paso, H, pg, reservado, notasEl, medidor);
-            if (extra != null) corr += extra;
-            else if (h <= util) destino = (pi + 1) * paso + pg.m.s;
-          }
-          forzar = null;
-          let topFinal = top;
-          if (destino != null && destino > top) {
-            const d = destino - top;
-            const base = parseFloat(getComputedStyle(el).marginTop) || 0;
-            el.style.marginTop = base + d + "px";
-            el.dataset.empuje = d;
-            corr += d;
-            topFinal = destino;
-          }
-          // Cada nota va en la página donde quedó su número.
-          if (notasEl.length) {
-            const er = el.getBoundingClientRect(), k = er.height / (el.offsetHeight || 1) || 1;
-            notasEl.forEach((o) => {
-              const y = topFinal + (o.getBoundingClientRect().top - er.top) / k;
-              const p = Math.floor(y / paso);
-              (notasPag[p] = notasPag[p] || []).push({ id: o.dataset.id, n: numerosNotas().get(o.dataset.id), texto: textoNota(o.dataset.id), alto: medidor(o.dataset.id) });
-            });
-          }
-          if (el.querySelector(".wd-salto")) { const t2 = topFinal; forzar = (Math.floor(t2 / paso) + 1) * paso + pg.m.s; }
-          if (el.firstElementChild && el.firstElementChild.tagName !== "BR" || el.textContent.trim()) pagEscrita = Math.floor((topFinal + Math.max(0, altos[i] - 1)) / paso);
-        }
+        const paso = pg.h + GAP;
+        // Primero se calcula todo con una sola medición y se escribe al final (rápido). Si lo que quedó
+        // no coincide con lo calculado (un caso que el cálculo no previó), se pagina a la manera exacta:
+        // escribir y volver a medir párrafo por párrafo (lenta en documentos largos, pero siempre bien).
+        // (NOM.paginarExacto = true fuerza la forma exacta: las pruebas comparan las dos.)
+        let r = NOM.paginarExacto ? { exacta: false } : calcularPaginas(pg, true), modo = "calculada";
+        const fallo = r.fallo || null;
+        if (!r.exacta) { quitarPaginacion(); r = calcularPaginas(pg, false); modo = "exacta"; }
+        const { notasPag, forzar } = r;
         tomarRegistros();
         const fin = cuerpo.offsetHeight;
         numPaginas = Math.max(1, Math.ceil((fin + 1) / paso));
@@ -2470,6 +2435,85 @@
         pintarEstado();
         pintarCursores();
         if (seguirCursor) { seguirCursor = false; desplazarAlCursor(); }
+        msPaginar = performance.now() - t0;
+        tamPaginado = cuerpo.offsetWidth + "x" + cuerpo.offsetHeight;
+        ed.paginacion = { ms: Math.round(msPaginar), modo, paginas: numPaginas, parrafos: cuerpo.children.length, fallo };
+      }
+      ed.repaginar = () => paginar();   // para las pruebas
+      /**
+       * Decide dónde empieza cada página: qué párrafo baja a la hoja siguiente (empuje) y cuál se parte
+       * entre dos hojas (corte). Con `calcular`, mide una sola vez, calcula todo sin tocar la página y
+       * escribe al final; luego comprueba que cada párrafo quedó donde se calculó (`exacta: false` si no).
+       * Sin `calcular`, escribe y vuelve a medir en cada párrafo (la forma anterior: lenta, exacta).
+       */
+      function calcularPaginas(pg, calcular) {
+        const kids = cuerpo.children, n = kids.length;
+        const H = pg.h, paso = H + GAP, util = H - pg.m.s - pg.m.i;
+        const tops = new Array(n), altos = new Array(n);
+        for (let i = 0; i < n; i++) { tops[i] = kids[i].offsetTop; altos[i] = kids[i].offsetHeight; }
+        // 8.2 Notas al pie: cuánto mide cada una (para dejarle lugar al final de su página).
+        const anchoTexto = pg.w - pg.m.iz - pg.m.d;
+        const medidor = medirNotas(anchoTexto);
+        const notasPag = {};   // página → [{ id, n, texto, alto }]
+        const reservado = (p) => (notasPag[p] || []).reduce((s, x) => s + x.alto, 0) + ((notasPag[p] || []).length ? 14 : 0);
+        const empujes = [], partes = [], esperado = calcular ? new Array(n) : null;
+        let corr = 0, forzar = null, pagEscrita = -1;   // pagEscrita: última hoja que ya tiene algo escrito
+        for (let i = 0; i < n; i++) {
+          const el = kids[i], top = tops[i] + corr, h = altos[i];
+          const pi = Math.floor(top / paso), arriba = pi * paso + pg.m.s;
+          const notasEl = $$(".wd-nota[data-obj]", el);
+          const altoNotasEl = notasEl.reduce((s, o) => s + medidor(o.dataset.id), 0);
+          const abajo = pi * paso + H - pg.m.i - reservado(pi) - (altoNotasEl ? altoNotasEl + (reservado(pi) ? 0 : 14) : 0);
+          let destino = null, partido = null;
+          // Una sección de Word que empieza en hoja nueva: su primer párrafo baja a la hoja siguiente
+          // (si en esta hoja ya hay algo escrito; tras puros renglones vacíos no se deja una hoja en blanco).
+          if (forzar == null && i > 0 && (el.dataset.sec || "")[0] === "p" && top > arriba + 1) {
+            if (pagEscrita >= pi) forzar = (pi + 1) * paso + pg.m.s;
+          }
+          if (forzar != null && top < forzar) destino = forzar;
+          else if (top < arriba - 1) destino = arriba;
+          else if (top + h > abajo + 1) {
+            // Un párrafo que no cabe se parte (si deja al menos 2 líneas en cada página); si no, pasa completo.
+            partido = partirParrafo(el, top, paso, H, pg, reservado, notasEl, medidor, calcular);
+            if (partido) { corr += partido.crece; if (partido.puntos && partido.puntos.length) partes.push(partido); }
+            else if (h <= util) destino = (pi + 1) * paso + pg.m.s;
+          }
+          forzar = null;
+          let topFinal = top;
+          if (destino != null && destino > top) {
+            const d = destino - top;
+            const base = parseFloat(getComputedStyle(el).marginTop) || 0;
+            if (calcular) empujes.push([el, base + d, d]);
+            else { el.style.marginTop = base + d + "px"; el.dataset.empuje = d; }
+            corr += d;
+            topFinal = destino;
+          }
+          if (calcular) esperado[i] = topFinal;
+          // Cada nota va en la página donde quedó su número.
+          if (notasEl.length) {
+            const er = el.getBoundingClientRect(), k = er.height / (el.offsetHeight || 1) || 1;
+            notasEl.forEach((o) => {
+              // (al calcular, el párrafo todavía no tiene sus cortes: se suma lo que bajan las líneas de arriba)
+              const y = topFinal + (o.getBoundingClientRect().top - er.top) / k + (calcular && partido && partido.bajaNota ? partido.bajaNota(o) : 0);
+              const p = Math.floor(y / paso);
+              (notasPag[p] = notasPag[p] || []).push({ id: o.dataset.id, n: numerosNotas().get(o.dataset.id), texto: textoNota(o.dataset.id), alto: medidor(o.dataset.id) });
+            });
+          }
+          if (el.querySelector(".wd-salto")) { const t2 = topFinal; forzar = (Math.floor(t2 / paso) + 1) * paso + pg.m.s; }
+          if (el.firstElementChild && el.firstElementChild.tagName !== "BR" || el.textContent.trim()) pagEscrita = Math.floor((topFinal + Math.max(0, h + (partido ? partido.crece : 0) - 1)) / paso);
+        }
+        if (!calcular) return { exacta: true, notasPag, forzar };
+        // Escribir todo de una vez. Los cortes de un mismo párrafo, del último al primero: así partir un
+        // nodo de texto no mueve la posición de los que faltan.
+        for (const [el, m, d] of empujes) { el.style.marginTop = m + "px"; el.dataset.empuje = d; }
+        for (const pr of partes) for (let j = pr.puntos.length - 1; j >= 0; j--) {
+          const pt = pr.puntos[j], rg = document.createRange();
+          rg.setStart(pt.node, pt.off);
+          rg.insertNode(crearCorte(pt.alto + "px"));
+        }
+        // Comprobar: cada párrafo tiene que haber quedado justo donde se calculó.
+        for (let i = 0; i < n; i++) if (Math.abs(kids[i].offsetTop - esperado[i]) > 1.5) return { exacta: false, fallo: { i, esperado: Math.round(esperado[i]), real: kids[i].offsetTop } };
+        return { exacta: true, notasPag, forzar };
       }
       /** Mide el alto de cada nota al pie con el ancho del texto (con caché por texto). */
       const cacheAltos = new Map();
@@ -2497,46 +2541,87 @@
       /**
        * Parte un párrafo que se pasa del final de la página: mete un separador invisible al inicio de
        * la primera línea que no cabe (ocupa todo el renglón), para que el resto empiece en la página
-       * siguiente. Deja al menos 2 líneas en cada lado. Devuelve cuánto creció el párrafo, o null si
-       * conviene pasarlo completo. El separador no es contenido: no entra al modelo ni se imprime.
+       * siguiente. Deja al menos 2 líneas en cada lado. Devuelve `{ crece, puntos }` (cuánto creció el
+       * párrafo y, al calcular, dónde van los cortes), o null si conviene pasarlo completo. El separador
+       * no es contenido: no entra al modelo ni se imprime.
+       *
+       * Con `calcular`, las líneas se miden una sola vez (sin cortes) y no se escribe nada: cada corte
+       * ocupa su propio renglón y baja las líneas de abajo exactamente su alto (comprobado al escribir).
+       * Sin `calcular`, se mete cada corte y se vuelve a medir (la forma anterior).
        */
-      function partirParrafo(el, top, paso, H, pg, reservado, notasEl, medidor) {
+      function partirParrafo(el, top, paso, H, pg, reservado, notasEl, medidor, calcular) {
         if (vista !== "paginas" || el.querySelector(".wd-obj.bloque, .wd-imagen.libre, .wd-imagen.flota-izq, .wd-imagen.flota-der") || !el.firstChild) return null;
-        let creci = 0;
+        const res = { crece: 0, puntos: [], bajaNota: null };
+        const fin = () => (res.crece ? res : null);
+        if (!calcular) {
+          for (let vuelta = 0; vuelta < 40; vuelta++) {
+            const lineas = lineasDe(el);
+            if (lineas.length < 4) return fin();
+            { const er0 = el.getBoundingClientRect(), z0 = er0.height / (el.offsetHeight || 1) || 1;
+              notasEl.forEach((o) => { o._linea = lineaDeNota(o, lineas, er0, z0); }); }
+            let k = -1, pag = -1;
+            for (let j = 0; j < lineas.length; j++) {
+              const yT = top + lineas[j].t, yB = top + lineas[j].b, p = Math.floor(yT / paso);
+              const notasAntes = notasEl.filter((o) => o._linea != null && o._linea <= j).reduce((s, o) => s + medidor(o.dataset.id), 0);
+              const limite = p * paso + H - pg.m.i - reservado(p) - (notasAntes ? notasAntes + 14 : 0);
+              if (yB > limite + 1) { k = j; pag = p; break; }
+            }
+            if (k < 0) return res;
+            const antes = lineas.filter((l, j) => j < k && Math.floor((top + l.t) / paso) === pag).length;
+            if (k > 0 && lineas.length - k < 2 && antes >= 3) k = lineas.length - 2;   // sin línea viuda
+            const enPagina = lineas.filter((l, j) => j < k && Math.floor((top + l.t) / paso) === pag).length;
+            if (enPagina < 2 || lineas.length - k < 2) return fin();                   // sin línea huérfana
+            const destino = (pag + 1) * paso + pg.m.s, alto = destino - (top + lineas[k].t);
+            if (alto <= 0) return fin();
+            const er = el.getBoundingClientRect(), z = er.height / (el.offsetHeight || 1) || 1;
+            const punto = inicioDeLinea(el, er.top + lineas[k].t * z);
+            if (!punto) return fin();
+            const antesAlto = el.offsetHeight;
+            const rg = document.createRange();
+            rg.setStart(punto.node, punto.off);
+            rg.insertNode(crearCorte(alto + "px"));
+            res.crece += Math.max(0, el.offsetHeight - antesAlto);
+          }
+          return res;
+        }
+        const lineas = lineasDe(el);
+        if (lineas.length < 4) return null;
+        const er = el.getBoundingClientRect(), z = er.height / (el.offsetHeight || 1) || 1;
+        const lineaNota = new Map();
+        notasEl.forEach((o) => { lineaNota.set(o, lineaDeNota(o, lineas, er, z)); });
+        // Cuánto bajó la línea j por los cortes ya decididos arriba de ella.
+        const baja = (j) => { let s = 0; for (const p of res.puntos) if (j >= p.k) s += p.alto; return s; };
+        const y = (j) => top + lineas[j].t + baja(j);
+        res.bajaNota = (o) => { const ln = lineaNota.get(o); return ln == null || ln < 0 ? 0 : baja(ln); };
         for (let vuelta = 0; vuelta < 40; vuelta++) {
-          const lineas = lineasDe(el);
-          if (lineas.length < 4) return creci || null;
-          { const er0 = el.getBoundingClientRect(), z0 = er0.height / (el.offsetHeight || 1) || 1;
-            notasEl.forEach((o) => { const t = (o.getBoundingClientRect().top - er0.top) / z0; o._linea = lineas.findIndex((l) => t >= l.t - 2 && t < l.b); }); }
           let k = -1, pag = -1;
           for (let j = 0; j < lineas.length; j++) {
-            const yT = top + lineas[j].t, yB = top + lineas[j].b, p = Math.floor(yT / paso);
-            const notasAntes = notasEl.filter((o) => o._linea != null && o._linea <= j).reduce((s, o) => s + medidor(o.dataset.id), 0);
+            const d = baja(j), yT = top + lineas[j].t + d, yB = top + lineas[j].b + d, p = Math.floor(yT / paso);
+            const notasAntes = notasEl.filter((o) => { const ln = lineaNota.get(o); return ln != null && ln <= j; }).reduce((s, o) => s + medidor(o.dataset.id), 0);
             const limite = p * paso + H - pg.m.i - reservado(p) - (notasAntes ? notasAntes + 14 : 0);
             if (yB > limite + 1) { k = j; pag = p; break; }
           }
-          if (k < 0) return creci;
-          const antes = lineas.filter((l, j) => j < k && Math.floor((top + l.t) / paso) === pag).length;
+          if (k < 0) return res;
+          const antes = lineas.filter((l, j) => j < k && Math.floor(y(j) / paso) === pag).length;
           if (k > 0 && lineas.length - k < 2 && antes >= 3) k = lineas.length - 2;   // sin línea viuda
-          const enPagina = lineas.filter((l, j) => j < k && Math.floor((top + l.t) / paso) === pag).length;
-          if (enPagina < 2 || lineas.length - k < 2) return creci || null;            // sin línea huérfana
-          const destino = (pag + 1) * paso + pg.m.s, alto = destino - (top + lineas[k].t);
-          if (alto <= 0) return creci || null;
-          const er = el.getBoundingClientRect(), z = er.height / (el.offsetHeight || 1) || 1;
+          const enPagina = lineas.filter((l, j) => j < k && Math.floor(y(j) / paso) === pag).length;
+          if (enPagina < 2 || lineas.length - k < 2) return fin();                   // sin línea huérfana
+          const ultimo = res.puntos[res.puntos.length - 1];
+          if (ultimo && k <= ultimo.k) return fin();   // una línea más alta que la hoja: no se parte más
+          const destino = (pag + 1) * paso + pg.m.s, alto = destino - y(k);
+          if (alto <= 0) return fin();
           const punto = inicioDeLinea(el, er.top + lineas[k].t * z);
-          if (!punto) return creci || null;
-          const corte = document.createElement("span");
-          corte.className = "wd-corte";
-          corte.contentEditable = "false";
-          corte.setAttribute("aria-hidden", "true");
-          corte.style.height = alto + "px";
-          const antesAlto = el.offsetHeight;
-          const rg = document.createRange();
-          rg.setStart(punto.node, punto.off);
-          rg.insertNode(corte);
-          creci += Math.max(0, el.offsetHeight - antesAlto);
+          if (!punto) return fin();
+          res.puntos.push({ node: punto.node, off: punto.off, alto, k });
+          res.crece += alto;
         }
-        return creci;
+        return res;
+      }
+      /** En qué línea del párrafo está la llamada de una nota. Se mide por su centro: el número va en
+          superíndice y sobresale por arriba, así que por su borde de arriba caía en la línea anterior. */
+      function lineaDeNota(o, lineas, er, z) {
+        const r = o.getBoundingClientRect(), t = (r.top + r.height / 2 - er.top) / z;
+        return lineas.findIndex((l) => t >= l.t - 2 && t < l.b);
       }
       /** El primer carácter de texto que está en la línea que empieza en y (coordenadas de pantalla).
           Funciona aunque el párrafo no esté a la vista (no usa caretRangeFromPoint). */
@@ -2546,14 +2631,16 @@
         for (let n = w.nextNode(); n; n = w.nextNode()) {
           if (!n.length || (n.parentElement && n.parentElement.closest("[data-obj], .wd-corte"))) continue;
           r.setStart(n, n.length - 1); r.setEnd(n, n.length);
+          // Cada letra se ubica por su centro: un subíndice al final de la línea de arriba baja tanto que
+          // su borde de arriba ya parecía de esta línea (el corte quedaba antes de él: un renglón de más).
           const ult = r.getBoundingClientRect();
-          if (ult.height && ult.top < y - 1) continue;
+          if (ult.height && (ult.top + ult.bottom) / 2 < y) continue;
           let lo = 0, hi = n.length - 1;
           while (lo < hi) {
             const m = (lo + hi) >> 1;
             r.setStart(n, m); r.setEnd(n, m + 1);
             const rc = r.getBoundingClientRect();
-            if (rc.height && rc.top >= y - 1) hi = m; else lo = m + 1;
+            if (rc.height && (rc.top + rc.bottom) / 2 >= y) hi = m; else lo = m + 1;
           }
           // No partir un par de sustitución (emojis).
           if (lo > 0 && /[\uDC00-\uDFFF]/.test(n.data[lo])) lo--;
@@ -2566,8 +2653,11 @@
         const r = document.createRange();
         r.selectNodeContents(el);
         const er = el.getBoundingClientRect(), z = er.height / (el.offsetHeight || 1) || 1;
+        // Fuera el renglón de cada corte: el corte mismo y, si quedó dentro de un texto con formato (un
+        // span), el pedazo de ese span en el mismo renglón (antes contaba como una línea que no cabe y se
+        // volvía a cortar hasta 40 veces: hojas en blanco).
         const cortes = $$(".wd-corte", el).map((c) => c.getBoundingClientRect());
-        const rects = [...r.getClientRects()].filter((x) => x.width > 0.5 && x.height > 0.5 && !cortes.some((c) => Math.abs(c.top - x.top) < 1 && Math.abs(c.height - x.height) < 1));
+        const rects = [...r.getClientRects()].filter((x) => x.width > 0.5 && x.height > 0.5 && !cortes.some((c) => x.top >= c.top - 1 && x.bottom <= c.bottom + 1));
         rects.sort((a, b) => a.top - b.top || a.left - b.left);
         const l = [];
         for (const x of rects) {
@@ -2589,10 +2679,23 @@
       }
 
       // ------------------------------------------------------------ barra de estado
-      function contar() {
+      // El conteo se guarda mientras el texto no cambie (visPintado es otro arreglo con cada cambio):
+      // en una tesis son 300 000 letras y la barra de estado se repinta al desplazarse.
+      // En un documento grande, mientras se escribe, la barra deja el último conteo y lo rehace al dejar de
+      // teclear un momento (contar 300 000 letras tarda unos 40 ms en la computadora y más en un teléfono).
+      let conteo = null, tConteo = null;
+      function contar(exacto) {
+        if (conteo && conteo.v === visPintado && conteo.p === psPintado) return conteo.r;
+        if (conteo && !exacto && visPintado.length > 40000) {
+          clearTimeout(tConteo);
+          tConteo = setTimeout(() => { tConteo = null; contar(true); pintarEstado(); }, 1200);
+          return conteo.r;
+        }
         const t = visPintado.map((x) => (x.e ? " " : x.c === SALTO ? "\n" : x.c)).join("");
         const palabras = (t.match(/[\p{L}\p{N}][\p{L}\p{N}'’_-]*/gu) || []).length;
-        return { palabras, caracteres: t.replace(/\n/g, "").length, sinEspacios: t.replace(/\s/g, "").length, parrafos: psPintado.filter((p) => p.fin > p.ini).length };
+        const r = { palabras, caracteres: t.replace(/\n/g, "").length, sinEspacios: t.replace(/\s/g, "").length, parrafos: psPintado.filter((p) => p.fin > p.ini).length };
+        conteo = { v: visPintado, p: psPintado, r };
+        return r;
       }
       const pintarEstado = NOM.throttle(() => {
         const c = contar(), s = ultimaSel;
@@ -2611,7 +2714,7 @@
         else if (e.target.closest("[data-contar]")) dialogoConteo();
       });
       function dialogoConteo() {
-        const c = contar();
+        const c = contar(true);
         NOM.hoja({ titulo: "Contar palabras", icono: "file-text", cuerpo: `<table class="wd-conteo">
           <tr><td>Páginas</td><td>${numPaginas}</td></tr><tr><td>Palabras</td><td>${c.palabras.toLocaleString("es-MX")}</td></tr>
           <tr><td>Caracteres (con espacios)</td><td>${c.caracteres.toLocaleString("es-MX")}</td></tr><tr><td>Caracteres (sin espacios)</td><td>${c.sinEspacios.toLocaleString("es-MX")}</td></tr>
@@ -2839,7 +2942,9 @@
       let seguirCursor = false;
       function seguirAlCursor() { seguirCursor = true; desplazarAlCursor(); }
       ed.lienzo.addEventListener("scroll", NOM.throttle(pintarEstado, 200), { passive: true });
-      const ro = new ResizeObserver(() => programarPaginar());
+      // Repaginar si cambia el tamaño de la hoja (otro ancho, se cargó una letra o una imagen), pero no
+      // por el cambio que hizo la misma paginación al terminar.
+      const ro = new ResizeObserver(() => { if (cuerpo.offsetWidth + "x" + cuerpo.offsetHeight !== tamPaginado) programarPaginar(); });
       ro.observe(cuerpo);
       // Si cambia el ancho del área (se abre un panel, gira el teléfono), la hoja se recentra: los cursores de los demás se recolocan.
       const roArea = new ResizeObserver(NOM.throttle(() => pintarCursores(), 120));

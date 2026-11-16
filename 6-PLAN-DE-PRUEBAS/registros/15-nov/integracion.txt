@@ -1,0 +1,16 @@
+OK   INT-01  Registrar una cuenta nueva                                                 esperado 201  obtenido 201  194 ms
+OK   INT-02  Iniciar sesión con esa cuenta y recibir la sesión                          esperado 200  obtenido 200  88 ms
+OK   INT-03  Con la sesión, crear un espacio: quien lo crea queda como Propietario      esperado 201 PROPIETARIO  obtenido 201 PROPIETARIO  
+OK   INT-04  Crear un documento de texto dentro del espacio                             esperado 201  obtenido 201  
+OK   INT-05  Otra cuenta, sin invitación, intenta abrir el espacio                      esperado 403  obtenido 403  
+OK   INT-06  El Propietario crea un código de invitación y la otra cuenta entra con él  esperado 201 200  obtenido 201 200  
+OK   INT-07  La invitada escribe en el documento y el Propietario ve el cambio          esperado 200 y lo ve  obtenido 200 y lo ve  
+OK   INT-08  El Propietario la cambia a solo lectura y su siguiente cambio se rechaza   esperado 200 403  obtenido 200 403  
+OK   INT-09  Con solo lectura todavía puede abrir el documento                          esperado 200  obtenido 200  
+OK   INT-10  Guardar una versión con nombre y verla en el historial                     esperado 200 y 1 versión  obtenido 200 y 1 versión  
+OK   INT-11  Solo lectura intenta restaurar una versión                                 esperado 403  obtenido 403  
+OK   INT-12  Mandar el documento a la papelera y restaurarlo                            esperado 200 200  obtenido 200 200  
+OK   INT-13  El Propietario le quita el acceso y ya no puede abrir el espacio           esperado 200 403  obtenido 200 403  
+OK   INT-14  Al cerrar sesión, la sesión anterior deja de servir                        esperado 401  obtenido 401  
+
+14 de 14  ·  registro 194 ms  ·  inicio de sesión 88 ms  ·  versión 0.14.1

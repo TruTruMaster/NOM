@@ -37,7 +37,8 @@ ESTADO = r"""() => ({
   hash: location.hash,
   hoja: (document.querySelector('.velo .hoja h2') || {}).textContent || null,
   menu: !!document.querySelector('.menu:not(.saliendo)'),
-  rueda: !!document.querySelector('.rueda-velo'),
+  // (una ruedita que ya se está cerrando, con su animación de 170 ms, no cuenta como abierta)
+  rueda: !!document.querySelector('.rueda-velo:not(.saliendo):not(.cambiando)'),
   errores: [...document.querySelectorAll('.avisos .aviso.error span')].map(x => x.textContent),
   editor: !!(window.NOM && NOM.editorActual && NOM.editorActual.vista && NOM.editorActual.vista.isConnected),
 })"""
@@ -74,6 +75,10 @@ class Rastreo:
             st = self.ev(ESTADO)
             if not (st["hoja"] or st["menu"] or st["rueda"]): break
             p.keyboard.press("Escape"); p.wait_for_timeout(250)
+        # Una función de la hoja (Funciones › SUMA…) deja la celda escribiendo la fórmula y esperando el
+        # rango, como Excel: se cancela con Escape. Si no, los clics siguientes caían en esa caja.
+        if self.ev("() => { const e = document.querySelector('.editor-celda'); return !!(e && e.offsetParent); }"):
+            p.keyboard.press("Escape"); p.wait_for_timeout(200)
         st = self.ev(ESTADO)
         if st["hoja"]:
             self.ev("() => document.querySelectorAll('.velo').forEach(v => v.remove())")
@@ -178,7 +183,13 @@ class Rastreo:
             if c1 and c3:
                 p.mouse.click(*c1); p.keyboard.down("Shift"); p.mouse.click(*c3); p.keyboard.up("Shift")
         else:
-            c = self.ev("() => { const ed = NOM.editorActual; const b = ed.doc.deLaPagina ? ed.doc.deLaPagina(ed.pagina).find(x => x.tipo !== 'conector' && x.tipo !== 'flecha') : null; if (!b) return null; const el = [...document.querySelectorAll(`.bl[data-id=\"${b.id}\"]`)].find(x => !x.closest('.mini')); if (!el) return null; el.scrollIntoView({block: 'nearest'}); const r = el.getBoundingClientRect(); return [r.x + r.width / 2, r.y + Math.min(r.height / 2, 20)]; }")
+            # Una figura que de verdad reciba el clic: tras Duplicar, Orden o Alinear, la primera del
+            # modelo puede quedar tapada por otra (antes se tocaba esa y no quedaba nada elegido).
+            c = self.ev("""() => { const ed = NOM.editorActual; const ids = (ed.doc.deLaPagina ? ed.doc.deLaPagina(ed.pagina) : []).filter(x => x.tipo !== 'conector' && x.tipo !== 'flecha').map(x => x.id);
+              for (const id of ids) { const el = [...document.querySelectorAll(`.bl[data-id="${id}"]`)].find(x => !x.closest('.mini')); if (!el) continue;
+                el.scrollIntoView({block: 'nearest'}); const r = el.getBoundingClientRect(); const pt = [r.x + r.width / 2, r.y + Math.min(r.height / 2, 20)];
+                const en = document.elementFromPoint(pt[0], pt[1]); if (en && el.contains(en)) return pt; }
+              return null; }""")
             if c:
                 p.keyboard.press("Escape"); p.mouse.click(*c)
         p.wait_for_timeout(250)
@@ -197,8 +208,9 @@ class Rastreo:
             datos = [["Nombre", "Calificación", "Faltas"], ["Ana", "9", "1"], ["Luis", "7.5", "3"], ["Eva", "10", "0"], ["Juan", "6", "5"]]
             for i, fila in enumerate(datos):
                 for j, v in enumerate(fila):
-                    ref = "ABC"[j] + str(i + 1)
-                    c = self.ev(f"() => {{ const c = document.querySelector('[data-r=\"{ref}\"]'); if (!c) return null; c.scrollIntoView({{block:'nearest', inline:'nearest'}}); const r = c.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }}")
+                    # (las celdas se ubican por columna y fila desde 0; antes buscaba un data-r que la hoja no tiene
+                    # y la hoja de la ruedita se quedaba vacía)
+                    c = self.ev(f"() => {{ const c = document.querySelector('td[data-c=\"{j}\"][data-f=\"{i}\"]'); if (!c) return null; c.scrollIntoView({{block:'nearest', inline:'nearest'}}); const r = c.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }}")
                     if not c: continue
                     p.mouse.click(*c); p.keyboard.type(v); p.keyboard.press("Enter"); p.wait_for_timeout(60)
         else:
@@ -213,7 +225,9 @@ class Rastreo:
                 p.keyboard.press("Escape"); p.wait_for_timeout(200)
             # Una figura más por código, por si en esta pantalla la barra no la muestra.
             if not self.ev("() => NOM.editorActual.doc.deLaPagina(NOM.editorActual.pagina).length"):
-                self.ev("() => { const ed = NOM.editorActual; ed.doc.cambiar('fig1', { tipo: 'figura', forma: 'rect', pagina: ed.pagina, orden: 1, x: 200, y: 150, w: 220, h: 120, z: 1, texto: 'Figura' }); NOM.modos[ed.modo || 'PRESENTACION']._lienzo && NOM.modos[ed.modo]._lienzo.render(); }")
+                # (con un número nuevo cada vez: si se reusa el de una figura que la ruedita ya eliminó,
+                # sigue marcada como eliminada y no aparece)
+                self.ev("() => { const ed = NOM.editorActual; ed.doc.cambiar('fig' + Date.now().toString(36), { tipo: 'figura', forma: 'rect', pagina: ed.pagina, orden: 1, x: 200, y: 150, w: 220, h: 120, z: 1, texto: 'Figura' }); NOM.modos[ed.modo || 'PRESENTACION']._lienzo && NOM.modos[ed.modo]._lienzo.render(); }")
         p.wait_for_timeout(600)
 
     # ------------------------------------------------------------ recorrer
@@ -302,13 +316,15 @@ class Rastreo:
             if off:
                 self.res.append((modo, r, "off", "apagada para esta selección")); continue
             if etiqueta in SALTAR: continue
-            if sub and nivel < 2:
+            if sub and nivel < 3:   # hasta tres niveles (Más › Otras › Fijar › sus opciones)
                 self.recorrer_rueda(modo, doc, (raiz or []) + [etiqueta], r, nivel + 1); continue
             antes_js = len(self.errores_js)
             if not abrir_rueda():
                 self.res.append((modo, r, "MAL", "la ruedita no volvió a abrir")); continue
-            self.ev(f"() => {{ const b = [...document.querySelectorAll('.rueda-item')].find(x => x.getAttribute('aria-label') === {json.dumps(etiqueta)}); const r = b.getBoundingClientRect(); window.__c = [r.x + r.width / 2, r.y + r.height / 2]; }}")
-            c = self.ev("() => window.__c")
+            c = self.ev(f"() => {{ const b = [...document.querySelectorAll('.rueda-item')].find(x => x.getAttribute('aria-label') === {json.dumps(etiqueta)}); if (!b) return null; const r = b.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }}")
+            if not c:
+                # Las opciones de algunos submenús dependen de lo copiado (Pegar especial): ya no está.
+                self.res.append((modo, r, "NO", "no volvió a aparecer")); self.limpiar(); continue
             p.mouse.click(*c); p.wait_for_timeout(400)
             # Un panel o menú que haya salido de la acción: se elige la primera opción.
             st = self.ev(ESTADO)

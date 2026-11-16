@@ -16,9 +16,10 @@ Cabecera de cada artículo:
 Markdown que entiende: ## y ### (con su ancla), párrafos, listas (- y 1.), **negrita**, *cursiva*,
 `código`, tablas con |, > notas, !> avisos y enlaces. Los enlaces internos se escriben
 [texto](ayuda:seccion/articulo#ancla), [texto](legal:pagina) o [texto](app:) y el generador los
-convierte en rutas relativas que terminan en index.html (así funcionan en el servidor, en el
-teléfono que comparte y dentro de la app, desde sus archivos). Un enlace a un artículo que no
-existe detiene el generador.
+convierte en rutas relativas que terminan en index.html (así funcionan dentro de la app, desde sus
+archivos). El servidor y el teléfono que comparte los cambian al vuelo por direcciones limpias
+(/legal/terminos, sin index.html; ver PaginasLimpias.java). Un enlace a un artículo que no existe
+detiene el generador.
 """
 import html, json, os, re, sys, unicodedata, datetime
 
@@ -29,7 +30,7 @@ FORMULAS = os.path.join(STATIC, "js", "formulas.js")
 SW = os.path.join(STATIC, "sw.js")
 PUBLICO = "https://nomcolab.dpdns.org"
 REPO = "https://github.com/TruTruMaster/NOM-COLAB"
-VERSION = "0.13.2"
+VERSION = "0.14.2"
 
 # Datos del responsable y contacto (un solo lugar). G.2: el equipo todavía no crea el correo del
 # proyecto; mientras, el contacto es por GitHub (reportes y avisos privados de seguridad).
@@ -109,6 +110,11 @@ def ruta_de(seccion, nombre=None):
     if seccion == "_legal": base = LEGAL
     if nombre and nombre != "index": base = os.path.join(base, nombre)
     return os.path.join(base, "index.html")
+
+
+def limpia(ruta):
+    """La dirección con la que el servidor muestra una página: sin index.html y sin diagonal final."""
+    return re.sub(r"/?index\.html$", "", ruta.replace(os.sep, "/"))
 
 
 def relativo(desde, hasta):
@@ -420,17 +426,18 @@ def main():
 
     escribir("ayuda/indice.json", json.dumps(indice, ensure_ascii=False, separators=(",", ":")))
     # robots.txt y sitemap.xml (la Raspberry se deja encontrar; Azure manda noindex en sus cabeceras)
-    escribir("robots.txt", f"User-agent: *\nAllow: /ayuda/\nAllow: /legal/\nDisallow: /api/\nSitemap: {PUBLICO}/sitemap.xml\n")
+    escribir("robots.txt", f"User-agent: *\nAllow: /ayuda\nAllow: /legal\nDisallow: /api/\nSitemap: {PUBLICO}/sitemap.xml\n")
     hoy = datetime.date.today().isoformat()
     escribir("sitemap.xml", '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-             + "".join(f"  <url><loc>{PUBLICO}/{u.replace(os.sep, '/').replace('index.html', '')}</loc><lastmod>{hoy}</lastmod></url>\n" for u in sorted(set(urls)))
+             + "".join(f"  <url><loc>{PUBLICO}/{limpia(u)}</loc><lastmod>{hoy}</lastmod></url>\n" for u in sorted(set(urls)))
              + "</urlset>\n")
     escribir(".well-known/security.txt", f"# NOM-COLAB: cómo reportar una falla de seguridad (RFC 9116)\nContact: {CONTACTO['seguridad']}\n"
              + (f"Contact: mailto:{CONTACTO['correo']}\n" if CONTACTO["correo"] else "")
-             + f"Expires: 2027-11-13T00:00:00.000Z\nPreferred-Languages: es, en\nCanonical: {PUBLICO}/.well-known/security.txt\nPolicy: {PUBLICO}/legal/seguridad/\n")
+             + f"Expires: 2027-11-13T00:00:00.000Z\nPreferred-Languages: es, en\nCanonical: {PUBLICO}/.well-known/security.txt\nPolicy: {PUBLICO}/legal/seguridad\n")
     # El service worker guarda de una vez lo legal, «Sin Internet» y las preguntas frecuentes.
-    fijas = ["ayuda/ayuda.css", "ayuda/ayuda.js", "ayuda/indice.json", "ayuda/index.html", "ayuda/buscar/index.html"]
-    fijas += sorted(u.replace(os.sep, "/") for u in urls if u.startswith(LEGAL) or u.startswith("ayuda/sin-internet") or u.startswith("ayuda/preguntas-frecuentes"))
+    # Se guardan con su dirección limpia (ayuda/sin-internet/alias), que es la que se abre en el navegador.
+    fijas = ["ayuda/ayuda.css", "ayuda/ayuda.js", "ayuda/indice.json", "ayuda", "ayuda/buscar"]
+    fijas += sorted(limpia(u) for u in urls if u.startswith(LEGAL) or u.startswith("ayuda/sin-internet") or u.startswith("ayuda/preguntas-frecuentes"))
     sw = open(SW, encoding="utf-8").read()
     bloque = "/* ayuda:inicio (lo escribe ayuda/generar.py) */ " + ", ".join(json.dumps(f) for f in fijas) + ", /* ayuda:fin */"
     if "/* ayuda:inicio" in sw:

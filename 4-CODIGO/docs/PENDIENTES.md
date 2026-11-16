@@ -183,3 +183,19 @@ el documento mientras tanto.
 - [ ] Explicarlo en la página: fase 14 (sitio de ayuda aparte de la app).
 - Descartado: entrar al teléfono con la cuenta de la nube y un servidor de computadora «de doble
   clic» (con la decisión de arriba ya no hacen falta).
+
+## 7. Formatos de texto fuente, imágenes, PDF y OCR (decidido el 15 de noviembre de 2026)
+
+Se hace lo marcado con «sí» en la lista de ideas, después del 27 de noviembre. El detalle y los
+«listo cuando» están en la fase 20 de `PLAN-CONSTRUCCION.md`.
+
+- [ ] Documento «texto fuente con vista previa» (la base de Markdown, Typst y LaTeX).
+- [ ] Markdown: ver y editar el texto fuente.
+- [ ] Arrastrar cualquier imagen o SVG y manipularla igual en los cuatro editores; el SVG sigue siendo vector.
+- [ ] Typst (medir antes cuánto pesa en el navegador).
+- [ ] LaTeX con autocompilado, solo en el servidor y después de Typst.
+- [ ] PDF con texto real a texto editable, avisando que el acomodo es aproximado.
+- [ ] **OCR y reconstrucción de páginas: obligatorio.** El motor se elige midiendo con un juego de
+      prueba propio; lo que no se leyó con seguridad se marca para revisarlo.
+- Descartado: AsciiDoc y un catálogo abierto de «convertir de esto a esto».
+- Sin decidir: pegar desde Word, Google Docs o una página web conservando el formato.

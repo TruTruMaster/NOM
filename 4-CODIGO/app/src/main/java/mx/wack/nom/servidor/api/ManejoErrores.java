@@ -49,6 +49,18 @@ public class ManejoErrores {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> otro(Exception e) {
+        // DEF-50: los errores propios de Spring traen su código (405 método no permitido, 415 tipo de
+        // contenido, 400 parámetro que falta o JSON mal formado). Antes todos salían como 500.
+        if (e instanceof org.springframework.web.ErrorResponse er) {
+            int st = er.getStatusCode().value();
+            String msg = st == 405 ? "Esa dirección no acepta ese método" : st == 415 ? "Tipo de contenido no aceptado"
+                    : st == 404 ? "No existe" : "La petición no es válida";
+            return ResponseEntity.status(st).contentType(JSON).body(Map.of("error", msg));
+        }
+        if (e instanceof org.springframework.http.converter.HttpMessageNotReadableException
+                || e instanceof org.springframework.beans.TypeMismatchException) {
+            return ResponseEntity.badRequest().contentType(JSON).body(Map.of("error", "La petición no es válida"));
+        }
         log.error("Error no controlado", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType(JSON)
                 .body(Map.of("error", "Ocurrio un error inesperado. Intenta de nuevo."));

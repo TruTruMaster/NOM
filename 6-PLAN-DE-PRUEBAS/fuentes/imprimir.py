@@ -8,6 +8,7 @@ Pasos: 1) imprime una vez, 2) busca en qué página quedó cada título (pdftote
 páginas en el índice y vuelve a imprimir, 4) deja la portada y la subportada sin pie de página (mutool).
 """
 import base64, os, re, subprocess, sys, tempfile, unicodedata
+os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", os.path.expanduser("~/.cache/nom-pruebas/navegadores"))
 from playwright.sync_api import sync_playwright
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -21,12 +22,11 @@ def datos(nombre, tipo):
 PIE = f"""
 <div style="width:100%;margin:0 2.3cm;display:flex;align-items:center;justify-content:space-between;font-family:Carlito,Arial,sans-serif;-webkit-print-color-adjust:exact;">
   <div style="display:flex;align-items:center;gap:6px;">
-    <img src="{datos('logo-cecyt9.png','image/png')}" style="height:22px">
-    <img src="{datos('logo-ipn.jpg','image/jpeg')}" style="height:22px">
-    <div style="line-height:1.15;margin-left:3px;"><div style="font-size:8px;font-weight:700;color:#1F1B24;">PRUEBAS DE SOFTWARE</div>
-    <div style="font-size:7.5px;color:#5E5A66;">CECyT 9 Juan de Dios Bátiz</div></div>
+    <img src="{datos('logo-wack.png','image/png')}" style="height:22px">
+    <div style="line-height:1.15;margin-left:3px;"><div style="font-size:8px;font-weight:700;color:#1F1B24;">WACK</div>
+    <div style="font-size:7.5px;color:#5E5A66;">Aseguramiento de la calidad</div></div>
   </div>
-  <div style="font-size:8px;color:#5E5A66;">Plan de pruebas · NOM-COLAB · 5IM7 · Equipo 6 “WACK”</div>
+  <div style="font-size:8px;color:#5E5A66;">Plan de pruebas · NOM-COLAB · PP-NOMCOLAB-01 · Revisión 2</div>
   <div style="width:22px;height:22px;border-radius:50%;background:#F2B705;color:#1F1B24;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;"><span class="pageNumber"></span></div>
 </div>"""
 

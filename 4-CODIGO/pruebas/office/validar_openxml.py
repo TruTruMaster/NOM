@@ -47,6 +47,27 @@ def validar(exe, archivos):
                 out[actual][1].append(firma)
     return out
 
+def normalizar(ruta):
+    """Copia (en ~/.cache/nom-pruebas/validador-normalizados) con las rutas al derecho y cada parte con el
+    nombre que declara [Content_Types].xml; None si no hace falta o no se puede."""
+    import zipfile
+    try:
+        zi = zipfile.ZipFile(ruta)
+        nombres = zi.namelist()
+        ct = next((n for n in nombres if n.replace("\\", "/").lower() == "[content_types].xml"), None)
+        if not ct: return None
+        decl = {m.lower(): m for m in re.findall(r'PartName="/([^"]+)"', zi.read(ct).decode("utf8", "replace"))}
+        nuevos = {n: ("[Content_Types].xml" if n == ct else decl.get(n.replace("\\", "/").lower(), n.replace("\\", "/"))) for n in nombres}
+        if all(k == v for k, v in nuevos.items()): return None
+        d = os.path.expanduser("~/.cache/nom-pruebas/validador-normalizados"); os.makedirs(d, exist_ok=True)
+        sal = os.path.join(d, os.path.basename(ruta))
+        with zipfile.ZipFile(sal, "w", zipfile.ZIP_DEFLATED) as zo:
+            for n in nombres: zo.writestr(nuevos[n], zi.read(n))
+        return sal
+    except Exception:
+        return None
+
+
 def original_de(ruta, corpus):
     base = os.path.basename(ruta)
     base = re.sub(r"^(abierto|recargado|exportado)-", "", base)
@@ -70,6 +91,15 @@ def main():
     exe = compilar()
     orig = {a: original_de(a, corpus) for a in archivos}
     res = validar(exe, archivos + sorted({o for o in orig.values() if o}))
+    # Un original con rutas internas al revés (xl\workbook.xml) o en otras mayúsculas no lo abre el
+    # validador, pero la app sí (y al descargar lo deja con los nombres correctos): se compara contra una
+    # copia del original con los nombres corregidos, para contar solo los errores que agregó la app.
+    for a, o in list(orig.items()):
+        if o:
+            copia = normalizar(o)
+            if copia:
+                r2 = validar(exe, [copia])
+                if str(r2.get(copia, ["x"])[0]).isdigit(): res[o] = r2[copia]
     malos = 0
     for a in archivos:
         n, errs = res.get(a, ["NO SE VALIDÓ", []])

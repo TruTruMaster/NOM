@@ -4,8 +4,35 @@ descripcion: Qué cambió en cada versión, en palabras sencillas.
 orden: 1
 aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-15
-version: 0.14.0
+version: 0.14.2
 ---
+## 0.14.2 — noviembre de 2026
+
+- **Documentos largos de Word** (una tesis de 180 páginas): escribir ya no congela la página unos
+  segundos cada vez que se acomodan las hojas. Ahora tarda una fracción de segundo y espera a que dejes
+  de teclear.
+- **Hojas en blanco de más**: cuando un párrafo con formato (negritas, otra letra, un subíndice) caía
+  justo entre dos hojas, a veces se cortaba muchas veces y aparecían páginas vacías (un informe de 78
+  páginas se veía de 312). Ya no.
+- Las **notas al pie** se cuentan en la página donde está su número, aunque el número vaya en
+  superíndice.
+- **Excel** hecho por otros programas, con rutas internas escritas al revés (`xl\workbook.xml`) o en
+  minúsculas: ahora se abre y se descarga bien.
+- Los archivos **.doc, .xls, .ppt** (Office 97-2003) y los de LibreOffice (.odt, .ods, .odp) ya se
+  pueden elegir al importar, y el aviso dice qué hacer: guardarlos como .docx, .xlsx o .pptx.
+- En documentos muy grandes, la copia para abrirlos sin Internet se guarda más espaciada y el conteo
+  de palabras se actualiza al dejar de escribir, para que la página no se trabe.
+- El servidor responde con el error correcto cuando una petición está mal hecha (antes decía «error
+  inesperado»).
+
+## 0.14.1 — noviembre de 2026
+
+- **Direcciones limpias** en la ayuda y en lo legal: ahora son como `/legal/terminos` o
+  `/ayuda/preguntas-frecuentes`, sin `index.html`. Las direcciones anteriores siguen funcionando y
+  llevan a la nueva.
+- **Entrar y crear cuenta**: abajo hay un pie con Ayuda, Preguntas frecuentes, Privacidad, Términos
+  y todo lo legal, para consultarlos sin iniciar sesión.
+
 ## 0.14.0 — noviembre de 2026
 
 - **Apariencia nueva**, más sobria: fondos lisos, bordes finos, letra menos gruesa y un solo color de

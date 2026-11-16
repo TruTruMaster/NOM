@@ -1,0 +1,28 @@
+
+== 75 páginas
+  ok   todas las páginas tienen título
+  ok   ningún enlace interno está roto
+  ok   cada página se muestra en su dirección limpia (sin index.html ni diagonal final)
+  ok   ningún enlace interno lleva index.html ni diagonal final
+  ok   a 360 px ninguna página se desplaza de lado
+  ok   sin errores de JavaScript en ninguna página
+  ok   /ayuda/ lleva a /ayuda
+  ok   /ayuda/index.html lleva a /ayuda
+  ok   /legal/privacidad/ lleva a /legal/privacidad
+  ok   /legal/terminos/index.html lleva a /legal/terminos
+  ok   /ayuda/empezar/que-es/index.html lleva a /ayuda/empezar/que-es
+  ok   el buscador encuentra «alias»
+  ok   …y «rama fusionar» trae el artículo de ramas
+  ok   los resultados del buscador llevan a direcciones limpias
+  ok   la página Buscar da resultados con ?q=
+  ok   la referencia de fórmulas trae todas las funciones (185)
+  ok   security.txt con contacto y vencimiento
+  ok   el aviso integral tiene responsable, datos, finalidades, derechos y cambios
+  ok   los 16 enlaces a la ayuda que hay en la app existen
+  ok   el registro tiene la casilla de Términos y Aviso de privacidad
+  ok   entrar y crear cuenta tienen un pie con Ayuda, Preguntas frecuentes, Privacidad, Términos y lo legal
+  ok   sin marcar la casilla no se crea la cuenta
+  ok   sin Internet abren lo legal, «Sin Internet» y las preguntas frecuentes
+  ok   desde los archivos (como en la app) se navega entre páginas
+
+Ayuda: 24 bien, 0 mal

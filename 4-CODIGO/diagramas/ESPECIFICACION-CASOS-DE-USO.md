@@ -46,6 +46,7 @@ y los diagramas de actividades `actividades/A1` a `A7`.
 | CU-26 | Trabajar sin conexión y resincronizar | Espacios | Alta |
 | CU-28 | Importar archivo | Espacios | Alta |
 | CU-29 | Exportar documento | Espacios | Alta |
+| CU-30 | Consultar la ayuda y los avisos legales | Ayuda y legal | Media |
 
 ---
 
@@ -673,6 +674,32 @@ y los diagramas de actividades `actividades/A1` a `A7`.
 - *3c.* En la app Android el archivo se guarda en Descargas.
 
 **Requerimientos** Objetivo general "compatibilidad con formatos de uso libre"
+
+---
+
+## CU-30 · Consultar la ayuda y los avisos legales
+
+| | |
+|---|---|
+| **Actor principal** | Visitante o Usuario |
+| **Descripción** | Cualquier persona consulta la guía de uso, las preguntas frecuentes, el aviso de privacidad y los términos, sin iniciar sesión. Ocupa el lugar del módulo *Conoce NOM* (guía de uso, FAQ, buscador e índice). |
+| **Precondiciones** | Ninguna. |
+| **Postcondiciones** | La persona leyó la información sin necesidad de iniciar sesión. |
+
+**Flujo principal**
+1. En el pie de la pantalla de entrada elige «Ayuda», «Preguntas frecuentes», «Privacidad» o «Términos».
+2. El sistema muestra la página en su dirección propia (`/ayuda`, `/legal/terminos`).
+3. La persona escribe en el buscador o elige un tema; el sistema muestra los artículos que coinciden.
+4. La persona abre el artículo, que tiene su índice.
+
+**Flujos alternativos**
+- *3a.* La búsqueda no encuentra nada → se avisa y se ofrecen las preguntas frecuentes.
+- *2a.* El equipo no tiene Internet → se muestra la copia guardada de las preguntas frecuentes, «Sin Internet» y lo legal.
+
+> **Formato de la materia (15-nov-2026).** Los 12 casos principales (CU-01, 02, 13, 16, 17, 18, 19, 29, 23, 24, 26 y 30)
+> están además en el formato de la materia (actor, descripción, precondición, flujo básico, dos flujos alternos y
+> postcondición, con su diagrama) en `ENTREGA/5IM7_WACK_Casos_de_Uso.docx`; sus textos salen de
+> `7-PRESENTACION/fuentes/casos.py`.
 
 ---
 

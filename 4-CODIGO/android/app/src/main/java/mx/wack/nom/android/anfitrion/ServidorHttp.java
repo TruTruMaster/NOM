@@ -24,6 +24,7 @@ import java.util.function.Consumer;
 
 import mx.wack.nom.core.servicio.Bitacora;
 import mx.wack.nom.core.servicio.Canal;
+import mx.wack.nom.core.servicio.PaginasLimpias;
 
 /**
  * Servidor HTTP/1.1 mínimo del teléfono: la API (ApiTelefono), los canales en tiempo real (SSE)
@@ -267,14 +268,17 @@ final class ServidorHttp {
     private void estatico(Peticion p, OutputStream out, boolean mantener) throws IOException {
         // /unirse?c=… y /proyectar?c=… (desde un codigo QR) muestran la misma pagina; ella lee el codigo.
         String ruta = p.ruta.equals("/") || p.ruta.equals("/unirse") || p.ruta.equals("/proyectar") ? "index.html" : p.ruta.substring(1);
-        // Fase 14: la ayuda y lo legal. Sin extensión: con la diagonal final (los enlaces de la página
-        // son relativos) y luego su index.html.
-        if (ruta.matches("(ayuda|legal)(/[a-z0-9-]+){0,2}")) {
-            out.write(("HTTP/1.1 301 Moved Permanently\r\nLocation: " + p.ruta + "/\r\nContent-Length: 0\r\n" + (mantener ? "Connection: keep-alive" : "Connection: close") + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+        // Fase 14: la ayuda y lo legal, en su dirección limpia (/legal/terminos). Las formas viejas
+        // (con diagonal final o con index.html) redirigen a ella; los enlaces relativos de la página
+        // se cambian por direcciones completas (PaginasLimpias), igual que en el servidor de la computadora.
+        String limpia = PaginasLimpias.limpiaDe(ruta);
+        if (limpia != null) {
+            out.write(("HTTP/1.1 301 Moved Permanently\r\nLocation: /" + limpia + "\r\nContent-Length: 0\r\n" + (mantener ? "Connection: keep-alive" : "Connection: close") + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
             out.flush();
             return;
         }
-        if (ruta.matches("(ayuda|legal)(/[a-z0-9-]+){0,2}/")) ruta += "index.html";
+        String pagina = PaginasLimpias.esLimpia(ruta) ? ruta : null;
+        if (pagina != null) ruta += "/index.html";
         if (ruta.contains("..") || ruta.startsWith("/") || !("GET".equals(p.metodo) || "HEAD".equals(p.metodo))) {
             responder(out, 404, "application/json;charset=UTF-8", Json.YO.escribir(Map.of("error", "No existe")), mantener, false);
             return;
@@ -286,6 +290,7 @@ final class ServidorHttp {
             int n;
             while ((n = a.read(buf)) > 0) b.write(buf, 0, n);
             datos = b.toByteArray();
+            if (pagina != null) datos = PaginasLimpias.limpiar(new String(datos, StandardCharsets.UTF_8), pagina).getBytes(StandardCharsets.UTF_8);
         } catch (IOException e) {
             responder(out, 404, "application/json;charset=UTF-8", Json.YO.escribir(Map.of("error", "No existe")), mantener, false);
             return;

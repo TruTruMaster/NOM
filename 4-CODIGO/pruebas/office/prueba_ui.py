@@ -110,7 +110,7 @@ def main():
                 assert e1["origen"] and e2["origen"], "el documento perdió su archivo de origen"
                 cmp = {"docx": F.comparar_docx, "xlsx": F.comparar_xlsx, "pptx": F.comparar_pptx}[ext]
                 za, zb = F.partes_zip(f), F.partes_zip(s2)
-                iguales = sum(1 for k, v in za.items() if zb.get(k) == v)
+                iguales = F.contar_iguales(za, zb)
                 try:
                     n1, n2 = cmp(f, s1), cmp(f, s2)
                 except Exception as ex:

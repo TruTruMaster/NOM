@@ -2,7 +2,7 @@
 # Red de regresión: corre TODAS las pruebas automáticas y deja un resumen.
 # Sirve para demostrar que lo que ya funcionaba sigue funcionando después de cualquier cambio.
 #
-#   4-CODIGO/pruebas/regresion.sh                 # todo (unos 40-60 min)
+#   4-CODIGO/pruebas/regresion.sh                 # todo (unos 60-80 min)
 #   4-CODIGO/pruebas/regresion.sh rapido          # sin Office ni ancho de celular (unos 15 min)
 #
 # Necesita el jar compilado (cd 4-CODIGO/app && mvn -o -q package) y el servidor de pruebas en
@@ -51,10 +51,18 @@ if [ "$MODO" != rapido ]; then
   corre rastreo_movil    "$PY" pruebas/interfaz/rastreo.py "$OUT/capturas" --movil
   corre diag_movil       "$PY" pruebas/interfaz/prueba_diag_movil.py "$OUT/capturas"
   corre funciones_firefox env NOM_NAVEGADOR=firefox "$PY" pruebas/interfaz/prueba_funciones.py "$OUT/capturas"
-  CORPUS="$CACHE/corpus/*/* $CACHE/corpus-web/*/*"   # los 90 archivos reales (sin argumentos solo usa corpus/, 47)
+  # los 123 archivos reales (sin argumentos solo usa corpus/, 47); corpus-reales sale de preparar.sh
+  CORPUS="$CACHE/corpus/*/* $CACHE/corpus-web/*/* $CACHE/corpus-reales/*/*"
   corre office_fidelidad bash -c "\"$PY\" pruebas/office/fidelidad.py $CORPUS"
   corre office_modelo    bash -c "\"$PY\" pruebas/office/fidelidad.py --modelo $CORPUS"
   corre office_ediciones "$PY" pruebas/office/ediciones.py --office
+  # Un Word largo de verdad (78 páginas): escribir sin que se trabe, otra persona, recargar y descargar.
+  corre documento_grande "$PY" pruebas/office/documento_grande.py "$CACHE/corpus/docx/ms-informe-gobernanza.docx" "$OUT/documento-grande"
+  # Archivos reales editados por dos personas (Chromium y Firefox) y descargados (plantillas de Microsoft).
+  R="$CACHE/corpus-reales"
+  corre editar_real      "$PY" pruebas/office/editar_real.py "$OUT/editar-real" "$R/xlsx/ms-plantilla-presupuesto-universitario.xlsx" \
+                           "$R/xlsx/ms-plantilla-tablas-dinamicas.xlsx" "$R/pptx/ms-plantilla-presentacion-basica.pptx" "$R/pptx/lo-group-rot.pptx" \
+                           "$CACHE/corpus/docx/ms-complex2010.docx"
   corre office_raros     "$PY" pruebas/office/raros.py
   corre funciones_lo     "$PY" pruebas/office/funciones_lo.py     # las funciones de la hoja contra LibreOffice
   # Lo editado y exportado, con el validador oficial de Microsoft (Open XML SDK): 0 errores nuevos contra el original.

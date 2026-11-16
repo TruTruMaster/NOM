@@ -854,7 +854,8 @@
         try { fetch(url, { method: "POST", keepalive: true, headers: { "Content-Type": "application/json", Authorization: "Bearer " + api.token() }, body: cuerpo }).catch(() => {}); } catch (e) { /* sin red */ }
       } else api.post(`/api/documentos/${docId}/presencia`, { cliente: doc.nodo, salir: true }).catch(() => {});
     };
-    const alOcultarPagina = () => avisarSalida(true);
+    // Al cerrar la pestaña también se guarda ya la copia del equipo (en un documento grande se espacia).
+    const alOcultarPagina = () => { avisarSalida(true); if (doc._guardarCache && doc._guardarCache.ya) { doc._guardarCache.ya(); if (NOM.boveda) NOM.boveda.vaciar(); } };
     addEventListener("pagehide", alOcultarPagina);
 
     return () => {

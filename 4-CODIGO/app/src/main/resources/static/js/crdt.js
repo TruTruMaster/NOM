@@ -40,9 +40,34 @@
       // después y un documento con cambios sin enviar de una hoja o una diapositiva no se abría).
       this._guardarCache = this.opc.soloMemoria ? () => {}
         : this.opc.local ? NOM.throttle(() => NOM.local.guardarEstado(this.id, this.estado), 500)
-        : NOM.throttle(() => NOM.guardar(NOM.api.clave("doc." + this.id), { estado: this.estado, meta: this.opc.meta || null, guardado: Date.now() }), 2000);
+        : this._copiaEspaciada();
       // Lo que quedó en cola de una sesión anterior también cuenta para el reloj.
       this.pendientes.forEach((op) => this._fusionar(op));
+    }
+
+    /**
+     * Copia del documento en este equipo (para abrirlo sin red). Cada copia serializa y cifra el estado
+     * completo: en un documento chico se guarda cada 2 s; en uno grande (una tesis importada pesa unos
+     * 15 MB) se espacia según lo que tardó la última (300 veces, hasta 20 s; en un teléfono lento tarda
+     * más y se espacia más), para no trabar la página mientras alguien escribe. Lo escrito y aún no
+     * enviado no depende de esta copia: va en la cola, que se guarda aparte al momento.
+     * `ya()` guarda lo pendiente de inmediato (al cerrar el documento o la página).
+     */
+    _copiaEspaciada() {
+      let ultimo = 0, t = null, costo = 0;
+      const guardar = () => {
+        clearTimeout(t); t = null; ultimo = Date.now();
+        const t0 = performance.now();
+        NOM.guardar(NOM.api.clave("doc." + this.id), { estado: this.estado, meta: this.opc.meta || null, guardado: Date.now() });
+        costo = performance.now() - t0;
+      };
+      const f = () => {
+        const ms = Math.min(20000, Math.max(2000, costo * 300));
+        if (Date.now() - ultimo >= ms) guardar();
+        else if (!t) t = setTimeout(guardar, ms - (Date.now() - ultimo));
+      };
+      f.ya = () => { if (t) guardar(); };
+      return f;
     }
 
     // ---------------------------------------------------------- lectura

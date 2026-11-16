@@ -84,7 +84,8 @@ def partes_zip(ruta):
     with z:
         for i in z.infolist():
             if i.is_dir(): continue
-            try: out[i.filename] = z.read(i.filename)
+            # (las rutas con diagonal invertida que guardan algunos programas: la app las normaliza)
+            try: out[i.filename.replace("\\", "/")] = z.read(i.filename)
             except Exception:
                 with open(ruta, "rb") as f:
                     f.seek(i.header_offset); cab = f.read(30)
@@ -488,11 +489,18 @@ def comparar_pptx(orig, nuevo):
     return n
 
 
+def contar_iguales(a, b):
+    """Partes idénticas, buscando el nombre sin distinguir mayúsculas (así lo dice la norma de Office, y
+    la app escribe cada parte con el nombre que declara el archivo en [Content_Types].xml)."""
+    bl = {k.lower(): v for k, v in b.items()}
+    return sum(1 for k, v in a.items() if (b[k] if k in b else bl.get(k.lower())) == v)
+
+
 def comparar_partes(orig, nuevo):
     """Cuando la librería no sabe abrir el original (por ejemplo, formato ISO "Strict"): parte por parte del .zip."""
     n = Nota()
     a, b = partes_zip(orig), partes_zip(nuevo)
-    iguales = sum(1 for k, v in a.items() if b.get(k) == v)
+    iguales = contar_iguales(a, b)
     n.pon("partes del archivo idénticas", iguales / max(1, len(a)), f"{iguales}/{len(a)}")
     n.conteo("número de partes", len(a), len(b))
     return n

@@ -439,6 +439,13 @@ CASOS = {
 }
 
 
+# LibreOffice se queda esperando con el ORIGINAL de Microsoft de estos (comprobado el 15-nov-2026: 2 de 2
+# veces, 200 s cada una, sin tocarlo). Pasarlos por LibreOffice no dice nada de la exportación y gastaba
+# 6 minutos por caso (y a veces el original sí abría y daba una falla falsa). Los revisa el validador de
+# Microsoft (validar_openxml.py), que sí los lee.
+LO_SE_TRABA = {"ms-brownbag.pptx"}
+
+
 def abre_office(ruta):
     """LibreOffice tiene que poder abrir el archivo y volverlo a guardar."""
     carpeta = SALIDA / "lo"; carpeta.mkdir(parents=True, exist_ok=True)
@@ -486,7 +493,7 @@ def main():
                         try:
                             assert zipfile.ZipFile(sale).testzip() is None, "zip dañado"
                             det = revisar(r, orig, sale)
-                            if a.office and not sufijo:
+                            if a.office and not sufijo and nombre not in LO_SE_TRABA:
                                 r_lo = abre_office(sale)
                                 # Si LibreOffice se traba, se prueba con el original de Microsoft: si con ese también, no es culpa de la exportación.
                                 if r_lo is None: assert abre_office(orig) is None, "LibreOffice se trabó con lo exportado y no con el original"

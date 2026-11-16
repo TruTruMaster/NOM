@@ -4,13 +4,14 @@ Equipo 6 "WACK" · CECyT 9 · 5IM7
 
 | Carpeta | Qué es | Qué hacer |
 |---|---|---|
-| **`ENTREGA/`** | **Los PDF para entregar:** el documento del módulo web (base de datos + Azure + seguridad con roles) y el plan de pruebas `5IM7_WACK_PP.pdf` | Entregarlos |
+| **`ENTREGA/`** | **Los PDF para entregar:** el documento del módulo web (base de datos + Azure + seguridad con roles) el plan de pruebas `5IM7_WACK_PP.pdf`, la presentación `5IM7_WACK_Presentacion.pdf` y la especificación de casos de uso `5IM7_WACK_Casos_de_Uso` (.docx y .pdf) | Entregarlos |
 | `1-ENTREGA-Diagramas-de-Actividades/` | **PDF para entregar** (y el mismo en .docx), las 7 imágenes sueltas y los editables de draw.io | Entregar `Diagrama de Actividades NOM-COLAB.pdf` |
 | `2-PAGINA-Servidor/` | La página completa (servidor + interfaz), **con Java incluido** | Windows: doble clic en `INICIAR-Windows.bat` · Linux: `./INICIAR-Linux.sh` |
 | `3-APP-Android/` | `NOM-COLAB.apk` (Android 7 en adelante) | Pasarla al celular e instalarla |
 | `4-CODIGO/` | Todo el código fuente, diagramas UML y documentación | Para revisar o seguir desarrollando |
 | `5-DOCUMENTO-MODULO/` | Fuentes del PDF del módulo: `fuentes/modulo.html`, sus imágenes y `fuentes/imprimir.py`, que lo vuelve a generar en `ENTREGA/` | Solo si se cambia el documento |
-| `6-PLAN-DE-PRUEBAS/` | Fuentes del plan de pruebas: `fuentes/plan.html`, `fuentes/imprimir.py` (lo genera en `ENTREGA/5IM7_WACK_PP.pdf`), `fuentes/prueba_limites.py` y `registros/` con la salida de cada suite | Solo si se cambia el plan |
+| `6-PLAN-DE-PRUEBAS/` | Fuentes del plan de pruebas: `fuentes/plan.html`, `fuentes/imprimir.py` (lo genera en `ENTREGA/5IM7_WACK_PP.pdf`), `fuentes/evidencias.py` (toma las capturas de evidencia), `fuentes/casos_integracion.py`, `fuentes/casos_permisos.py`, `fuentes/prueba_limites.py` y `registros/` con la salida de cada suite | Solo si se cambia el plan |
+| `7-PRESENTACION/` | Fuentes de la presentación del proyecto y de la especificación de casos de uso: `fuentes/casos.py` (los textos), `fuentes/generar_casos.py` (arma el Word sobre el formato vacío), `fuentes/presentacion.py` (arma el PDF de 20 diapositivas) y `fuentes/capturas.py` (toma las capturas de la app que usa la presentación); los dos dejan su resultado en `ENTREGA/` | Solo si se cambia la presentación o un caso de uso |
 | `CREDENCIALES-AZURE.txt` | Contraseñas de la base de Azure (administrador y usuarios con rol) y cuentas de prueba. **Privado** | No compartir ni subir |
 | `LOG.md` | Registro de todo lo que se hizo | — |
 

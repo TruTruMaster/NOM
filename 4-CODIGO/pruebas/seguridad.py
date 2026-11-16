@@ -847,6 +847,23 @@ try:
     prueba("14.2 …sin la huella de la contraseña ni del código", False, "hashContrasena" in txt or "hashRecuperacion" in txt or '"sal"' in txt)
     prueba("14.2 Los datos de la cuenta piden sesión", 401, r("GET", "/api/cuentas/datos")[0])
 
+    # 14.3 DEF-50: una petición mal hecha responde su código (antes todo salía como 500). El teléfono que
+    # comparte no distingue «método equivocado» de «no existe»: ahí es 404 (no cambia ningún dato).
+    es_tel = bool((r("GET", "/api/red/info")[1] or {}).get("telefono"))
+    metodo_mal = [404] if es_tel else [405]
+    prueba("14.3 DEF-50: POST donde solo hay PUT (accesos) no es un error del servidor", metodo_mal, [r("POST", f"/api/espacios/{esp}/accesos", {"usuario": "ajena", "permiso": "LECTURA"}, tok["duena"])[0]])
+    prueba("14.3 …y no le dio acceso a nadie", 403, r("GET", f"/api/espacios/{esp}", t=tok["ajena"])[0])
+    prueba("14.3 DELETE a una dirección que solo se lee", metodo_mal, [r("DELETE", "/api/red/info")[0]])
+    if not es_tel:
+        q = urllib.request.Request(B + "/api/cuentas/sesion", method="POST", data=b"{roto", headers={"Content-Type": "application/json"})
+        try: cod = urllib.request.urlopen(q, timeout=30).status
+        except urllib.error.HTTPError as e: cod = e.code
+        prueba("14.3 JSON mal formado: 400, no 500", 400, cod)
+        q = urllib.request.Request(B + "/api/cuentas/sesion", method="POST", data=b"hola", headers={"Content-Type": "text/plain"})
+        try: cod = urllib.request.urlopen(q, timeout=30).status
+        except urllib.error.HTTPError as e: cod = e.code
+        prueba("14.3 Tipo de contenido que no es JSON: 415", 415, cod)
+
     # 15 Espacios cifrados de extremo a extremo y chat del espacio
     K = lambda: "e2e:" + base64.urlsafe_b64encode(secrets.token_bytes(40)).decode().rstrip("=")
     PUB = '{"kty":"EC","crv":"P-256","x":"prueba","y":"prueba"}'

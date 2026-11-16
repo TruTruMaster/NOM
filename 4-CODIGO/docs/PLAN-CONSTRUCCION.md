@@ -506,6 +506,124 @@ Por qué y con qué fuentes: el documento «UI and Psychology» del equipo; lo d
 - [ ] Prueba de cinco segundos y tareas con cinco personas (bloque H) con la apariencia nueva.
 - [x] Commit y publicación de la 0.14.0 (15-nov): Raspberry (humo 30 de 30), release v0.14.0 en GitHub y push a `main`; incluye la 0.13.2.
 
+## Fase 18. Direcciones limpias y pie de ayuda en la entrada (15 de noviembre de 2026, versión 0.14.1)
+
+- [x] La ayuda y lo legal se muestran en su dirección limpia (`/legal/terminos`, `/ayuda/preguntas-frecuentes`), sin `index.html` ni diagonal final; las formas anteriores redirigen (301). Los archivos conservan sus enlaces relativos para la app (que los abre desde `file://`) y el servidor los cambia al servirlos (`nucleo/.../servicio/PaginasLimpias.java`, `PaginasApi.java`, `ServidorHttp.java` del teléfono); `NOM.urlAyuda`, `ayuda.js`, el mapa del sitio y lo que guarda el service worker usan la dirección limpia.
+- [x] Entrar y crear cuenta tienen un pie fijo (fuera de la tarjeta) con Ayuda, Preguntas frecuentes, Privacidad, Términos y Todo lo legal (`vista-cuentas.js`, `.pie-legal` en `nom.css`).
+
+Pruebas: `PaginasLimpiasTest` (4 casos), `prueba_ayuda.py` 24 de 24 (75 páginas en su dirección limpia, ningún enlace con `index.html`), regresión rápida. Jar y APK 0.14.1 (versionCode 24) compilados y copiados a `2-PAGINA-Servidor/` y `3-APP-Android/`. **Sin publicar** (ni Raspberry, ni release, ni push): falta que el equipo lo pida.
+
+## Fase 19. Entregables de la presentación y del plan de pruebas (15 de noviembre de 2026)
+
+- [x] Especificación de casos de uso en el formato de la materia: 12 casos en 5 módulos, con su diagrama (`7-PRESENTACION/fuentes/casos.py` y `generar_casos.py` → `ENTREGA/5IM7_WACK_Casos_de_Uso.docx` y `.pdf`).
+- [x] Presentación del proyecto, 20 diapositivas: empresa, misión y visión, organigrama, problemática, mapa de navegación con avance por módulo, un caso de uso por módulo y demostración (`7-PRESENTACION/fuentes/presentacion.py` → `ENTREGA/5IM7_WACK_Presentacion.pdf`).
+- [x] Plan de pruebas, revisión 2: solo caja blanca y caja negra (lo visto en clase), cinco módulos, casos que cuatro personas pueden repetir en una tarde (`6-PLAN-DE-PRUEBAS/fuentes/plan.html`, `casos_integracion.py`, `casos_permisos.py`).
+- [ ] Que el equipo repita a mano las pruebas del plan y confirme los nombres de responsables y las calificaciones de usabilidad antes del 27 de noviembre.
+- [x] Corregir DEF-50 (un método que no existe responde 500 en vez de 405). Hecho en la 0.14.2 (fase 21); el plan de pruebas (PDF) lo sigue mostrando como defecto encontrado: el equipo decide si lo actualiza.
+- [x] Presentación, casos de uso y plan de pruebas como documentos de la empresa (15-nov, tarde): sin logotipos ni menciones de la escuela, del grupo ni de la materia; en las portadas y en el pie va el logotipo de WACK. Las capturas de la app se repitieron con un espacio de nombre neutro (`7-PRESENTACION/fuentes/capturas.py` y `6-PLAN-DE-PRUEBAS/fuentes/evidencias.py`, nuevos). Los nombres de archivo conservan `5IM7_WACK_…` porque es la nomenclatura obligatoria de entrega.
+- [ ] Decidir si la app también deja de decir que es un proyecto escolar: el aviso «Proyecto escolar» de las páginas de ayuda y legales y el ejemplo «CECyT 11…» del campo de organización al crear la cuenta siguen ahí.
+
+## Fase 20. Texto fuente, imágenes, PDF y OCR (decidido el 15 de noviembre de 2026; se construye después del 27 de noviembre)
+
+Decisión del equipo sobre la lista de ideas del 15 de noviembre: se hace todo lo marcado con «sí», tal cual. **El OCR no es opcional** y tiene que ser el mejor que se pueda conseguir. Nada de esto empieza antes de la entrega del 27 de noviembre: primero el visto bueno de la 0.14.0 y las pruebas con usuarios.
+
+Regla para no multiplicar el trabajo: no se hace un editor por formato. Se hace **un solo tipo de documento nuevo, «texto fuente con vista previa»**; el motor de texto letra por letra ya sincroniza texto plano, así que Markdown, Typst y después LaTeX son el mismo editor con distinto compilador. Cada tarea cumple la regla 9 (computadora, navegador del celular, app y teléfono como servidor).
+
+### 20.1 Base: documento «texto fuente con vista previa»
+- [ ] Tipo de documento nuevo: el texto fuente a un lado y la vista previa al otro (en el celular, una pestaña cada uno); se edita entre varios con el motor letra por letra, funciona sin conexión y guarda versiones como los demás.
+  - Listo cuando: dos personas escriben a la vez en el fuente y las dos ven la misma vista previa, también en el teléfono como servidor.
+
+### 20.2 Markdown
+- [ ] Ver y editar el texto fuente de un documento Markdown (importar y exportar `.md` ya existe).
+  - Listo cuando: un `.md` importado se edita como fuente, la vista previa cambia al teclear y al exportarlo sale el mismo texto.
+
+### 20.3 Arrastrar cualquier imagen o SVG y manipularla
+- [ ] Que soltar una imagen o un SVG funcione igual en los cuatro editores (mover, cambiar tamaño, girar, recortar) y que el SVG siga siendo vector (hoy existe a medias).
+  - Listo cuando: el mismo SVG se suelta en texto, hoja, presentación y diagrama, se agranda sin pixelarse y sale como vector al exportar. En el celular se elige el archivo con el dedo (no hay arrastre desde fuera).
+
+### 20.4 Typst
+- [ ] Medir primero cuánto pesa el compilador de Typst en el navegador (descarga, memoria y tiempo en el A55) y cuánto engorda el APK. Con ese dato se decide si compila en el equipo o en el servidor.
+- [ ] Documento Typst sobre la base de 20.1: recompila al teclear y exporta a PDF.
+
+### 20.5 LaTeX con autocompilado (solo en el servidor, y después de Typst)
+- [ ] Compilar LaTeX en el servidor (la Raspberry o una computadora), no en el navegador ni en el teléfono como servidor: una instalación completa no cabe en un APK de 2.5 MB. En el teléfono como servidor se avisa que no está disponible. Las ecuaciones ya aceptan notación tipo LaTeX.
+
+### 20.6 PDF a texto editable (acotado)
+- [ ] Para PDF con texto real: pasarlo a un documento de texto en el navegador, avisando que el acomodo es aproximado. Los PDF que son solo imagen pasan por el OCR (20.7).
+
+### 20.7 OCR y reconstrucción de páginas (obligatorio)
+
+Ningún OCR acierta siempre: una foto movida o una letra manuscrita difícil producen errores con cualquier motor. «Sin errores» se cumple entonces con dos cosas: elegir el motor que menos falle **midiéndolo**, y que la app enseñe lo que no leyó con seguridad para que la persona lo corrija antes de aceptarlo.
+
+- [ ] Juego de prueba propio, en español, con su transcripción correcta: páginas impresas escaneadas, fotos de celular (derechas, chuecas, con sombra), tablas, dos columnas, fórmulas y letra manuscrita.
+- [ ] Medir los candidatos con ese juego (error por carácter y por palabra, tablas bien armadas, tiempo y memoria) y elegir por números. Candidatos al 15-nov, a revisar cuáles siguen vigentes al empezar: PaddleOCR con su análisis de estructura, Surya, docTR y los modelos de visión para documentos; Tesseract como referencia mínima. Medirlos en la Raspberry y en una computadora, porque los mejores piden mucha memoria.
+- [ ] Dónde corre: el motor elegido en el servidor (nube y computadora). Para el teléfono como servidor y sin Internet, medir también el reconocimiento de texto que trae Android en el dispositivo y un modelo ligero en el navegador; se usa el mejor disponible en cada caso y se dice cuál se usó.
+- [ ] Foto con la cámara del teléfono, recortada y enderezada, como entrada del OCR.
+- [ ] Reconstrucción: títulos, párrafos, listas, tablas y columnas pasan a un documento de texto editable; la imagen original se conserva junto al resultado.
+- [ ] Revisión: la página y el texto reconocido lado a lado, con las palabras de poca confianza marcadas; no se da por bueno hasta que la persona las revisa.
+  - Listo cuando: el motor elegido es el de menor error del juego de prueba, los números quedan anotados aquí, y en una página impresa limpia no queda ningún error después de la revisión marcada.
+
+### 20.8 Lo que no se hace
+- AsciiDoc: casi nadie lo usa y es otro formato que mantener.
+- «Convertir de esto a esto» como catálogo abierto: solo las rutas que la app ya domina (Office, `.nom`, PDF, Markdown, HTML).
+
+### 20.9 Propuesta aparte, sin decidir
+- [ ] Pegar desde Word, Google Docs o una página web conservando el formato.
+
+## Fase 21. Revisión para la entrega del primer semestre (15 de noviembre de 2026, noche; versión 0.14.2)
+
+Decisión del equipo (15-nov): la entrega del primer semestre es el **20 de noviembre de 2026**. No se
+construye nada de la fase 20 (texto fuente, LaTeX, OCR…) antes de esa fecha: solo que **todo lo ya hecho
+funcione**, sobre todo la conexión entre equipos y la edición. Prueba de texto que dio el equipo: una
+tesis real de 2005 en Word 97-2003 (`Tesis.doc`, 32 MB, 46 600 palabras, 39 tablas, 153 imágenes).
+
+- [x] Entorno de pruebas reconstruido (`~/.cache` se había vaciado) y `pruebas/preparar.sh` nuevo: rehace el
+      Python con Playwright, los navegadores, los tres corpus de Office y el validador de Microsoft desde cero.
+- [x] Tesis (pasada a .docx, como haría cualquiera con «Guardar como»): importar, escribir, otra persona en
+      Firefox, recargar y descargar Word, 17 de 17 (`pruebas/office/documento_grande.py`). Encontró tres defectos:
+  - [x] DEF-51 (alta): en documentos largos, escribir congelaba la página 5-6 s cada vez que se acomodaban las
+        hojas (la paginación medía todo el documento de nuevo por cada página partida). Ahora se mide una vez,
+        se calcula todo y se escribe al final, y se comprueba; si algo no cuadra, se usa la forma anterior.
+        Tesis: 5.5 s → 0.2 s por paginación; escribir, 50 ms por letra (máximo 177 ms).
+  - [x] DEF-52 (alta): hojas en blanco de más. Si el corte de página caía dentro de un texto con formato (un
+        span), el renglón de ese span junto al corte contaba como una línea que no cabe y se volvía a cortar
+        hasta 40 veces: la tesis se veía de 358 páginas (LibreOffice: 180; ahora 184) y un informe de Microsoft
+        de 78 se veía de 312.
+  - [x] DEF-53 (media): con un subíndice al final de un renglón, el corte de página se ponía antes del subíndice
+        (un renglón de más y la letra pasaba a la otra hoja); y la llamada de una nota al pie en superíndice se
+        contaba en la página anterior. Ahora cada letra y cada llamada se ubica por su centro.
+  - [x] En documentos muy grandes, la copia para abrirlos sin Internet se guarda más espaciada (según lo que
+        tarda) y siempre al cerrar; el conteo de palabras se rehace al dejar de escribir.
+- [x] Comparación de la paginación nueva contra la anterior en la tesis y 34 Word del corpus: 33 idénticas,
+      las otras dos difieren por redondeo de 1 px; ningún renglón queda fuera de su hoja salvo tablas más
+      altas que el espacio que queda (no se parten entre hojas: límite conocido, igual que antes).
+- [x] Corpus nuevo de Office reales (`corpus-reales`, 33 archivos): plantillas oficiales de Microsoft
+      (tablas dinámicas, presupuesto universitario con formato condicional y gráfica, registro escolar,
+      tutorial de fórmulas, Gantt, ventas, activos, presentación básica) y archivos de usuarios de las
+      pruebas de LibreOffice (SmartArt, animaciones, secciones, video, sonido en transiciones, grupos girados).
+      Abrir y descargar sin tocar: 33 de 33 completos; por la app completa (servidor, recargar): 32 de 33 con
+      todas sus partes idénticas (el otro, ver DEF-54).
+- [x] DEF-54 (media): un Excel hecho por otro programa con rutas internas al revés (`xl\workbook.xml`) y en
+      minúsculas no se podía abrir («no parece un libro de Excel»). Ahora el lector normaliza las rutas y usa
+      el nombre que declara el archivo (la norma de Office no distingue mayúsculas); lo descargado lo abren
+      el validador de Microsoft y LibreOffice.
+- [x] Edición real en Word, Excel y PowerPoint con dos personas (`pruebas/office/editar_real.py`).
+- [x] DEF-50: un método o una petición mal hecha ya responde su código (405, 400, 415), no 500.
+      `seguridad.py` 380 de 380 (5 casos nuevos). En el teléfono que comparte, un método equivocado sigue
+      dando 404 (no cambia datos).
+- [x] `.doc`, `.xls`, `.ppt`, `.odt`, `.ods`, `.odp` y `.rtf` se pueden elegir al importar y el aviso dice
+      qué hacer (guardarlo como .docx, .xlsx o .pptx). Abrir .doc directamente queda como propuesta (ver abajo).
+- [x] `rastreo.py`: las 27 acciones de la ruedita que «no abrían» eran de la prueba (buscaba celdas con un
+      atributo que la hoja no tiene, no salía de una celda escribiendo una fórmula, reusaba el número de una
+      figura eliminada y tocaba figuras tapadas). Revisadas una por una a mano: todas funcionan.
+- [x] `ediciones.py`: LibreOffice se traba también con el original de `ms-brownbag.pptx`; ya no se le pasa
+      (lo revisa el validador de Microsoft).
+- [ ] Repetir en el A55 (la depuración inalámbrica perdió el emparejamiento: hay que volver a vincularla).
+- [ ] Recoger la investigación de Office de flast (se cortó el 14-nov por el límite semanal de uso; ver
+      `docs/paridad/LEEME.md`).
+- [ ] Propuesta sin decidir: abrir `.doc` (Word 97-2003) directamente, sin pasar por Word. Es otro formato
+      completo (binario); calcularlo antes de prometerlo.
+
 ## Cómo quedó (8 de noviembre de 2026)
 
 Las fases 8 y 9 están construidas en Spring, en el servidor del teléfono (`ApiTelefono`) y en la
@@ -551,6 +669,16 @@ sesión anterior: `./desplegar.sh roles` para las columnas nuevas de usuarios.
 - La copia de trabajo `~/NOM-COLAB` no se actualizó en esta sesión (es más vieja que `~/NOM`).
 
 ## Orden recomendado para la siguiente sesión
+
+**Desde el 15 de noviembre de 2026 (noche), hasta la entrega del 20 de noviembre:** nada nuevo; solo lo que
+falta de la fase 21: (1) el A55 real (volver a vincular la depuración inalámbrica y repetir
+`pruebas/reales/app_emulador.py`, `telefono_emulador.py` y `rama_emulador.py` con su serie de adb);
+(2) si alguien tiene Microsoft Office, abrir ahí lo que descarga la app (los archivos de
+`~/.cache/nom-pruebas/registros/reales/`) y anotar si pide «reparar»; (3) recoger la investigación de
+Office cuando el escritorio vuelva a Linux. Antes de cualquier cambio: `pruebas/preparar.sh` y
+`pruebas/regresion.sh`.
+
+**Después del 27 de noviembre de 2026:** fase 20 (texto fuente, imágenes, PDF y OCR), en este orden: 20.1, 20.2, 20.3, 20.7 (el OCR es obligatorio; empezar por el juego de prueba y la medición), 20.6, 20.4 y 20.5.
 
 **Desde el 15 de noviembre de 2026:** la 0.14.0 (fase 17, apariencia y orden) está publicada (Raspberry, GitHub) junto con
 la 0.13.2. Falta que el equipo la revise en la app real (A55 y escritorio) y dé el visto bueno. Después sigue lo de abajo.

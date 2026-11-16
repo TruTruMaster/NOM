@@ -564,7 +564,7 @@
       { texto: "Datos públicos (Wikidata)…", icono: "globe", fn: () => { h.cerrar(true); NOM.datos.datosPublicos(esp); } },
     ]);
     $("[data-importar]", pie).onclick = async () => {
-      const f = await NOM.formatos.elegirArchivo(NOM.formatos.IMPORTABLES.join(","));
+      const f = await NOM.formatos.elegirArchivo(NOM.formatos.ACEPTAR.join(","));
       if (!f) return;
       try {
         const r = await NOM.formatos.importar(f);
@@ -628,7 +628,7 @@
     if (mover) mover.onclick = () => { const n = NOM.local.moverACuenta(); aviso(`${n} documento(s) ahora están cifrados en tu cuenta`, { tipo: "ok" }); seccionLocal(cont, conCuenta); };
     const imp = $("[data-importar-local]", cont);
     if (imp) imp.onclick = async () => {
-      const f = await NOM.formatos.elegirArchivo(NOM.formatos.IMPORTABLES.join(","));
+      const f = await NOM.formatos.elegirArchivo(NOM.formatos.ACEPTAR.join(","));
       if (!f) return;
       const donde = conCuenta ? await elegirDestino("¿Dónde guardamos lo importado?") : "local";
       if (!donde) return;
