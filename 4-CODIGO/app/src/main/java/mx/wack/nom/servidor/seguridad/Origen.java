@@ -48,9 +48,12 @@ public final class Origen {
         if (secreto == null || secreto.length() < 32 || clave == null) return null;
         if (!java.security.MessageDigest.isEqual(secreto.getBytes(java.nio.charset.StandardCharsets.UTF_8),
                 clave.getBytes(java.nio.charset.StandardCharsets.UTF_8))) return null;
-        String ip = req.getHeader("X-Real-IP");
+        // Vercel pone la IP de la persona en X-Vercel-Forwarded-For (reemplaza la que mande cualquiera);
+        // X-Real-IP tambien la trae, pero Cloudflare la quita por el camino.
+        String ip = req.getHeader("X-Vercel-Forwarded-For");
+        if (ip == null || ip.isBlank()) ip = req.getHeader("X-Real-IP");
         if (ip == null || ip.isBlank()) return null;
-        ip = ip.trim();
+        ip = ip.contains(",") ? ip.substring(0, ip.indexOf(',')).trim() : ip.trim();
         return ip.matches("[0-9a-fA-F:.]{2,45}") ? ip : null;
     }
 

@@ -22,3 +22,4 @@ tokenvercel
 # Python compilado (lo crea cada corrida de las pruebas)
 __pycache__/
 *.pyc
+.vercel

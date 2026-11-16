@@ -5,7 +5,8 @@ Raspberry, con sus cuentas y su base de datos):
 
 | Nombre | Para qué |
 |---|---|
-| `https://nom.qd.je` | El nombre corto: el que se comparte y el que se ve en Google, Bing y los demás. |
+| `https://www.nom.qd.je` | La dirección principal: la que se ve en Google, Bing y los demás. |
+| `https://nom.qd.je` | El nombre para compartir: redirige a `www.nom.qd.je`. |
 | `https://nomcolab.dpdns.org` | El de siempre. **No se apaga:** la app de Android le habla a este nombre, los pases van firmados con él y quien ya guardó cosas en el navegador con este nombre las sigue teniendo ahí. |
 
 No se redirige un nombre al otro, porque el navegador guarda la sesión y los documentos de cada
@@ -13,24 +14,34 @@ nombre por separado. Una redirección dejaría a la gente sin sesión y sin lo q
 Internet. Para que los buscadores no los cuenten como dos sitios, cada página dice cuál es su dirección
 principal (`<link rel="canonical">`). Esa dirección sale de `NOM_CANONICO` en `/etc/nomcolab.conf`.
 
-## 1. Por qué Cloudflare no acepta nom.qd.je
-
-`dpdns.org` está en la [lista pública de sufijos](https://publicsuffix.org/list/public_suffix_list.dat)
-(como `.com`), así que para Cloudflare `nomcolab.dpdns.org` es un dominio completo y se puede agregar
-como zona gratis. `qd.je` no está en esa lista: para Cloudflare, `nom.qd.je` es un subdominio de
-`qd.je`, y agregar subdominios como zona solo se puede con el plan Enterprise.
-
-La salida es **Cloudflare for SaaS**, que sí viene en el plan gratis (hasta 100 nombres). La zona
-`nomcolab.dpdns.org` acepta tráfico de otro nombre (`nom.qd.je`) y lo manda al mismo túnel de la
-Raspberry. Así sigue el método de siempre: sin abrir puertos y con certificado HTTPS de Cloudflare.
+## 1. Cómo quedó (16 de noviembre de 2026)
 
 ```
-navegador ──https://nom.qd.je──▶ Cloudflare (nombre personalizado de la zona nomcolab.dpdns.org)
-                                   └─▶ origen de respaldo origen.nomcolab.dpdns.org
-                                         └─▶ túnel «nomcolab» ──▶ Raspberry :8080
+https://www.nom.qd.je ──CNAME──▶ origen.nomcolab.dpdns.org ──▶ Cloudflare for SaaS ──▶ túnel ──▶ Raspberry
+https://nom.qd.je ──A/AAAA──▶ GitHub Pages (repo TruTruMaster/nom-qd-je) ──redirige──▶ https://www.nom.qd.je
 ```
 
-## 2. Lo que ya está hecho
+- La dirección principal es **`https://www.nom.qd.je`** (`NOM_CANONICO`), por el mismo túnel de
+  siempre: la casa no se expone y no hay puertos abiertos.
+- `nom.qd.je` solo redirige, conservando la ruta, la consulta y el fragmento (los enlaces para unirse
+  siguen sirviendo).
+
+**Por qué `nom.qd.je` no puede ser la principal:** `qd.je` no está en la
+[lista pública de sufijos](https://publicsuffix.org/list/public_suffix_list.dat) (`dpdns.org` sí). Por
+eso los servicios tratan a DigitalPlat como dueño de todo `qd.je`:
+- Cloudflare no la acepta como zona. Cloudflare for SaaS solo activa un nombre que sea CNAME hacia la
+  zona, y en la raíz de una zona no se puede poner CNAME (DigitalPlat: «CNAME records cannot be
+  created at the zone apex»). La raíz solo se puede con el plan Enterprise.
+- Vercel funcionó como reenvío (probado de punta a punta; ver `servidor-propio/vercel/`), pero pide
+  comprobar el dominio con un TXT en `_vercel.qd.je`, que es de DigitalPlat, porque otra cuenta de
+  Vercel ya usa un `*.qd.je`.
+- Netlify corta las peticiones reenviadas a los 26 s (el canal en vivo) y tiene el mismo bloqueo de
+  dominio. Deno Deploy se cierra en abril de 2027.
+- La salida limpia es que DigitalPlat agregue `qd.je` a la lista pública de sufijos, como hizo con
+  `dpdns.org`. Entonces `nom.qd.je` entra a Cloudflare gratis como zona propia, igual que
+  `nomcolab.dpdns.org`, y pasa a ser la principal (`NOM_CANONICO=https://nom.qd.je`).
+
+## 2. Lo que hay en el código
 
 - **DNS en Cloudflare:** `origen.nomcolab.dpdns.org` → el túnel `nomcolab` (CNAME con proxy). Será el
   «origen de respaldo».
@@ -50,84 +61,41 @@ navegador ──https://nom.qd.je──▶ Cloudflare (nombre personalizado de l
   `herramientas/buscadores/avisar.py`.
 - `pruebas/humo.py` revisa robots, sitemap, la portada y el `noindex` de `/unirse`.
 
-## 3. Paso A: quién responde por nom.qd.je (DNS)
+## 3. Lo que se configuró afuera
 
-DigitalPlat solo **delega**: no guarda registros, solo dice qué servidores de nombres responden por
-`nom.qd.je`. Hace falta un DNS gratis que acepte un subdominio como zona. Se usa **deSEC**
-(<https://desec.io>), que acepta cualquier correo. Hurricane Electric (dns.he.net) no aceptó ni Gmail
-ni Yahoo al registrarse (16-nov).
+**DigitalPlat** (DNS de `nom.qd.je`, «Use DigitalPlat DNS»):
 
-1. <https://desec.io> → «Sign up»: correo y captcha. Confirmar con el enlace que llega al correo.
-2. «+» (nuevo dominio) → `nom.qd.je`. deSEC muestra sus servidores de nombres: `ns1.desec.io` y
-   `ns2.desec.org`. Los registros DS (DNSSEC) se ignoran: DigitalPlat no los pide.
-3. En el panel de DigitalPlat (<https://dash.domain.digitalplat.org>), en `nom.qd.je`, poner como
-   servidores de nombres `ns1.desec.io` y `ns2.desec.org`.
-4. En deSEC, dentro de `nom.qd.je`, agregar con el «Subname» **vacío** (es el propio `nom.qd.je`):
-   - tipo **A**: `104.21.87.200` y `172.67.145.239`
-   - tipo **AAAA**: `2606:4700:3037::ac43:91ef` y `2606:4700:3034::6815:57c8`
+| Nombre | Tipo | Valor |
+|---|---|---|
+| `www` | CNAME | `origen.nomcolab.dpdns.org.` (con el punto final; sin él, el panel le agrega `.nom.qd.je`) |
+| (raíz) | A | `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153` (GitHub Pages) |
+| (raíz) | AAAA | `2606:50c0:8000::153`, `2606:50c0:8001::153`, `2606:50c0:8002::153`, `2606:50c0:8003::153` |
 
-   Son las direcciones de Cloudflare de la zona (`dig origen.nomcolab.dpdns.org`; las mismas que las de
-   `nomcolab.dpdns.org`). deSEC no tiene ALIAS, así que se ponen a mano. Cloudflare casi nunca las cambia,
-   pero si lo hiciera el nombre corto dejaría de abrir. Con un token de la API de deSEC se puede programar
-   una revisión que las actualice sola.
-5. Los registros TXT del paso B van en el mismo dominio, con «Subname» `_cf-custom-hostname` y
-   `_acme-challenge`. Si deSEC rechaza el valor, se escribe entre comillas dobles: `"valor"`.
+**Cloudflare**, zona `nomcolab.dpdns.org`: `origen.nomcolab.dpdns.org` (CNAME con proxy al túnel) es el
+origen de respaldo de Cloudflare for SaaS; el nombre personalizado `www.nom.qd.je` está activo.
 
-## 4. Paso B: Cloudflare for SaaS (panel de Cloudflare)
+**GitHub:** el repositorio público `TruTruMaster/nom-qd-je` (Pages, dominio `nom.qd.je`, HTTPS
+obligatorio) trae `index.html` y `404.html` que mandan a `https://www.nom.qd.je` con la misma ruta.
 
-En la zona `nomcolab.dpdns.org` → **SSL/TLS → Custom Hostnames**:
+**Raspberry:** `doas sh ~/dominio-corto/dominio-corto.sh` (una vez) puso el túnel con
+`www.nom.qd.je`, `NOM_NUBE=https://nomcolab.dpdns.org` (los pases valen en los APK ya instalados) y la
+orden `nomcolab-pi dominio`, que dejó `NOM_CANONICO=https://www.nom.qd.je`. Para cambiar la principal:
+editar esa línea en `/etc/nomcolab.conf` y `nomcolab-pi reiniciar`.
 
-1. «Enable Cloudflare for SaaS». Es gratis hasta 100 nombres; puede pedir una forma de pago
-   para el perfil de cobro, pero no cobra mientras no se pasen de 100.
-2. **Fallback Origin:** `origen.nomcolab.dpdns.org` → «Add Fallback Origin». Esperar a que diga
-   *Active*.
-3. **Add Custom Hostname:** `nom.qd.je`; *Certificate validation method*: **TXT**. Lo demás, como
-   viene.
-4. Cloudflare muestra dos registros TXT: uno de propiedad (`_cf-custom-hostname.nom.qd.je`) y uno del
-   certificado (`_acme-challenge.nom.qd.je`). Agregar los dos, tal cual, en deSEC (paso A.5).
-5. Esperar a que *Hostname status* y *Certificate status* digan **Active**. Tarda de minutos a un par
-   de horas.
-
-(El token del túnel, `~/.cloudflared/cert.pem`, solo puede manejar túneles y DNS. Por eso esta parte
-se hace en el panel y no con un programa.)
-
-## 5. Paso C: la Raspberry
-
-La carpeta `servidor-propio/pi` ya está copiada en la Pi como `~/dominio-corto/`. Una sola vez, con la
-contraseña de la Pi:
-
-```sh
-ssh pi5
-doas sh ~/dominio-corto/dominio-corto.sh
-```
-
-Esto hace que el túnel también atienda `nom.qd.je` y fija `NOM_NUBE=https://nomcolab.dpdns.org`,
-para que los pases los sigan aceptando los APK ya instalados aunque la cuenta se abra con el nombre
-corto. También instala la orden `nomcolab-pi` nueva. Si `nom.qd.je` ya contesta, la vuelve dirección
-principal (`NOM_CANONICO=https://nom.qd.je`). Si todavía no contesta (el DNS tarda), después basta
-con correr esto, que no pide contraseña:
-
-```sh
-nomcolab-pi dominio
-```
-
-Para regresar la dirección principal a la de cada nombre: borrar la línea `export NOM_CANONICO=…` de
-`/etc/nomcolab.conf` y `nomcolab-pi reiniciar`.
-
-## 6. Paso D: los buscadores
+## 4. Los buscadores
 
 Ningún buscador incluye un sitio porque sí: hay que avisarles y comprobar que el sitio es tuyo. Todo
 es gratis.
 
 | Buscador | Qué hacer | Cubre |
 |---|---|---|
-| **Google** | [Search Console](https://search.google.com/search-console) → Agregar propiedad → **Dominio** → `nom.qd.je` → copiar el TXT `google-site-verification=…` en deSEC (registro TXT con «Subname» vacío) → Verificar. Después: Sitemaps → `https://nom.qd.je/sitemap.xml`, e Inspección de URL → `https://nom.qd.je/` → «Solicitar indexación». Hacer lo mismo con `nomcolab.dpdns.org`, poniendo su TXT en el DNS de Cloudflare. | Google, Android, Chrome |
+| **Google** | [Search Console](https://search.google.com/search-console) → Agregar propiedad → **Dominio** → `nom.qd.je` (cubre también `www`) → copiar el TXT `google-site-verification=…` en DigitalPlat (registro TXT en la raíz) → Verificar. Después: Sitemaps → `https://www.nom.qd.je/sitemap.xml`, e Inspección de URL → `https://www.nom.qd.je/` → «Solicitar indexación». Hacer lo mismo con `nomcolab.dpdns.org`, poniendo su TXT en el DNS de Cloudflare. | Google, Android, Chrome |
 | **Bing** | [Bing Webmaster Tools](https://www.bing.com/webmasters) → «Importar desde Google Search Console» (toma los sitios y los sitemaps ya comprobados). | Bing, DuckDuckGo, Yahoo, Ecosia, Edge, Copilot |
-| **Yandex** | [Yandex Webmaster](https://webmaster.yandex.com) → agregar `https://nom.qd.je` → comprobar con DNS (TXT `yandex-verification: …`) → Indexing → Sitemap files. | Yandex |
+| **Yandex** | [Yandex Webmaster](https://webmaster.yandex.com) → agregar `https://www.nom.qd.je` → comprobar con DNS (TXT `yandex-verification: …`) → Indexing → Sitemap files. | Yandex |
 | **IndexNow** | Después de cada publicación: `python3 4-CODIGO/herramientas/buscadores/avisar.py` (lee el sitemap del servidor y avisa de todas sus páginas). | Bing, Yandex, Seznam, Naver, Yep |
 
 Otras cosas que ayudan y no cuestan:
-- En GitHub, el «Website» del repositorio (`TruTruMaster/NOM-COLAB` → About → ⚙) con `https://nom.qd.je`.
+- En GitHub, el «Website» del repositorio (`TruTruMaster/NOM-COLAB` → About → ⚙) con `https://www.nom.qd.je`.
 - Enlazar `https://nom.qd.je` desde donde se hable del proyecto (perfil, presentación, el README).
 - Al compartir el enlace en WhatsApp, Telegram, Discord o Facebook ya sale la tarjeta con la imagen y
   la descripción. Para refrescar la de Facebook:
@@ -140,13 +108,13 @@ Mexicanas). Eso no se arregla con ajustes, solo con que mucha gente enlace y bus
 de schema.org dicen que «NOM» es un nombre del sitio, para que Google pueda mostrar «NOM-COLAB» como
 nombre del sitio en los resultados.
 
-## 7. Comprobar
+## 5. Comprobar
 
 ```sh
-dig +short nom.qd.je                         # direcciones de Cloudflare
-curl -sI https://nom.qd.je | head -3         # HTTP/2 200
-curl -s https://nom.qd.je/robots.txt         # Sitemap: https://nom.qd.je/sitemap.xml (con NOM_CANONICO)
-NOM_BASE=https://nom.qd.je python3 4-CODIGO/pruebas/humo.py
+dig +short www.nom.qd.je                     # origen.nomcolab.dpdns.org y direcciones de Cloudflare
+curl -s https://www.nom.qd.je/robots.txt     # Sitemap: https://www.nom.qd.je/sitemap.xml
+curl -sL -o /dev/null -w '%{url_effective}\n' https://nom.qd.je/ayuda   # termina en www.nom.qd.je
+NOM_BASE=https://www.nom.qd.je python3 4-CODIGO/pruebas/humo.py
 ```
 
 Los datos estructurados se revisan en <https://search.google.com/test/rich-results> y

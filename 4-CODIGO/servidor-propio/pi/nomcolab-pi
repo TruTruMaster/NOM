@@ -11,7 +11,7 @@
 #   nomcolab-pi bitacora [servidor|tunel|vigia] [líneas]
 #   nomcolab-pi llave         muestra la llave del cifrado en reposo (guárdala FUERA de la Pi y de
 #                             la laptop de los respaldos: sin ella no se abren los datos ni los respaldos)
-#   nomcolab-pi dominio       revisa si el nombre corto (nom.qd.je) ya llega a este servidor; si sí, lo
+#   nomcolab-pi dominio       revisa si el nombre corto (www.nom.qd.je) ya llega a este servidor; si sí, lo
 #                             vuelve la dirección principal para los buscadores (NOM_CANONICO)
 set -u
 VAR=/var/lib/nomcolab
@@ -79,7 +79,7 @@ case "${1:-estado}" in
     echo "Llave del cifrado en reposo (base64). Guárdala en un lugar seguro, separada de los respaldos:"
     cat "$f" ;;
   dominio)
-    CORTO=https://nom.qd.je
+    CORTO=https://www.nom.qd.je
     if wget -q -O /dev/null -T 15 "$CORTO/api/red/info" 2>/dev/null; then
       echo "dominio: $CORTO contesta"
       if grep -q '^export NOM_CANONICO=' /etc/nomcolab.conf 2>/dev/null; then

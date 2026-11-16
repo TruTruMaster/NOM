@@ -1308,3 +1308,12 @@ y que se pueda encontrar en Google y los demás buscadores buscando «nomcolab»
 - **Falta (del dueño):** la cuenta de deSEC, Cloudflare for SaaS en el panel, `doas sh dominio-corto.sh` en la
   Pi, Search Console, Bing Webmaster y Yandex. El APK no se recompiló: la app sigue con `nomcolab.dpdns.org` y
   los cambios de la página entran en el siguiente.
+- **Cómo quedó (misma tarde):** la principal es `https://www.nom.qd.je` (Cloudflare for SaaS: `www` es CNAME a
+  `origen.nomcolab.dpdns.org`, por el túnel de siempre) y `nom.qd.je` redirige a ella desde GitHub Pages
+  (repositorio `TruTruMaster/nom-qd-je`, conserva la ruta). La raíz no puede pasar por Cloudflare (CNAME prohibido
+  en la raíz y raíces solo con Enterprise). Vercel funcionó como reenvío (clave `x-nom-proxy`, IP real en
+  `X-Vercel-Forwarded-For`, canal en vivo que se reabre sin avisar tras el corte de 120 s), pero pide un TXT en
+  `_vercel.qd.je`, que es de DigitalPlat; Netlify corta a los 26 s; Deno Deploy cierra en abril de 2027. Lo que
+  arregla todo: que DigitalPlat meta `qd.je` a la lista pública de sufijos. `robots.txt` y `sitemap.xml` van con
+  `no-cache` (Cloudflare los guardaba 4 horas).
+

@@ -7,8 +7,9 @@ Raspberry por el túnel de Cloudflare. La casa no se expone y no se abre ningún
 
 - `vercel.json`: todo se reenvía; Vercel no guarda copias (`x-vercel-enable-rewrite-caching: 0`) y
   agrega en cada petición `x-nom-proxy` con la clave `NOM_PROXY_SECRETO` (variable del proyecto en
-  Vercel, reemplaza la que mande cualquiera). El servidor solo cree `X-Real-IP` si la clave coincide
-  con la suya (`Origen.deVercel`); así los límites contra abuso ven a cada persona.
+  Vercel, reemplaza la que mande cualquiera). El servidor solo cree `X-Vercel-Forwarded-For` (la IP de la persona; Vercel
+  reemplaza la que mande cualquiera y Cloudflare quita `X-Real-IP`) si la clave coincide con la suya
+  (`Origen.deVercel`); así los límites contra abuso ven a cada persona.
 - Vercel corta cada petición reenviada a los 120 s: el canal en vivo se vuelve a abrir solo, sin
   avisar (`api.eventos`).
 - La clave vive fuera del repositorio (`~/.config/nomcolab/secreto-vercel` en la laptop) y en

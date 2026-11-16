@@ -61,17 +61,17 @@ public class PaginasApi {
         return ResponseEntity.ok().contentType(HTML).eTag(etiqueta).cacheControl(org.springframework.http.CacheControl.noCache()).body(html);
     }
 
+    // robots.txt y sitemap.xml cambian con NOM_CANONICO: sin esto Cloudflare los guardaba 4 horas.
     @GetMapping(value = "/robots.txt", produces = "text/plain;charset=UTF-8")
-    @org.springframework.web.bind.annotation.ResponseBody
-    public String robots(HttpServletRequest req) {
-        return Buscadores.robots(Buscadores.base(req));
+    public ResponseEntity<String> robots(HttpServletRequest req) {
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noCache()).body(Buscadores.robots(Buscadores.base(req)));
     }
 
     @GetMapping(value = "/sitemap.xml", produces = "application/xml;charset=UTF-8")
     public ResponseEntity<String> sitemap(HttpServletRequest req) throws IOException {
         String escrito = leer("sitemap.xml");
         if (escrito == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        return ResponseEntity.ok().body(Buscadores.sitemap(escrito, Buscadores.base(req)));
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noCache()).body(Buscadores.sitemap(escrito, Buscadores.base(req)));
     }
 
     /** Un archivo de static/ (o de donde digan las ubicaciones configuradas) como texto; null si no esta. */
