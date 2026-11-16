@@ -1235,3 +1235,32 @@ de internet: Office real.
   gráficas, imágenes ni formas del archivo), Word con secciones de otro tamaño u orientación, columnas, objetos
   flotantes y división automática de palabras, tramas y degradados en celdas, tablas y SmartArt de PowerPoint, la
   vuelta en Office real y la paridad en la app de Android.
+
+## 65. Gráficas de Office, dibujos de Excel y tablas de PowerPoint (0.15.1, 16 de noviembre de 2026)
+
+Sigue el pedido de la entrada 64 (que todo archivo de Office se vea idéntico en la app y en la web).
+
+- **Gráficas de Office con un solo dibujante** (`js/graficas-office.js`): se lee el XML de la gráfica (columnas,
+  barras, líneas, áreas, dispersión, pastel, anillo, combinadas) con su estilo y se dibuja con las reglas de
+  Office: escala automática (cero si el mínimo es menor que 5/6 del máximo, 5 % de aire, unidad 1-2-5 que cabe en
+  el largo del eje), ancho y separación de barras, apiladas y 100 %, marcadores, leyenda (al revés en barras
+  horizontales), títulos y rótulos. Contra las gráficas exportadas por Excel real: 95 a 97 % de parecido en
+  columnas y líneas. Excel la muestra en su ancla con los valores vivos de la hoja; PowerPoint con los datos de la
+  tabla del bloque (si alguien los edita en la app, la gráfica cambia); Word en línea, de su tamaño.
+- **Excel, lo que va encima de la hoja:** imágenes (recorte, borde, giro), formas con su texto y WordArt (contorno y
+  sombra de la letra), grupos girados y anidados, SmartArt (su dibujo ya acomodado), conectores, controles de
+  formulario con su estado (casilla marcada, opción, botón, lista desplegable con lo elegido) y el triángulo rojo
+  de las notas.
+- **PowerPoint, tablas como PowerPoint:** el estilo de tabla que trae el archivo (`ppt/tableStyles.xml`) por capas,
+  celdas combinadas, rellenos, bordes, márgenes y anclaje de cada celda; los saltos de renglón dentro de la celda
+  y textos como «7.0» se quedan como están (antes «1,1 / 1,2» salía «1,11,2» y «7.0» salía 7).
+- **Medidas:** PowerPoint tablas y gráficas 92.1 → 97.5 %, presentación con tema 96.8 → 98.7 %; la hoja de Excel
+  con 30 gráficas y la de objetos, con todo en su lugar.
+- **Pruebas:** edición y descarga de Excel 30 de 30, PowerPoint 78 de 78 y Word 98 de 98; abrir y descargar sin
+  tocar: Excel 99.8 % (46), PowerPoint 100 % (43), Word 100 % (34); diapositivas y diagramas sin errores.
+- **Regresión rápida con la 0.15.1:** todo bien (seguridad 380 de 380, cuentas 61 de 61, funciones 201 de 201…)
+  salvo las marcas de `rastreo` que ya salían en la 0.14.2 y la 0.15.0 (tercer nivel de «Pegar especial» y la
+  animación de la ruedita al cortar); humo 30 de 30.
+- **Falta:** gráficas nuevas de Excel (cascada, histograma, rectángulos, proyección solar, embudo, caja y bigotes)
+  y las 3D (se dibujan planas), Word con secciones, columnas, objetos flotantes, estilos de tabla, numeración
+  «Chapter %1» y puntos guía del índice.
