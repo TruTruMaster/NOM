@@ -27,9 +27,53 @@
 
   /** Prefijos de las propiedades de cada celda. */
   // tf: tipo de letra de la celda (viene de Excel; aquí se ve con esa fuente o su equivalente)
-  const PROPS = ["c", "n", "i", "u", "k", "f", "r", "al", "aj", "bd", "tl", "m", "tf"];
+  // bx: bordes de Excel; tp: tamaño exacto de la letra; ax: la alineación completa de Excel; nt: nota; fb: botón de filtro
+  // rx: trama o degradado de Excel
+  const PROPS = ["c", "n", "i", "u", "k", "f", "r", "al", "aj", "bd", "tl", "m", "tf", "bx", "tp", "ax", "rx", "nt", "fb"];
   /** Lo que copia "copiar formato" y el cuadrito de relleno además del contenido. */
-  const FORMATO = ["n", "i", "u", "k", "f", "r", "al", "aj", "bd", "tl", "tf"];
+  const FORMATO = ["n", "i", "u", "k", "f", "r", "al", "aj", "bd", "tl", "tf", "bx", "tp", "ax", "rx"];
+  /** Las tramas de celda de Excel, píxel por píxel como las dibuja Excel (medidas en Excel de verdad; renglones de 8
+      píxeles que se repiten hacia abajo, contados desde la esquina de A1). lightVertical, lightDown y lightUp salen
+      de sus versiones gruesas. */
+  const TRAMAS_XL = {
+    mediumGray: ".#.#.#.#|#.#.#.#.", darkGray: "###.###.|#.###.##", lightGray: "#...#...|..#...#.",
+    gray125: "........|..#...#.|........|#...#...", gray0625: "........|......#.|........|..#.....",
+    darkHorizontal: "........|########|########|........", darkVertical: "..##..##",
+    darkDown: ".##..##.|..##..##|#..##..#|##..##..", darkUp: ".##..##.|##..##..|#..##..#|..##..##",
+    darkGrid: ".##..##.|.##..##.|#..##..#|#..##..#", darkTrellis: ".##..##.|########|#..##..#|########",
+    lightHorizontal: "........|########|........|........", lightVertical: "..#...#.",
+    lightDown: ".#...#..|..#...#.|...#...#|#...#...", lightUp: "..#...#.|.#...#..|#...#...|...#...#",
+    lightGrid: "..#...#.|########|..#...#.|..#...#.", lightTrellis: ".#.#.#.#|..#...#.|.#.#.#.#|#...#...",
+  };
+  const HEX6 = /^#[0-9A-Fa-f]{6}$/;
+  const svgsTrama = new Map();
+  /** El mosaico de 8 × 8 de una trama de Excel, con su color (lo demás deja ver el color de la celda). */
+  function svgTrama(nombre, fg) {
+    const k = nombre + fg;
+    if (!svgsTrama.has(k)) {
+      const filas = (TRAMAS_XL[nombre] || TRAMAS_XL.mediumGray).split("|");
+      let d = "";
+      for (let y = 0; y < 8; y++) { const fila = filas[y % filas.length]; for (let x = 0; x < 8; x++) if (fila[x] === "#") d += `M${x} ${y}h1v1h-1z`; }
+      svgsTrama.set(k, `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" shape-rendering="crispEdges"><path d="${d}" fill="${HEX6.test(fg) ? fg : "#000000"}"/></svg>`);
+    }
+    return svgsTrama.get(k);
+  }
+  /** Degradado de Excel «desde el centro» (o desde una esquina): del rectángulo interior hacia cada orilla. */
+  function svgDegradadoXl(g) {
+    const n = (x) => Math.max(0, Math.min(100, (+x || 0) * 100));
+    const L = n(g.l), R = Math.max(L, n(g.r)), T = n(g.t), B = Math.max(T, n(g.b));
+    const pr = (Array.isArray(g.p) ? g.p : []).filter((q) => Array.isArray(q) && HEX6.test(q[1] || ""));
+    if (!pr.length) return "";
+    const o = (q) => Math.max(0, Math.min(1, +q[0] || 0));
+    const paradas = pr.map((q) => `<stop offset="${o(q)}" stop-color="${q[1]}"/>`).join("");
+    const lg = (id, x1, y1, x2, y2) => `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${paradas}</linearGradient>`;
+    // de lado a lado: hacia la izquierda desde L, el color interior entre L y R, hacia la derecha desde R (sin huecos
+    // entre las cuñas: las de arriba y abajo van encima)
+    const lados = [...pr.slice().reverse().map((q) => [(L - o(q) * L) / 100, q[1]]), ...pr.map((q) => [(R + o(q) * (100 - R)) / 100, q[1]])]
+      .map((q) => `<stop offset="${q[0].toFixed(4)}" stop-color="${q[1]}"/>`).join("");
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" preserveAspectRatio="none"><defs>${lg("a", 0, T, 0, 0)}${lg("b", 0, B, 0, 100)}<linearGradient id="h" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="0">${lados}</linearGradient></defs>` +
+      `<rect width="100" height="100" fill="url(#h)"/><path d="M0 0H100L${R} ${T}H${L}Z" fill="url(#a)"/><path d="M0 100H100L${R} ${B}H${L}Z" fill="url(#b)"/></svg>`;
+  }
   const ANCHO = 120, ALTO = 32;
   const COLORES_CELDA = ["#000000", "#C2372B", "#E8590C", "#2FA868", "#1D7A4C", "#3D72F2", "#8B5CF6"];
   const RELLENOS = ["#FFF2CC", "#FCE5CD", "#F4CCCC", "#D9EAD3", "#CFE2F3", "#D9D2E9", "#EFEFEF", "#FFFF00"];
@@ -327,6 +371,12 @@
       // ------------------------------------------------------------ bordes de Excel (bx: «a:thin:#000000;d:medium:#156082»)
       const BX_ANCHO = { hair: 1, thin: 1, dotted: 1, dashed: 1, dashDot: 1, dashDotDot: 1, medium: 2, mediumDashed: 2, mediumDashDot: 2, mediumDashDotDot: 2, slantDashDot: 2, thick: 3, double: 3 };
       const BX_CSS = { hair: "dotted", dotted: "dotted", dashed: "dashed", dashDot: "dashed", dashDotDot: "dashed", mediumDashed: "dashed", mediumDashDot: "dashed", mediumDashDotDot: "dashed", slantDashDot: "dashed", double: "double" };
+      // las diagonales: guiones como los de Excel, en píxeles de pantalla
+      const BX_GUION = { hair: "1 1", dotted: "1 1", dashed: "3 1", dashDot: "3 1 1 1", dashDotDot: "3 1 1 1 1 1", mediumDashed: "6 2", mediumDashDot: "6 2 2 2", mediumDashDotDot: "6 2 2 2 2 2", slantDashDot: "6 2 2 2" };
+      function svgDiagonal(u, w) {
+        const linea = (x, x1, y1, x2, y2) => (x ? `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${x[1]}" stroke-width="${x[0] === "double" ? 1 : BX_ANCHO[x[0]] || 1}"${BX_GUION[x[0]] ? ` stroke-dasharray="${BX_GUION[x[0]]}"` : ""}/>` : "");
+        return `<svg xmlns="http://www.w3.org/2000/svg">${linea(u, "0", "100%", "100%", "0")}${linea(w, "0", "0", "100%", "100%")}</svg>`;
+      }
       function ladosBx(ref) {
         const x = t["bx:" + ref];
         if (!x) return null;
@@ -641,6 +691,7 @@
       }
 
       // ------------------------------------------------------------ pintar
+      let faseX = 0, faseY = 0;   // dónde empieza la celda que se pinta, desde la esquina de A1 (para las tramas)
       /** Cómo se ve una celda: texto con su formato, estilos y clases. */
       function aspecto(c, f, ev, conds, cfx) {
         const ref = F().ref(c, f), v = ev.valor(c, f), fmt = t["f:" + ref];
@@ -670,7 +721,16 @@
         // botón de filtro de Excel (tablas, filtros de la hoja y tablas dinámicas), a la derecha de la celda
         if (xl() && t["nt:" + ref]) { capas.push(NOTA_XL); tams.push("6px 6px"); pos.push("right top"); }
         if (xl() && t["fb:" + ref]) { capas.unshift(t["fb:" + ref] === 2 ? BOTON_FILTRADO : BOTON_FILTRO); tams.unshift("15px 15px"); pos.unshift("right 1px center"); }
-        if (capas.length) st.push(`background-image:${capas.join(",")};background-size:${tams.join(",")};background-position:${pos.join(",")};background-repeat:no-repeat`);
+        // bordes en diagonal de Excel (sobre el relleno; en una combinada, de esquina a esquina de toda ella)
+        const yoBx = xl() ? ladosBx(ref) : null;
+        if (yoBx && (yoBx.u || yoBx.w)) { capas.push(urlSvg(svgDiagonal(yoBx.u, yoBx.w))); tams.push("100% 100%"); pos.push("0 0"); }
+        const rx = xl() && fondo === (t["r:" + ref] || "") ? t["rx:" + ref] : null;
+        let mosaico = false;
+        if (rx && rx.t && TRAMAS_XL[rx.t]) { capas.push(urlSvg(svgTrama(rx.t, rx.fg))); tams.push("8px 8px"); pos.push(`${-(faseX % 8)}px ${-(faseY % 8)}px`); mosaico = true; }
+        else if (rx && rx.g === "lin" && Array.isArray(rx.p) && rx.p.length && rx.p.every((q) => Array.isArray(q) && HEX6.test(q[1] || ""))) {
+          capas.push(`linear-gradient(${((+rx.deg || 0) + 90) % 360}deg, ${rx.p.map((q) => `${q[1]} ${(Math.max(0, Math.min(1, +q[0] || 0)) * 100).toFixed(1)}%`).join(", ")})`); tams.push("100% 100%"); pos.push("0 0");
+        } else if (rx && rx.g === "path") { const sv = svgDegradadoXl(rx); if (sv) { capas.push(urlSvg(sv)); tams.push("100% 100%"); pos.push("0 0"); } }
+        if (capas.length) st.push(`background-image:${capas.join(",")};background-size:${tams.join(",")};background-position:${pos.join(",")};background-repeat:${capas.map((_, i) => (mosaico && i === capas.length - 1 ? "repeat" : "no-repeat")).join(",")}`);
         if (color) st.push("color:" + color);
         if (fondo) st.push("background-color:" + fondo);
         const al = t["al:" + ref];
@@ -720,8 +780,25 @@
           if (tp && (!tlv || Math.abs(tlv - Math.round((tp / 1.0476) * 2) / 2) < 0.01)) st.push("font-size:" + tp + "pt");
           else if (tlv) st.push("font-size:" + Math.round(tlv * 1.0476 * 2) / 2 + "pt");
           const esN = F().esNum(v) && !String(cr).startsWith("'") && fmt !== "@", esB = typeof v === "boolean", esE = v instanceof F().ErrorF;
-          if (!al) st.push("text-align:" + (esN ? "right" : esB || esE ? "center" : "left"));
-          return { v, txt: cx && cx.ocultar ? "" : r.t, relleno: r.relleno, gato: r.gato && !(cx && cx.ocultar), st: st.join(";"), negrita, num: esN, err: esE, formula: cr.startsWith("=") ? cr : "", ajusta: !!t["aj:" + ref] };
+          // La alineación de Excel (ax:): rellenar, justificar, distribuido, centrar en la selección, vertical, giro,
+          // sangría y reducir hasta ajustar. «General»: número a la derecha, lógico o error al centro, texto a la izquierda.
+          const ax = t["ax:" + ref] || null, hx = ax && ax.h;
+          let alH = al && ALIN[al] ? ALIN[al] : esN ? "right" : esB || esE ? "center" : "left";
+          if (hx === "justify") alH = "justify";
+          else if (hx === "distributed" || hx === "centerContinuous") alH = "center";
+          else if (ax && ax.r && !al && !esN) alH = ax.r === 90 ? "right" : ax.r === 255 ? "center" : "left";   // girado: como Excel
+          if (!al || hx || (ax && ax.r)) st.push("text-align:" + alH);
+          if (hx === "distributed" && /\s/.test(String(r.t || "").trim())) st.push("text-align:justify;text-align-last:justify");
+          const va = ax && ax.v ? { top: "t", center: "m", justify: "j", distributed: "d" }[ax.v] || "b" : "b";
+          if (va !== "b") st.push("vertical-align:" + (va === "m" || va === "d" ? "middle" : "top"));
+          // sangría: 9 px por nivel, del lado de la alineación (de los dos lados en «distribuido»)
+          const sangria = ax && ax.i ? ax.i * 9 : 0;
+          if (sangria && (alH === "right" || hx === "distributed")) st.push(`padding-right:${2 + sangria}px`);
+          if (sangria && alH !== "right") st.push(`padding-left:${2 + sangria}px`);
+          // justificar y distribuido (en horizontal o en vertical) ajustan el texto, aunque la celda no lo pida
+          const ajusta = !!t["aj:" + ref] || hx === "justify" || hx === "distributed" || va === "j" || va === "d";
+          if (ajusta) st.push("line-height:" + ((+X.h0 || 20) / ((+X.tam || 11) * 4 / 3)).toFixed(4));
+          return { v, txt: cx && cx.ocultar ? "" : r.t, relleno: r.relleno, gato: r.gato && !(cx && cx.ocultar), st: st.join(";"), negrita, num: esN, err: esE, formula: cr.startsWith("=") ? cr : "", ajusta, ax, alH, va, sangria };
         }
         return { v, txt: F().aplicarFormato(v, fmt), st: st.join(";"), negrita, num: F().esNum(v), err: v instanceof F().ErrorF, formula: cr.startsWith("=") ? cr : "" };
       }
@@ -747,13 +824,16 @@
         const estXl = X ? ` class="xl${X.rejilla ? "" : " sin-rejilla"}" style="width:${anchoTotal}px;--xl-fuente:${esc(NOM.textoRico ? NOM.textoRico.cssFuente(X.fuente) : X.fuente)};--xl-tam:${+X.tam || 11}pt"${X.rtl ? ' dir="rtl"' : ""}` : "";
         let h = `<table${estXl}><colgroup><col style="width:46px">${Array.from({ length: cols }, (_, c) => `<col style="width:${ancho(c)}px">`).join("")}</colgroup>
           <thead><tr><th data-todo title="Elegir todo"></th>${Array.from({ length: cols }, (_, c) => `<th data-col="${c}" class="${c >= r.c1 && c <= r.c2 ? "activa" : ""}${v.orden && v.orden.c === c ? " ordenada" : ""}${(v.filtros || {})[c] ? " filtrada" : ""}">${F().colLetra(c)}${ed.soloLectura ? "" : `<span class="redim-c" data-redim-c="${c}" aria-hidden="true"></span>`}</th>`).join("")}</tr></thead><tbody>`;
+        const x0s = []; { let x = 0; for (let c = 0; c < cols; c++) { x0s.push(x); x += ancho(c); } }
+        let yAcum = 0;
         for (const f of visibles) {
-          const hf = alto(f);
-          h += `<tr data-fila="${f}"${hf ? ` style="height:${hf}px"` : ""}><th data-filah="${f}" class="${f >= r.f1 && f <= r.f2 ? "activa" : ""}">${f + 1}${ed.soloLectura ? "" : `<span class="redim-f" data-redim-f="${f}" aria-hidden="true"></span>`}</th>`;
-          let tapada = -1;   // modo Excel: hasta qué columna llega el texto que se desbordó desde la izquierda
+          const hf = alto(f), fija = !!(X && hf && +t["ah:" + (f + 1)]);   // modo Excel: alto fijo (lo que no cabe se corta)
+          const numFila = fija && hf < 20 ? `<div class="xl-fija-n" style="height:${Math.max(0, hf - 1)}px">${f + 1}</div>` : f + 1;
+          h += `<tr data-fila="${f}"${hf ? ` style="height:${hf}px"` : ""}><th data-filah="${f}" class="${f >= r.f1 && f <= r.f2 ? "activa" : ""}">${numFila}${ed.soloLectura ? "" : `<span class="redim-f" data-redim-f="${f}" aria-hidden="true"></span>`}</th>`;
           for (let c = 0; c < cols; c++) {
             const ref = F().ref(c, f);
             if (cubiertas.has(ref)) continue;
+            faseX = x0s[c] || 0; faseY = yAcum;
             const a = aspecto(c, f, ev, conds, cfx), sp = spans.get(ref);
             const clases = [a.num ? "num" : "", a.err ? "err" : "",
               c === sel.c && f === sel.f ? "sel" : (dentro(r, c, f) ? "rango" : ""),
@@ -764,19 +844,46 @@
               // relleno «*» (contabilidad): lo de la izquierda pegado a la izquierda y el número a la derecha
               if (a.relleno != null && a.txt.includes("\u0000")) { const [iz, de] = a.txt.split("\u0000"); contenido = `<span class="xl-rell"><span>${esc(iz)}</span><span>${esc(de)}</span></span>`; }
               if (t["ow:" + F().colLetra(c)]) extra += " col-oculta";
-              // texto que no cabe: se desborda sobre las celdas vacías de la derecha, como en Excel
-              if (!a.num && a.txt && !a.ajusta && !sp && !/text-align:(right|center)/.test(a.st)) {
-                let k = c + 1; while (k < cols && String(crudo(k, f)) === "" && !cubiertas.has(F().ref(k, f))) k++;
-                if (k > c + 1) { extra += " desborda"; tapada = k - 1; }
+              const ax = a.ax, hx = ax && ax.h;
+              if (ax && ax.r && a.txt && !a.gato) {
+                // texto girado (de 1 a 90: hacia arriba; de 91 a 180: hacia abajo) o apilado (255), como Excel;
+                // la caja del girado se mide después de pintar (ajustarComoExcel)
+                contenido = ax.r === 255 ? `<span class="xl-apilado">${[...a.txt].map((ch) => (ch === " " ? "&nbsp;" : esc(ch))).join("<br>")}</span>`
+                  : `<span class="xl-giro" data-giro="${ax.r <= 90 ? -ax.r : ax.r - 90}"><span>${contenido}</span></span>`;
+              } else if ((hx === "fill" || (ax && ax.s)) && a.txt && !a.gato && a.relleno == null) {
+                // «rellenar» repite el texto hasta llenar la celda; «reducir hasta ajustar» achica la letra hasta que cabe
+                extra += hx === "fill" ? " xl-llenar" : " xl-reducir";
+                contenido = `<span class="xl-medir">${contenido}</span>`;
+              } else if (!a.num && a.txt && !a.ajusta && !sp && !a.gato && a.relleno == null) {
+                // Texto que no cabe: se desborda sobre las celdas vacías de al lado, como en Excel: a la derecha si va a la
+                // izquierda, a la izquierda si va a la derecha y a los dos lados si va centrado; «centrar en la selección»,
+                // sobre las vacías de la derecha que también lo piden. Se corta en la primera celda que tiene algo.
+                const libre = (k) => k >= 0 && k < cols && String(crudo(k, f)) === "" && !cubiertas.has(F().ref(k, f)) && !spans.get(F().ref(k, f));
+                let izq = 0, der = 0;
+                if (hx === "centerContinuous") { for (let k = c + 1; libre(k) && (t["ax:" + F().ref(k, f)] || {}).h === "centerContinuous"; k++) der += ancho(k); }
+                else {
+                  if (a.alH !== "right") for (let k = c + 1; libre(k) && k <= c + 60; k++) der += ancho(k);
+                  if (a.alH === "right" || a.alH === "center") for (let k = c - 1; libre(k) && k >= c - 60; k--) izq += ancho(k);
+                }
+                if (izq || der) {
+                  extra += " desborda";
+                  const w0 = ancho(c), pad = 2 + (a.sangria || 0);
+                  const pos = hx === "centerContinuous" ? `left:${(w0 + der) / 2}px;--tx:-50%` : a.alH === "center" ? `left:${izq + w0 / 2}px;--tx:-50%` : a.alH === "right" ? `right:${pad}px` : `left:${izq + pad}px`;
+                  contenido = `<span class="xl-ventana" data-va="${a.va}" style="left:${-izq}px;width:${izq + w0 + der}px"><span style="${pos}">${contenido}</span></span>`;
+                }
               }
-              if (c <= tapada && a.txt === "" && c !== tapada + 1) extra += "";
               if (a.ajusta) extra += " ajusta";
               if (a.gato) contenido = "#".repeat(30);
+              // texto ajustado: renglones de 20 px que llegan hasta la línea de abajo (n renglones = 20 n px, como Excel)
+              else if (a.ajusta && contenido !== "") contenido = `<div class="xl-aj">${contenido}</div>`;
+              if (fija && contenido !== "" && !sp && !extra.includes(" desborda")) contenido = `<div class="xl-fija" data-va="${a.va || "b"}" style="height:${Math.max(0, hf - 2)}px"><div>${contenido}</div></div>`;
             }
             h += `<td data-c="${c}" data-f="${f}" data-id="${esc(t.id)}!${ref}" class="${clases}${extra}"${sp ? ` colspan="${sp.cs}" rowspan="${sp.rs}"` : ""} ${a.negrita ? "data-negrita" : ""} ${t["i:" + ref] ? "data-cursiva" : ""} ${t["u:" + ref] ? "data-subrayado" : ""} ${a.st ? `style="${esc(a.st)}"` : ""} title="${esc(a.formula)}">${contenido}</td>`;
           }
           h += "</tr>";
+          yAcum += hf || 0;
         }
+        faseX = faseY = 0;
         rej.innerHTML = h + "</tbody></table>";
         if (X) ajustarComoExcel();
         if (X) pintarDibujos(ev);
@@ -795,6 +902,33 @@
        * uno en formato General primero pierde decimales (o pasa a notación científica), como en Excel.
        */
       function ajustarComoExcel() {
+        const espacio = (td) => { const cs = getComputedStyle(td); return td.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight); };
+        // Texto girado: su caja mide lo que ocupa ya girado (así se alinea abajo y a su lado como en Excel)
+        rej.querySelectorAll(".xl-giro").forEach((g) => {
+          const x = g.firstElementChild, w = x.offsetWidth, h = x.offsetHeight, a = (+g.dataset.giro * Math.PI) / 180;
+          const W = Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a)), H = Math.abs(w * Math.sin(a)) + Math.abs(h * Math.cos(a));
+          g.style.width = W.toFixed(1) + "px"; g.style.height = H.toFixed(1) + "px";
+          x.style.cssText = `position:absolute;left:${((W - w) / 2).toFixed(1)}px;top:${((H - h) / 2).toFixed(1)}px;transform:rotate(${+g.dataset.giro}deg)`;
+        });
+        // «Rellenar»: tantas copias enteras del texto como caben; «Reducir hasta ajustar»: la letra se achica hasta caber
+        rej.querySelectorAll("td.xl-llenar .xl-medir").forEach((x) => {
+          const td = x.closest("td"), base = x.textContent, w = x.offsetWidth;
+          if (base && w > 0) x.dataset.rep = base.repeat(Math.max(1, Math.floor((espacio(td) + 0.01) / w)) - 1);
+        });
+        rej.querySelectorAll("td.xl-reducir .xl-medir").forEach((x) => {
+          const td = x.closest("td"), w = x.offsetWidth, libre = espacio(td);
+          if (w > libre + 0.5) x.style.fontSize = ((parseFloat(getComputedStyle(x).fontSize) * Math.max(1, libre)) / w).toFixed(2) + "px";
+        });
+        // Excel no dibuja la cuadrícula donde pasa el texto desbordado (un borde propio sí se queda)
+        rej.querySelectorAll("td.desborda > .xl-ventana").forEach((v) => {
+          const x = v.firstElementChild, rv = v.getBoundingClientRect(), rx = x.getBoundingClientRect();
+          const x0 = Math.max(rv.left, rx.left), x1 = Math.min(rv.right, rx.right);
+          for (const o of v.parentElement.parentElement.children) {
+            if (o.tagName !== "TD" || o.style.borderRight) continue;
+            const r = o.getBoundingClientRect();
+            if (r.right > x0 + 1 && r.right < x1 - 1) o.classList.add("xl-sin-linea");
+          }
+        });
         rej.querySelectorAll("td.num").forEach((td) => {
           if (td.scrollWidth <= td.clientWidth + 1) return;
           const c = +td.dataset.c, f = +td.dataset.f, ref = F().ref(c, f), fmt = t["f:" + ref];
@@ -806,10 +940,11 @@
             for (let d = 5; d >= 0; d--) { let [m, e] = n.toExponential(d).split("e"); intentos.push(m + "E" + (+e < 0 ? "-" : "+") + String(Math.abs(+e)).padStart(2, "0")); }
             for (const x of intentos) { if (a >= 1 && x.replace(/[-.]/g, "").length < String(Math.trunc(a)).length && !/E/.test(x)) continue; td.textContent = x; if (td.scrollWidth <= td.clientWidth + 1) return; }
           }
-          td.textContent = "#";
-          let n = 1;
-          while (td.scrollWidth <= td.clientWidth && n < 200) { n++; td.textContent = "#".repeat(n); }
-          td.textContent = "#".repeat(Math.max(1, n - 1));
+          const g = document.createElement("span");
+          g.textContent = "#".repeat(20); td.textContent = ""; td.append(g);
+          const w = g.offsetWidth / 20, wr = Math.max(1, Math.round(w));
+          g.textContent = "#".repeat(Math.max(1, Math.min(200, Math.floor((espacio(td) + 0.01) / wr))));
+          g.style.letterSpacing = (wr - w).toFixed(3) + "px";
         });
       }
 
@@ -1734,9 +1869,26 @@
         doc().cambiar(t.id, campos);
       }
       const colorCeldas = (color) => ponerEnRango("k", color);
-      const rellenoCeldas = (color) => ponerEnRango("r", color);
+      const rellenoCeldas = (color) => {
+        if (ed.soloLectura || !t) return;
+        const campos = {};
+        cadaCelda(rango(), (c, f, ref) => { campos["r:" + ref] = color || null; if (t["rx:" + ref]) campos["rx:" + ref] = null; });
+        doc().cambiar(t.id, campos);
+      };
       const formatoNumero = (cod) => ponerEnRango("f", cod === "General" ? null : cod);
-      const alinear = (a) => ponerEnRango("al", a);
+      const alinear = (a) => {
+        if (ed.soloLectura || !t) return;
+        const campos = {};
+        cadaCelda(rango(), (c, f, ref) => { campos["al:" + ref] = a || null; Object.assign(campos, sinAlineacionXl(ref)); });
+        doc().cambiar(t.id, campos);
+      };
+      /** La alineación de Excel sin su parte horizontal (rellenar, justificar, distribuido…) ni su sangría. */
+      function sinAlineacionXl(ref) {
+        const ax = t["ax:" + ref];
+        if (!ax || (!ax.h && !ax.i)) return {};
+        const n = Object.assign({}, ax); delete n.h; delete n.i;
+        return { ["ax:" + ref]: Object.keys(n).length ? n : null };
+      }
       function decimales(delta) {
         if (ed.soloLectura || !t) return;
         const ev = evaluar(), campos = {};
@@ -1839,6 +1991,7 @@
           const campos = {}, cod = $("[data-cod]", cuerpo).value.trim() || "General", a = $("[data-al]", cuerpo).value, tam = +$("[data-tl]", cuerpo).value, aj = $("[data-aj]", cuerpo).checked;
           cadaCelda(rango(), (c, f, rf) => {
             campos["f:" + rf] = cod === "General" ? null : cod;
+            if ((a || null) !== (t["al:" + rf] || null)) Object.assign(campos, sinAlineacionXl(rf));
             campos["al:" + rf] = a || null;
             campos["tl:" + rf] = tam === 10.5 ? null : tam;
             campos["aj:" + rf] = aj || null;
@@ -2223,7 +2376,7 @@
           const forma = lista.some((c) => c.bloque === "_doc" || (c.bloque === tId && Object.keys(c.campos).some(deForma)) || (c.campos.tipo === "tabla" && c.bloque !== tId));
           t = tabla();
           // Con filtro u orden, un valor nuevo puede cambiar qué filas se ven: se repinta todo.
-          if (!forma && !vistaActual() && t) { actualizarValores(); return; }
+          if (!forma && !vistaActual() && t && !xl()) { actualizarValores(); return; }
           const scroll = [rej.scrollLeft, rej.scrollTop];
           const e = editor;
           if (e) e.remove();

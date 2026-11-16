@@ -185,6 +185,7 @@
 
   // ================================================================ dibujo
   function svg(m, w, h, opc) {
+    if (m && m.ex) return svgEx(m, w, h, opc);
     opc = opc || {};
     const pt = opc.pt || 1, fam = (f) => (opc.familia ? opc.familia(f || m.letra.f || "Calibri") : `'${(f || m.letra.f || "Calibri").replace(/'/g, "")}', sans-serif`);
     const L = (l, def) => Object.assign({ tam: 10, c: "#595959", b: false, f: null }, m.letra || {}, def || {}, l || {});
@@ -469,5 +470,320 @@
   }
 
   window.NOM = window.NOM || {};
-  NOM.graficaOffice = { leer, svg, escala };
+  // ================================================================ gráficas nuevas de Excel (cx:chartSpace)
+  // Histograma, Pareto, cajas y bigotes, cascada, rectángulos, proyección solar y embudo. Excel no guarda sus
+  // valores: los toma de nombres ocultos («_xlchart.v1.N») que apuntan a la hoja. Aquí se leen vivos y se calculan
+  // como Excel: intervalos por la regla de Scott, cuartiles exclusivos o inclusivos, rectángulos «cuadrados»…
+  const TIPOS_EX = { clusteredColumn: "histograma", boxWhisker: "caja", waterfall: "cascada", treemap: "rectangulos", sunburst: "solar", funnel: "embudo" };
+  function leerEx(xml, ctx) {
+    ctx = ctx || {};
+    const d = new DOMParser().parseFromString(xml, "application/xml");
+    const todos = (n, nombre) => (n ? [...n.getElementsByTagNameNS("*", nombre)] : []);
+    const h1 = (n, nombre) => [...(n ? n.children : [])].find((c) => c.localName === nombre) || null;
+    const at = (n, a) => (n ? n.getAttribute(a) : null);
+    const num = (x) => (x == null || x === "" || !isFinite(+x) ? null : +x);
+    const ref = (f) => {
+      const tx = String((f && f.textContent) || "").trim();
+      if (!tx) return null;
+      const r = /^_xlchart\./i.test(tx) ? (ctx.nombre ? ctx.nombre(tx) : null) : tx;
+      return r ? String(r).replace(/^=/, "") : null;
+    };
+    const textoDe = (tx) => { if (!tx) return null; const v = todos(tx, "v")[0]; if (v) return v.textContent; const ts = todos(tx, "t"); return ts.length ? ts.map((q) => q.textContent).join("") : null; };
+    const chart = todos(d, "chart")[0], series = todos(d, "series");
+    const s0 = series.find((s) => at(s, "layoutId") !== "paretoLine") || series[0];
+    if (!s0) throw new Error("gráfica sin series");
+    const tipo = series.some((s) => at(s, "layoutId") === "paretoLine") ? "pareto" : TIPOS_EX[at(s0, "layoutId")];
+    if (!tipo) throw new Error("tipo de gráfica que no se conoce");
+    const id = at(h1(s0, "dataId"), "val") || "0";
+    const data = todos(d, "data").find((x) => at(x, "id") === id) || todos(d, "data")[0];
+    // lo guardado (si lo hay): cada nivel con sus puntos; el primero es el de las hojas del árbol
+    const dim = (tp) => {
+      const e = [...(data ? data.children : [])].find((x) => /Dim$/.test(x.localName) && at(x, "type") === tp);
+      if (!e) return null;
+      const niveles = todos(e, "lvl").map((l) => { const o = []; todos(l, "pt").forEach((p) => { o[+at(p, "idx") || 0] = p.textContent; }); return o; });
+      return { f: ref(h1(e, "f")), niveles };
+    };
+    const tit = h1(chart, "title"), ley = h1(chart, "legend"), txS = h1(s0, "tx"), txD = txS && todos(txS, "txData")[0];
+    const lp = h1(s0, "layoutPr"), bn = lp && h1(lp, "binning"), stt = lp && h1(lp, "statistics"), vis = lp && h1(lp, "visibility"), sub = lp && h1(lp, "subtotals");
+    const bool = (n, a, def) => { const v = at(n, a); return v == null ? def : v === "1" || v === "true"; };
+    const ejes = todos(d, "axis").map((a) => {
+      const vs = h1(a, "valScaling"), cs = h1(a, "catScaling");
+      return { val: !!vs, min: num(at(vs, "min")), max: num(at(vs, "max")), unidad: num(at(vs, "majorUnit")), hueco: num(at(cs, "gapWidth")), rejilla: !!h1(a, "majorGridlines"),
+        rotulos: !!h1(a, "tickLabels"), oculto: at(a, "hidden") === "1", pct: todos(a, "units").some((u) => at(u, "unit") === "percentage") };
+    });
+    return {
+      ex: true, tipo,
+      titulo: tit ? { texto: textoDe(h1(tit, "tx")) } : null,
+      leyenda: ley ? { pos: at(ley, "pos") || "t" } : null,
+      nombre: { f: ref(txD && h1(txD, "f")), v: txD ? textoDe(txD) : null },
+      cat: dim("cat"), val: dim("val") || dim("size"),
+      bins: bn ? { cerrado: at(bn, "intervalClosed") || "r", ancho: num(at(h1(bn, "binSize"), "val")), cantidad: num(at(h1(bn, "binCount"), "val")), arriba: num(at(bn, "overflow")), abajo: num(at(bn, "underflow")) } : null,
+      cuartil: at(stt, "quartileMethod") || "exclusive",
+      vis: { media: bool(vis, "meanMarker", true), lineaMedia: bool(vis, "meanLine", false), puntos: bool(vis, "nonoutliers", true), atipicos: bool(vis, "outliers", true) },
+      totales: sub ? todos(sub, "idx").map((x) => +at(x, "val")).filter((x) => isFinite(x)) : [],
+      ejes,
+      acentos: ctx.acentos || ["#156082", "#E97132", "#196B24", "#0F9ED5", "#A02B93", "#4EA72E"],
+      letra: { f: ctx.fuente ? ctx.fuente("+mn-lt") : null },
+    };
+  }
+
+  /** Rectángulos «cuadrados» (Bruls, Huizing y van Wijk), como los acomoda Excel: renglones a lo largo del lado corto. */
+  function cuadricular(valores, x, y, w, h) {
+    const total = valores.reduce((s, v) => s + v, 0), out = [];
+    if (!(total > 0) || !(w > 0) || !(h > 0)) return valores.map(() => ({ x, y, w: 0, h: 0 }));
+    const area = valores.map((v) => (v / total) * w * h);
+    let i = 0;
+    const peor = (fila, lado) => { const s = fila.reduce((a, b) => a + b, 0), mx = Math.max(...fila), mn = Math.min(...fila); return Math.max((lado * lado * mx) / (s * s), (s * s) / (lado * lado * mn)); };
+    while (i < area.length) {
+      const lado = Math.min(w, h), fila = [area[i]];
+      let j = i + 1;
+      while (j < area.length && peor(fila.concat(area[j]), lado) <= peor(fila, lado)) fila.push(area[j++]);
+      const s = fila.reduce((a, b) => a + b, 0);
+      if (w >= h) {   // franja vertical a la izquierda
+        const fw = s / h; let yy = y;
+        fila.forEach((a) => { out.push({ x, y: yy, w: fw, h: a / fw }); yy += a / fw; });
+        x += fw; w -= fw;
+      } else {        // franja horizontal arriba
+        const fh = s / w; let xx = x;
+        fila.forEach((a) => { out.push({ x: xx, y, w: a / fh, h: fh }); xx += a / fh; });
+        y += fh; h -= fh;
+      }
+      i = j;
+    }
+    return out;
+  }
+  /** Cuartil como Excel: CUARTIL.EXC (posición p·(n+1)) o CUARTIL.INC (posición p·(n−1)), con interpolación. */
+  function cuartil(ord, p, exclusivo) {
+    const n = ord.length;
+    if (!n) return null;
+    let pos = exclusivo ? p * (n + 1) - 1 : p * (n - 1);
+    pos = Math.max(0, Math.min(n - 1, pos));
+    const i = Math.floor(pos), f = pos - i;
+    return i + 1 < n ? ord[i] + f * (ord[i + 1] - ord[i]) : ord[i];
+  }
+
+  function svgEx(m, w, h, opc) {
+    opc = opc || {};
+    const pt = opc.pt || 1, fam = (f) => (opc.familia ? opc.familia(f || m.letra.f || "Calibri") : `'${(f || m.letra.f || "Calibri").replace(/'/g, "")}', sans-serif`);
+    const partes = [], L = (def) => Object.assign({ tam: 9, c: "#595959", b: false, f: m.letra.f }, def || {});
+    const t = (x, y, s, l, anc, extra) => partes.push(`<text x="${n2(x)}" y="${n2(y)}" font-family="${esc(fam(l.f))}" font-size="${n2(l.tam * pt)}" fill="${esc(l.c)}" font-weight="${l.b ? 700 : 400}" font-style="normal" text-anchor="${anc || "start"}"${extra || ""}>${esc(s)}</text>`);
+    const ok = (c) => /^#[0-9A-Fa-f]{6}$/.test(c || "");
+    const acc = (k) => { const a = (m.acentos || [])[k % 6]; return ok(a) ? a : ["#156082", "#E97132", "#196B24", "#0F9ED5", "#A02B93", "#4EA72E"][k % 6]; };
+    const oscuro = (c, f) => "#" + [1, 3, 5].map((i) => Math.round(parseInt(c.slice(i, i + 2), 16) * f).toString(16).padStart(2, "0")).join("");
+    partes.push(`<rect x="0.5" y="0.5" width="${n2(w - 1)}" height="${n2(h - 1)}" fill="#FFFFFF"${opc.sinBorde ? "" : ` stroke="#D9D9D9" stroke-width="${n2(Math.max(0.25, 0.75 * pt))}"`}/>`);
+    // ---- los datos, vivos de la hoja (o lo guardado)
+    const colsDe = (f) => { const q = /\$?([A-Z]{1,3})\$?\d+:\$?([A-Z]{1,3})\$?\d+$/.exec(String(f || "")); if (!q) return 1; const nc = (s) => s.split("").reduce((a, c) => a * 26 + c.charCodeAt(0) - 64, 0); return Math.max(1, nc(q[2]) - nc(q[1]) + 1); };
+    const filasDe = (dm) => {
+      if (!dm) return [];
+      const vivo = opc.valores && dm.f ? opc.valores(dm.f) : null;
+      if (vivo) { const k = colsDe(dm.f), o = []; for (let i = 0; i < vivo.length; i += k) o.push(vivo.slice(i, i + k)); return o; }
+      const nv = dm.niveles || [], n = Math.max(0, ...nv.map((l) => l.length));
+      return Array.from({ length: n }, (_, i) => nv.slice().reverse().map((l) => (l[i] == null ? null : l[i])));
+    };
+    const numero2 = (v) => (v == null || v === "" || !isFinite(+v) ? null : +v);
+    const vals = filasDe(m.val).map((r) => numero2(r[r.length - 1]));
+    const catsF = filasDe(m.cat), cats = catsF.map((r) => r.filter((x) => x != null && x !== "").map(String));
+    const nombreSerie = (() => { const v = opc.valores && m.nombre && m.nombre.f ? opc.valores(m.nombre.f) : null; return v && v[0] != null ? String(v[0]) : (m.nombre && m.nombre.v) || ""; })();
+    const fmtN = (v) => { const r = Math.round(v * 1e6) / 1e6; return numero(r, null, opc); };
+    // ---- título y leyenda
+    let arriba = 7 * pt, abajo = h - 7 * pt, izq = 7 * pt, der = w - 7 * pt;
+    if (m.titulo) {
+      const lt = L({ tam: 14 }), tx = m.titulo.texto != null ? m.titulo.texto : nombreSerie || "Título del gráfico";
+      const y = arriba + lt.tam * pt * 0.95;
+      t(w / 2, y, tx, lt, "middle");
+      arriba = y + lt.tam * pt * 0.45 + 4 * pt;
+    }
+    const leyenda = (entradas) => {
+      if (!m.leyenda || !entradas.length) return;
+      const ll = L({ tam: 9 }), caja = 7 * pt, sep = 4 * pt, gap = 10 * pt, altoF = ll.tam * pt * 1.5;
+      const anchoE = (e) => caja + sep + medir(e.texto, ll.tam * pt, fam(ll.f));
+      const total = entradas.reduce((s, e) => s + anchoE(e), 0) + gap * (entradas.length - 1);
+      const y0 = m.leyenda.pos === "b" ? abajo - altoF : arriba, yc = y0 + altoF / 2;
+      let x = w / 2 - total / 2;
+      entradas.forEach((e) => { partes.push(`<rect x="${n2(x)}" y="${n2(yc - caja / 2)}" width="${n2(caja)}" height="${n2(caja)}" fill="${esc(e.color)}"/>`); t(x + caja + sep, yc + ll.tam * pt * 0.35, e.texto, ll); x += anchoE(e) + gap; });
+      if (m.leyenda.pos === "b") abajo = y0 - 4 * pt; else arriba = y0 + altoF + 4 * pt;
+    };
+    const fin = () => `<svg xmlns="http://www.w3.org/2000/svg" width="${n2(w)}" height="${n2(h)}" viewBox="0 0 ${n2(w)} ${n2(h)}">${partes.join("")}</svg>`;
+    const ejeV = m.ejes.find((e) => e.val) || {}, ejeC = m.ejes.find((e) => !e.val) || {};
+    /** Ejes de columnas: valores a la izquierda (y a la derecha en Pareto), categorías abajo; devuelve dónde pintar. */
+    const marco = (dmin, dmax, etiquetas, derecho) => {
+      const lv = L(), lc = L(), alto = Math.max(40, abajo - arriba - lc.tam * pt * 1.6);
+      const esc_ = escala(dmin, dmax, ejeV, false, Math.floor(alto / (lv.tam * pt * 2.2)));
+      const marcas = []; for (let v = esc_.a, k = 0; v <= esc_.b + esc_.u * 1e-6 && k < 200; v = esc_.a + ++k * esc_.u) marcas.push(Math.round(v * 1e10) / 1e10);
+      const verV = ejeV.rotulos !== false && !ejeV.oculto;
+      let x0 = izq + (verV ? Math.max(...marcas.map((v) => medir(fmtN(v), lv.tam * pt, fam(lv.f)))) + 6 * pt : 0), x1 = der;
+      const y0 = arriba + lv.tam * pt * 0.6, y1 = abajo - lc.tam * pt * 1.6;
+      let marcasD = null;
+      if (derecho) {
+        marcasD = []; for (let k = 0; k <= 10; k++) marcasD.push(k / 10);
+        x1 -= Math.max(...marcasD.map((v) => medir(Math.round(v * 100) + "%", lv.tam * pt, fam(lv.f)))) + 6 * pt;
+      }
+      const yv = (v) => y1 - ((v - esc_.a) / (esc_.b - esc_.a || 1)) * (y1 - y0);
+      marcas.forEach((v) => {
+        if (ejeV.rejilla !== false) partes.push(`<line x1="${n2(x0)}" y1="${n2(yv(v))}" x2="${n2(x1)}" y2="${n2(yv(v))}" stroke="#D9D9D9" stroke-width="${n2(0.75 * pt)}"/>`);
+        if (verV) t(x0 - 6 * pt, yv(v) + lv.tam * pt * 0.35, fmtN(v), lv, "end");
+      });
+      if (marcasD) marcasD.forEach((v) => t(x1 + 6 * pt, y1 - v * (y1 - y0) + lv.tam * pt * 0.35, Math.round(v * 100) + "%", lv));
+      const anchoC = (x1 - x0) / Math.max(1, etiquetas.length);
+      if (ejeC.rotulos !== false && !ejeC.oculto) etiquetas.forEach((e, i) => t(x0 + anchoC * (i + 0.5), y1 + lc.tam * pt * 1.25, e, lc, "middle"));
+      return { x0, x1, y0, y1, yv, anchoC };
+    };
+    const tipo = m.tipo;
+
+    if (tipo === "histograma" || tipo === "pareto") {
+      let barras;   // [{ etiqueta, valor }]
+      const b = m.bins;
+      if (b || !cats.length) {
+        const datos = vals.filter((x) => x != null);
+        if (!datos.length) return fin();
+        const n = datos.length, min = Math.min(...datos), max = Math.max(...datos);
+        let ancho = b && b.ancho, k = b && b.cantidad;
+        if (!ancho && k) ancho = (max - min) / k;
+        if (!ancho) {
+          // regla de Scott (desviación de muestra), con dos cifras significativas como las pinta Excel
+          const media = datos.reduce((s, x) => s + x, 0) / n, sd = Math.sqrt(datos.reduce((s, x) => s + (x - media) * (x - media), 0) / Math.max(1, n - 1));
+          const crudo = (3.5 * sd) / Math.cbrt(n);
+          ancho = crudo > 0 ? +crudo.toPrecision(2) : 1;
+        }
+        const lo0 = b && b.abajo != null ? b.abajo : min, hi0 = b && b.arriba != null ? b.arriba : max;
+        const nb = Math.max(1, k || Math.ceil((hi0 - lo0) / ancho - 1e-9));
+        const izqC = !b || b.cerrado !== "l";
+        barras = Array.from({ length: nb }, (_, i) => {
+          const a = lo0 + i * ancho, z = lo0 + (i + 1) * ancho;
+          const etiqueta = izqC ? `${i === 0 && !(b && b.abajo != null) ? "[" : "("}${fmtN(a)}, ${fmtN(z)}]` : `[${fmtN(a)}, ${fmtN(z)}${i === nb - 1 && !(b && b.arriba != null) ? "]" : ")"}`;
+          return { etiqueta, valor: datos.filter((x) => (izqC ? (x > a || (i === 0 && x >= a)) && x <= z + 1e-9 : x >= a - 1e-9 && (x < z || (i === nb - 1 && x <= z))) && x >= lo0 - 1e-9 && x <= hi0 + 1e-9).length };
+        });
+        if (b && b.abajo != null) barras.unshift({ etiqueta: `≤${fmtN(b.abajo)}`, valor: datos.filter((x) => x <= b.abajo).length });
+        if (b && b.arriba != null) barras.push({ etiqueta: `>${fmtN(b.arriba)}`, valor: datos.filter((x) => x > b.arriba).length });
+      } else barras = cats.map((c, i) => ({ etiqueta: c.join(" "), valor: vals[i] || 0 }));
+      if (tipo === "pareto") barras = barras.map((x, i) => Object.assign(x, { i })).sort((p, q) => q.valor - p.valor || p.i - q.i);
+      const mx = Math.max(0, ...barras.map((x) => x.valor));
+      const f = marco(0, mx, barras.map((x) => x.etiqueta), tipo === "pareto");
+      const hueco = ejeC.hueco != null ? ejeC.hueco : 0, bw = f.anchoC / (1 + hueco), col = acc(0);
+      barras.forEach((x, i) => {
+        const bx = f.x0 + f.anchoC * i + (f.anchoC - bw) / 2, y = f.yv(x.valor);
+        partes.push(`<rect x="${n2(bx)}" y="${n2(y)}" width="${n2(bw)}" height="${n2(Math.max(0, f.y1 - y))}" fill="${col}" stroke="#FFFFFF" stroke-width="${n2(0.75 * pt)}"/>`);
+      });
+      partes.push(`<line x1="${n2(f.x0)}" y1="${n2(f.y1)}" x2="${n2(f.x1)}" y2="${n2(f.y1)}" stroke="#D9D9D9" stroke-width="${n2(0.75 * pt)}"/>`);
+      if (tipo === "pareto") {
+        const tot = barras.reduce((s, x) => s + x.valor, 0) || 1;
+        let acum = 0;
+        const pts = barras.map((x, i) => { acum += x.valor; return `${n2(f.x0 + f.anchoC * (i + 0.5))},${n2(f.y1 - (acum / tot) * (f.y1 - f.y0))}`; });
+        partes.push(`<polyline points="${pts.join(" ")}" fill="none" stroke="${acc(1)}" stroke-width="${n2(2.25 * pt)}" stroke-linejoin="round" stroke-linecap="round"/>`);
+      }
+      return fin();
+    }
+
+    if (tipo === "caja") {
+      // grupos por categoría (o uno solo, «1»)
+      const grupos = new Map();
+      vals.forEach((v, i) => { if (v == null) return; const k = cats.length ? (cats[i] || []).join(" ") : "1"; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(v); });
+      if (!grupos.size) return fin();
+      const todosV = [...grupos.values()].flat();
+      const f = marco(Math.min(...todosV), Math.max(...todosV), [...grupos.keys()], false);
+      const hueco = ejeC.hueco != null ? ejeC.hueco : 1, bw = f.anchoC / (1 + hueco), col = acc(0), borde = oscuro(col, 0.7), sw = n2(Math.max(0.5, 0.75 * pt));
+      [...grupos.values()].forEach((g, i) => {
+        const ord = g.slice().sort((a, b) => a - b), exc = m.cuartil !== "inclusive";
+        const q1 = cuartil(ord, 0.25, exc), q2 = cuartil(ord, 0.5, exc), q3 = cuartil(ord, 0.75, exc), iqr = q3 - q1;
+        const dentro = ord.filter((x) => x >= q1 - 1.5 * iqr - 1e-9 && x <= q3 + 1.5 * iqr + 1e-9), fuera = ord.filter((x) => !dentro.includes(x));
+        const lo = Math.min(...dentro), hi = Math.max(...dentro), media = ord.reduce((s, x) => s + x, 0) / ord.length;
+        const cx = f.x0 + f.anchoC * (i + 0.5), bx = cx - bw / 2, tapa = bw * 0.3;
+        partes.push(`<line x1="${n2(cx)}" y1="${n2(f.yv(hi))}" x2="${n2(cx)}" y2="${n2(f.yv(lo))}" stroke="${borde}" stroke-width="${sw}"/>`);
+        [hi, lo].forEach((v) => partes.push(`<line x1="${n2(cx - tapa / 2)}" y1="${n2(f.yv(v))}" x2="${n2(cx + tapa / 2)}" y2="${n2(f.yv(v))}" stroke="${borde}" stroke-width="${sw}"/>`));
+        partes.push(`<rect x="${n2(bx)}" y="${n2(f.yv(q3))}" width="${n2(bw)}" height="${n2(Math.max(0, f.yv(q1) - f.yv(q3)))}" fill="${col}" stroke="${borde}" stroke-width="${sw}"/>`);
+        partes.push(`<line x1="${n2(bx)}" y1="${n2(f.yv(q2))}" x2="${n2(bx + bw)}" y2="${n2(f.yv(q2))}" stroke="${borde}" stroke-width="${sw}"/>`);
+        const punto = (v) => partes.push(`<circle cx="${n2(cx)}" cy="${n2(f.yv(v))}" r="${n2(2 * pt)}" fill="${col}" stroke="${borde}" stroke-width="${sw}"/>`);
+        if (m.vis.puntos) dentro.filter((x) => x !== lo && x !== hi).forEach(punto);   // (en las puntas del bigote no: ahí está la tapa)
+        if (m.vis.atipicos) fuera.forEach(punto);
+        if (m.vis.media) { const r = 3.5 * pt, y = f.yv(media); partes.push(`<path d="M${n2(cx - r)} ${n2(y - r)}L${n2(cx + r)} ${n2(y + r)}M${n2(cx + r)} ${n2(y - r)}L${n2(cx - r)} ${n2(y + r)}" stroke="${borde}" stroke-width="${n2(1.1 * pt)}" fill="none"/>`); }
+      });
+      partes.push(`<line x1="${n2(f.x0)}" y1="${n2(f.y1)}" x2="${n2(f.x1)}" y2="${n2(f.y1)}" stroke="#D9D9D9" stroke-width="${n2(0.75 * pt)}"/>`);
+      return fin();
+    }
+
+    if (tipo === "cascada") {
+      leyenda([{ texto: "Aumento", color: acc(0) }, { texto: "Disminución", color: acc(1) }, { texto: "Total", color: acc(2) }]);
+      let corre = 0;
+      const pasos = vals.map((v, i) => {
+        const x = v || 0;
+        if (m.totales.includes(i)) { corre = x; return { de: 0, a: x, tipo: 2 }; }
+        const de = corre; corre += x; return { de, a: corre, tipo: x < 0 ? 1 : 0 };
+      });
+      const extremos = pasos.flatMap((p) => [p.de, p.a]).concat(0);
+      const f = marco(Math.min(...extremos), Math.max(...extremos), vals.map((_, i) => (cats[i] || []).join(" ") || String(i + 1)), false);
+      const hueco = ejeC.hueco != null ? ejeC.hueco : 0.5, bw = f.anchoC / (1 + hueco);
+      pasos.forEach((p, i) => {
+        const bx = f.x0 + f.anchoC * i + (f.anchoC - bw) / 2, ya = f.yv(Math.max(p.de, p.a)), yb = f.yv(Math.min(p.de, p.a));
+        partes.push(`<rect x="${n2(bx)}" y="${n2(ya)}" width="${n2(bw)}" height="${n2(Math.max(0.5, yb - ya))}" fill="${acc(p.tipo)}"/>`);
+        // la línea que une cada columna con la siguiente, a la altura donde quedó
+        if (i + 1 < pasos.length) partes.push(`<line x1="${n2(bx + bw)}" y1="${n2(f.yv(p.a))}" x2="${n2(bx + f.anchoC)}" y2="${n2(f.yv(p.a))}" stroke="#D9D9D9" stroke-width="${n2(0.75 * pt)}"/>`);
+      });
+      partes.push(`<line x1="${n2(f.x0)}" y1="${n2(f.y0)}" x2="${n2(f.x0)}" y2="${n2(f.y1)}" stroke="#D9D9D9" stroke-width="${n2(0.75 * pt)}"/>`);
+      partes.push(`<line x1="${n2(f.x0)}" y1="${n2(f.y1)}" x2="${n2(f.x1)}" y2="${n2(f.y1)}" stroke="#D9D9D9" stroke-width="${n2(0.75 * pt)}"/>`);
+      return fin();
+    }
+
+    if (tipo === "embudo") {
+      const etiquetas = vals.map((_, i) => (cats[i] || []).join(" ") || String(i + 1)), lc = L();
+      const x0 = izq + Math.max(0, ...etiquetas.map((e) => medir(e, lc.tam * pt, fam(lc.f)))) + 8 * pt, x1 = der, y0 = arriba, y1 = abajo;
+      const mx = Math.max(0, ...vals.map((v) => Math.abs(v || 0))) || 1, altoC = (y1 - y0) / Math.max(1, vals.length);
+      const hueco = ejeC.hueco != null ? ejeC.hueco : 0.06, bh = altoC / (1 + hueco), cx = (x0 + x1) / 2;
+      vals.forEach((v, i) => {
+        const bw = (Math.abs(v || 0) / mx) * (x1 - x0), y = y0 + altoC * i + (altoC - bh) / 2;
+        partes.push(`<rect x="${n2(cx - bw / 2)}" y="${n2(y)}" width="${n2(bw)}" height="${n2(bh)}" fill="${acc(0)}"/>`);
+        t(x0 - 8 * pt, y0 + altoC * (i + 0.5) + lc.tam * pt * 0.35, etiquetas[i], lc, "end");
+      });
+      partes.push(`<line x1="${n2(x0)}" y1="${n2(y0)}" x2="${n2(x0)}" y2="${n2(y1)}" stroke="#D9D9D9" stroke-width="${n2(0.75 * pt)}"/>`);
+      return fin();
+    }
+
+    if (tipo === "rectangulos" || tipo === "solar") {
+      // el árbol: primer nivel (color) → hojas, con sus sumas; de mayor a menor como Excel
+      const raiz = { hijos: [], valor: 0 };
+      vals.forEach((v, i) => {
+        if (v == null || !(v > 0)) return;
+        let nodo = raiz;
+        (cats[i] && cats[i].length ? cats[i] : [String(i + 1)]).forEach((nm) => {
+          let h2 = nodo.hijos.find((x) => x.nombre === nm);
+          if (!h2) { h2 = { nombre: nm, hijos: [], valor: 0, orden: nodo.hijos.length }; nodo.hijos.push(h2); }
+          h2.valor += v; nodo = h2;
+        });
+        raiz.valor += v;
+      });
+      const grupos = raiz.hijos;
+      grupos.forEach((g, k) => { g.color = acc(k); });
+      const pintarColor = (nodo, c) => { nodo.color = nodo.color || c; nodo.hijos.forEach((x) => pintarColor(x, nodo.color)); };
+      grupos.forEach((g) => pintarColor(g, g.color));
+      const ordenar = (nodo) => { nodo.hijos.sort((a, b) => b.valor - a.valor || a.orden - b.orden); nodo.hijos.forEach(ordenar); };
+      if (tipo === "rectangulos") leyenda(grupos.map((g) => ({ texto: g.nombre, color: g.color })));
+      ordenar(raiz);
+      const linea = n2(Math.max(0.75, 1.5 * pt));
+      if (tipo === "rectangulos") {
+        const dibujar = (nodo, r) => {
+          if (!nodo.hijos.length) { partes.push(`<rect x="${n2(r.x)}" y="${n2(r.y)}" width="${n2(r.w)}" height="${n2(r.h)}" fill="${nodo.color}" stroke="#FFFFFF" stroke-width="${linea}"/>`); return; }
+          cuadricular(nodo.hijos.map((x) => x.valor), r.x, r.y, r.w, r.h).forEach((q, i) => dibujar(nodo.hijos[i], q));
+        };
+        dibujar(raiz, { x: izq, y: arriba, w: der - izq, h: abajo - arriba });
+        return fin();
+      }
+      // proyección solar: anillos del centro hacia afuera, desde las 12 y en el sentido del reloj
+      const prof = (nodo) => (nodo.hijos.length ? 1 + Math.max(...nodo.hijos.map(prof)) : 0), niveles = Math.max(1, prof(raiz));
+      const cx = (izq + der) / 2, cy = (arriba + abajo) / 2, R = Math.max(1, Math.min(der - izq, abajo - arriba) / 2), grueso = R / (niveles + 1);
+      const p = (r, a) => `${n2(cx + r * Math.sin(a))} ${n2(cy - r * Math.cos(a))}`;
+      const gajo = (r0, r1, a0, a1, c) => {
+        if (a1 - a0 >= Math.PI * 2 - 1e-6) a1 = a0 + Math.PI * 2 - 1e-4;
+        const g = a1 - a0 > Math.PI ? 1 : 0;
+        partes.push(`<path d="M${p(r1, a0)}A${n2(r1)} ${n2(r1)} 0 ${g} 1 ${p(r1, a1)}L${p(r0, a1)}A${n2(r0)} ${n2(r0)} 0 ${g} 0 ${p(r0, a0)}Z" fill="${c}" stroke="#FFFFFF" stroke-width="${linea}"/>`);
+      };
+      const anillo = (nodo, nivel, a0, a1) => {
+        let a = a0;
+        nodo.hijos.forEach((x) => { const b2 = a + ((a1 - a0) * x.valor) / (nodo.valor || 1); gajo(grueso * (nivel + 1), grueso * (nivel + 2), a, b2, x.color); anillo(x, nivel + 1, a, b2); a = b2; });
+      };
+      anillo(raiz, 0, 0, Math.PI * 2);
+      return fin();
+    }
+    return fin();
+  }
+
+  NOM.graficaOffice = { leer, leerEx, svg, escala };
 })();

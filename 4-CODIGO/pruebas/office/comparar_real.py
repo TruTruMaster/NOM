@@ -146,8 +146,8 @@ def pdf_a_png(pdf, carpeta, dpi=96):
 
 def lado_a_lado(a, b, ruta, titulo=""):
     """Office | NOM-COLAB | diferencias."""
-    A = Image.open(a).convert("RGB") if a else None
-    B = Image.open(b).convert("RGB") if b else None
+    A = sobre_blanco(a) if a else None
+    B = sobre_blanco(b) if b else None
     w = max(x.width for x in (A, B) if x); h = max(x.height for x in (A, B) if x)
     lienzo = Image.new("RGB", (w * 3 + 40, h + 30), "white")
     d = ImageDraw.Draw(lienzo)
@@ -217,8 +217,11 @@ JS_CELDAS = r"""
   if (!rej) return { celdas: {}, cols: [], filas: [] };
   rej.querySelectorAll('td[data-c]').forEach((td) => {
     const cs = getComputedStyle(td);
-    out[(+td.dataset.f + 1) + ',' + (+td.dataset.c + 1)] = { t: td.innerText, fondo: cs.backgroundColor, color: cs.color, b: +cs.fontWeight >= 600, i: cs.fontStyle === 'italic',
+    const x = out[(+td.dataset.f + 1) + ',' + (+td.dataset.c + 1)] = { t: td.innerText, fondo: cs.backgroundColor, img: cs.backgroundImage, color: cs.color, b: +cs.fontWeight >= 600, i: cs.fontStyle === 'italic',
       al: cs.textAlign, fuente: cs.fontFamily, tam: parseFloat(cs.fontSize) * 0.75, w: td.getBoundingClientRect().width, h: td.getBoundingClientRect().height };
+    // las celdas que tapa una combinada tienen su relleno (en Excel cada una lo reporta) y ningún texto
+    for (let dy = 0; dy < (td.rowSpan || 1); dy++) for (let dx = 0; dx < (td.colSpan || 1); dx++)
+      if (dx || dy) out[(+td.dataset.f + 1 + dy) + ',' + (+td.dataset.c + 1 + dx)] = Object.assign({}, x, { t: '' });
   });
   // ancho PINTADO de cada columna (el de su encabezado), no el que dice el <col>
   const cols = [...rej.querySelectorAll('thead th[data-col]')].map((th) => th.getBoundingClientRect().width);
@@ -266,10 +269,16 @@ def importar(nav, esp, archivo):
     return r
 
 
+def sobre_blanco(ruta):
+    """La imagen sobre fondo blanco (Excel exporta las gráficas con fondo transparente)."""
+    im = Image.open(ruta).convert("RGBA"); fondo = Image.new("RGBA", im.size, "white")
+    return Image.alpha_composite(fondo, im).convert("RGB")
+
+
 def parecido_img(a, b, tam=(480, 270)):
     """Qué tanto se parecen dos imágenes (0 a 100): 100 - diferencia media por píxel en escala de grises reducida."""
     import numpy as np
-    A = np.asarray(Image.open(a).convert("L").resize(tam), dtype=float); B = np.asarray(Image.open(b).convert("L").resize(tam), dtype=float)
+    A = np.asarray(sobre_blanco(a).convert("L").resize(tam), dtype=float); B = np.asarray(sobre_blanco(b).convert("L").resize(tam), dtype=float)
     return round(100 - np.abs(A - B).mean() / 2.55, 1)
 
 
@@ -325,7 +334,10 @@ def medir_xlsx(nav, esp, archivo, carpeta, verdad, nombre):
             elif len(malas) < 60: malas.append({"celda": k, "excel": to, "nom": tn, "formula": c.get("formula")})
             if c.get("fondo"):
                 tot_fondo += 1
-                if n and rgb_hex(n["fondo"]) == c["fondo"]: ok_fondo += 1
+                # degradado (4000 lineal, 4001 desde el centro): Excel no da un color de relleno; basta que se pinte un degradado
+                if c.get("trama") in (4000, 4001): bien = bool(n) and ("gradient" in (n.get("img") or "") or "svg" in (n.get("img") or ""))
+                else: bien = bool(n) and rgb_hex(n["fondo"]) == c["fondo"]
+                if bien: ok_fondo += 1
                 elif len(fondos_malos) < 40: fondos_malos.append({"celda": k, "excel": c["fondo"], "trama": c.get("trama"), "nom": (n or {}).get("fondo")})
         for col in h.get("columnas", [])[:30]:
             j = col["c"] - 1
@@ -348,6 +360,29 @@ def medir_xlsx(nav, esp, archivo, carpeta, verdad, nombre):
             off.crop((max(0, x0), max(0, y0), max(0, x0) + 1250, max(0, y0) + 800)).save(carpeta / f"office-h{hi + 1}.png")
             lado_a_lado(carpeta / f"office-h{hi + 1}.png", ruta, carpeta / f"lado-h{hi + 1}.png", h["nombre"])
             hoja["parecido"] = parecido_img(carpeta / f"office-h{hi + 1}.png", ruta, (625, 400))
+        # cada gráfica contra la imagen que Excel sacó de ella (Chart.Export): se busca la de NOM-COLAB por su lugar
+        if h.get("graficas"):
+            nom_g = p.evaluate("""() => {
+              const a1 = document.querySelector('td[data-c="0"][data-f="0"]'); if (!a1) return [];
+              const r0 = a1.getBoundingClientRect();
+              return [...document.querySelectorAll('.xl-dibujos > .xl-dib')].map((el, i) => { const r = el.getBoundingClientRect(); return { i, x: r.left - r0.left, y: r.top - r0.top, w: r.width, h: r.height, vacio: el.classList.contains('xl-dib-vacio'), svg: !!el.querySelector('svg') }; });
+            }""")
+            hoja["graficas"] = []
+            for gi, g in enumerate(h["graficas"]):
+                png = REAL / "verdad" / (g.get("png") or "")
+                if not g.get("png") or not png.exists(): continue
+                try: Image.open(png).load()
+                except Exception: hoja["graficas"].append({"titulo": g.get("titulo"), "tipo": g.get("tipo"), "sin_referencia": True}); continue
+                ex, ey = g["x"] * 96 / 72, g["y"] * 96 / 72
+                cands = sorted(nom_g, key=lambda e: abs(e["x"] - ex) + abs(e["y"] - ey) + abs(e["w"] - g["w"] * 96 / 72) + abs(e["h"] - g["h"] * 96 / 72))
+                d = {"titulo": g.get("titulo"), "tipo": g.get("tipo")}
+                if cands and abs(cands[0]["x"] - ex) + abs(cands[0]["y"] - ey) < 40:
+                    e = cands[0]; ruta_g = carpeta / f"nom-h{hi + 1}-g{gi + 1}.png"
+                    p.locator(".xl-dibujos > .xl-dib").nth(e["i"]).screenshot(path=str(ruta_g))
+                    d.update(vacio=e["vacio"], parecido=parecido_img(png, ruta_g, (360, 250)))
+                    lado_a_lado(png, ruta_g, carpeta / f"lado-h{hi + 1}-g{gi + 1}.png", str(g.get("titulo") or ""))
+                else: d["falta"] = True
+                hoja["graficas"].append(d)
         res["hojas"].append(hoja)
     res.update(celdas=tot_txt, texto_igual=ok_txt, pct_texto=round(100 * ok_txt / max(1, tot_txt), 1), fondos=tot_fondo, fondo_igual=ok_fondo,
                pct_fondo=round(100 * ok_fondo / max(1, tot_fondo), 1), columnas=tot_col, ancho_igual=ok_col, pct_ancho=round(100 * ok_col / max(1, tot_col), 1),
@@ -390,6 +425,9 @@ def comparar(archivo, movil, salida, nav, esp):
     else:
         print(f"{archivo.name}: hojas {rep.get('hojas_visibles_office')} / {rep.get('hojas_nom')} · texto de celdas igual {rep.get('pct_texto')} % de {rep.get('celdas')} · "
               f"fondos {rep.get('pct_fondo')} % de {rep.get('fondos')} · anchos de columna {rep.get('pct_ancho')} % · altos de fila {rep.get('pct_alto')} %", flush=True)
+        for h in rep.get("hojas", []):
+            for g in h.get("graficas", []):
+                print(f"   gráfica {g.get('titulo')!s:32} {'sin imagen de Excel' if g.get('sin_referencia') else 'falta' if g.get('falta') else ('vacía ' if g.get('vacio') else '') + str(g.get('parecido')) + ' %'}", flush=True)
     return rep
 
 

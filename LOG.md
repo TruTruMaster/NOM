@@ -1318,12 +1318,35 @@ y que se pueda encontrar en Google y los demás buscadores buscando «nomcolab»
   `no-cache` (Cloudflare los guardaba 4 horas).
 
 
-## 68. Formas y cuadros de texto de Word (para la 0.15.3, 16 de noviembre de 2026)
+## 68. 0.15.3: formas de Word, Excel alineado y rellenado como Excel y sus gráficas nuevas (16 de noviembre de 2026)
 
 - **Formas y cuadros de texto de Word** (wps, también los que Word 2010 envuelve en `mc:AlternateContent`): su
   geometría de Office con sus ajustes, relleno, contorno, texto con su letra y alineación, giro, volteo y texto
   vertical, en su lugar desde el párrafo y la columna (delante o detrás del texto). Las que Word rodea «arriba y
   abajo» apartan su franja del texto del párrafo. Documento de objetos: páginas 17 → 18 (como Word), renglones
   idénticos 73.0 → 77.0 %, en su página 54.1 → 60.8 %.
-- **Falta:** rellenos con degradado, trama o imagen en las formas de Word, puntas y guiones de las líneas, efectos
-  (sombra, resplandor), grupos de formas y lienzos de dibujo.
+- **Excel, alineación completa** (importador de Excel versión 4): vertical (arriba, centro, abajo, justificada,
+  distribuida), sangría (9 px por nivel), texto girado y apilado como Excel, «Rellenar», «Reducir hasta ajustar» y
+  «Centrar en la selección». El texto que no cabe se desborda a la izquierda si va a la derecha y a los dos lados si
+  va centrado, se corta en la primera celda con algo y tapa la cuadrícula. Las filas de alto fijo recortan lo que no
+  cabe y los altos van en píxeles enteros como Excel (80.1 pt → 106 px); el texto ajustado va a renglones de 20 px.
+- **Excel, rellenos:** las 18 tramas píxel por píxel (medidas en la captura de Excel), degradados lineales y
+  «desde el centro», bordes en diagonal y los «####» con el ancho entero del «#» de Windows. Hoja de formato:
+  texto de celdas igual 97.1 → 100 %, rellenos iguales 67.5 → 100 %.
+- **Gráficas nuevas de Excel** (histograma, Pareto, cajas y bigotes, cascada, rectángulos, proyección solar y
+  embudo; antes un recuadro vacío): con sus datos vivos de la hoja y las reglas de Excel (intervalos por la regla de
+  Scott, cuartiles exclusivos, acomodo «cuadrado» de los rectángulos). Contra la imagen que exporta Excel: 96 a 98 %.
+- **Medir:** `comparar_real.py` compara también cada gráfica contra la que exporta Excel; `verdad.py` lleva la ventana
+  a cada gráfica antes de exportarla (Excel las exporta vacías si no se ven) y, si Office se traba, cierra solo el
+  proceso que abrió.
+- **En modo Excel** un cambio de valores repinta la hoja completa (los desbordes, los giros y los «####» dependen de
+  las celdas vecinas). Los campos nuevos de la celda (`ax:`, `rx:`, también `bx:` y `tp:`) se mueven al insertar,
+  eliminar u ordenar y van con «copiar formato»; alinear o rellenar desde la app quita lo de Excel que estorba.
+- **Versión 0.15.3** (interfaz 19: el documento guarda la alineación y los rellenos de Excel), APK código 29.
+- **Pruebas:** `regresion.sh rapido` bien (seguridad 380 de 380, cuentas 61 de 61, funciones 201 de 201; `rastreo`
+  solo con las 5 marcas conocidas desde la 0.14.2), ediciones 206 de 206, fidelidad 99.9 % en 123 archivos (Word
+  y PowerPoint 100 %, Excel 99.8 %), pantalla 32 de 32, validador de Microsoft 206 de 206, los 8 libros de Excel
+  de verdad con texto, anchos y altos iguales (x02 98.3 % por el motor de fórmulas).
+- **Falta:** gráficas 3D, la circular separada y los estilos de gráfica 205 y 209 (86 a 88 %); matrices dinámicas,
+  LET y LAMBDA en el motor de fórmulas; en las formas de Word, rellenos con degradado, trama o imagen, puntas y
+  guiones de las líneas, efectos, grupos de formas y lienzos de dibujo.

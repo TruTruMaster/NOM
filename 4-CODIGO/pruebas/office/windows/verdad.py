@@ -17,15 +17,30 @@ SALE = os.path.join(ARCHIVOS, "verdad")
 os.makedirs(SALE, exist_ok=True)
 
 
-def vigilar(segundos, proceso, que):
-    """Si Office se queda trabado (un aviso de reparar invisible), lo cierra y lo anota."""
+def pids(imagen):
+    """Los procesos con ese nombre que corren ahora (para saber cuál abrimos nosotros)."""
+    salida = os.popen(f'tasklist /FI "IMAGENAME eq {imagen}" /FO CSV /NH').read()
+    return {int(c.split('","')[1]) for c in salida.splitlines() if c.startswith('"') and '","' in c and c.split('","')[1].isdigit()}
+
+
+def vigilar(segundos, proceso, que, pid=None):
+    """Si Office se queda trabado (un aviso de reparar invisible), cierra SOLO el proceso que abrimos nosotros
+    (nunca un Office que la persona tenga abierto) y lo anota. Sin saber cuál es, solo avisa."""
     ev = threading.Event()
     def fin():
         if not ev.wait(segundos):
-            print(f"  [trabado] {que}: más de {segundos} s; se cierra {proceso}", flush=True)
-            os.system(f"taskkill /F /IM {proceso} >nul 2>&1")
+            if pid:
+                print(f"  [trabado] {que}: más de {segundos} s; se cierra {proceso} (proceso {pid}, el nuestro)", flush=True)
+                os.system(f"taskkill /F /PID {pid} >nul 2>&1")
+            else: print(f"  [trabado] {que}: más de {segundos} s; no se cierra nada (no se sabe cuál {proceso} es el nuestro)", flush=True)
     threading.Thread(target=fin, daemon=True).start()
     return ev
+
+
+def nuevo(imagen, antes):
+    """El proceso que apareció al abrir Office, si fue exactamente uno."""
+    n = pids(imagen) - antes
+    return next(iter(n)) if len(n) == 1 else None
 
 
 # ------------------------------------------------------------------------------------------- Word
@@ -34,9 +49,10 @@ HISTORIAS = {1: "cuerpo", 2: "notas", 3: "notasfinales", 4: "comentarios", 5: "c
 
 
 def verdad_word(ruta, nombre):
+    antes = pids("WINWORD.EXE")
     w = word()
     datos = {"archivo": os.path.basename(ruta), "app": "word", "abrio": False}
-    ev = vigilar(240, "WINWORD.EXE", nombre)
+    ev = vigilar(240, "WINWORD.EXE", nombre, nuevo("WINWORD.EXE", antes))
     try:
         t0 = time.time()
         try:
@@ -160,9 +176,10 @@ def captura_hoja(x, wb, ws, ruta):
 
 
 def verdad_excel(ruta, nombre):
+    antes = pids("EXCEL.EXE")
     x = excel()
     datos = {"archivo": os.path.basename(ruta), "app": "excel", "abrio": False, "hojas": []}
-    ev = vigilar(600, "EXCEL.EXE", nombre)
+    ev = vigilar(600, "EXCEL.EXE", nombre, nuevo("EXCEL.EXE", antes))
     try:
         t0 = time.time()
         try: wb = x.Workbooks.Open(ruta, 0, True, None, None, None, True, None, None, False, False, None, False, None, 0)
@@ -227,8 +244,17 @@ def verdad_excel(ruta, nombre):
                 try: g["tipo"] = co.Chart.ChartType; g["titulo"] = co.Chart.ChartTitle.Text if co.Chart.HasTitle else None
                 except Exception: pass
                 png = os.path.join(SALE, f"{nombre}-h{hi}-g{k}.png")
-                try: co.Chart.Export(png, "PNG"); g["png"] = os.path.basename(png)
-                except Exception as e: g["error_png"] = str(e)[:100]
+                # Excel exporta vacía una gráfica que no está a la vista: se lleva la ventana a ella (y se reintenta)
+                for intento in range(3):
+                    try:
+                        if intento or k > 1:
+                            win = wb.Windows(1); win.ScrollRow = max(1, co.TopLeftCell.Row - 1); win.ScrollColumn = max(1, co.TopLeftCell.Column - 1)
+                            if intento: co.Activate()
+                            time.sleep(0.4 + intento)
+                        co.Chart.Export(png, "PNG")
+                        if os.path.exists(png) and os.path.getsize(png) > 0: g["png"] = os.path.basename(png); break
+                    except Exception as e: g["error_png"] = str(e)[:100]
+                else: g["error_png"] = g.get("error_png") or "Excel la exportó vacía"
                 graficas.append(g)
             h["graficas"] = graficas
             formas = []
@@ -304,9 +330,10 @@ def forma_ppt(sh, prof=0):
 
 
 def verdad_powerpoint(ruta, nombre):
+    antes = pids("POWERPNT.EXE")
     p = powerpoint()
     datos = {"archivo": os.path.basename(ruta), "app": "powerpoint", "abrio": False, "diapositivas": []}
-    ev = vigilar(600, "POWERPNT.EXE", nombre)
+    ev = vigilar(600, "POWERPNT.EXE", nombre, nuevo("POWERPNT.EXE", antes))
     try:
         try: p.Visible = True
         except Exception: pass

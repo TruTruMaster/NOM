@@ -201,3 +201,52 @@ Word: secciones con otro tamaño u orientación, columnas, objetos flotantes (cu
 imágenes) y la división automática de palabras; Excel: tramas y degradados en celdas, bordes diagonales, texto
 girado y alineación vertical, filas de alto fijo que recortan; PowerPoint: tablas con su estilo y SmartArt;
 la vuelta (lo exportado abierto en Office real) y la paridad en la app de Android.
+
+### Tanda 3 (16 de noviembre de 2026, versiones 0.15.2 y 0.15.3)
+
+**Word (0.15.2 y 0.15.3):** estilos de tabla por capas según `tblLook`, numeración como la escribe Word («Chapter %1»,
+«%1.%2», una cuenta por lista), imágenes flotantes (sin ajuste, cuadrado, estrecho, arriba y abajo), gráficos de
+Word con el dibujante de Office y formas y cuadros de texto (`wps`) con su geometría, relleno, contorno y texto, en
+su lugar; las que van «arriba y abajo» apartan su franja del texto. Documento de objetos: 18 páginas como Word,
+renglones idénticos 57.4 → 77.0 %.
+
+**Excel como Excel (0.15.3, importador de Excel versión 4):**
+
+| Lo nuevo | Cómo lo hace Excel (medido) |
+|---|---|
+| Alineación completa (`ax:`) | Vertical arriba, centro, abajo, justificada y distribuida; sangría de 9 px por nivel; texto girado (a 90° pegado a la derecha, a −90° a la izquierda, los demás a la izquierda) y apilado (letras de 20 px, al centro); «Rellenar» repite el texto con copias enteras; «Reducir hasta ajustar» achica la letra; «Centrar en la selección» sobre las vacías de la derecha que también lo piden; justificado y distribuido ajustan el texto |
+| Texto desbordado | A la derecha si va a la izquierda, a la izquierda si va a la derecha, a los dos lados si va centrado; se corta en la primera celda con algo y la cuadrícula no se dibuja donde pasa el texto |
+| Filas de alto fijo | Lo que no cabe se corta (abajo, arriba o al centro, como la celda); también el número de la fila. El alto se dibuja con los píxeles enteros que caben: 80.1 pt → 106 px, 27.95 → 37, 3.95 → 5 |
+| Texto ajustado | Renglones de 20 px con Calibri o Aptos de 11 (n renglones = 20 n px, como Excel) |
+| Tramas (`rx:`) | Las 18 de Excel píxel por píxel (mosaicos de 8 × 8 medidos en la captura de Excel, contados desde la esquina de A1); `lightVertical`, `lightDown` y `lightUp` salen de sus versiones gruesas (el archivo de prueba no las tiene) |
+| Degradados | Lineal con su ángulo y «desde el centro» (o desde una esquina) como cuatro cuñas del rectángulo interior hacia las orillas |
+| Bordes en diagonal | De abajo a arriba y de arriba a abajo, con su estilo y color, sobre el relleno |
+| «####» | Tantos como caben con el ancho entero con que Windows dibuja el «#» (7 px en Aptos Narrow de 11, no 7.3) |
+| Gráficas nuevas (`cx:chartSpace`) | Histograma (intervalos por la regla de Scott con desviación de muestra y dos cifras: 21.74 → 22), Pareto (intervalos de mayor a menor y la línea acumulada en el eje de la derecha), cajas y bigotes (cuartiles exclusivos o inclusivos, bigotes a 1.5 veces el rango, puntos y la media con «×»), cascada (aumento, disminución y total con sus líneas de unión), rectángulos (acomodo «cuadrado» de Bruls), proyección solar (anillos desde las 12 en punto, de mayor a menor) y embudo. Los datos vienen de nombres ocultos `_xlchart.v1.N`: se dibujan con los valores vivos |
+
+| Archivo (Excel de verdad) | Antes | 0.15.3 |
+|---|---|---|
+| x01 formato: texto de celdas igual | 97.1 % | 100 % |
+| x01 formato: rellenos iguales | 67.5 % | 100 % |
+| x01 hoja «Alineación» (parecido de la captura) | 96.7 % | 97.8 % (todos los altos de fila como Excel) |
+| x01 hoja «Relleno y bordes» | 96.0 % | 97.1 % |
+| x04: las 7 gráficas nuevas (parecido con la imagen que exporta Excel) | 59.6 a 92.6 % (recuadro vacío) | 96.3 a 97.9 % |
+| x02 a x08: texto, anchos y altos | 100 % (x02 98.3 %) | igual |
+
+**Cómo medir cada gráfica:** `comparar_real.py ARCHIVO.xlsx` compara además cada gráfica contra la imagen que Excel
+exporta de ella (`Chart.Export`): busca la de NOM-COLAB por su lugar y deja `lado-hN-gM.png`. Excel exporta vacía
+una gráfica que no está a la vista: `windows/verdad.py` lleva la ventana a cada una y reintenta (antes faltaban 21
+de las 37 imágenes de x04). Si Office se traba, `verdad.py` cierra solo el proceso que abrió (nunca un Office que
+la persona tenga abierto).
+
+**Hallazgos sin cambiar todavía:** Excel vuelve a calcular al abrir el alto de una fila sin alto fijo que tiene
+texto ajustado (en x01 una fila guardada con 75 pt se ve de 45): pasó una vez en los 8 libros y aquí se respeta lo
+guardado. x02: lo que da distinto es del motor de fórmulas: matrices dinámicas (ORDENAR, FILTRAR, UNICOS,
+SECUENCIA, TOMAR, APILARV, DIVIDIRTEXTO, BYROW, MAP), LET, LAMBDA y TIR con una matriz escrita.
+
+**Lo que sigue (por impacto):** las gráficas 3D (columnas 3D 84.9 %, circular 3D 85.6 %), la circular separada
+(88.2 %) y los estilos de gráfica 205 y 209 (86 a 88 %); matrices dinámicas, LET y LAMBDA en el motor de fórmulas;
+Word: rellenos con degradado, trama o imagen en las formas, puntas y guiones de las líneas, grupos y lienzos,
+secciones de otro tamaño u orientación, columnas, puntos guía del índice y la división automática de palabras; la
+vuelta en Office real y la paridad en la app de Android.
+

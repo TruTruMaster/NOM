@@ -2718,7 +2718,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
   // Versiones del importador de Excel (lo que se guarda y lo que se exporta se compara con la misma versión):
   // 1 la primera · 2 formato de números y medidas de Excel · 3 tinte exacto de Excel, colores indexados, bordes
   // con su estilo y color, y los estilos de tabla (los que Excel trae de fábrica y los del libro).
-  const VERSION_XL = 3;
+  const VERSION_XL = 4;
   function modeloXlsx(z, version) {
     const V = version || VERSION_XL;
     const P = (t) => new DOMParser().parseFromString(t, "application/xml");
@@ -2771,14 +2771,47 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     };
     const fuentes = todos(hijo(est.documentElement, "fonts"), "font").map((f) => ({ nombre: at(hijo(f, "name"), "val") || null, b: !!hijo(f, "b") && at(hijo(f, "b"), "val") !== "0", i: !!hijo(f, "i") && at(hijo(f, "i"), "val") !== "0", u: !!hijo(f, "u") && at(hijo(f, "u"), "val") !== "none", k: hijo(f, "color") ? color(hijo(f, "color")) : null, sz: hijo(f, "sz") ? +at(hijo(f, "sz"), "val") : 11 }));
     const rellenos = todos(hijo(est.documentElement, "fills"), "fill").map((f) => { const p = hijo(f, "patternFill"); return p && at(p, "patternType") === "solid" && hijo(p, "fgColor") ? color(hijo(p, "fgColor")) : null; });
+    // (versión 4) Tramas y degradados de celda, para pintarlos como Excel: { t: trama, fg, bg } (fg: el color de la
+    // trama; bg: el de la celda) o { g: "lin", deg, p: paradas } / { g: "path", l, r, t, b, p } (desde el rectángulo
+    // interior hacia las orillas). En el relleno simple (r:) queda el color de la celda o la mezcla del degradado.
+    const rellenosX = V >= 4 ? todos(hijo(est.documentElement, "fills"), "fill").map((f) => {
+      const p = hijo(f, "patternFill"), g = hijo(f, "gradientFill");
+      if (p) {
+        const tp = at(p, "patternType");
+        if (!tp || tp === "none" || tp === "solid") return null;
+        return { t: tp, fg: (hijo(p, "fgColor") && color(hijo(p, "fgColor"))) || "#000000", bg: (hijo(p, "bgColor") && color(hijo(p, "bgColor"))) || "#FFFFFF" };
+      }
+      if (!g) return null;
+      const fr = (x) => Math.max(0, Math.min(1, +x || 0));
+      const pr = todos(g, "stop").map((q) => [fr(at(q, "position")), (hijo(q, "color") && color(hijo(q, "color"))) || "#FFFFFF"]).sort((a, b) => a[0] - b[0]);
+      if (!pr.length) return null;
+      return at(g, "type") === "path" ? { g: "path", l: fr(at(g, "left")), r: fr(at(g, "right")), t: fr(at(g, "top")), b: fr(at(g, "bottom")), p: pr } : { g: "lin", deg: +at(g, "degree") || 0, p: pr };
+    }) : [];
+    const mezcla = (a, b) => "#" + [1, 3, 5].map((i) => Math.round((parseInt(a.slice(i, i + 2), 16) + parseInt(b.slice(i, i + 2), 16)) / 2).toString(16).padStart(2, "0")).join("").toUpperCase();
+    const rellenoDe = (id) => rellenos[id] || (rellenosX[id] ? (rellenosX[id].t ? rellenosX[id].bg : mezcla(rellenosX[id].p[0][1], rellenosX[id].p[rellenosX[id].p.length - 1][1])) : null);
     const bordesX = todos(hijo(est.documentElement, "borders"), "border").map((b) => [["top", "a"], ["bottom", "b"], ["left", "i"], ["right", "d"]].map(([l, k]) => {
       const e = hijo(b, l), st = e && at(e, "style");
       return st && st !== "none" ? `${k}:${st}:${color(hijo(e, "color")) || "#000000"}` : "";
-    }).filter(Boolean).join(";"));
+    }).concat(V >= 4 ? (() => {
+      // (versión 4) las diagonales: u, de abajo a arriba; w, de arriba a abajo
+      const dg = hijo(b, "diagonal"), st = dg && at(dg, "style"), k = st && st !== "none" ? color(hijo(dg, "color")) || "#000000" : null;
+      return k ? [at(b, "diagonalUp") === "1" ? `u:${st}:${k}` : "", at(b, "diagonalDown") === "1" ? `w:${st}:${k}` : ""] : [];
+    })() : []).filter(Boolean).join(";"));
     const bordes = todos(hijo(est.documentElement, "borders"), "border").map((b) => ["top", "bottom", "left", "right"].map((l, k) => (hijo(b, l) && at(hijo(b, l), "style") ? "abid"[k] : "")).join(""));
     const xfs = todos(hijo(est.documentElement, "cellXfs"), "xf").map((xf) => {
       const al = hijo(xf, "alignment");
-      return { num: +at(xf, "numFmtId") || 0, fuente: fuentes[+at(xf, "fontId") || 0] || {}, relleno: rellenos[+at(xf, "fillId") || 0] || null, borde: bordes[+at(xf, "borderId") || 0] || "", bx: bordesX[+at(xf, "borderId") || 0] || "", al: al ? { left: "izq", center: "centro", centerContinuous: "centro", right: "der" }[at(al, "horizontal")] || null : null, aj: al ? at(al, "wrapText") === "1" : false };
+      return { num: +at(xf, "numFmtId") || 0, fuente: fuentes[+at(xf, "fontId") || 0] || {}, relleno: rellenoDe(+at(xf, "fillId") || 0) || null, rx: rellenosX[+at(xf, "fillId") || 0] || null, borde: bordes[+at(xf, "borderId") || 0] || "", bx: bordesX[+at(xf, "borderId") || 0] || "", al: al ? { left: "izq", center: "centro", centerContinuous: "centro", right: "der" }[at(al, "horizontal")] || null : null, aj: al ? at(al, "wrapText") === "1" : false,
+        // (versión 4: lo demás de la alineación de Excel —rellenar, justificar, distribuido, centrar en la selección,
+        // vertical, giro del texto, sangría y reducir hasta ajustar— para pintarlo como Excel)
+        ax: V >= 4 && al ? (() => {
+          const o = {}, hz = at(al, "horizontal"), vt = at(al, "vertical"), rot = +(at(al, "textRotation") || 0), ind = +(at(al, "indent") || 0);
+          if (hz && !/^(general|left|right|center)$/.test(hz)) o.h = hz;
+          if (vt && vt !== "bottom") o.v = vt;
+          if (rot > 0 && rot <= 180 || rot === 255) o.r = rot;
+          if (ind > 0) o.i = Math.min(ind, 250);
+          if (at(al, "shrinkToFit") === "1") o.s = 1;
+          return Object.keys(o).length ? o : null;
+        })() : null };
     });
     const hojasXml = todos(P(libro), "sheet");
     // Tablas de Excel (ListObject) de todas las hojas: su nombre, su rango y sus columnas, para traducir las
@@ -2949,6 +2982,18 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
               const xc = z.texto(rel.ruta);
               if (xc) { try { out.push(Object.assign({ tipo: "grafica", g: NOM.graficaOffice.leer(xc, { color: colorDml, fuente: fuenteDml, acentos: ["accent1", "accent2", "accent3", "accent4", "accent5", "accent6"].map((k) => "#" + (temaDml[k] || "4472C4")) }) }, base)); } catch (e) { /* una gráfica rara no detiene la hoja */ } }
               return;
+            }
+            // (versión 4) gráficas nuevas de Excel (histograma, Pareto, cajas, cascada, rectángulos, solar, embudo):
+            // sus datos vienen de nombres ocultos del libro que apuntan a la hoja; se dibujan con los valores vivos
+            if (V >= 4 && rel && /chartEx$/i.test(rel.tipo || "") && NOM.graficaOffice && NOM.graficaOffice.leerEx) {
+              const xc = z.texto(rel.ruta);
+              if (xc) {
+                try {
+                  out.push(Object.assign({ tipo: "grafica", g: NOM.graficaOffice.leerEx(xc, { color: colorDml, fuente: fuenteDml, nombre: (n) => nombresXl[String(n).toLowerCase()] || null,
+                    acentos: ["accent1", "accent2", "accent3", "accent4", "accent5", "accent6"].map((k) => "#" + (temaDml[k] || "4472C4")) }) }, base));
+                  return;
+                } catch (e) { /* una que no se entiende queda como recuadro */ }
+              }
             }
             // SmartArt: Excel guarda al lado el dibujo ya acomodado; sus formas van como un grupo del tamaño del marco
             const relIds = todos(el, "relIds")[0];
@@ -3321,8 +3366,10 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       todos(doc, "row").forEach((row) => {
         const ht = +at(row, "ht");
         const rnum = +at(row, "r");
-        if (at(row, "customHeight") === "1" && ht && rnum && rnum <= MAX_F) campos["ah:" + rnum] = Math.round(ht / 0.75);
-        else if (ht && rnum && rnum <= MAX_F) campos["ahx:" + rnum] = Math.round(ht / 0.75);   // alto que Excel calculó (letra grande, texto ajustado)
+        // (versión 4: Excel dibuja la fila con los píxeles enteros que caben en su alto: 80.1 pt → 106 px, no 107)
+        const pxFila = (x) => (V >= 4 ? Math.floor(x / 0.75 + 1e-6) : Math.round(x / 0.75));
+        if (at(row, "customHeight") === "1" && ht && rnum && rnum <= MAX_F) campos["ah:" + rnum] = pxFila(ht);
+        else if (ht && rnum && rnum <= MAX_F) campos["ahx:" + rnum] = pxFila(ht);   // alto que Excel calculó (letra grande, texto ajustado)
         if (at(row, "hidden") === "1" && rnum && rnum <= MAX_F) campos["oh:" + rnum] = true;
         hijos(row, "c").forEach((c) => {
           const ref = at(c, "r"), p = F().parseRef(ref || "");
@@ -3364,6 +3411,8 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
             if (s.relleno) campos["r:" + R] = s.relleno;
             if (s.borde) campos["bd:" + R] = s.borde.split("").sort().join("");
             if (V >= 3 && s.bx) campos["bx:" + R] = s.bx;
+            if (V >= 4 && s.ax) campos["ax:" + R] = s.ax;
+            if (V >= 4 && s.rx) campos["rx:" + R] = s.rx;
             if (s.al) campos["al:" + R] = s.al;
             if (s.aj) campos["aj:" + R] = true;
           }

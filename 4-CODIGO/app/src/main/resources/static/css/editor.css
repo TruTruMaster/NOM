@@ -1219,6 +1219,26 @@
 .rejilla-hoja table.xl td.ajusta { white-space: normal; overflow-wrap: anywhere; vertical-align: bottom; }
 .rejilla-hoja table.xl td.col-oculta, .rejilla-hoja table.xl th.col-oculta { padding: 0; border: 0; font-size: 0; }
 .rejilla-hoja table.xl .xl-rell { display: flex; justify-content: space-between; white-space: pre; width: 100%; }
+/* Texto desbordado (a la derecha, a la izquierda o a los dos lados): una ventana sobre las celdas vacías de al lado,
+   que lo corta en la primera celda con algo; los toques pasan a las celdas de abajo */
+.rejilla-hoja table.xl .xl-ventana { position: absolute; top: 0; bottom: 0; overflow: hidden; pointer-events: none; text-decoration: inherit; }
+.rejilla-hoja table.xl .xl-ventana > span { position: absolute; bottom: 1px; white-space: nowrap; transform: translateX(var(--tx, 0)); text-decoration: inherit; }
+.rejilla-hoja table.xl .xl-ventana:is([data-va="t"], [data-va="j"]) > span { bottom: auto; top: 0; }
+.rejilla-hoja table.xl .xl-ventana:is([data-va="m"], [data-va="d"]) > span { bottom: auto; top: 50%; transform: translate(var(--tx, 0), -50%); }
+.rejilla-hoja table.xl td.xl-sin-linea { border-right-color: transparent; }
+/* Fila de alto fijo: lo que no cabe se corta (abajo, arriba o al centro, como la celda) */
+.rejilla-hoja table.xl .xl-fija { display: flex; flex-direction: column; justify-content: flex-end; overflow-x: visible; overflow-y: clip; }
+.rejilla-hoja table.xl .xl-fija:is([data-va="t"], [data-va="j"]) { justify-content: flex-start; }
+.rejilla-hoja table.xl .xl-fija[data-va="m"] { justify-content: center; }
+.rejilla-hoja table.xl .xl-fija[data-va="d"] { justify-content: safe center; }
+.rejilla-hoja table.xl .xl-fija > div { flex: none; }
+.rejilla-hoja table.xl .xl-aj { margin-bottom: -2px; }
+.rejilla-hoja table.xl .xl-medir[data-rep]::after { content: attr(data-rep); }
+.rejilla-hoja table.xl .xl-fija-n { display: flex; align-items: center; justify-content: center; overflow: clip; }
+/* Texto girado (su caja se mide al pintar) y apilado: una letra por renglón, centradas */
+.rejilla-hoja table.xl .xl-giro { display: inline-block; position: relative; vertical-align: bottom; }
+.rejilla-hoja table.xl .xl-giro > span { display: inline-block; white-space: nowrap; }
+.rejilla-hoja table.xl .xl-apilado { display: inline-block; vertical-align: bottom; line-height: 1.364em; text-align: center; white-space: nowrap; }
 
 /* ---- Texto de PowerPoint (diapositivas importadas): como lo mide PowerPoint --------------------------
    Cada párrafo y cada tramo traen su letra, su tamaño y su interlineado (1.2 × tamaño × porcentaje); aquí

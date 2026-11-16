@@ -650,11 +650,17 @@ imagen con `pruebas/office/comparar_real.py`).
 - [x] Gráficas de Office con un solo dibujante para Excel, Word y PowerPoint (`js/graficas-office.js`).
 - [x] Excel: imágenes, formas, grupos, SmartArt, conectores, controles de formulario y notas en la hoja, en su ancla.
 - [x] PowerPoint: tablas con su estilo del archivo, celdas combinadas, rellenos, bordes y márgenes.
-- [ ] Gráficas nuevas de Excel (cascada, histograma, rectángulos, proyección solar, embudo, caja y bigotes) y 3D.
+- [x] Gráficas nuevas de Excel (cascada, histograma, Pareto, rectángulos, proyección solar, embudo, caja y bigotes)
+      con sus datos vivos (0.15.3); cada gráfica medida contra la imagen que exporta Excel.
+- [ ] Gráficas 3D (columnas y circular), circular separada y estilos de gráfica 205 y 209.
+- [ ] Motor de fórmulas: matrices dinámicas (ORDENAR, FILTRAR, UNICOS, SECUENCIA…), LET y LAMBDA.
 - [x] Word: estilos de tabla, numeración «Chapter %1» con cuenta por lista, imágenes flotantes, gráficos (0.15.2).
-- [ ] Word: formas y cuadros de texto, secciones con otro tamaño u orientación, columnas, puntos guía del índice,
-      división automática de palabras.
-- [ ] Excel: tramas y degradados en celdas, bordes diagonales, texto girado, alineación vertical, filas de alto fijo.
+- [x] Word: formas y cuadros de texto en su lugar, con su geometría, relleno, contorno y texto (0.15.3).
+- [ ] Word: rellenos con degradado, trama o imagen en las formas, puntas y guiones de las líneas, grupos y lienzos,
+      secciones con otro tamaño u orientación, columnas, puntos guía del índice, división automática de palabras.
+- [x] Excel (importador versión 4, 0.15.3): tramas y degradados en celdas, bordes diagonales, alineación completa
+      (vertical, girado, apilado, sangría, rellenar, reducir, centrar en la selección), desborde a los dos lados y
+      filas de alto fijo que recortan, con los altos en píxeles enteros como Excel.
 - [ ] PowerPoint: SmartArt sin dibujo guardado.
 - [ ] La vuelta: lo que exporta NOM-COLAB abierto en Office real (sin reparar y con el mismo aspecto).
 - [ ] Paridad en la app de Android (emulador y A55).
@@ -705,9 +711,11 @@ sesión anterior: `./desplegar.sh roles` para las columnas nuevas de usuarios.
 
 ## Orden recomendado para la siguiente sesión
 
-**Desde el 16 de noviembre de 2026:** la 0.15.0, la 0.15.1 y la 0.15.2 (fase 22, paridad con Office real) quedaron
-publicadas. Lo que sigue de esa fase, en este orden: formas y cuadros de texto de Word, secciones y columnas de Word,
-gráficas nuevas de Excel, lo que falta de Excel y PowerPoint, la vuelta en Office real y la paridad en la app. La computadora con
+**Desde el 16 de noviembre de 2026 (tarde):** la 0.15.0 a la 0.15.3 (fase 22, paridad con Office real) quedaron
+publicadas. Lo que sigue de esa fase, en este orden: gráficas 3D y estilos de gráfica (los más flojos de
+`comparar_real.py x04-graficas.xlsx`), matrices dinámicas, LET y LAMBDA en el motor de fórmulas, secciones y
+columnas de Word, rellenos y líneas de las formas de Word, lo que falta de PowerPoint, la vuelta en Office real y la
+paridad en la app. La computadora con
 Office: `pruebas/office/office_real.py` (ver `docs/PARIDAD-OFFICE-REAL.md`, sección 1). Lo de abajo sigue vigente
 para el A55 y la fase 20.
 
