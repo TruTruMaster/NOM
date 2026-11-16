@@ -5,7 +5,7 @@
 const VERSION = "nom-colab-0.14.2";
 const BASE = [
   "./", "index.html", "manifest.webmanifest",
-  "css/nom.css", "css/editor.css", "css/fuentes.css",
+  "css/nom.css", "css/editor.css", "css/fuentes.css", "css/fuentes-office.css",
   "fonts/nunito-latin-wght-normal.woff2", "fonts/nunito-latin-ext-wght-normal.woff2",
   // equivalentes de las fuentes de Office (para que un documento mida lo mismo sin red y en el teléfono)
   "fonts/carlito-regular.woff2", "fonts/carlito-negrita.woff2", "fonts/carlito-cursiva.woff2", "fonts/carlito-negrita-cursiva.woff2",
@@ -14,6 +14,8 @@ const BASE = [
   "fonts/liberation-serif-regular.woff2", "fonts/liberation-serif-negrita.woff2", "fonts/liberation-serif-cursiva.woff2", "fonts/liberation-serif-negrita-cursiva.woff2",
   "fonts/liberation-mono-regular.woff2", "fonts/liberation-mono-negrita.woff2", "fonts/liberation-mono-cursiva.woff2", "fonts/liberation-mono-negrita-cursiva.woff2",
   "fonts/comic-neue-regular.woff2", "fonts/comic-neue-negrita.woff2", "fonts/comic-neue-cursiva.woff2", "fonts/comic-neue-negrita-cursiva.woff2",
+  // las que más usa Office (Aptos, Aptos Display, Aptos Narrow, Cambria, Calibri, Arial y Times); las demás se guardan al usarse
+  ...["a", "ad", "an", "ca", "cal", "ar", "ti"].flatMap((f) => ["regular", "negrita", "cursiva", "negrita-cursiva"].map((e) => `fonts/office/nom-${f}-${e}.woff2`)),
   "img/icono.svg", "img/icono-192.png", "img/icono-512.png", "img/icono-maskable-512.png",
   "js/nucleo.js", "js/rueda.js", "js/cripto.js", "js/boveda.js", "js/e2e.js", "js/api.js", "js/secuencia.js", "js/crdt.js", "js/local.js",
   "js/formulas.js", "js/graficas.js", "js/ecuaciones.js", "js/plantillas.js", "js/compresion.js", "js/origen.js", "js/formatos.js", "js/ooxml.js", "js/vista-cuentas.js", "js/vista-espacios.js",

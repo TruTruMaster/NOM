@@ -1,0 +1,379 @@
+#!/usr/bin/env python3
+"""Compara cómo se ve un archivo en NOM-COLAB contra cómo lo pinta Microsoft Office de verdad.
+
+La referencia sale de Office en Windows (`office_real.py` + `windows/verdad.py`): por cada renglón de
+cada página, su texto exacto y su posición. Aquí se importa el mismo archivo en NOM-COLAB (Chromium
+con Playwright), se mide cada renglón pintado y se compara:
+
+  - renglones idénticos (mismo texto de principio a fin = Word cortó en el mismo lugar)
+  - renglones en la misma página y a qué distancia vertical quedaron
+  - número de páginas
+  - imágenes lado a lado por página: Office | NOM-COLAB | diferencias (en rojo lo que solo está en
+    Office, en azul lo que solo está en NOM-COLAB)
+
+  ~/.cache/nom-pruebas/venv/bin/python pruebas/office/comparar_real.py ARCHIVO.docx … [--movil] [--salida DIR]
+
+Los archivos y la referencia se buscan en ~/.cache/nom-pruebas/office-real/{archivos,verdad}.
+Necesita el servidor local (puerto 8099) y PLAYWRIGHT_BROWSERS_PATH=~/.cache/nom-pruebas/navegadores.
+"""
+import argparse, base64, difflib, json, os, re, subprocess, sys, unicodedata
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent)); sys.path.insert(0, str(Path(__file__).parent.parent / "interfaz"))
+import nomprueba as N
+import prueba_ui as U
+from PIL import Image, ImageChops, ImageDraw
+
+REAL = Path(os.environ.get("NOM_PRUEBAS_CACHE", Path.home() / ".cache/nom-pruebas")) / "office-real"
+
+JS_IMPORTAR = r"""
+async ([b64, nombre, espacio]) => {
+  const bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const r = await NOM.formatos.importar(new File([bytes], nombre));
+  const d = await NOM.api.post(`/api/espacios/${espacio}/documentos`, { nombre: r.nombre, modo: r.modo, ops: NOM.DocCRDT.partir(r.ops) });
+  location.hash = "#/doc/" + d.id;
+  return { id: d.id, modo: r.modo, aviso: r.aviso || null };
+}
+"""
+
+# Cada renglón pintado en el editor de texto: se mide letra por letra (rectángulo de cada carácter) y
+# se parte donde la letra baja de renglón. Devuelve las páginas con sus renglones (en puntos, desde la
+# esquina de la hoja) y el texto del encabezado y del pie.
+JS_RENGLONES = r"""
+() => {
+  const cuerpo = document.querySelector('.wd-cuerpo');
+  const pags = [...document.querySelectorAll('.wd-pagina')].map((p) => p.getBoundingClientRect());
+  const pagDe = (y) => { for (let i = 0; i < pags.length; i++) if (y >= pags[i].top - 2 && y < pags[i].bottom + 2) return i; return -1; };
+  const PT = 0.75 / (window.__zoomNom || 1);
+  const letras = [];
+  const tw = document.createTreeWalker(cuerpo, NodeFilter.SHOW_TEXT, { acceptNode: (n) => {
+    const e = n.parentElement;
+    if (!e || e.closest('.wd-corte, [data-obj] .wd-ctl, script, style')) return NodeFilter.FILTER_REJECT;
+    const cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden') return NodeFilter.FILTER_REJECT;
+    return NodeFilter.FILTER_ACCEPT; } });
+  const r = document.createRange();
+  let n, parrafo = null, numPar = -1;
+  while ((n = tw.nextNode())) {
+    const p = n.parentElement.closest('.wd-cuerpo > *');
+    if (p !== parrafo) { parrafo = p; numPar++; }
+    const s = n.data;
+    for (let i = 0; i < s.length; i++) {
+      let j = i + 1; const c0 = s.charCodeAt(i); if (c0 >= 0xD800 && c0 < 0xDC00 && j < s.length) j++;
+      r.setStart(n, i); r.setEnd(n, j);
+      const q = r.getClientRects(); if (!q.length) { i = j - 1; continue; }
+      const b = q[q.length - 1];
+      letras.push({ c: s.slice(i, j), x: b.left, y: b.top, h: b.height, w: b.width, p: numPar });
+      i = j - 1;
+    }
+  }
+  // renglones: una letra empieza renglón si queda más abajo que la anterior (más de media altura) o a la izquierda en otra fila
+  const renglones = [];
+  let cur = null;
+  for (const L of letras) {
+    const nuevo = !cur || L.p !== cur.p || L.y > cur.y + Math.max(4, cur.h * 0.5) || L.y + L.h < cur.y;
+    if (nuevo) { cur = { texto: '', x: L.x, y: L.y, h: L.h, p: L.p, fin: L.x + L.w }; renglones.push(cur); }
+    cur.texto += L.c; cur.fin = Math.max(cur.fin, L.x + L.w); cur.x = Math.min(cur.x, L.x);
+  }
+  const salida = pags.map((p, i) => ({ n: i + 1, ancho: p.width * PT, alto: p.height * PT, renglones: [], enc: '', pie: '' }));
+  const fuera = [];
+  for (const R of renglones) {
+    const i = pagDe(R.y + R.h / 2);
+    const o = { texto: R.texto, x: (R.x - (i >= 0 ? pags[i].left : 0)) * PT, y: (R.y - (i >= 0 ? pags[i].top : 0)) * PT, w: (R.fin - R.x) * PT, h: R.h * PT, p: R.p };
+    if (i >= 0) salida[i].renglones.push(o); else fuera.push(o);
+  }
+  document.querySelectorAll('.wd-pagina').forEach((p, i) => {
+    const e = p.querySelector('.wd-enc'), f = p.querySelector('.wd-pie');
+    salida[i].enc = e ? e.innerText : ''; salida[i].pie = f ? f.innerText : '';
+  });
+  return { paginas: salida, fuera, letras: letras.length };
+}
+"""
+
+
+def limpio(t):
+    """Texto de un renglón para comparar: sin marcas de control de Word, espacios normalizados."""
+    if t is None: return ""
+    t = unicodedata.normalize("NFC", t)
+    t = t.replace(" ", " ").replace(" ", " ").replace(" ", " ").replace(" ", " ").replace("​", "")
+    t = re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", " ", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def renglones_word(verdad):
+    """Renglones del cuerpo de Word por página (sin encabezado, pie ni notas)."""
+    out = []
+    for pg in verdad.get("paginas", []):
+        rs = []
+        for z in pg["zonas"]:
+            if z.get("historia") not in ("cuerpo", None) or z.get("tipo") not in (0, None): continue
+            for li in z["lineas"]:
+                if li.get("t") == 0 and li.get("texto") is not None:
+                    rs.append({"texto": li["texto"], "x": li["x"], "y": li["y"], "h": li["h"]})
+        rs.sort(key=lambda r: (round(r["y"]), r["x"]))
+        out.append(rs)
+    return out
+
+
+def comparar_renglones(word, nom):
+    """Alinea los renglones de los dos (en orden) y cuenta cuántos quedaron idénticos y en su página."""
+    W = [(p, limpio(r["texto"]), r) for p, rs in enumerate(word) for r in rs if limpio(r["texto"])]
+    Nn = [(p, limpio(r["texto"]), r) for p, rs in enumerate(nom) for r in rs if limpio(r["texto"])]
+    sm = difflib.SequenceMatcher(None, [t for _, t, _ in W], [t for _, t, _ in Nn], autojunk=False)
+    iguales = misma_pag = 0; dy = []
+    diferencias = []
+    for op, a0, a1, b0, b1 in sm.get_opcodes():
+        if op == "equal":
+            for k in range(a1 - a0):
+                iguales += 1
+                pw, _, rw = W[a0 + k]; pn, _, rn = Nn[b0 + k]
+                if pw == pn: misma_pag += 1; dy.append(rn["y"] - rw["y"])
+        else:
+            diferencias.append({"word": [f"p{W[i][0] + 1}: {W[i][1]}" for i in range(a0, a1)][:12],
+                                "nom": [f"p{Nn[i][0] + 1}: {Nn[i][1]}" for i in range(b0, b1)][:12]})
+    dy.sort()
+    return {"renglones_word": len(W), "renglones_nom": len(Nn), "iguales": iguales, "misma_pagina": misma_pag,
+            "pct_iguales": round(100 * iguales / max(1, len(W)), 1), "pct_misma_pagina": round(100 * misma_pag / max(1, len(W)), 1),
+            "dy_mediana_pt": round(dy[len(dy) // 2], 1) if dy else None,
+            "dy_max_pt": round(max(abs(x) for x in dy), 1) if dy else None, "diferencias": diferencias}
+
+
+def pdf_a_png(pdf, carpeta, dpi=96):
+    carpeta.mkdir(parents=True, exist_ok=True)
+    for v in carpeta.glob("office-*.png"): v.unlink()
+    subprocess.run(["pdftoppm", "-r", str(dpi), "-png", str(pdf), str(carpeta / "office")], check=True)
+    return sorted(carpeta.glob("office-*.png"))
+
+
+def lado_a_lado(a, b, ruta, titulo=""):
+    """Office | NOM-COLAB | diferencias."""
+    A = Image.open(a).convert("RGB") if a else None
+    B = Image.open(b).convert("RGB") if b else None
+    w = max(x.width for x in (A, B) if x); h = max(x.height for x in (A, B) if x)
+    lienzo = Image.new("RGB", (w * 3 + 40, h + 30), "white")
+    d = ImageDraw.Draw(lienzo)
+    d.text((10, 8), "Office  " + titulo, fill="black"); d.text((w + 30, 8), "NOM-COLAB", fill="black"); d.text((2 * w + 40, 8), "diferencias", fill="black")
+    if A: lienzo.paste(A, (0, 30))
+    if B: lienzo.paste(B, (w + 20, 30))
+    if A and B:
+        a2 = Image.new("RGB", (w, h), "white"); a2.paste(A, (0, 0))
+        b2 = Image.new("RGB", (w, h), "white"); b2.paste(B, (0, 0))
+        ga, gb = a2.convert("L"), b2.convert("L")
+        sa = ga.point(lambda v: 255 if v < 160 else 0); sb = gb.point(lambda v: 255 if v < 160 else 0)
+        rojo = ImageChops.subtract(sa, sb); azul = ImageChops.subtract(sb, sa)
+        dif = Image.new("RGB", (w, h), "white")
+        base = Image.merge("RGB", [ga.point(lambda v: 200 + v // 5)] * 3)
+        dif.paste(base, (0, 0))
+        dif.paste((220, 0, 0), (0, 0), rojo); dif.paste((0, 60, 230), (0, 0), azul)
+        lienzo.paste(dif, (2 * w + 40, 30))
+    lienzo.save(ruta)
+
+
+def entrar():
+    c = N.cuenta(); esp = N.espacio(c["token"], "Office real")
+    return c, esp
+
+
+def medir_docx(nav, esp, archivo, carpeta, verdad):
+    p = nav.p
+    r = p.evaluate(JS_IMPORTAR, [base64.b64encode(archivo.read_bytes()).decode(), archivo.name, esp])
+    p.wait_for_function(U.JS_LISTO, timeout=120000)
+    p.evaluate("() => document.fonts.ready"); p.wait_for_timeout(1500)
+    p.evaluate("() => NOM.editorActual.repaginar && NOM.editorActual.repaginar()"); p.wait_for_timeout(800)
+    m = p.evaluate(JS_RENGLONES)
+    m["aviso"] = r.get("aviso")
+    m["paginacion"] = p.evaluate("() => NOM.editorActual.paginacion || null")
+    # capturas de cada página
+    n = p.evaluate("() => document.querySelectorAll('.wd-pagina').length")
+    p.evaluate("() => document.querySelectorAll('.consejo').forEach((e) => e.remove())")
+    caps = []
+    for i in range(n):
+        p.evaluate("(i) => document.querySelectorAll('.wd-pagina')[i].scrollIntoView({block: 'start'})", i)
+        p.wait_for_timeout(250)
+        caja = p.evaluate("(i) => { const r = document.querySelectorAll('.wd-pagina')[i].getBoundingClientRect(); return {x: r.left, y: r.top, width: r.width, height: r.height}; }", i)
+        ruta = carpeta / f"nom-{i + 1:02d}.png"
+        p.screenshot(path=str(ruta), clip=caja)
+        caps.append(ruta)
+    return m, caps
+
+
+JS_DIAPO = r"""
+async (i) => {
+  const doc = NOM.editorActual.doc, p = doc.paginas()[i];
+  let cont = document.getElementById('__diapo_prueba');
+  if (!cont) { cont = document.createElement('div'); cont.id = '__diapo_prueba'; cont.style.cssText = 'position:fixed;left:0;top:0;z-index:99999;background:#fff'; document.body.append(cont); }
+  const T = NOM.diapo.tam(doc);
+  cont.innerHTML = `<div class="diapo diapo-foto" style="${NOM.diapo.estiloDiapo(doc, p)}position:relative;left:0;top:0;transform:none;border-radius:0;box-shadow:none;margin:0">${NOM.lienzoVista.htmlDiapositiva(doc, p)}</div>`;
+  cont.style.width = T.w + 'px'; cont.style.height = T.h + 'px';
+  await document.fonts.ready; await new Promise((r) => setTimeout(r, 120));
+  const imgs = [...cont.querySelectorAll('img')]; await Promise.all(imgs.map((im) => im.complete ? 0 : new Promise((r) => { im.onload = im.onerror = r; })));
+  return { w: T.w, h: T.h, n: doc.paginas().length };
+}
+"""
+JS_CELDAS = r"""
+() => {
+  const out = {}, rej = document.querySelector('td[data-c]') ? document.querySelector('td[data-c]').closest('table') : null;
+  if (!rej) return { celdas: {}, cols: [], filas: [] };
+  rej.querySelectorAll('td[data-c]').forEach((td) => {
+    const cs = getComputedStyle(td);
+    out[(+td.dataset.f + 1) + ',' + (+td.dataset.c + 1)] = { t: td.innerText, fondo: cs.backgroundColor, color: cs.color, b: +cs.fontWeight >= 600, i: cs.fontStyle === 'italic',
+      al: cs.textAlign, fuente: cs.fontFamily, tam: parseFloat(cs.fontSize) * 0.75, w: td.getBoundingClientRect().width, h: td.getBoundingClientRect().height };
+  });
+  const cols = [...rej.querySelectorAll('col')].slice(1).map((c) => parseFloat(c.style.width) || c.getBoundingClientRect().width);
+  const filas = [...rej.querySelectorAll('tr[data-fila]')].map((tr) => ({ f: +tr.dataset.fila + 1, h: tr.getBoundingClientRect().height }));
+  const a1 = rej.querySelector('td[data-c="0"][data-f="0"]'), r = a1 ? a1.getBoundingClientRect() : null;
+  return { celdas: out, cols, filas, a1: r ? { x: r.left, y: r.top } : null };
+}
+"""
+
+
+def rgb_hex(c):
+    m = re.match(r"rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)", c or "")
+    if not m: return None
+    if m.group(4) is not None and float(m.group(4)) == 0: return None
+    return "#%02X%02X%02X" % tuple(int(m.group(k)) for k in (1, 2, 3))
+
+
+def importar(nav, esp, archivo):
+    p = nav.p
+    r = p.evaluate(JS_IMPORTAR, [base64.b64encode(archivo.read_bytes()).decode(), archivo.name, esp])
+    p.wait_for_function(U.JS_LISTO, timeout=180000)
+    p.evaluate("() => document.fonts.ready"); p.wait_for_timeout(1500)
+    return r
+
+
+def parecido_img(a, b, tam=(480, 270)):
+    """Qué tanto se parecen dos imágenes (0 a 100): 100 - diferencia media por píxel en escala de grises reducida."""
+    import numpy as np
+    A = np.asarray(Image.open(a).convert("L").resize(tam), dtype=float); B = np.asarray(Image.open(b).convert("L").resize(tam), dtype=float)
+    return round(100 - np.abs(A - B).mean() / 2.55, 1)
+
+
+def medir_pptx(nav, esp, archivo, carpeta, verdad, nombre):
+    p = nav.p
+    r = importar(nav, esp, archivo)
+    n = p.evaluate("() => NOM.editorActual.doc.paginas().length")
+    diapos = []
+    for i in range(n):
+        info = p.evaluate(JS_DIAPO, i)
+        ruta = carpeta / f"nom-{i + 1:02d}.png"
+        p.screenshot(path=str(ruta), clip={"x": 0, "y": 0, "width": info["w"], "height": info["h"]})
+        Image.open(ruta).resize((1920, int(round(1920 * info["h"] / info["w"])))).save(ruta)
+        of = REAL / "verdad" / f"{nombre}-{i + 1:02d}.png"
+        d = {"n": i + 1}
+        if of.exists():
+            d["parecido"] = parecido_img(of, ruta)
+            lado_a_lado(of, ruta, carpeta / f"lado-{i + 1:02d}.png", f"diapositiva {i + 1}")
+        diapos.append(d)
+    p.evaluate("() => { const c = document.getElementById('__diapo_prueba'); if (c) c.remove(); }")
+    vals = [d["parecido"] for d in diapos if "parecido" in d]
+    return {"aviso": r.get("aviso"), "diapositivas_office": len(verdad.get("diapositivas", [])), "diapositivas_nom": n,
+            "parecido_medio": round(sum(vals) / max(1, len(vals)), 1), "parecido_min": min(vals) if vals else None, "por_diapositiva": diapos}
+
+
+def medir_xlsx(nav, esp, archivo, carpeta, verdad, nombre):
+    p = nav.p
+    r = importar(nav, esp, archivo)
+    pags = p.evaluate("() => NOM.editorActual.doc.paginas()")
+    hojas_vis = [h for h in verdad.get("hojas", []) if h.get("visible") == -1]
+    res = {"aviso": r.get("aviso"), "hojas_office": len(verdad.get("hojas", [])), "hojas_visibles_office": len(hojas_vis), "hojas_nom": len(pags), "hojas": []}
+    tot_txt = ok_txt = tot_fondo = ok_fondo = tot_col = ok_col = 0
+    for hi, h in enumerate(hojas_vis):
+        if hi >= len(pags): break
+        p.evaluate("(pid) => { const b = document.querySelector(`.pestana-hoja[data-pag=\"${pid}\"]`); if (b) b.click(); }", pags[hi])
+        p.wait_for_timeout(900)
+        m = p.evaluate(JS_CELDAS)
+        malas = []
+        for c in h.get("celdas", []):
+            k = f"{c['f']},{c['c']}"; n = m["celdas"].get(k)
+            tot_txt += 1
+            tn = (n or {}).get("t", "").replace("\n", " ").strip(); to = (c.get("texto") or "").replace("\n", " ").strip()
+            if tn == to: ok_txt += 1
+            elif len(malas) < 60: malas.append({"celda": k, "excel": to, "nom": tn, "formula": c.get("formula")})
+            if c.get("fondo"):
+                tot_fondo += 1
+                if n and rgb_hex(n["fondo"]) == c["fondo"]: ok_fondo += 1
+        for col in h.get("columnas", [])[:30]:
+            j = col["c"] - 1
+            if j < len(m["cols"]) and not col.get("oculta"):
+                tot_col += 1
+                if abs(m["cols"][j] - col["w"] * 96 / 72) <= 2: ok_col += 1
+        hoja = {"nombre": h["nombre"], "texto_distinto": malas}
+        # imagen: cuadrícula desde A1 en los dos
+        of = REAL / "verdad" / f"{nombre}-h{verdad['hojas'].index(h) + 1}.png"
+        if of.exists() and m.get("a1"):
+            cap = h.get("captura", {})
+            ruta = carpeta / f"nom-h{hi + 1}.png"
+            p.screenshot(path=str(ruta), clip={"x": max(0, m["a1"]["x"] - 40), "y": max(0, m["a1"]["y"] - 24), "width": 1250, "height": 800})
+            off = Image.open(of); x0, y0 = cap.get("a1_x", 40) - 40, cap.get("a1_y", 24) - 24
+            off.crop((max(0, x0), max(0, y0), max(0, x0) + 1250, max(0, y0) + 800)).save(carpeta / f"office-h{hi + 1}.png")
+            lado_a_lado(carpeta / f"office-h{hi + 1}.png", ruta, carpeta / f"lado-h{hi + 1}.png", h["nombre"])
+            hoja["parecido"] = parecido_img(carpeta / f"office-h{hi + 1}.png", ruta, (625, 400))
+        res["hojas"].append(hoja)
+    res.update(celdas=tot_txt, texto_igual=ok_txt, pct_texto=round(100 * ok_txt / max(1, tot_txt), 1), fondos=tot_fondo, fondo_igual=ok_fondo,
+               pct_fondo=round(100 * ok_fondo / max(1, tot_fondo), 1), columnas=tot_col, ancho_igual=ok_col, pct_ancho=round(100 * ok_col / max(1, tot_col), 1))
+    return res
+
+
+def comparar(archivo, movil, salida, nav, esp):
+    archivo = Path(archivo)
+    if not archivo.exists(): archivo = REAL / "archivos" / archivo.name
+    nombre = archivo.stem
+    verdad = json.loads((REAL / "verdad" / (nombre + ".verdad.json")).read_text())
+    carpeta = Path(salida) / (nombre + ("-movil" if movil else ""))
+    carpeta.mkdir(parents=True, exist_ok=True)
+    for v in carpeta.glob("*.png"): v.unlink()
+    rep = {"archivo": archivo.name, "movil": movil}
+    if archivo.suffix == ".docx":
+        m, caps = medir_docx(nav, esp, archivo, carpeta, verdad)
+        word = renglones_word(verdad)
+        nom = [pg["renglones"] for pg in m["paginas"]]
+        rep.update(paginas_word=len(word), paginas_nom=len(nom), aviso=m.get("aviso"), paginacion=m.get("paginacion"),
+                   fuera_de_pagina=len(m["fuera"]), **comparar_renglones(word, nom))
+        pdf = REAL / "verdad" / (nombre + ".pdf")
+        if pdf.exists():
+            offs = pdf_a_png(pdf, carpeta)
+            for i in range(max(len(offs), len(caps))):
+                lado_a_lado(offs[i] if i < len(offs) else None, caps[i] if i < len(caps) else None, carpeta / f"lado-{i + 1:02d}.png", f"página {i + 1}")
+    elif archivo.suffix == ".pptx":
+        rep.update(medir_pptx(nav, esp, archivo, carpeta, verdad, nombre))
+    elif archivo.suffix == ".xlsx":
+        rep.update(medir_xlsx(nav, esp, archivo, carpeta, verdad, nombre))
+    rep["errores_js"] = nav.errores[-10:]
+    (carpeta / "reporte.json").write_text(json.dumps(rep, ensure_ascii=False, indent=1))
+    if archivo.suffix == ".docx":
+        print(f"{archivo.name}: páginas Word {rep.get('paginas_word')} / NOM {rep.get('paginas_nom')} · renglones idénticos "
+              f"{rep.get('iguales')}/{rep.get('renglones_word')} ({rep.get('pct_iguales')} %) · en su página {rep.get('pct_misma_pagina')} % · "
+              f"desfase vertical mediana {rep.get('dy_mediana_pt')} pt", flush=True)
+    elif archivo.suffix == ".pptx":
+        print(f"{archivo.name}: diapositivas {rep.get('diapositivas_office')} / {rep.get('diapositivas_nom')} · parecido medio {rep.get('parecido_medio')} % (mínimo {rep.get('parecido_min')} %)", flush=True)
+    else:
+        print(f"{archivo.name}: hojas {rep.get('hojas_visibles_office')} / {rep.get('hojas_nom')} · texto de celdas igual {rep.get('pct_texto')} % de {rep.get('celdas')} · "
+              f"fondos {rep.get('pct_fondo')} % de {rep.get('fondos')} · anchos de columna {rep.get('pct_ancho')} %", flush=True)
+    return rep
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("archivos", nargs="+")
+    ap.add_argument("--movil", action="store_true")
+    ap.add_argument("--salida", default=str(REAL / "comparar"))
+    a = ap.parse_args()
+    N.esperar_servidor()
+    c, esp = entrar()
+    nav = N.Navegador(movil=a.movil)
+    if not a.movil: nav.ctx.close(); nav.ctx = nav.b.new_context(viewport={"width": 1300, "height": 1150}); nav.p = nav.ctx.new_page(); nav.p.on("pageerror", lambda e: nav.errores.append(str(e)))
+    nav.entrar(c)
+    nav.p.evaluate("() => { const t = NOM.leer('nom.texto', {}); t.vista = 'paginas'; t.zoom = 1; NOM.guardar && NOM.guardar('nom.texto', t); localStorage.setItem('nom.texto', JSON.stringify(t)); }")
+    # los consejos de la primera vez tapan la página en las capturas: se dan por vistos
+    nav.p.evaluate("() => { ['consejo.TEXTO', 'consejo.HOJA', 'consejo.PRESENTACION', 'consejo.DIAGRAMA', 'rueda'].forEach((k) => NOM.hito && NOM.hito(k)); }")
+    reps = []
+    try:
+        for f in a.archivos: reps.append(comparar(f, a.movil, a.salida, nav, esp))
+    finally:
+        nav.cerrar()
+    Path(a.salida).mkdir(parents=True, exist_ok=True)
+    (Path(a.salida) / ("resumen-movil.json" if a.movil else "resumen.json")).write_text(json.dumps(reps, ensure_ascii=False, indent=1))
+
+
+if __name__ == "__main__":
+    main()

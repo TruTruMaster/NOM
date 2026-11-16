@@ -1319,15 +1319,34 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     // se ve con esa fuente, ese tamaño y ese interlineado.
     const rN = letraDe(idNormal), pN = parDe(idNormal);
     const cmDe = (tw) => Math.round((tw / 567) * 100) / 100;
-    const liDe = (c) => (c.linea && (!c.regla || c.regla === "auto") ? Math.round((c.linea / 240) * 100) / 100 : null);
+    // (con 4 decimales: el 1.1583 de Office 2024 —line="278"— no es el 1.15 de antes; en 40 renglones son 5 pt)
+    const liDe = (c) => (c.linea && (!c.regla || c.regla === "auto") ? Math.round((c.linea / 240) * 10000) / 10000 : null);
     const liDeWord = (v) => Math.abs(v - 1.15) <= 0.04 || Math.abs(v - 1.08) <= 0.03;   // lo que aquí ya es el interlineado normal
     const formato = {};
     if (rN.fuente) formato.fuente = rN.fuente;
     if (rN.tam) formato.tam = rN.tam; else if (stTxt) formato.tam = 10;   // sin tamaño escrito, Word usa 10 pt
     // (un archivo con estilos que no dice el interlineado va a renglón sencillo: es lo que hace Word)
     const liDeO = (c) => (c.linea ? liDe(c) : stTxt ? 1 : null);
-    if (liDeO(pN) && !liDeWord(liDeO(pN))) formato.interlineado = liDeO(pN);
+    // El interlineado del estilo Normal va siempre tal cual (antes se omitía si se parecía a 1.15 o 1.08 y el
+    // documento se veía con 1.15: los renglones de Word no caían en el mismo lugar).
+    if (liDeO(pN)) formato.interlineado = liDeO(pN);
     if (pN.pri > 0) formato.primera = cmDe(pN.pri);
+    // Interletraje y ligaduras del documento. Office 2024 los activa por omisión (w:kern de 1 pt y
+    // w14:ligatures «standardContextual»): sin ellos el texto ocupa más que en Word y corta en otro lugar.
+    const kernDe = (rpr) => { const k = hijo(rpr, "kern"); return k ? (+val(k) || 0) / 2 : null; };
+    const ligDe = (rpr) => { const l = hijo(rpr, "ligatures"); return l ? l.getAttribute("w14:val") || l.getAttributeNS("http://schemas.microsoft.com/office/word/2010/wordml", "val") : null; };
+    const dN = idNormal != null ? defEstilo[idNormal] : null;
+    const kernN = (dN && kernDe(dN.rpr)) ?? kernDe(rprDef);
+    if (kernN) formato.kern = kernN;
+    const ligN = (dN && ligDe(dN.rpr)) || ligDe(rprDef);
+    if (ligN && ligN !== "none") formato.lig = ligN;
+    // Modo de compatibilidad del archivo (Word 2013 y después = 15): de él depende cómo justifica Word.
+    {
+      const aj = await z.texto("word/settings.xml");
+      const m = aj && /compatibilityMode"[^>]*w:val="(\d+)"|w:val="(\d+)"[^>]*compatibilityMode"/.exec(aj);
+      const modo = m ? +(m[1] || m[2]) : (aj ? 12 : 15);
+      if (modo < 15) formato.compat = modo;
+    }
     const liBase = formato.interlineado || 1.15;
     /** Lo que es igual al formato base no se repite en cada letra. */
     const relativa = (a) => { if (a.fuente && a.fuente === formato.fuente) delete a.fuente; if (a.tam && a.tam === formato.tam) delete a.tam; return a; };
@@ -1449,7 +1468,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         if (der > 20) pa.sangder = cmDe(der);
       }
       const li = liDeO(c);
-      if (li != null) { if (Math.abs(li - liBase) > 0.04 && !(formato.interlineado == null && liDeWord(li))) pa.interlineado = li; }
+      if (li != null) { if (Math.abs(li - liBase) > 0.0005 && !(formato.interlineado == null && liDeWord(li))) pa.interlineado = li; }
       else if (c.linea && c.regla === "exact") pa.lineaPt = Math.round(c.linea / 2) / 10;
       else if (c.linea && c.regla === "atLeast" && c.linea / 20 > (letra.tam || formato.tam || 11) * 1.3) pa.lineaPt = Math.round(c.linea / 2) / 10;
       // espacio antes y después: solo se anota si no es el que aquí ya tiene ese tipo de párrafo

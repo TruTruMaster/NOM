@@ -30,12 +30,14 @@
   // Cada fuente con sus equivalentes de medidas iguales. Carlito, Caladea, Liberation y Comic Neue
   // van dentro de la aplicación (css/fuentes.css), así que el texto mide lo mismo en la computadora y
   // en el teléfono aunque el equipo no tenga instalada la fuente de Office.
+  // Las de Office van PRIMERO con su equivalente de medidas exactas (el mismo ancho de cada letra y el mismo
+  // alto de renglón): así el documento corta igual en todos los equipos, tenga o no la fuente de Office.
   const FUENTES = {
-    Calibri: "'Calibri','Carlito',sans-serif", Arial: "'Arial','Liberation Sans','Arimo',sans-serif",
-    "Times New Roman": "'Times New Roman','Liberation Serif','Tinos',serif", Cambria: "'Cambria','Caladea',serif",
+    Calibri: "'NOM CAL','Carlito','Calibri',sans-serif", Arial: "'NOM AR','Liberation Sans','Arial','Arimo',sans-serif",
+    "Times New Roman": "'NOM TI','Liberation Serif','Times New Roman','Tinos',serif", Cambria: "'NOM CA','Cambria','Caladea',serif",
     Georgia: "'Georgia','Liberation Serif',serif", Garamond: "'Garamond','EB Garamond','Liberation Serif',serif", Verdana: "'Verdana','DejaVu Sans','Liberation Sans',sans-serif",
     Tahoma: "'Tahoma','DejaVu Sans','Liberation Sans',sans-serif", "Trebuchet MS": "'Trebuchet MS','Liberation Sans',sans-serif",
-    "Courier New": "'Courier New','Liberation Mono','Cousine',monospace", "Comic Sans MS": "'Comic Sans MS','Comic Neue',cursive",
+    "Courier New": "'NOM CU','Liberation Mono','Courier New','Cousine',monospace", "Comic Sans MS": "'NOM CS','Comic Sans MS','Comic Neue',cursive",
     Nunito: "'Nunito',sans-serif",
   };
   // Fuentes de Office que no están en la lista de arriba: con qué se ven cuando el equipo no las tiene.
@@ -48,6 +50,39 @@
     consolas: "'Liberation Mono','Cousine',monospace", courier: "'Liberation Mono','Cousine',monospace", "lucida console": "'Liberation Mono',monospace",
     "segoe script": "'Comic Neue',cursive", "segoe print": "'Comic Neue',cursive", "lucida handwriting": "'Comic Neue',cursive", "bradley hand itc": "'Comic Neue',cursive", "ink free": "'Comic Neue',cursive", "mv boli": "'Comic Neue',cursive", "kristen itc": "'Comic Neue',cursive",
   };
+  // Fuentes de Office con una equivalente libre de LAS MISMAS MEDIDAS, armada con herramientas/fuentes/
+  // (fonts/office/, css/fuentes-office.css). El nombre de Office (en minúsculas) → la equivalente.
+  const MEDIDAS = {
+    aptos: "NOM A", "aptos display": "NOM AD", "aptos narrow": "NOM AN", cambria: "NOM CA", "calibri light": "NOM CL", "segoe ui": "NOM SU",
+    georgia: "NOM GE", verdana: "NOM VE", tahoma: "NOM TA", "trebuchet ms": "NOM TR", "arial narrow": "NOM ARN", "arial black": "NOM ARB",
+    consolas: "NOM CO", "lucida console": "NOM LC", "century gothic": "NOM CG", garamond: "NOM GA", "book antiqua": "NOM BA",
+    "palatino linotype": "NOM PL", "comic sans ms": "NOM CS", impact: "NOM IM", "franklin gothic medium": "NOM FG", "gill sans mt": "NOM GS",
+    candara: "NOM CN", corbel: "NOM CB", constantia: "NOM CT", "segoe print": "NOM SP", "segoe script": "NOM SS", bahnschrift: "NOM BH",
+    // variantes que Office 2024 resuelve con la misma familia
+    "aptos light": "NOM A", "aptos semibold": "NOM A", "aptos extrabold": "NOM A", "aptos black": "NOM A", "segoe ui light": "NOM SU", "segoe ui semibold": "NOM SU",
+  };
+  // Alto natural del renglón de cada fuente (ascendente + descendente + interlineado, entre unidades por em).
+  // Word mide el interlineado «sencillo» con esto: 1.0 × este alto × el tamaño; «1.15» es 1.15 veces eso.
+  const ALTO = {
+    "NOM A": 1.2207, "NOM AD": 1.2207, "NOM AN": 1.2207, "NOM ARB": 1.4102, "NOM ARN": 1.1475, "NOM BA": 1.2056, "NOM BH": 1.2002, "NOM CA": 1.172,
+    "NOM CB": 1.2075, "NOM CG": 1.2261, "NOM CL": 1.2205, "NOM CN": 1.2205, "NOM CO": 1.1709, "NOM CS": 1.394, "NOM CT": 1.221, "NOM FG": 1.1338,
+    "NOM GA": 1.125, "NOM GE": 1.1362, "NOM GS": 1.1595, "NOM IM": 1.2197, "NOM LC": 1.0, "NOM PL": 1.3491, "NOM SP": 1.765, "NOM SS": 1.584,
+    "NOM SU": 1.3301, "NOM TA": 1.207, "NOM TR": 1.1611, "NOM VE": 1.2153, "NOM CAL": 1.2207, "NOM AR": 1.1499, "NOM TI": 1.1499, "NOM CU": 1.1328, Carlito: 1.2207, Caladea: 1.15, "Liberation Sans": 1.1499,
+    "Liberation Serif": 1.1499, "Liberation Mono": 1.1328, "Comic Neue": 1.15,
+  };
+  // Ancho del espacio de cada fuente (entre unidades por em): Word 2013 y después, en un párrafo justificado,
+  // encoge los espacios (hasta un 20 % de este ancho) para que quepa una palabra más en el renglón.
+  const ESPACIO = {
+    "NOM A": 0.2031, "NOM AD": 0.1929, "NOM AN": 0.187, "NOM AR": 0.2778, "NOM ARB": 0.3335, "NOM ARN": 0.228, "NOM BA": 0.25, "NOM BH": 0.2686, "NOM CA": 0.22,
+    "NOM CAL": 0.2261, "NOM CB": 0.2002, "NOM CG": 0.2769, "NOM CL": 0.226, "NOM CN": 0.217, "NOM CO": 0.5498, "NOM CS": 0.299, "NOM CT": 0.251, "NOM CU": 0.6001,
+    "NOM FG": 0.25, "NOM GA": 0.25, "NOM GE": 0.2412, "NOM GS": 0.278, "NOM IM": 0.1763, "NOM LC": 0.6025, "NOM PL": 0.25, "NOM SP": 0.4, "NOM SS": 0.4,
+    "NOM SU": 0.2739, "NOM TA": 0.3125, "NOM TI": 0.25, "NOM TR": 0.3013, "NOM VE": 0.3516, Carlito: 0.2261, "Liberation Sans": 0.2778, "Liberation Serif": 0.25, "Liberation Mono": 0.6001,
+  };
+  const primeraDe = (f) => { const m = /^'([^']+)'/.exec(cssFuente(f || "Calibri")); return m ? m[1] : ""; };
+  /** Alto natural del renglón de una fuente de Office (para el interlineado de Word); 1.2 si no se conoce. */
+  function altoFuente(f) { return ALTO[primeraDe(f)] || 1.2; }
+  /** Ancho del espacio de una fuente (en em). */
+  function espacioFuente(f) { return ESPACIO[primeraDe(f)] || 0.25; }
   /** Familia genérica de una fuente que no conocemos, por su nombre (una con remates no debe caer en una de palo seco). */
   function generica(nombre) {
     const n = nombre.toLowerCase();
@@ -99,9 +134,13 @@
   const claveA = (a) => { const l = limpio(a); return l ? Object.keys(l).sort().map((k) => k + "=" + l[k]).join(";") : ""; };
   const solo = (a, ks) => { const r = {}; ks.forEach((k) => { if (a && a[k] != null && a[k] !== false && a[k] !== "") r[k] = a[k]; }); return r; };
   const cssFuente = (f) => {
+    const n = String(f).replace(/['";{}<>\\]/g, "").trim(), k = n.toLowerCase();
+    // primero la equivalente de las mismas medidas (si existe), aunque la fuente también esté en FUENTES
+    if (MEDIDAS[k]) return `'${MEDIDAS[k]}',` + (FUENTES[f] || `'${n}',` + (PARECIDAS[k] || generica(n)));
     if (FUENTES[f]) return FUENTES[f];
-    const n = String(f).replace(/['";{}<>\\]/g, "").trim();
-    return `'${n}',` + (PARECIDAS[n.toLowerCase()] || generica(n));
+    const conocida = Object.keys(FUENTES).find((x) => x.toLowerCase() === k);
+    if (conocida) return FUENTES[conocida];
+    return `'${n}',` + (PARECIDAS[k] || generica(n));
   };
   // Borde de párrafo: "grosor estilo color lados" (puntos; lados: s superior, i inferior, z izquierda, d derecha).
   const RE_BORDE = /^(\d+(?:\.\d+)?) (solid|double|dotted|dashed) (#[0-9A-Fa-f]{6}) ([sizd]{1,4})$/;
@@ -347,7 +386,7 @@
     let st = "";
     if (a.color) st += `color:${a.color};`;
     if (a.fondo) st += `background-color:${a.fondo};`;
-    if (a.fuente) st += `font-family:${cssFuente(a.fuente)};`;
+    if (a.fuente) st += `font-family:${cssFuente(a.fuente)};--af:${altoFuente(a.fuente)};--ae:${espacioFuente(a.fuente)};`;
     if (a.tam) st += `font-size:${+a.tam}pt;`;
     if (a.vers) st += "font-variant-caps:small-caps;";
     if (a.mayus) st += "text-transform:uppercase;";
@@ -399,7 +438,7 @@
     if (pa.antes != null) { at += ` data-antes="${+pa.antes}"`; st += `--antes:${+pa.antes}pt;`; }
     if (pa.despues != null) { at += ` data-desp="${+pa.despues}"`; st += `--desp:${+pa.despues}pt;`; }
     if (pa.ox != null && pa.ox !== "") at += ` data-ox="${esc(pa.ox)}"`;
-    if (+pa.lineaPt) { at += ` data-lipt="${+pa.lineaPt}"`; st += `--li:${+pa.lineaPt}pt;`; }
+    if (+pa.lineaPt) { at += ` data-lipt="${+pa.lineaPt}"`; st += `--lipt:${+pa.lineaPt}pt;`; }
     const bm = RE_BORDE.exec(pa.borde || "");
     if (bm) { at += ` data-borde="${esc(pa.borde)}"`; st += cssBorde(pa.borde) + (/[zd]/.test(bm[4]) ? `;--bext:${(+bm[1] + 4).toFixed(2)}pt;--bpad:4pt;` : ";"); }
     if (/^#[0-9a-fA-F]{6}$/.test(pa.sombra || "")) { at += ` data-sombra="${pa.sombra}"`; st += `background-color:${pa.sombra};`; }
@@ -2301,6 +2340,14 @@
       function aplicarFormato() {
         const fb = formatoBase();
         cuerpo.style.fontFamily = fb.fuente ? cssFuente(fb.fuente) : "";
+        cuerpo.style.setProperty("--af", altoFuente(fb.fuente || "Calibri"));
+        cuerpo.style.setProperty("--ae", espacioFuente(fb.fuente || "Calibri"));
+        // Word 2013 y después encoge los espacios de los renglones justificados (modo de compatibilidad 15);
+        // un documento de Word 2010 o anterior, no.
+        cuerpo.classList.toggle("encoge", !(+fb.compat && +fb.compat < 15));
+        // interletraje y ligaduras solo si el documento los pide (como Word): w:kern desde cierto tamaño
+        cuerpo.classList.toggle("con-kern", +fb.kern > 0 && +fb.kern <= (+fb.tam || 11));
+        cuerpo.classList.toggle("con-liga", /standard|all|historical|discretional/i.test(fb.lig || ""));
         cuerpo.style.fontSize = fb.tam ? +fb.tam + "pt" : "";
         if (fb.interlineado) cuerpo.style.setProperty("--wd-li", +fb.interlineado); else cuerpo.style.removeProperty("--wd-li");
         if (+fb.primera) cuerpo.style.setProperty("--wd-primera", +fb.primera + "cm"); else cuerpo.style.removeProperty("--wd-primera");
@@ -3543,5 +3590,5 @@
     },
   };
 
-  NOM.textoRico = { parrafosDe, asegurarSecuencia, tokens, envolver, BLOQUE: B, cssFuente, cssBorde, FUENTES };
+  NOM.textoRico = { parrafosDe, asegurarSecuencia, tokens, envolver, BLOQUE: B, cssFuente, cssBorde, FUENTES, altoFuente };
 })();

@@ -389,21 +389,30 @@
   position: relative; display: flex; flex-direction: column;
   padding: var(--ms, 96px) var(--md, 96px) var(--mi, 96px) var(--miz, 96px); min-height: var(--ph);
   outline: none; color: #000; caret-color: #000; background: transparent;
-  font: 11pt/1.15 Calibri, Carlito, "Segoe UI", Arial, sans-serif;
+  font: 11pt/1.15 "NOM CAL", Carlito, Calibri, "Segoe UI", Arial, sans-serif;
   white-space: pre-wrap; overflow-wrap: break-word; tab-size: 4; -webkit-font-smoothing: auto;
+  /* como Word: sin interletraje ni ligaduras (Word no los aplica si el documento no los pide) */
+  font-kerning: none; font-variant-ligatures: none;
+  /* y con el ancho EXACTO de cada letra: sin esto, Chromium en Linux con pantalla de densidad 1 redondea cada
+     letra a píxeles enteros (una «o» de Aptos a 12 pt mide 8.83 px y la pintaba de 9) y los renglones cortaban
+     en otro lugar que en Word y que en el teléfono */
+  text-rendering: geometricPrecision;
+  /* --af: alto natural del renglón de la fuente (Carlito = Calibri: 1.2207); cada párrafo y cada tramo con
+     otra fuente traen el suyo. El interlineado de Word es un múltiplo de ese alto, no del tamaño. */
+  --af: 1.2207;
 }
 .wd-cuerpo ::selection { background: rgba(68, 114, 196, .32); }
 .wd[data-vista="continua"] .wd-hoja { width: min(var(--pw), 100%); }
 .wd[data-vista="continua"] .wd-cuerpo { background: #fff; border-radius: 6px; min-height: calc(100dvh - 220px); box-shadow: 0 1px 2px rgba(0, 0, 0, .10), 0 8px 24px -8px rgba(0, 0, 0, .18); padding: clamp(24px, 6vw, 72px) clamp(18px, 6vw, 72px); }
 
 /* párrafos: estilo Normal de Word (Calibri 11, interlineado 1.15, 8 pt después) */
-.wd-cuerpo > * { margin: var(--antes, 0) 0 var(--desp, 8pt); line-height: var(--li, 1.15); padding-left: calc(var(--sang, 0) * 36pt); min-height: 1.15em; position: relative; font-size: inherit; font-weight: inherit; }
+.wd-cuerpo > * { margin: var(--antes, 0) 0 var(--desp, 8pt); line-height: calc(var(--li, 1.15) * var(--af)); padding-left: calc(var(--sang, 0) * 36pt); min-height: calc(var(--li, 1.15) * var(--af) * 1em); position: relative; font-size: inherit; font-weight: inherit; }
 .wd-cuerpo > [data-alin="centro"] { text-align: center; }
 .wd-cuerpo > [data-alin="der"] { text-align: right; }
 .wd-cuerpo > [data-alin="just"] { text-align: justify; }
-.wd-cuerpo > h1 { font: 16pt/var(--li, 1.15) "Calibri Light", Carlito, Calibri, "Segoe UI", sans-serif; color: #2F5496; margin-top: var(--antes, 12pt); margin-bottom: var(--desp, 0); }
-.wd-cuerpo > h2 { font: 13pt/var(--li, 1.15) "Calibri Light", Carlito, Calibri, "Segoe UI", sans-serif; color: #2F5496; margin-top: var(--antes, 2pt); margin-bottom: var(--desp, 0); }
-.wd-cuerpo > h3 { font: 12pt/var(--li, 1.15) "Calibri Light", Carlito, Calibri, "Segoe UI", sans-serif; color: #1F3763; margin-top: var(--antes, 2pt); margin-bottom: var(--desp, 0); }
+.wd-cuerpo > h1 { --af: 1.2205; font: 16pt/1.15 "NOM CL", "Calibri Light", Carlito, Calibri, "Segoe UI", sans-serif; color: #2F5496; margin-top: var(--antes, 12pt); margin-bottom: var(--desp, 0); }
+.wd-cuerpo > h2 { --af: 1.2205; font: 13pt/1.15 "NOM CL", "Calibri Light", Carlito, Calibri, "Segoe UI", sans-serif; color: #2F5496; margin-top: var(--antes, 2pt); margin-bottom: var(--desp, 0); }
+.wd-cuerpo > h3 { --af: 1.2205; font: 12pt/1.15 "NOM CL", "Calibri Light", Carlito, Calibri, "Segoe UI", sans-serif; color: #1F3763; margin-top: var(--antes, 2pt); margin-bottom: var(--desp, 0); }
 .wd-cuerpo > [data-estilo="titulo"] { font: 28pt/1.05 "Calibri Light", Carlito, Calibri, sans-serif; letter-spacing: -.5pt; margin-bottom: var(--desp, 4pt); }
 .wd-cuerpo > [data-estilo="subtitulo"] { color: #5A5A5A; letter-spacing: .75pt; }
 .wd-cuerpo > [data-estilo="cita"] { font-style: italic; color: #404040; text-align: center; margin: var(--antes, 10pt) 43pt var(--desp, 8pt); }
@@ -690,8 +699,12 @@
 .repeticion-texto mark { background: #C8F2D5; color: inherit; border-radius: 2px; }
 
 /* ---------------------------------------------------------------- texto: formato base, dueños, cambios, sugerencias */
-.wd-cuerpo > * { line-height: var(--li, var(--wd-li, 1.15)); }
-.wd-cuerpo > h1, .wd-cuerpo > h2, .wd-cuerpo > h3 { line-height: var(--li, var(--wd-li, 1.15)); }
+/* Interlineado como Word: múltiplo × alto natural de la fuente × tamaño. Un tramo con otra fuente trae su
+   propio --af (su renglón mide según su fuente, como en Word); el exacto (--lipt) vale igual para todo. */
+.wd-cuerpo > *, .wd-cuerpo > * span[style*="--af"] { line-height: calc(var(--li, var(--wd-li, 1.15)) * var(--af)); }
+.wd-cuerpo > h1, .wd-cuerpo > h2, .wd-cuerpo > h3 { line-height: calc(var(--li, var(--wd-li, 1.15)) * var(--af)); }
+.wd-cuerpo > [data-lipt], .wd-cuerpo > [data-lipt] * { line-height: var(--lipt) !important; }
+.wd-cuerpo > [data-lipt] { min-height: var(--lipt); }
 .wd-cuerpo.con-fuente > h1, .wd-cuerpo.con-fuente > h2, .wd-cuerpo.con-fuente > h3, .wd-cuerpo.con-fuente > [data-estilo="titulo"] { font-family: inherit; }
 .wd-cuerpo > [data-dueno] { box-shadow: -4px 0 0 0 var(--dueno, #6B6875); }
 .wd-cuerpo > [data-dueno]::after { content: attr(data-dueno-nombre); position: absolute; right: calc(100% + 10px); top: .1em; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 800 9pt/1.4 var(--fuente); color: #fff; background: var(--dueno, #6B6875); padding: 0 6px; border-radius: 4px; pointer-events: none; }
@@ -1171,3 +1184,12 @@
 @media print { .wd-objeto.con-texto[data-obj] { display: inline-block; } .wd-objeto.con-texto[data-obj] > .wd-obj-caja > b { display: none; } }
 /* En un celular, sin páginas, las sangrías en centímetros no deben dejar el texto en una tirita */
 @media (max-width: 640px) { .wd[data-vista="continua"] .wd-cuerpo { --ks: .35; } }
+
+/* El mismo ancho exacto de cada letra en encabezados, pies y diapositivas (ver .wd-cuerpo). */
+.wd-paginas, .diapo { text-rendering: geometricPrecision; }
+.wd-cuerpo.con-kern { font-kerning: normal; }
+.wd-cuerpo.con-liga { font-variant-ligatures: common-ligatures contextual; }
+/* Justificado como Word 2013 y después: los espacios pueden encogerse hasta un 20 % de su ancho para que quepa
+   una palabra más; luego el justificado reparte lo que sobra. --ae es el ancho del espacio de la fuente (em). */
+.wd-cuerpo.encoge { --encoger: 0.2; }
+.wd-cuerpo.encoge > [data-alin="just"], .wd-cuerpo.encoge > [data-alin="just"] span[style*="--ae"] { word-spacing: calc(var(--ae, 0.25) * var(--encoger) * -1em); }

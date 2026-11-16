@@ -18,3 +18,50 @@ letras ni en sus medidas.
   Comic Neue 2.003  Copyright 2014 The Comic Neue Project Authors (https://github.com/crozynski/comicneue)
 
 Para qué sirve cada una: css/fuentes.css.
+
+Fuentes con las medidas de Office (carpeta fonts/office/, css/fuentes-office.css)
+---------------------------------------------------------------------------------
+
+Las arma herramientas/fuentes/armar_fuentes.py. Cada una es una fuente nueva, con otro nombre, hecha a
+partir del dibujo de una fuente libre (todas bajo la SIL Open Font License 1.1) ajustado para que cada
+letra ocupe EXACTAMENTE el mismo ancho que en la fuente de Office correspondiente, con el mismo alto de
+renglón, la misma posición de subrayado y tachado, y el mismo interletraje y las mismas ligaduras. De las
+fuentes de Office solo se tomaron esas medidas (datos numéricos); el dibujo de las letras no sale de
+ninguna fuente de Microsoft. Se distribuyen bajo la SIL Open Font License 1.1, como sus bases, y no usan
+los nombres reservados de sus bases.
+
+  Nombre     Mismas medidas que         Dibujo de
+  NOM CAL    Calibri                    Carlito (Copyright 2013 The Carlito Project Authors)
+  NOM AR     Arial                      Liberation Sans 2.1.5 (Copyright 2010 Google Corporation; 2012 Red Hat, Inc.)
+  NOM TI     Times New Roman            Liberation Serif 2.1.5 (ídem)
+  NOM CU     Courier New                Liberation Mono 2.1.5 (ídem)
+  NOM A      Aptos                      Open Sans (Copyright 2020 The Open Sans Project Authors)
+  NOM AD     Aptos Display              Open Sans
+  NOM AN     Aptos Narrow               Open Sans (ancho 75)
+  NOM CA     Cambria                    Caladea (Copyright 2012 The Caladea Project Authors)
+  NOM CL     Calibri Light              Lato Light (Copyright 2011-2015 tyPoland Lukasz Dziedzic)
+  NOM SU     Segoe UI                   Selawik (Copyright Microsoft Corporation, SIL OFL 1.1)
+  NOM GE     Georgia                    Gelasio (Copyright 2022 The Gelasio Project Authors)
+  NOM VE     Verdana                    Open Sans
+  NOM TA     Tahoma                     Open Sans
+  NOM TR     Trebuchet MS               Open Sans
+  NOM ARN    Arial Narrow               Open Sans (ancho 75)
+  NOM ARB    Arial Black                Open Sans (peso 800)
+  NOM CO     Consolas                   Liberation Mono 2.1.5
+  NOM LC     Lucida Console             Liberation Mono 2.1.5
+  NOM CG     Century Gothic             Open Sans
+  NOM GA     Garamond                   EB Garamond (Copyright 2017 The EB Garamond Project Authors)
+  NOM BA     Book Antiqua               Gelasio
+  NOM PL     Palatino Linotype          Gelasio
+  NOM CS     Comic Sans MS              Comic Neue (Copyright 2014 The Comic Neue Project Authors)
+  NOM IM     Impact                     Open Sans (peso 800, ancho 75)
+  NOM FG     Franklin Gothic Medium     Open Sans (peso 600)
+  NOM GS     Gill Sans MT               Lato
+  NOM CN     Candara                    Lato
+  NOM CB     Corbel                     Open Sans
+  NOM CT     Constantia                 Caladea
+  NOM SP     Segoe Print                Comic Neue
+  NOM SS     Segoe Script               Comic Neue
+  NOM BH     Bahnschrift                Open Sans (ancho 87)
+
+Llevan latín (con todos los acentos de Europa), griego, cirílico, puntuación, monedas y signos comunes.

@@ -94,7 +94,8 @@ def raro(p, esp, movil, capturas):
         anota("sin número de página inventado (el archivo no trae)", not any(c.isdigit() for c in h["pie"] + h["enc"]), h["pie"])
     n = P("NORMAL-HEREDADO")
     anota("fuente del estilo Normal (Garamond 13, con sustituta de remates)", "Garamond" in n.get("fuente", "") and "serif" in n.get("fuente", "") and "sans-serif" not in n.get("fuente", "") and cerca(n.get("tam"), 13, 0.3), n)
-    anota("interlineado 1.5 del estilo Normal", cerca(n.get("linea"), 13 / 0.75 * 1.5, 1.2), n.get("linea"))
+    # Word mide el interlineado sobre el alto natural de la fuente (Garamond: 1.125 veces el tamaño), no sobre el tamaño
+    anota("interlineado 1.5 del estilo Normal (como Word: 1.5 × alto natural de Garamond)", cerca(n.get("linea"), 13 / 0.75 * 1.5 * 1.125, 1.2), n.get("linea"))
     t = P("TITULO-UNO")
     anota("título con la letra de su estilo (Calibri 14)", "Calibri" in t.get("fuente", "") and cerca(t.get("tam"), 14, 0.3), t)
     s = P("SANGRIA-COMBO")
@@ -125,7 +126,8 @@ def raro(p, esp, movil, capturas):
         paso = p.evaluate("() => { const a = document.querySelectorAll('.wd-pagina'); return a.length > 1 ? a[1].offsetTop - a[0].offsetTop : 0; }")
         h = p.evaluate(JS_HOJA)
         # (puede quedar arriba el renglón vacío con el que el archivo cierra la sección anterior)
-        anota("esa sección empieza en hoja nueva, sin dejar una hoja en blanco", paso and h["ms"] - 2 <= d3["arriba"] % paso <= h["ms"] + 60 and h["paginas"] <= 3, (d3.get("arriba"), paso, h["paginas"]))
+        # (Word real, 16-nov-2026: este archivo tiene 4 páginas y la sección horizontal empieza en la 4)
+        anota("esa sección empieza en hoja nueva, sin dejar una hoja en blanco (4 páginas, como en Word)", paso and h["ms"] - 2 <= d3["arriba"] % paso <= h["ms"] + 60 and h["paginas"] == 4, (d3.get("arriba"), paso, h["paginas"]))
     anota("párrafo de derecha a izquierda", rtl.get("dir") == "rtl", rtl.get("dir"))
 
     # ---- teclear de verdad dentro de un párrafo importado
