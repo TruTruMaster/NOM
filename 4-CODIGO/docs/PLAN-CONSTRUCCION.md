@@ -618,6 +618,10 @@ tesis real de 2005 en Word 97-2003 (`Tesis.doc`, 32 MB, 46 600 palabras, 39 tabl
       figura eliminada y tocaba figuras tapadas). Revisadas una por una a mano: todas funcionan.
 - [x] `ediciones.py`: LibreOffice se traba también con el original de `ms-brownbag.pptx`; ya no se le pasa
       (lo revisa el validador de Microsoft).
+- [x] Regresión completa con la 0.14.2: todo bien salvo marcas de `rastreo` revisadas a mano (todas funcionan);
+      prueba de esfuerzo con la tesis 13 de 13 (`pruebas/office/esfuerzo_texto.py`).
+- [x] Publicada (15-nov): commit `563fa92` en `main` (Azure bien), Raspberry 0.14.2 (humo 30 de 30), release
+      v0.14.2 con la APK; app del emulador y computadora contra la Raspberry, 15 de 15.
 - [ ] Repetir en el A55 (la depuración inalámbrica perdió el emparejamiento: hay que volver a vincularla).
 - [ ] Recoger la investigación de Office de flast (se cortó el 14-nov por el límite semanal de uso; ver
       `docs/paridad/LEEME.md`).

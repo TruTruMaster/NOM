@@ -121,5 +121,10 @@ with sync_playwright() as pw:
     anota("sin errores de JavaScript en la computadora", not err, str(err[:2]))
     nav.close()
 adb("shell", "cmd", "connectivity", "airplane-mode", "disable")
+# Las dos cuentas de prueba se borran (con sus espacios y documentos): así no queda basura en la nube.
+app("(NOM.api.limpiarSesion(), location.hash = '#/', 1)")
+for c in (a, b):
+    st = N.api("POST", "/api/cuentas/eliminar", {"contrasena": N.CL, "confirmacion": "BORRAR"}, c["token"])[0]
+    anota(f"se borra la cuenta de prueba {c['nombre']}", st == 200, str(st))
 print(f"\nApp y computadora: {sum(1 for r in res if r[1])} de {len(res)} bien")
 sys.exit(0 if all(r[1] for r in res) else 1)

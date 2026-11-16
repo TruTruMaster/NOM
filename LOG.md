@@ -1172,3 +1172,15 @@ equipo dio un archivo real para probar el texto: una tesis de 2005 en Word 97-20
   `4-CODIGO/docs/paridad/LEEME.md`.
 - **Falta:** repetir en el A55 real (su depuración inalámbrica perdió el emparejamiento) y abrir lo
   descargado en Microsoft Office de verdad (el escritorio arrancó en Windows, sin acceso remoto).
+- **Resultados finales con la 0.14.2:** `regresion.sh` completo, todo bien (seguridad 380 de 380, cuentas 61 de
+  61, sin Internet, extremo a extremo, ayuda, red, funciones en Chromium, celular y Firefox, Office: fidelidad
+  en 123 archivos, ediciones 206 de 206 —ahora en 22 min, antes 58—, documento largo 17 de 17, edición real
+  50 de 50, funciones contra LibreOffice 178 de 178, validador de Microsoft 206 de 206) salvo `rastreo`, que
+  marca 3 acciones en computadora (de 581) y 11 en celular (de 546): se revisaron a mano una por una y todas
+  funcionan (son del flujo de la prueba: paneles que deja abiertos, la animación de 170 ms al cerrar la
+  ruedita, un tercer nivel de submenú). Prueba de esfuerzo con la tesis (`office/esfuerzo_texto.py`):
+  reemplazar todo, escribir en una tabla, copiar todo y pegarlo (285 000 letras en 6 s), deshacer, borrar todo
+  y deshacer: 13 de 13, y la otra persona queda con el mismo contenido.
+- **Publicada el mismo día:** commit `563fa92` en `main` (Azure desplegó bien; la Web App sigue apagada),
+  Raspberry en 0.14.2 (humo 30 de 30), release v0.14.2 con la APK (el enlace de «Descarga la app» entrega
+  exactamente esa APK). La app del emulador y una computadora contra la Raspberry: 15 de 15.
