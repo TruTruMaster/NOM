@@ -1377,3 +1377,16 @@ exporta Excel de ella (ver la entrada 68).
 - **Falta:** líneas de tendencia, barras de error y la tabla de datos debajo de la gráfica; matrices dinámicas,
   LET y LAMBDA; lo de Word de la entrada 68.
 
+## 70. Líneas de tendencia, barras de error y tabla de datos (para la 0.15.5, 16 de noviembre de 2026)
+
+- **Líneas de tendencia** como Excel: lineal, exponencial, logarítmica, potencial, polinómica (hasta grado 6) y
+  media móvil, con su ecuación y su R² (cinco cifras, como el formato General; en la exponencial y la potencial
+  sobre los logaritmos), su estilo de línea y su entrada en la leyenda («Lineal (Ventas)»).
+- **Barras de error:** valor fijo, porcentaje, desviación estándar (Excel la centra en la media) y error estándar,
+  con o sin tapas.
+- **Tabla de datos** debajo de la gráfica (categorías, una fila por serie con su clave, bordes) en lugar de los
+  rótulos de categorías; el título del eje va debajo de la tabla.
+- **Guiones de Office** (punto, raya, raya y punto…) en anchos de línea, con las puntas redondas como Excel.
+- «Formato detallado» del libro de gráficas: 93.2 → 95.1 %; las demás sin cambios. Falta medir PowerPoint y Word
+  antes de publicar (comparten el dibujante).
+

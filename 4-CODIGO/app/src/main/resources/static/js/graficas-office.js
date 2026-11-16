@@ -55,6 +55,7 @@
       if (at(ln, "w")) o.w = +at(ln, "w") / 12700;
       const sf = h1(ln, "solidFill"); if (sf) o.c = color(sf);
       const gu = h1(ln, "prstDash"); if (gu && at(gu, "val") !== "solid") o.guion = at(gu, "val");
+      if (at(ln, "cap") === "rnd") o.redondo = true;
       return o;
     };
     const letra = (txPr) => {
@@ -111,6 +112,9 @@
     const v3 = ch && h1(ch, "view3D");
     if (v3) m.vista3D = { rotX: +val(v3, "rotX", 15), rotY: +val(v3, "rotY", 20), prof: +val(v3, "depthPercent", 100), alto: +val(v3, "hPercent", 100), recto: si(v3, "rAngAx", true), persp: +val(v3, "perspective", 30) };
     m.trazado = { relleno: relleno(h1(pa, "spPr")), linea: linea(h1(pa, "spPr")), disp: disposicion(pa), degr: degradado(h1(pa, "spPr")) };
+    // tabla de datos debajo de la gráfica
+    const dt = h1(pa, "dTable");
+    if (dt) m.tablaDatos = { h: si(dt, "showHorzBorder", true), v: si(dt, "showVertBorder", true), contorno: si(dt, "showOutline", true), claves: si(dt, "showKeys", true), linea: linea(h1(dt, "spPr")), letra: letra(h1(dt, "txPr")) };
     // título: el escrito, o el de la serie (una sola serie) o «Título del gráfico»
     const ti = h1(ch, "title");
     if (ti) m.titulo = { texto: textoRico(h1(ti, "tx")), letra: Object.assign({}, letra(h1(ti, "txPr")) || {}, letraDeRico(h1(ti, "tx")) || {}), sobre: si(ti, "overlay", false), disp: disposicion(ti) };
@@ -149,6 +153,13 @@
           cats: cache(h1(s, "cat") || h1(s, "xVal")), vals: cache(h1(s, "val") || h1(s, "yVal")), suave: si(s, "smooth", false), rotulos: rotulos(s),
           explota: +val(s, "explosion", 0), invierte: si(s, "invertIfNegative", false), degr: degradado(sp), opac: alfa(sp && h1(sp, "solidFill")) };
         if (mk) se.marcador = { simbolo: val(mk, "symbol", "auto"), tam: +val(mk, "size", 5), relleno: relleno(h1(mk, "spPr")), linea: linea(h1(mk, "spPr")) };
+        // líneas de tendencia (con su ecuación y su R²) y barras de error
+        const tls = hs(s, "trendline").map((tl) => ({ tipo: val(tl, "trendlineType", "linear"), orden: +val(tl, "order", 2), periodo: +val(tl, "period", 2), ec: si(tl, "dispEq", false),
+          r2: si(tl, "dispRSqr", false), linea: linea(h1(tl, "spPr")), letra: letra(h1(h1(tl, "trendlineLbl"), "txPr")), nombre: (h1(tl, "name") || {}).textContent || null,
+          adelante: +val(tl, "forward", 0), atras: +val(tl, "backward", 0) }));
+        if (tls.length) se.tendencias = tls;
+        const eb = hs(s, "errBars").find((e) => val(e, "errDir", "y") !== "x");
+        if (eb) se.error = { tipo: val(eb, "errBarType", "both"), valor: val(eb, "errValType", "fixedVal"), v: +val(eb, "val", 1), sinTapa: si(eb, "noEndCap", false), linea: linea(h1(eb, "spPr")) };
         const pts = hs(s, "dPt").map((p) => ({ idx: +val(p, "idx", 0), relleno: relleno(h1(p, "spPr")), linea: linea(h1(p, "spPr")), explota: +val(p, "explosion", 0) }));
         if (pts.length) se.puntos = pts;
         const tx = h1(s, "tx"), sr = tx && h1(tx, "strRef"); if (sr) se.refNombre = (todos(sr, "f")[0] || {}).textContent || null;
@@ -191,6 +202,50 @@
     if (e.min == null) a = a2 < 0 || (a2 > 0 && a !== 0) ? Math.floor(a2 / u + 1e-9) * u : a;
     return { a, b, u };
   }
+  /** Una cifra con n dígitos significativos, sin ceros de más (el formato General de las etiquetas de tendencia). */
+  function cifras(x, n) { if (!isFinite(x)) return ""; const r = Number((+x).toPrecision(n || 5)); return String(Math.abs(r) < 1e-12 ? 0 : r); }
+  const NOMBRE_TENDENCIA = { linear: () => "Lineal", exp: () => "Exponencial", log: () => "Logarítmica", power: () => "Potencial", poly: () => "Polinómica", movingAvg: (tl) => `Media móvil de ${tl.periodo || 2} per.` };
+  /** Línea de tendencia de Excel: lineal, exponencial, logarítmica, potencial, polinómica o media móvil, con su
+      ecuación y su R² (en las exponencial y potencial, sobre los logaritmos, como Excel). */
+  function ajustar(tl, pares) {
+    const P = pares.filter((q) => q[1] != null && isFinite(q[1]) && isFinite(q[0]));
+    if (P.length < 2) return null;
+    if (tl.tipo === "movingAvg") {
+      const per = Math.max(2, tl.periodo || 2), pts = [];
+      for (let i = per - 1; i < P.length; i++) pts.push([P[i][0], P.slice(i - per + 1, i + 1).reduce((a, q) => a + q[1], 0) / per]);
+      return pts.length ? { puntos: pts } : null;
+    }
+    const recta = (pp) => {
+      const n = pp.length, sx = pp.reduce((a, q) => a + q[0], 0), sy = pp.reduce((a, q) => a + q[1], 0), sxx = pp.reduce((a, q) => a + q[0] * q[0], 0), sxy = pp.reduce((a, q) => a + q[0] * q[1], 0);
+      const den = n * sxx - sx * sx; if (!den) return null;
+      const b = (n * sxy - sx * sy) / den, a = (sy - b * sx) / n, my = sy / n;
+      const tot = pp.reduce((s2, q) => s2 + (q[1] - my) * (q[1] - my), 0), res = pp.reduce((s2, q) => s2 + (q[1] - a - b * q[0]) * (q[1] - a - b * q[0]), 0);
+      return { a, b, r2: tot ? 1 - res / tot : 1 };
+    };
+    const mas = (x) => (x < 0 ? ` - ${cifras(-x)}` : ` + ${cifras(x)}`);
+    if (tl.tipo === "exp") { const q = P.filter((p) => p[1] > 0).map((p) => [p[0], Math.log(p[1])]), r = q.length > 1 && recta(q); if (!r) return null; const c = Math.exp(r.a); return { f: (x) => c * Math.exp(r.b * x), ec: `y = ${cifras(c)}e^${cifras(r.b)}x`, r2: r.r2 }; }
+    if (tl.tipo === "log") { const q = P.filter((p) => p[0] > 0).map((p) => [Math.log(p[0]), p[1]]), r = q.length > 1 && recta(q); if (!r) return null; return { f: (x) => (x > 0 ? r.a + r.b * Math.log(x) : NaN), ec: `y = ${cifras(r.b)}ln(x)${mas(r.a)}`, r2: r.r2 }; }
+    if (tl.tipo === "power") { const q = P.filter((p) => p[0] > 0 && p[1] > 0).map((p) => [Math.log(p[0]), Math.log(p[1])]), r = q.length > 1 && recta(q); if (!r) return null; const c = Math.exp(r.a); return { f: (x) => c * Math.pow(x, r.b), ec: `y = ${cifras(c)}x^${cifras(r.b)}`, r2: r.r2 }; }
+    if (tl.tipo === "poly") {
+      const k = Math.max(2, Math.min(6, tl.orden || 2)), n = k + 1;
+      // ecuaciones normales con eliminación de Gauss
+      const A = Array.from({ length: n }, (_, i) => Array.from({ length: n + 1 }, (_, j) => (j < n ? P.reduce((s2, q) => s2 + Math.pow(q[0], i + j), 0) : P.reduce((s2, q) => s2 + q[1] * Math.pow(q[0], i), 0))));
+      for (let i = 0; i < n; i++) {
+        let piv = i; for (let r2 = i + 1; r2 < n; r2++) if (Math.abs(A[r2][i]) > Math.abs(A[piv][i])) piv = r2;
+        [A[i], A[piv]] = [A[piv], A[i]];
+        if (!A[i][i]) return null;
+        for (let r2 = 0; r2 < n; r2++) if (r2 !== i) { const f = A[r2][i] / A[i][i]; for (let j = i; j <= n; j++) A[r2][j] -= f * A[i][j]; }
+      }
+      const cf = A.map((row, i) => row[n] / row[i]), f = (x) => cf.reduce((s2, c, i) => s2 + c * Math.pow(x, i), 0);
+      const my = P.reduce((a, q) => a + q[1], 0) / P.length, tot = P.reduce((s2, q) => s2 + (q[1] - my) ** 2, 0), res = P.reduce((s2, q) => s2 + (q[1] - f(q[0])) ** 2, 0);
+      const terminos = cf.map((c, i) => [c, i]).reverse().filter((q) => Math.abs(q[0]) > 1e-12);
+      const ec = "y = " + terminos.map(([c, i], j) => `${j ? (c < 0 ? " - " : " + ") : c < 0 ? "-" : ""}${cifras(Math.abs(c))}${i ? "x" + (i > 1 ? String(i).replace(/\d/g, (d) => "⁰¹²³⁴⁵⁶⁷⁸⁹"[d]) : "") : ""}`).join("");
+      return { f, ec, r2: tot ? 1 - res / tot : 1 };
+    }
+    const r = recta(P);
+    if (!r) return null;
+    return { f: (x) => r.a + r.b * x, ec: `y = ${cifras(r.b)}x${mas(r.a)}`, r2: r.r2 };
+  }
   function numero(v, fmt, opc) {
     if (v == null || v === "") return "";
     if (opc && opc.formato && fmt && fmt !== "General") { try { return opc.formato(+v, fmt); } catch (e) { /* tal cual */ } }
@@ -224,7 +279,14 @@
       return `url(#${id})`;
     };
     const trazo = (ln, def) => { if (ln && ln.no) return null; const o = Object.assign({ w: 0.75, c: "#D9D9D9" }, def || {}, ln || {}); return o; };
-    const attrsTrazo = (o) => (o ? ` stroke="${esc(o.c || "#000")}" stroke-width="${n2(Math.max(0.25, o.w * pt))}"${o.guion ? ` stroke-dasharray="${n2(3 * o.w * pt)} ${n2(2 * o.w * pt)}"` : ""}` : ' stroke="none"');
+    const GUIONES = { sysDot: [1, 1], sysDash: [3, 1], dash: [4, 3], dashDot: [4, 3, 1, 3], lgDash: [8, 3], lgDashDot: [8, 3, 1, 3], lgDashDotDot: [8, 3, 1, 3, 1, 3], sysDashDot: [3, 1, 1, 1], sysDashDotDot: [3, 1, 1, 1, 1, 1] };
+    const guion = (o) => {
+      if (!o || !o.guion) return "";
+      const w = Math.max(0.25, (o.w || 0.75) * pt), pat = GUIONES[o.guion] || [3, 2];
+      // con punta redonda la raya crece medio ancho de cada lado: se descuenta de la raya y se suma al hueco
+      return ` stroke-dasharray="${pat.map((k, i) => n2(Math.max(i % 2 ? 0 : 0.001, o.redondo ? (i % 2 ? k + 1 : k - 1) * w : k * w))).join(" ")}"${o.redondo ? ' stroke-linecap="round"' : ""}`;
+    };
+    const attrsTrazo = (o) => (o ? ` stroke="${esc(o.c || "#000")}" stroke-width="${n2(Math.max(0.25, o.w * pt))}"${guion(o)}` : ' stroke="none"');
     // fondo de la gráfica
     const fa = m.area.degr ? degSvg(m.area.degr) : m.area.relleno === "none" ? "none" : m.area.relleno || "#FFFFFF", la = trazo(m.area.linea, opc.sinBorde ? { no: 1 } : { c: "#D9D9D9", w: 0.75 });
     partes.push(`<rect x="0.5" y="0.5" width="${n2(w - 1)}" height="${n2(h - 1)}" fill="${esc(fa)}"${la && !la.no ? attrsTrazo(la) : ""}${m.area.redondo ? ' rx="6"' : ""}/>`);
@@ -266,6 +328,7 @@
         marca: (g.tipo === "linea" || g.tipo === "dispersion") && (s.marcador ? s.marcador.simbolo !== "none" : g.marcadores && g.tipo === "linea") ? (s.marcador && s.marcador.simbolo) || "circle" : null }));
       // barras horizontales: Excel lista las series al revés (como se ven de arriba abajo)
       if (!unaRebanada && m.tipos[0] && m.tipos[0].tipo === "barra" && m.tipos[0].dir === "bar" && (m.leyenda.pos === "b" || m.leyenda.pos === "t")) entradas.reverse();
+      if (!unaRebanada) series.forEach(({ s }, k) => (s.tendencias || []).forEach((tl) => entradas.push({ texto: tl.nombre || `${NOMBRE_TENDENCIA[tl.tipo] ? NOMBRE_TENDENCIA[tl.tipo](tl) : "Tendencia"} (${nombreSerie(s, k)})`, color: (tl.linea && tl.linea.c) || colorSerie(k), tipo: "linea", guion: tl.linea })));
       entradas = entradas.filter((e, i) => !(m.leyenda.borrar || []).includes(i));
       const cajaW = 7 * pt, sep = 4 * pt, gapE = 10 * pt, lineaW = 18 * pt;
       const anchoE = (e) => (e.tipo === "linea" ? lineaW : cajaW) + sep + medir(e.texto, ll.tam * pt, fam(ll.f));
@@ -292,7 +355,7 @@
         if (!m.leyenda.sobre) { if (pos === "l") izq = x0 + anchoMax + 8 * pt; else der = x0 - 8 * pt; }
       }
       function dibujarClave(e, x, yc) {
-        if (e.tipo === "linea") { partes.push(`<line x1="${n2(x)}" y1="${n2(yc)}" x2="${n2(x + lineaW)}" y2="${n2(yc)}" stroke="${esc(e.color)}" stroke-width="${n2(2.25 * pt)}" stroke-linecap="round"/>`); if (e.marca) partes.push(`<circle cx="${n2(x + lineaW / 2)}" cy="${n2(yc)}" r="${n2(2.5 * pt)}" fill="${esc(e.color)}"/>`); return; }
+        if (e.tipo === "linea") { partes.push(`<line x1="${n2(x)}" y1="${n2(yc)}" x2="${n2(x + lineaW)}" y2="${n2(yc)}" stroke="${esc(e.color)}" stroke-width="${n2((e.guion && e.guion.w ? e.guion.w : 2.25) * pt)}" stroke-linecap="round"${e.guion ? guion(e.guion) : ""}/>`); if (e.marca) partes.push(`<circle cx="${n2(x + lineaW / 2)}" cy="${n2(yc)}" r="${n2(2.5 * pt)}" fill="${esc(e.color)}"/>`); return; }
         partes.push(`<rect x="${n2(x)}" y="${n2(yc - cajaW / 2)}" width="${n2(cajaW)}" height="${n2(cajaW)}" fill="${esc(e.color)}"/>`);
       }
     }
@@ -368,7 +431,13 @@
         if (verV) pb -= lv.tam * pt * 1.6;
       } else {
         if (verV) pl += Math.max(...marcasV.map((v) => medir(fmtV(v), lv.tam * pt, fam(lv.f)))) + 6 * pt;
-        if (verC) pb -= lc.tam * pt * 1.6;
+        if (verC && !m.tablaDatos) pb -= lc.tam * pt * 1.6;
+        if (m.tablaDatos) {
+          const ld = L(m.tablaDatos.letra, { tam: 9 }), filaD = ld.tam * pt * 1.5;
+          pb -= filaD * (1 + series.length);
+          const colN = Math.max(0, ...series.map(({ s }, k) => medir(nombreSerie(s, k), ld.tam * pt, fam(ld.f)))) + (m.tablaDatos.claves ? 9 * pt : 3 * pt) + 3 * pt;
+          pl = Math.max(pl, izq + colN);
+        }
       }
       // Office deja 11 pt a la derecha del área de trazado (no 7) y, en barras horizontales, medio rótulo más
       if (!(m.leyenda && (m.leyenda.pos === "r" || m.leyenda.pos === "tr") && !m.leyenda.sobre)) pr -= 4 * pt;
@@ -407,6 +476,7 @@
       escAct = esc2; marcasDe(esc2).forEach((v) => t(pr + 4 * pt, aV(v) + lv2.tam * pt * 0.35, fmtV2(v), lv2, "start")); escAct = esc_;
     }
     // ---- series
+    const centros = new Map();   // dónde quedó cada punto de cada serie (para las barras de error)
     m.tipos.forEach((g) => {
       escAct = enSec(g) ? esc2 : esc_;
       const ss = g.series.map((s) => ({ s, v: datos(s) })), k0 = series.findIndex((x) => x.g === g);
@@ -430,6 +500,8 @@
             const r = horizontal ? { x: Math.min(desde, hasta), y: c, w: Math.abs(hasta - desde), h: bw } : { x: c, y: Math.min(desde, hasta), w: bw, h: Math.abs(hasta - desde) };
             const propio = (s.puntos || []).some((q) => q.idx === i && q.relleno);
             partes.push(`<rect x="${n2(r.x)}" y="${n2(r.y)}" width="${n2(r.w)}" height="${n2(r.h)}" fill="${pintaS && !propio ? pintaS : esc(fill)}"${opacS}${ln ? attrsTrazo(ln) : ""}/>`);
+            if (!centros.has(s)) centros.set(s, []);
+            centros.get(s)[i] = horizontal ? null : r.x + r.w / 2;
             const ro = s.rotulos || g.rotulos;
             if (ro && ro.val) {
               // dentro arriba (inEnd), dentro abajo (inBase), al centro (ctr) o afuera (outEnd, lo de siempre)
@@ -451,6 +523,7 @@
           const col = (s.linea && s.linea.c) || (s.relleno && s.relleno !== "none" ? s.relleno : colorSerie(k0 + j));
           const ys = v.map((x, i) => { if (x == null) return null; const y = g.grupo === "percentStacked" ? x / tot[i] : x; if (apilado(g)) { acum[i] += y; return acum[i]; } return y; });
           const pts = ys.map((y, i) => (y == null ? null : [aC(i), aV(y)]));
+          centros.set(s, ys.map((y, i) => aC(i)));
           capas.push({ s, col, pts, j });
         });
         if (g.tipo === "area") {
@@ -485,6 +558,48 @@
         });
       }
     });
+    // ---- barras de error y líneas de tendencia, encima de las series
+    m.tipos.forEach((g) => {
+      if (horizontal || !(g.tipo === "barra" || g.tipo === "linea" || g.tipo === "area")) return;
+      escAct = enSec(g) ? esc2 : esc_;
+      g.series.forEach((s) => {
+        const v = datos(s), c = centros.get(s) || [], k = series.findIndex((x) => x.s === s);
+        const eb = s.error;
+        if (eb) {
+          // valor fijo, porcentaje, desviación estándar (Excel la centra en la media) o error estándar
+          const nums = v.filter((x) => x != null), n = nums.length, media = n ? nums.reduce((a, b) => a + b, 0) / n : 0;
+          const sd = n > 1 ? Math.sqrt(nums.reduce((a, x) => a + (x - media) * (x - media), 0) / (n - 1)) : 0;
+          const lnE = trazo(eb.linea, { c: "#595959", w: 0.75 }), tapa = 3 * pt;
+          v.forEach((x, i) => {
+            if (x == null || c[i] == null || !lnE) return;
+            const e = eb.valor === "percentage" ? (Math.abs(x) * eb.v) / 100 : eb.valor === "stdDev" ? eb.v * sd : eb.valor === "stdErr" ? sd / Math.sqrt(Math.max(1, n)) : eb.valor === "cust" ? 0 : eb.v;
+            const centro = eb.valor === "stdDev" ? media : x, ya = aV(eb.tipo === "minus" ? centro : centro + e), yb = aV(eb.tipo === "plus" ? centro : centro - e), cx = c[i];
+            partes.push(`<line x1="${n2(cx)}" y1="${n2(ya)}" x2="${n2(cx)}" y2="${n2(yb)}"${attrsTrazo(lnE)}/>`);
+            if (!eb.sinTapa) {
+              if (eb.tipo !== "minus") partes.push(`<line x1="${n2(cx - tapa)}" y1="${n2(ya)}" x2="${n2(cx + tapa)}" y2="${n2(ya)}"${attrsTrazo(lnE)}/>`);
+              if (eb.tipo !== "plus") partes.push(`<line x1="${n2(cx - tapa)}" y1="${n2(yb)}" x2="${n2(cx + tapa)}" y2="${n2(yb)}"${attrsTrazo(lnE)}/>`);
+            }
+          });
+        }
+        (s.tendencias || []).forEach((tl) => {
+          const aj = ajustar(tl, v.map((y, i) => [i + 1, y]));
+          if (!aj) return;
+          const lnT = trazo(tl.linea, { c: colorSerie(k), w: 2 }), x0 = 1 - (tl.atras || 0), x1 = v.length + (tl.adelante || 0);
+          const xPant = (x) => aC(0) + (x - 1) * anchoCat;
+          let d = "";
+          if (aj.puntos) d = aj.puntos.map((q, j) => `${j ? "L" : "M"}${n2(xPant(q[0]))},${n2(aV(q[1]))}`).join("");
+          else { const pasos = tl.tipo === "linear" ? 1 : 40; for (let j = 0; j <= pasos; j++) { const x = x0 + ((x1 - x0) * j) / pasos, y = aj.f(x); if (isFinite(y)) d += `${d ? "L" : "M"}${n2(xPant(x))},${n2(aV(y))}`; } }
+          if (d && lnT) partes.push(`<path d="${d}" fill="none"${attrsTrazo(lnT)}/>`);
+          // la ecuación y el R², junto al final de la línea (5 cifras como el formato General de Excel)
+          const lineas = [tl.ec && aj.ec ? aj.ec : "", tl.r2 && aj.r2 != null ? `R² = ${cifras(aj.r2, 4)}` : ""].filter(Boolean);
+          if (lineas.length && !aj.puntos) {
+            const lt = L(tl.letra, { tam: 9 }), xe = xPant(x1) - anchoCat * 0.25, ye = aV(aj.f(x1));
+            lineas.forEach((ln, j) => t(xe, ye + (j - (lineas.length - 1) / 2) * lt.tam * pt * 1.25 + lt.tam * pt * 0.35, ln, lt, "end"));
+          }
+        });
+      });
+    });
+    escAct = esc_;
     // eje de categorías: su línea y sus rótulos
     const lineaC = trazo(ejeC.linea, { c: "#D9D9D9", w: 0.75 });
     escAct = esc_;
@@ -492,7 +607,25 @@
     if (lineaC && !ejeC.borrado && !escX) partes.push(horizontal ? `<line x1="${n2(yCero)}" y1="${n2(ptop)}" x2="${n2(yCero)}" y2="${n2(pb)}"${attrsTrazo(lineaC)}/>` : `<line x1="${n2(pl)}" y1="${n2(yCero)}" x2="${n2(pr)}" y2="${n2(yCero)}"${attrsTrazo(lineaC)}/>`);
     const lineaV = trazo(ejeV.linea, { no: 1 });
     if (lineaV && !ejeV.borrado) partes.push(horizontal ? `<line x1="${n2(pl)}" y1="${n2(pb)}" x2="${n2(pr)}" y2="${n2(pb)}"${attrsTrazo(lineaV)}/>` : `<line x1="${n2(pl)}" y1="${n2(ptop)}" x2="${n2(pl)}" y2="${n2(pb)}"${attrsTrazo(lineaV)}/>`);
-    if (verC && !escX) {
+    // ---- tabla de datos: categorías arriba y una fila por serie (con su clave), alineadas con las columnas
+    if (m.tablaDatos && !horizontal && !escX) {
+      const td = m.tablaDatos, ld = L(td.letra, { tam: 9 }), filaD = ld.tam * pt * 1.5, lnD = trazo(td.linea, { c: "#D9D9D9", w: 0.75 });
+      const x0 = pl - (pl - izq), y0 = pb, filas = 1 + series.length, sep = (x1, y1, x2, y2) => partes.push(`<line x1="${n2(x1)}" y1="${n2(y1)}" x2="${n2(x2)}" y2="${n2(y2)}"${attrsTrazo(lnD)}/>`);
+      cats.forEach((c, i) => t(aC(i), y0 + filaD * 0.5 + ld.tam * pt * 0.35, c, ld, "middle"));
+      series.forEach(({ s }, k) => {
+        const yc = y0 + filaD * (k + 1.5), v = datos(s);
+        v.forEach((x, i) => { if (x != null) t(aC(i), yc + ld.tam * pt * 0.35, numero(x, s.vals.fmt, opc), ld, "middle"); });
+        let xn = x0 + 3 * pt;
+        if (td.claves) { const cl = s.relleno && s.relleno !== "none" ? s.relleno : (s.linea && s.linea.c) || colorSerie(k); partes.push(`<rect x="${n2(xn)}" y="${n2(yc - 3 * pt)}" width="${n2(6 * pt)}" height="${n2(6 * pt)}" fill="${s.degr ? degSvg(s.degr) : esc(cl)}"/>`); xn += 9 * pt; }
+        t(xn, yc + ld.tam * pt * 0.35, nombreSerie(s, k), ld, "start");
+      });
+      if (lnD) {
+        if (td.h) for (let k = 0; k <= filas; k++) { if (k === 0 && !td.contorno) continue; sep(k === 0 ? pl : x0, y0 + k * filaD, pr, y0 + k * filaD); }
+        if (td.v) for (let i = 0; i <= nC; i++) { if ((i === 0 || i === nC) && !td.contorno && i !== 0) continue; sep(pl + i * anchoCat, y0, pl + i * anchoCat, y0 + filas * filaD); }
+        if (td.contorno) sep(x0, y0 + filaD, x0, y0 + filas * filaD);
+      }
+    }
+    if (verC && !escX && !(m.tablaDatos && !horizontal)) {
       const salto = ejeC.salto || Math.max(1, Math.ceil(Math.max(...cats.map((c) => medir(c, lc.tam * pt, fam(lc.f)))) / Math.max(1, anchoCat * (horizontal ? 9 : 1.6))));
       cats.forEach((c, i) => {
         if (i % (horizontal ? 1 : 1) !== 0) return;
@@ -507,7 +640,7 @@
     }
     // títulos de los ejes
     if (ejeV.titulo && ejeV.titulo.texto) { const lt = L(ejeV.titulo.letra, { tam: 10, b: false }); if (horizontal) t((pl + pr) / 2, h - 7 * pt, ejeV.titulo.texto, lt, "middle"); else partes.push(`<text x="${n2(7 * pt + lt.tam * pt)}" y="${n2((ptop + pb) / 2)}" font-family="${esc(fam(lt.f))}" font-size="${n2(lt.tam * pt)}" fill="${esc(lt.c)}" font-weight="${lt.b ? 700 : 400}" font-style="normal" text-anchor="middle" transform="rotate(-90 ${n2(7 * pt + lt.tam * pt)} ${n2((ptop + pb) / 2)})">${esc(ejeV.titulo.texto)}</text>`); }
-    if (ejeC.titulo && ejeC.titulo.texto) { const lt = L(ejeC.titulo.letra, { tam: 10 }); if (horizontal) partes.push(`<text x="${n2(7 * pt + lt.tam * pt)}" y="${n2((ptop + pb) / 2)}" font-family="${esc(fam(lt.f))}" font-size="${n2(lt.tam * pt)}" fill="${esc(lt.c)}" font-weight="${lt.b ? 700 : 400}" font-style="normal" text-anchor="middle" transform="rotate(-90 ${n2(7 * pt + lt.tam * pt)} ${n2((ptop + pb) / 2)})">${esc(ejeC.titulo.texto)}</text>`); else t((pl + pr) / 2, pb + lc.tam * pt * 1.6 + lt.tam * pt * 1.1, ejeC.titulo.texto, lt, "middle"); }
+    if (ejeC.titulo && ejeC.titulo.texto) { const lt = L(ejeC.titulo.letra, { tam: 10 }); if (horizontal) partes.push(`<text x="${n2(7 * pt + lt.tam * pt)}" y="${n2((ptop + pb) / 2)}" font-family="${esc(fam(lt.f))}" font-size="${n2(lt.tam * pt)}" fill="${esc(lt.c)}" font-weight="${lt.b ? 700 : 400}" font-style="normal" text-anchor="middle" transform="rotate(-90 ${n2(7 * pt + lt.tam * pt)} ${n2((ptop + pb) / 2)})">${esc(ejeC.titulo.texto)}</text>`); else t((pl + pr) / 2, pb + (m.tablaDatos ? L(m.tablaDatos.letra, { tam: 9 }).tam * pt * 1.5 * (1 + series.length) : lc.tam * pt * 1.6) + lt.tam * pt * 1.1, ejeC.titulo.texto, lt, "middle"); }
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${n2(w)}" height="${n2(h)}" viewBox="0 0 ${n2(w)} ${n2(h)}">${partes.join("")}</svg>`;
 
     // ---- columnas 3D (Excel con ejes en ángulo recto): el frente sin deformar y la profundidad hacia arriba a la
