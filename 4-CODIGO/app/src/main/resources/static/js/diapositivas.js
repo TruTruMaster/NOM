@@ -37,11 +37,34 @@
   const tema = (doc) => TEMAS[doc && doc.valor ? doc.valor("_doc", "tema") : ""] || null;
   const fuenteCss = (f) => (NOM.textoRico && f ? NOM.textoRico.cssFuente(f) : f ? `'${f}',sans-serif` : "");
   /** CSS de un fondo. */
+  const urlCss = (u) => String(u).replace(/["'()\\<>]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
+  // Degradado exacto de PowerPoint (varias paradas, ángulo, radial): solo colores, porcentajes y grados.
+  const CSS_DEGRADADO = /^(linear|radial)-gradient\((?:[a-z ]+ at \d+% \d+%|-?[\d.]+deg|circle[a-z -]*|ellipse[a-z -]*)?(?:,?\s*(?:#[0-9A-Fa-f]{6}|rgba\(\d+,\d+,\d+,[\d.]+\))\s+-?[\d.]+%)+\)$/;
+  const TRAMAS = { pct5: 0.05, pct10: 0.1, pct20: 0.2, pct25: 0.25, pct30: 0.3, pct40: 0.4, pct50: 0.5, pct60: 0.6, pct70: 0.7, pct75: 0.75, pct80: 0.8, pct90: 0.9 };
   function cssFondo(f) {
     if (!f) return "";
+    if (f.tipo === "degradado" && f.css && CSS_DEGRADADO.test(f.css)) return f.css;
+    if (f.tipo === "trama" && NOM.geomOffice && NOM.geomOffice.trama(f.trama, 1) && /^#[0-9A-Fa-f]{6}$/.test(f.linea || "") && /^#[0-9A-Fa-f]{6}$/.test(f.color || "")) {
+      // la trama de Office tal cual: 8 × 8 puntos de 1/96 de pulgada, repetidos
+      const pp = Math.max(0.25, Math.min(4, +f.pp || 0.75)), lado = Math.round(pp * 800) / 100;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${lado}" height="${lado}"><rect width="${lado}" height="${lado}" fill="${f.color}"/><path d="${NOM.geomOffice.trama(f.trama, pp)}" fill="${f.linea}"/></svg>`;
+      return `${f.color} url('data:image/svg+xml,${encodeURIComponent(svg).replace(/'/g, "%27").replace(/\(/g, "%28").replace(/\)/g, "%29")}') 0 0 / ${lado}px ${lado}px repeat`;
+    }
+    if (f.tipo === "trama") {
+      // trama de PowerPoint: el color de la trama mezclado con el de fondo según su porcentaje (las de líneas, a rayas)
+      const a = TRAMAS[f.trama], lin = /horz|vert|dn|up|diag|cross|wave|zigZag|brick|weave|trellis|grid|check/i.test(f.trama || "");
+      if (lin) return `repeating-linear-gradient(${/vert/i.test(f.trama) ? 90 : /up/i.test(f.trama) ? 45 : /dn/i.test(f.trama) ? -45 : 0}deg, ${f.linea || "#000"} 0 1px, ${f.color || "#fff"} 1px 6px)`;
+      return `color-mix(in srgb, ${f.linea || "#000"} ${Math.round((a == null ? 0.5 : a) * 100)}%, ${f.color || "#fff"})`;
+    }
+    // (la dirección va entre comillas simples: este estilo se escribe dentro de un style="…" con comillas dobles)
+    if (f.tipo === "imagen" && f.src && (f.ajuste === "estirar" || f.ajuste === "mosaico")) {
+      const u = urlCss(f.src);
+      const px = (v, d) => (isFinite(+v) && +v > 0 ? Math.round(+v * 100) / 100 : d) + "px";
+      return f.ajuste === "estirar" ? `#fff url('${u}') 0 0 / 100% 100% no-repeat` : `#fff url('${u}') ${px(f.tx, 0)} ${px(f.ty, 0)} / ${px(f.tw, 48)} ${px(f.th, 48)} repeat`;
+    }
     if (f.tipo === "degradado") return `linear-gradient(${+f.angulo || 135}deg, ${f.c1 || "#FFFFFF"}, ${f.c2 || "#CFE0FF"})`;
     if (f.tipo === "rayas") return `repeating-linear-gradient(${f.color || "#FFFDF5"} 0 31px, ${f.linea || "#D7E3F4"} 31px 32px)`;
-    if (f.tipo === "imagen" && f.src) return `${f.ajuste === "ajustar" ? "#000" : "#fff"} url("${String(f.src).replace(/"/g, "%22")}") center / ${f.ajuste === "ajustar" ? "contain" : "cover"} no-repeat`;
+    if (f.tipo === "imagen" && f.src) return `${f.ajuste === "ajustar" ? "#000" : "#fff"} url('${urlCss(f.src)}') center / ${f.ajuste === "ajustar" ? "contain" : "cover"} no-repeat`;
     if (f.tipo === "color") return f.color || "#FFFFFF";
     return "";
   }
@@ -64,7 +87,13 @@
 
   // ------------------------------------------------------------ texto con formato dentro de los cuadros
   const ETIQUETAS = { B: "b", STRONG: "b", I: "i", EM: "i", U: "u", S: "s", STRIKE: "s", DEL: "s", SUB: "sub", SUP: "sup", SPAN: "span", FONT: "span", A: "a", UL: "ul", OL: "ol", LI: "li", DIV: "div", P: "div", BR: "br" };
-  const ESTILOS_OK = ["color", "background-color", "font-size", "font-weight", "font-style", "text-decoration", "text-decoration-line", "text-align", "font-family"];
+  // (también el formato de párrafo que trae PowerPoint: interlineado, márgenes, sangrías, espaciado y la viñeta
+  // como un bloque en línea de ancho fijo; solo números con su unidad, nada que cargue algo de afuera)
+  const ESTILOS_OK = ["color", "background-color", "font-size", "font-weight", "font-style", "text-decoration", "text-decoration-line", "text-align", "font-family",
+    "line-height", "margin-top", "margin-bottom", "margin-left", "text-indent", "letter-spacing", "text-transform", "font-variant-caps", "vertical-align", "display", "width"];
+  const MEDIDA = /^-?\d+(\.\d+)?(px|pt|em|%)?$/;
+  const VALOR_OK = { "line-height": MEDIDA, "margin-top": MEDIDA, "margin-bottom": MEDIDA, "margin-left": MEDIDA, "text-indent": MEDIDA, "letter-spacing": MEDIDA, width: MEDIDA,
+    "text-transform": /^(uppercase|lowercase|none|capitalize)$/, "font-variant-caps": /^(small-caps|normal|all-small-caps)$/, "vertical-align": /^(super|sub|baseline|-?\d+(\.\d+)?(em|%))$/, display: /^(inline-block|inline)$/ };
   const colorOk = (v) => /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\)|[a-z]+)$/i.test(v.trim());
   /** Solo se guarda formato de texto: negrita, cursiva, subrayado, tachado, color, tamaño, listas,
       alineación y enlaces http(s). Lo demás (scripts, estilos raros) se descarta. */
@@ -86,6 +115,7 @@
           if (i < 0) return;
           const k = d.slice(0, i).trim().toLowerCase(), v = d.slice(i + 1).trim();
           if (!ESTILOS_OK.includes(k) || /url\(|expression|javascript/i.test(v)) return;
+          if (VALOR_OK[k] && !VALOR_OK[k].test(v)) return;
           if ((k === "color" || k === "background-color") && !colorOk(v)) return;
           if (k === "font-size" && !/^\d+(\.\d+)?(px|pt|em|rem|%)$/.test(v)) return;
           st += `${k}:${v};`;

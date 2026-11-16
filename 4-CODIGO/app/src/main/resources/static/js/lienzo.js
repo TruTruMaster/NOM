@@ -142,10 +142,45 @@
     const relleno = lineal || b.relleno === false ? null : b.color || "#E7E5EE";
     const ancho = lineal ? (b.bordeAncho || 3) : +b.bordeAncho || (CON_CONTORNO.has(f) ? 2 : 0);
     const trazo = ancho ? b.borde || (lineal ? "#4A4854" : "#2B2A33") : null;
-    return { f, lineal, relleno, ancho, trazo, radio: b.radio != null ? +b.radio : f === "rect" ? 14 : f === "burbuja" ? 14 : 0, estilo: b.bordeEstilo || "solido" };
+    return { f, lineal, relleno, ancho, trazo, radio: b.radio != null ? +b.radio : f === "rect" ? 14 : f === "burbuja" ? 14 : 0, estilo: b.bordeEstilo || "solido",
+      prst: b.prst && NOM.geomOffice && NOM.geomOffice.tiene(b.prst) ? b.prst : null, av: b.av || null,
+      // forma libre de Office (custGeom) y relleno con degradado o imagen (los de PowerPoint)
+      cust: b.cust && Array.isArray(b.cust.p) && NOM.geomOffice ? b.cust : null, pintura: !lineal && b.relleno !== false && pinturaValida(b.pintura) ? b.pintura : null, id: b.id };
+  }
+  const COLOR_SVG = /^(#[0-9A-Fa-f]{6}|rgba\(\d+,\d+,\d+,[\d.]+\))$/;
+  function pinturaValida(pt) {
+    if (!pt || typeof pt !== "object") return false;
+    if (pt.tipo === "img") return typeof pt.src === "string" && /^(data:image\/|blob:|\/api\/)/.test(pt.src);
+    if (pt.tipo === "trama") return !!(NOM.geomOffice && NOM.geomOffice.trama(pt.prst, 1)) && /^#[0-9A-Fa-f]{6}$/.test(pt.fg || "") && /^#[0-9A-Fa-f]{6}$/.test(pt.bg || "");
+    if (pt.tipo === "lin" || pt.tipo === "rad") return Array.isArray(pt.paradas) && pt.paradas.length >= 2 && pt.paradas.every((q) => Array.isArray(q) && isFinite(q[0]) && COLOR_SVG.test(q[1]));
+    return false;
+  }
+  /** Definición SVG del relleno (degradado lineal o radial, o imagen estirada) de una forma de w × h. */
+  function defPintura(pt, id, w, h) {
+    const paradas = () => pt.paradas.map(([o, c]) => `<stop offset="${n2(Math.max(0, Math.min(1, +o)))}" stop-color="${esc(c)}"/>`).join("");
+    if (pt.tipo === "trama") {
+      const pp = Math.max(0.25, Math.min(4, +pt.pp || 0.75)), lado = n2(pp * 8);
+      return `<pattern id="${esc(id)}" patternUnits="userSpaceOnUse" x="0" y="0" width="${lado}" height="${lado}"><rect width="${lado}" height="${lado}" fill="${esc(pt.bg)}"/><path d="${NOM.geomOffice.trama(pt.prst, pp)}" fill="${esc(pt.fg)}"/></pattern>`;
+    }
+    if (pt.tipo === "img") return `<pattern id="${esc(id)}" patternUnits="userSpaceOnUse" x="0" y="0" width="${n2(w)}" height="${n2(h)}"><image href="${esc(pt.src)}" x="0" y="0" width="${n2(w)}" height="${n2(h)}" preserveAspectRatio="none"/></pattern>`;
+    if (pt.tipo === "lin") {
+      // como PowerPoint: el ángulo va en el sentido de las agujas del reloj y el degradado cubre toda la forma
+      const a = ((+pt.ang || 0) * Math.PI) / 180, cx = w / 2, cy = h / 2, L = (Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a))) / 2;
+      return `<linearGradient id="${esc(id)}" gradientUnits="userSpaceOnUse" x1="${n2(cx - L * Math.cos(a))}" y1="${n2(cy - L * Math.sin(a))}" x2="${n2(cx + L * Math.cos(a))}" y2="${n2(cy + L * Math.sin(a))}">${paradas()}</linearGradient>`;
+    }
+    const cx = (+pt.cx || 0.5) * w, cy = (+pt.cy || 0.5) * h, r = Math.max(Math.hypot(cx, cy), Math.hypot(w - cx, cy), Math.hypot(cx, h - cy), Math.hypot(w - cx, h - cy));
+    return `<radialGradient id="${esc(id)}" gradientUnits="userSpaceOnUse" cx="${n2(cx)}" cy="${n2(cy)}" r="${n2(r)}">${paradas()}</radialGradient>`;
   }
   /** 8.4 Piezas de una figura: la principal (relleno y contorno) y sus adornos (doble borde, pestaña, centro). */
   function partesFigura(e, w, h) {
+    // Forma de Office: su geometría exacta (con las caras más claras u oscuras que define Office), la de la norma
+    // o una libre del archivo; con degradado o imagen, las caras normales usan esa pintura
+    if (e.prst || e.cust) {
+      const tz = e.cust ? NOM.geomOffice.trazosDe(e.cust, w, h, e.av) : NOM.geomOffice.trazos(e.prst, w, h, e.av);
+      const normal = e.pintura ? `url(#pf-${e.id})` : e.relleno;
+      if (tz && tz.length) return tz.map((t) => ({ d: t.d, relleno: t.relleno === "none" || !e.relleno ? null : t.relleno === "norm" ? normal : NOM.geomOffice.matiz(e.relleno, t.relleno), trazo: t.contorno ? e.trazo : null, par: !!e.cust }));
+    }
+    if (e.pintura) return [{ d: ruta(e.f, w, h, e.radio), relleno: `url(#pf-${e.id})`, trazo: e.trazo }];
     const r = [{ d: ruta(e.f, w, h, e.radio), relleno: e.relleno, trazo: e.trazo }];
     const contorno = (d) => r.push({ d, relleno: null, trazo: e.trazo });
     const elipse = (x, y, ew, eh) => `M${n2(x)},${n2(y + eh / 2)} A${n2(ew / 2)},${n2(eh / 2)} 0 1 0 ${n2(x + ew)},${n2(y + eh / 2)} A${n2(ew / 2)},${n2(eh / 2)} 0 1 0 ${n2(x)},${n2(y + eh / 2)} Z`;
@@ -156,7 +191,37 @@
     if (e.f === "paquete") contorno(`M0,${n2(Math.min(24, h * 0.22))} H${n2(Math.min(w * 0.45, 120))}`);
     return r;
   }
+  /** Línea o conector de Office: en píxeles de verdad (sin estirar el trazo), de esquina a esquina, con sus puntas. */
+  function svgLineaOffice(b) {
+    const w = Math.max(0, +b.w || 0), h = Math.max(0, +b.h || 0), ancho = Math.max(0.1, +b.bordeAncho || 1), color = b.borde || "#000000";
+    const tz = NOM.geomOffice.trazos(b.prst || "line", Math.max(w, 0.01), Math.max(h, 0.01), b.av) || [{ d: `M0,0L${n2(w)},${n2(h)}`, contorno: true }];
+    const dash = b.bordeEstilo === "guiones" ? ` stroke-dasharray="${n2(ancho * 4)} ${n2(ancho * 3)}"` : b.bordeEstilo === "puntos" ? ` stroke-dasharray="${n2(ancho)} ${n2(ancho)}"` : "";
+    const voltear = b.volteoH || b.volteoV ? ` transform="translate(${b.volteoH ? n2(w) : 0} ${b.volteoV ? n2(h) : 0}) scale(${b.volteoH ? -1 : 1} ${b.volteoV ? -1 : 1})"` : "";
+    // puntas: en la dirección del primer y del último tramo (headEnd al principio, tailEnd al final)
+    const nums = ((tz[0] && tz[0].d) || "").match(/-?\d+(\.\d+)?/g) || [], q = nums.map(Number);
+    const TAM = { sm: 2, med: 3, lg: 5 };
+    const puntaSvg = (pt, x, y, x0, y0) => {
+      if (!pt || !pt.t) return "";
+      let dx = x - x0, dy = y - y0;
+      const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
+      const base = Math.max(ancho, 1), W = base * (TAM[pt.w] || 3), Ln = base * (TAM[pt.l] || 3), nx = (-dy * W) / 2, ny = (dx * W) / 2;
+      const bx = x - dx * Ln, by = y - dy * Ln, c = esc(color);
+      if (pt.t === "oval") return `<ellipse cx="${n2(x)}" cy="${n2(y)}" rx="${n2(Ln / 2)}" ry="${n2(W / 2)}" transform="rotate(${n2((Math.atan2(dy, dx) * 180) / Math.PI)} ${n2(x)} ${n2(y)})" fill="${c}"/>`;
+      if (pt.t === "diamond") return `<path d="M${n2(x + dx * Ln / 2)},${n2(y + dy * Ln / 2)} L${n2(x + nx)},${n2(y + ny)} L${n2(x - dx * Ln / 2)},${n2(y - dy * Ln / 2)} L${n2(x - nx)},${n2(y - ny)} Z" fill="${c}"/>`;
+      if (pt.t === "arrow") return `<path d="M${n2(bx + nx)},${n2(by + ny)} L${n2(x)},${n2(y)} L${n2(bx - nx)},${n2(by - ny)}" fill="none" stroke="${c}" stroke-width="${ancho}" stroke-linejoin="miter"/>`;
+      if (pt.t === "stealth") return `<path d="M${n2(x)},${n2(y)} L${n2(bx + nx)},${n2(by + ny)} L${n2(x - dx * Ln * 0.6)},${n2(y - dy * Ln * 0.6)} L${n2(bx - nx)},${n2(by - ny)} Z" fill="${c}"/>`;
+      return `<path d="M${n2(x)},${n2(y)} L${n2(bx + nx)},${n2(by + ny)} L${n2(bx - nx)},${n2(by - ny)} Z" fill="${c}"/>`;
+    };
+    let puntas = "";
+    if (b.puntas && q.length >= 4) {
+      puntas += puntaSvg(b.puntas.ini, q[0], q[1], q[2], q[3]);
+      puntas += puntaSvg(b.puntas.fin, q[q.length - 2], q[q.length - 1], q[q.length - 4], q[q.length - 3]);
+    }
+    const W = n2(Math.max(1, w)), H = n2(Math.max(1, h));
+    return `<svg class="forma-svg linea-office" width="${W}" height="${H}" style="width:${W}px;height:${H}px" aria-hidden="true"><g${voltear}>${tz.filter((t) => t.contorno !== false).map((t) => `<path d="${t.d}" fill="none" stroke="${esc(color)}" stroke-width="${ancho}"${dash} stroke-linecap="${b.bordeEstilo === "puntos" ? "round" : "butt"}" stroke-linejoin="round"/>`).join("")}${puntas}</g></svg>`;
+  }
   function svgFigura(b) {
+    if (b.lineaOffice && NOM.geomOffice) return svgLineaOffice(b);
     const w = Math.max(1, b.w || 1), h = Math.max(1, b.h || 1), e = estiloFigura(b);
     const dash = e.estilo === "guiones" ? ` stroke-dasharray="${e.ancho * 3} ${e.ancho * 2}"` : e.estilo === "puntos" ? ` stroke-dasharray="0 ${e.ancho * 2}"` : "";
     const tapa = e.estilo === "puntos" || e.f === "actor" ? "round" : "butt";
@@ -164,8 +229,9 @@
     let extra = "";
     if (e.f === "nota") { const k = Math.min(w, h) * 0.16; extra = `<path d="M${n2(w - k)},${n2(h)} L${n2(w - k)},${n2(h - k)} L${n2(w)},${n2(h - k)} Z" fill="rgba(0,0,0,.12)"/>`; }
     if (e.f === "linea-flecha") { const k = 6 + e.ancho * 2.2; extra = `<path d="M${n2(w - k)},${n2(h / 2 - k * 0.6)} L${n2(w)},${n2(h / 2)} L${n2(w - k)},${n2(h / 2 + k * 0.6)} Z" fill="${esc(e.trazo)}"/>`; }
-    const piezas = partesFigura(e, w, h).map((pz) => `<path d="${pz.d}" fill="${pz.relleno ? esc(pz.relleno) : "none"}" stroke="${pz.trazo ? esc(pz.trazo) : "none"}" stroke-width="${e.ancho}"${pz.trazo ? dash : ""} stroke-linejoin="round" stroke-linecap="${tapa}" vector-effect="non-scaling-stroke"/>`).join("");
-    return `<svg class="forma-svg" viewBox="0 0 ${n2(w)} ${n2(h)}" preserveAspectRatio="none" aria-hidden="true"><g${voltear}>${piezas}${extra}</g></svg>`;
+    const defs = e.pintura ? `<defs>${defPintura(e.pintura, "pf-" + e.id, w, h)}</defs>` : "";
+    const piezas = partesFigura(e, w, h).map((pz) => `<path d="${pz.d}"${pz.par ? ' fill-rule="evenodd"' : ""} fill="${pz.relleno ? esc(pz.relleno) : "none"}" stroke="${pz.trazo ? esc(pz.trazo) : "none"}" stroke-width="${e.ancho}"${pz.trazo ? dash : ""} stroke-linejoin="round" stroke-linecap="${tapa}" vector-effect="non-scaling-stroke"/>`).join("");
+    return `<svg class="forma-svg" viewBox="0 0 ${n2(w)} ${n2(h)}" preserveAspectRatio="none" aria-hidden="true">${defs}<g${voltear}>${piezas}${extra}</g></svg>`;
   }
   const ALIN = { izq: "left", centro: "center", der: "right" };
   /** ¿El texto se ve en negrita? Si no se eligió: las figuras y los títulos sí; un cuadro de texto normal, no. */
@@ -357,13 +423,34 @@
     iconosLimpios.set(crudo, r);
     return r;
   }
+  /** Texto importado de PowerPoint: márgenes internos, anclaje (arriba, en medio, abajo), columnas, sin ajuste
+      y texto vertical, como PowerPoint (el formato de cada párrafo y tramo ya viene en su html). */
+  function estiloPpt(c, extra) {
+    const n = (v) => Math.max(0, +v || 0);
+    const [l, t, r, bb] = Array.isArray(c.ins) ? c.ins : [9.6, 4.8, 9.6, 4.8];
+    let s = `padding:${n(t)}px ${n(r)}px ${n(bb)}px ${n(l)}px;`;
+    if (c.cols > 1) s += `column-count:${Math.min(16, Math.round(+c.cols))};column-gap:${n(c.espCol)}px;display:block;`;
+    if (c.ajusta === false) s += "white-space:pre;";
+    if (c.vert === "vert" || c.vert === "eaVert") s += "writing-mode:vertical-rl;";
+    else if (c.vert === "vert270") s += "writing-mode:vertical-rl;transform:rotate(180deg);";
+    return s + (extra || "");
+  }
+  const ANCLA = { t: "t", ctr: "ctr", b: "b", just: "t", dist: "t" };
   function contenido(b) {
     const D = NOM.diapo;
+    if (b.tipo === "texto" && b.ppt) return `<div class="libre-texto ppt" data-anc="${ANCLA[b.ppt.anc] || "t"}" data-estilo="${esc(b.estilo || "p")}" data-ph="${esc(b.ph || "Escribe aquí")}" style="${esc(estiloPpt(b.ppt))}">${D ? D.htmlRico(b.html) : htmlSeguro(b.html)}</div>`;
     if (b.tipo === "texto") return `<div class="libre-texto" data-estilo="${esc(b.estilo || "p")}" data-ph="${esc(b.ph || "Escribe aquí")}" style="${estiloTexto(b)}">${D ? D.htmlRico(b.html) : htmlSeguro(b.html)}</div>`;
     if (b.tipo === "forma") {
       const e = estiloFigura(b);
       const cm = COMPARTIMENTOS.has(e.f);
       const txt = cm ? compartimentos(e.f, b.texto) : b.html && D ? D.htmlRico(b.html) : esc(b.texto || "");
+      if (b.ppt && !e.lineal) {
+        // el texto de una forma de Office va en el rectángulo de texto de su geometría
+        const w = Math.max(1, b.w || 1), h = Math.max(1, b.h || 1);
+        const rt = e.cust ? NOM.geomOffice.rectTextoDe(e.cust, w, h, e.av) : e.prst && NOM.geomOffice ? NOM.geomOffice.rectTexto(e.prst, w, h, e.av) : { l: 0, t: 0, r: w, b: h };
+        const caja = `left:${n2(rt.l)}px;top:${n2(rt.t)}px;width:${n2(Math.max(1, rt.r - rt.l))}px;height:${n2(Math.max(1, rt.b - rt.t))}px;`;
+        return `<div class="forma ppt-forma" data-figura="${esc(e.f)}">${svgFigura(b)}<div class="txt ppt" data-anc="${ANCLA[b.ppt.anc] || "ctr"}" data-ph="Texto" style="${esc(estiloPpt(b.ppt, caja))}">${txt}</div></div>`;
+      }
       return `<div class="forma" data-figura="${esc(e.f)}"${cm ? ` style="--cm-borde:${esc(e.trazo || "#2B2A33")}"` : ""}>${svgFigura(b)}${e.lineal ? "" : `<div class="txt" data-ph="Texto" style="${estiloTexto(b, e.relleno)}">${txt}</div>`}</div>`;
     }
     if (b.tipo === "imagen") {
@@ -394,7 +481,7 @@
     if (b.opacidad != null && b.opacidad < 1) s += `opacity:${+b.opacidad};`;
     return s;
   }
-  const clasesBloque = (b) => (b.sombra === true || (b.sombra == null && b.tipo === "forma" && !esLinea(b.figura)) ? " sombra" : "") + (b.bloqueado ? " bloqueado" : "");
+  const clasesBloque = (b) => (b.sombra === true || (b.sombra == null && b.tipo === "forma" && !esLinea(b.figura)) ? " sombra" : "") + (b.bloqueado ? " bloqueado" : "") + (b.lineaOffice ? " linea-office" : "");
 
   /** Posición efectiva: los bloques que nacieron en modo Texto aún no tienen x, y. */
   function posiciones(bs, acotado) {
@@ -596,6 +683,7 @@
       const bs = bloques();
       if (acotado) { aplicarDiapo(); const t = W() + "x" + H(); if (t !== ultimoTam) { ultimoTam = t; aplicarVista(); } }
       $$(".bl", mundo).forEach((e) => e.remove());
+      if (acotado && ed.pagina) { const capa = capaHeredada(doc(), ed.pagina); if (capa) mundo.insertAdjacentHTML("afterbegin", capa); }
       const mapa = {};
       for (const id of [...sel]) if (!bs.some((b) => b.id === id)) sel.delete(id);
       bs.filter((b) => b.tipo !== "conector").sort((a, b) => (a.z || 0) - (b.z || 0)).forEach((b, i) => {
@@ -2404,6 +2492,12 @@
     return { estado: e, pasos: pasos.length - 1 };
   }
   /** HTML de los bloques de una diapositiva. paso: el paso de la presentación (null = todo visible, sin animar). */
+  /** Formas heredadas del patrón y del diseño de PowerPoint (van debajo de todo y no se tocan). */
+  function capaHeredada(doc, p) {
+    const k = doc && doc.valor && doc.valor("_doc", "capa:" + p), bs = k ? doc.valor("_doc", "capaBl:" + k) : null;
+    if (!Array.isArray(bs) || !bs.length) return "";
+    return bs.map((b) => `<div class="bl heredado" aria-hidden="true" style="${estiloBloque(Object.assign({}, b, { z: -1 }))}z-index:0;pointer-events:none;overflow:${b.tipo === "forma" || b.ppt ? "visible" : "hidden"};">${contenido(b)}</div>`).join("");
+  }
   function htmlDiapositiva(doc, p, paso, opc) {
     const bs = bloquesPresentables(doc, p);
     const est = paso == null ? null : estadoAnimaciones(doc, p, paso, opc && opc.final).estado;
@@ -2412,12 +2506,13 @@
     const oculto = (id) => est && est[id] && est[id].oculto && !est[id].anim.length;
     const cs = doc.deLaPagina(p).filter((c) => c.tipo === "conector" && porId[c.desde] && porId[c.hasta] && !oculto(c.desde) && !oculto(c.hasta));
     const flechas = cs.length ? `<svg class="capa-conectores" width="${T.w}" height="${T.h}" style="z-index:0" aria-hidden="true">${cs.map((c) => svgConector(c, porId[c.desde], porId[c.hasta])).join("")}</svg>` : "";
-    return flechas + bs.map((b) => {
+    return capaHeredada(doc, p) + flechas + bs.map((b) => {
       const s = est && est[b.id];
       if (s && s.oculto && !s.anim.length) return "";
       // Varias animaciones del mismo bloque en el mismo paso (entrada y énfasis…) van juntas.
       const st = s && s.anim.length ? `animation-name:${s.anim.map((x) => `a-${x.tipo}-${x.efecto}`).join(",")};animation-duration:${s.anim.map((x) => x.dur + "ms").join(",")};animation-delay:${s.anim.map((x) => x.t + "ms").join(",")};animation-fill-mode:both;animation-timing-function:cubic-bezier(.2,.8,.2,1);` : "";
-      return `<div class="bl${clasesBloque(b)}${s && s.anim.length ? " animando" : ""}" data-id="${esc(b.id)}" style="${estiloBloque(b)}overflow:${b.tipo === "forma" ? "visible" : "hidden"};${st}">${contenido(b)}</div>`;
+      // (el texto de PowerPoint no se recorta en el borde de su cuadro: PowerPoint lo deja salir)
+      return `<div class="bl${clasesBloque(b)}${s && s.anim.length ? " animando" : ""}" data-id="${esc(b.id)}" style="${estiloBloque(b)}overflow:${b.tipo === "forma" || b.ppt ? "visible" : "hidden"};${st}">${contenido(b)}</div>`;
     }).join("");
   }
 

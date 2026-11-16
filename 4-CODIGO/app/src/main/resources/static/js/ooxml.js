@@ -3030,8 +3030,9 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         if (b.tipo === "ecuacion") return caja(nid, "Ecuación", b, `<a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="es-MX" sz="${Math.round(((b.tTam || 32) / 1.333) * k * 100)}" dirty="0"/><a:t>${x(NOM.ecuaciones ? NOM.ecuaciones.texto(b.tex || "") : b.tex || "")}</a:t></a:r></a:p>`, "LaTeX: " + (b.tex || ""));
         if (b.tipo === "forma") {
           const e = NOM.figuras.estiloFigura(b);
-          const geo = GEO[e.f] || "roundRect";
-          const av = geo === "roundRect" ? `<a:gd name="adj" fmla="val ${Math.round(Math.min(50000, (e.radio / Math.max(1, Math.min(b.w, b.h))) * 100000))}"/>` : "";
+          const geo = b.prst && /^[a-zA-Z0-9]+$/.test(b.prst) ? b.prst : GEO[e.f] || "roundRect";
+          const av = b.prst && b.av ? Object.entries(b.av).filter(([n, v]) => /^[a-z0-9]+$/i.test(n) && isFinite(+v)).map(([n, v]) => `<a:gd name="${n}" fmla="val ${Math.round(+v)}"/>`).join("")
+            : geo === "roundRect" ? `<a:gd name="adj" fmla="val ${Math.round(Math.min(50000, (e.radio / Math.max(1, Math.min(b.w, b.h))) * 100000))}"/>` : "";
           if (geo === "line") {
             return `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="${nid}" name="Línea ${nid}"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr><p:spPr>${pos(Object.assign({}, b, { y: b.y + b.h / 2, h: 0 }))}<a:prstGeom prst="line"><a:avLst/></a:prstGeom>${linea(b, e)}</p:spPr></p:cxnSp>`;
           }
@@ -3542,20 +3543,58 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       flowChartDecision: "rombo", flowChartTerminator: "elipse", flowChartMagneticDisk: "cilindro" };
     // Colores del tema: casi todas las figuras de una presentación real dicen "acento 1" o "texto 1"
     // en vez de un color escrito.
-    const esquema = {};
-    {
-      const tt = await z.texto((Object.values(relsPres).find((q) => /\/theme$/.test(q.tipo)) || {}).destino || "ppt/theme/theme1.xml");
-      const cs = tt ? todos(P(tt), "clrScheme")[0] : null;
-      hs(cs).forEach((c) => { const v = h1(c, "srgbClr") ? at(h1(c, "srgbClr"), "val") : h1(c, "sysClr") ? at(h1(c, "sysClr"), "lastClr") : null; if (v && /^[0-9a-f]{6}$/i.test(v)) esquema[c.localName] = v.toUpperCase(); });
-      Object.assign(esquema, { tx1: esquema.dk1, bg1: esquema.lt1, tx2: esquema.dk2, bg2: esquema.lt2 });
+    const esquema = {}, lineasTema = {}, fuentesTema = { mayor: null, menor: null }, fondosTema = {};
+    let relsTema = {};
+    const capas = new Map();   // diseño → formas heredadas del patrón y del diseño (se pintan debajo)
+    // Cada patrón trae su propio tema (una presentación puede mezclar varios): colores, fuentes, grosores de línea y
+    // rellenos de fondo. Se leen una vez por tema y se cambian al pasar a una diapositiva de otro patrón.
+    const temas = new Map();
+    async function leerTema(rutaTema) {
+      if (temas.has(rutaTema)) return temas.get(rutaTema);
+      const t = { esquema: {}, lineas: {}, fondos: {}, fuentes: { mayor: null, menor: null }, rels: {} };
+      const tt = await z.texto(rutaTema), dt = tt ? P(tt) : null;
+      const cs = dt ? todos(dt, "clrScheme")[0] : null;
+      hs(cs).forEach((c) => { const v = h1(c, "srgbClr") ? at(h1(c, "srgbClr"), "val") : h1(c, "sysClr") ? at(h1(c, "sysClr"), "lastClr") : null; if (v && /^[0-9a-f]{6}$/i.test(v)) t.esquema[c.localName] = v.toUpperCase(); });
+      Object.assign(t.esquema, { tx1: t.esquema.dk1, bg1: t.esquema.lt1, tx2: t.esquema.dk2, bg2: t.esquema.lt2 });
+      // grosor (puntos) de las líneas de los estilos del tema: <p:style><a:lnRef idx="2"> usa el segundo
+      const ls = dt ? todos(todos(dt, "lnStyleLst")[0], "ln") : [];
+      ls.forEach((l, i) => (t.lineas[i + 1] = +(at(l, "w") || 9525) / 12700));
+      // rellenos de fondo del tema (bgRef idx="1001"… usa el primero)
+      const bgl = dt ? todos(dt, "bgFillStyleLst")[0] : null;
+      hs(bgl).forEach((f, i) => { f.__tema = true; t.fondos[i + 1] = f; });
+      t.rels = tt ? await relsDe(rutaTema) : {};
+      // fuentes del tema: «+mj-lt» (títulos) y «+mn-lt» (cuerpo)
+      ["majorFont", "minorFont"].forEach((k, i) => { const f = dt && todos(dt, k)[0], l = f && h1(f, "latin"); if (l && at(l, "typeface")) t.fuentes[i ? "menor" : "mayor"] = at(l, "typeface"); });
+      temas.set(rutaTema, t);
+      return t;
     }
-    /** Más claro o más oscuro, como lo pide el archivo (lumMod, lumOff, tint, shade: en milésimas de %). */
+    function usarTema(t) {
+      [[esquema, t.esquema], [lineasTema, t.lineas], [fondosTema, t.fondos]].forEach(([a, b]) => { for (const k in a) delete a[k]; Object.assign(a, b); });
+      fuentesTema.mayor = t.fuentes.mayor; fuentesTema.menor = t.fuentes.menor;
+      relsTema = t.rels;
+    }
+    const temaPres = await leerTema((Object.values(relsPres).find((q) => /\/theme$/.test(q.tipo)) || {}).destino || "ppt/theme/theme1.xml");
+    usarTema(temaPres);
+    /** Más claro o más oscuro, como lo pide el archivo (lumMod, lumOff, tint, shade: en milésimas de %).
+        Como Office: shade y tint se aplican en RGB lineal (gamma 2.3); lumMod y lumOff en la luminosidad. */
     function matiz(hex, c) {
+      // shade y tint primero, en el orden del archivo
+      for (const t of hs(c)) {
+        const k = +at(t, "val") / 100000;
+        if (t.localName !== "shade" && t.localName !== "tint") continue;
+        const lin = [0, 2, 4].map((i) => Math.pow(parseInt(hex.slice(i, i + 2), 16) / 255, 2.3));
+        const nuevo = lin.map((x) => (t.localName === "shade" ? x * k : 1 - (1 - x) * k));
+        hex = nuevo.map((x) => Math.round(Math.pow(Math.max(0, Math.min(1, x)), 1 / 2.3) * 255).toString(16).padStart(2, "0")).join("").toUpperCase();
+      }
       let [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
-      const v = (k) => { const e = h1(c, k); return e ? +at(e, "val") / 100000 : null; };
+      const v = (k) => { const e = h1(c, k); return e && k !== "shade" && k !== "tint" ? +at(e, "val") / 100000 : null; };
       const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
       let h = 0, sa = 0, l = (mx + mn) / 2;
       if (mx !== mn) { const d = mx - mn; sa = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn); h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h /= 6; }
+      if (v("hueMod") != null) h = (h * v("hueMod")) % 1;
+      if (v("hueOff") != null) h = (((h + (v("hueOff") * 100000) / 21600000) % 1) + 1) % 1;   // (hueOff va en 60 000avos de grado)
+      if (v("satMod") != null) sa = Math.max(0, Math.min(1, sa * v("satMod")));
+      if (v("satOff") != null) sa = Math.max(0, Math.min(1, sa + v("satOff")));
       if (v("lumMod") != null) l *= v("lumMod");
       if (v("lumOff") != null) l += v("lumOff");
       if (v("shade") != null) l *= v("shade");
@@ -3566,16 +3605,176 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       [r, g, b] = sa === 0 ? [l, l, l] : [f(h + 1 / 3), f(h), f(h - 1 / 3)];
       return [r, g, b].map((x2) => Math.round(x2 * 255).toString(16).padStart(2, "0")).join("").toUpperCase();
     }
-    const hexDe = (fill) => {
+    const hexDe = (fill, ph) => {
       const c = fill && todos(fill, "srgbClr")[0];
       if (c && /^[0-9a-f]{6}$/i.test(at(c, "val") || "")) return "#" + (hs(c).length ? matiz(at(c, "val"), c) : at(c, "val").toUpperCase());
-      const e = fill && todos(fill, "schemeClr")[0], base = e && esquema[at(e, "val")];
+      const e = fill && todos(fill, "schemeClr")[0], base = e && (at(e, "val") === "phClr" && ph ? String(ph).replace("#", "").toUpperCase() : esquema[at(e, "val")]);
       if (base) return "#" + (hs(e).length ? matiz(base, e) : base);
       const y = fill && todos(fill, "sysClr")[0];
       if (y && /^[0-9a-f]{6}$/i.test(at(y, "lastClr") || "")) return "#" + at(y, "lastClr").toUpperCase();
       const pr = fill && todos(fill, "prstClr")[0], nom = pr && { black: "000000", white: "FFFFFF", red: "FF0000", green: "008000", blue: "0000FF", yellow: "FFFF00", gray: "808080" }[at(pr, "val")];
       return nom ? "#" + nom : null;
     };
+    /** Color de un elemento de color suelto (srgbClr, schemeClr…), con phClr si viene de un estilo del tema. */
+    const colorDeElemento = (ce, ph) => {
+      if (!ce) return null;
+      let base = null;
+      if (ce.localName === "srgbClr") base = (at(ce, "val") || "").toUpperCase();
+      else if (ce.localName === "schemeClr") base = at(ce, "val") === "phClr" && ph ? String(ph).replace("#", "").toUpperCase() : esquema[at(ce, "val")];
+      else if (ce.localName === "sysClr") base = (at(ce, "lastClr") || "").toUpperCase();
+      if (!/^[0-9A-F]{6}$/.test(base || "")) return null;
+      return "#" + (hs(ce).length ? matiz(base, ce) : base);
+    };
+    /** Dos tonos (duotone de Office): cada píxel va del primer color (oscuros) al segundo (claros). */
+    function duotono(src, c1, c2) {
+      return new Promise((ok) => {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const k = Math.min(1, 1600 / Math.max(img.width, img.height));
+            const cv = document.createElement("canvas"); cv.width = Math.max(1, Math.round(img.width * k)); cv.height = Math.max(1, Math.round(img.height * k));
+            const g = cv.getContext("2d"); g.drawImage(img, 0, 0, cv.width, cv.height);
+            const d = g.getImageData(0, 0, cv.width, cv.height), px = d.data;
+            const a = [1, 3, 5].map((i) => parseInt(c1.slice(i, i + 2), 16)), b = [1, 3, 5].map((i) => parseInt(c2.slice(i, i + 2), 16));
+            for (let i = 0; i < px.length; i += 4) {
+              const l = (0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2]) / 255;
+              px[i] = a[0] + (b[0] - a[0]) * l; px[i + 1] = a[1] + (b[1] - a[1]) * l; px[i + 2] = a[2] + (b[2] - a[2]) * l;
+            }
+            g.putImageData(d, 0, 0);
+            ok(cv.toDataURL("image/jpeg", 0.9));
+          } catch (e) { ok(src); }
+        };
+        img.onerror = () => ok(src);
+        img.src = src;
+      });
+    }
+    /** Color de un relleno como CSS, con su transparencia (alpha) si la tiene. */
+    const colorCss = (fill, ph) => {
+      const hx = hexDe(fill, ph);
+      if (!hx) return null;
+      const cl = fill && (todos(fill, "srgbClr")[0] || todos(fill, "schemeClr")[0] || todos(fill, "sysClr")[0] || todos(fill, "prstClr")[0]);
+      const al = cl && h1(cl, "alpha");
+      if (!al) return hx;
+      const n = parseInt(hx.slice(1), 16), a = Math.max(0, Math.min(1, +at(al, "val") / 100000));
+      return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${Math.round(a * 1000) / 1000})`;
+    };
+    // Cuánto cubre cada trama de Office (sus 8 × 8 puntos): a tamaño normal se ve como un tono parejo.
+    const COBERTURA = { pct5: 0.05, pct10: 0.1, pct20: 0.2, pct25: 0.25, pct30: 0.3, pct40: 0.4, pct50: 0.5, pct60: 0.6, pct70: 0.7, pct75: 0.75, pct80: 0.8, pct90: 0.9,
+      horz: 0.125, vert: 0.125, ltHorz: 0.25, ltVert: 0.25, dkHorz: 0.5, dkVert: 0.5, narHorz: 0.5, narVert: 0.5, dashHorz: 0.19, dashVert: 0.19, cross: 0.23,
+      dnDiag: 0.125, upDiag: 0.125, ltDnDiag: 0.25, ltUpDiag: 0.25, dkDnDiag: 0.5, dkUpDiag: 0.5, wdDnDiag: 0.375, wdUpDiag: 0.375, dashDnDiag: 0.19, dashUpDiag: 0.19,
+      diagCross: 0.25, smCheck: 0.5, lgCheck: 0.5, smGrid: 0.44, lgGrid: 0.23, dotGrid: 0.125, smConfetti: 0.125, lgConfetti: 0.3, horzBrick: 0.3, diagBrick: 0.25,
+      solidDmnd: 0.5, openDmnd: 0.25, dotDmnd: 0.125, plaid: 0.4, sphere: 0.5, weave: 0.4, divot: 0.2, shingle: 0.25, wave: 0.25, trellis: 0.55, zigZag: 0.3 };
+    function colorTrama(prst, cf, cb) {
+      const a = COBERTURA[prst] != null ? COBERTURA[prst] : 0.5;
+      const c = (h, i) => parseInt(String(h).slice(1 + i * 2, 3 + i * 2), 16);
+      return "#" + [0, 1, 2].map((i) => Math.round(c(cf, i) * a + c(cb, i) * (1 - a)).toString(16).padStart(2, "0")).join("").toUpperCase();
+    }
+    /** Ancho y alto en píxeles de una imagen (data:). */
+    const medidasImagen = (src) => new Promise((ok) => { const im = new Image(); im.onload = () => ok({ w: im.naturalWidth || 1, h: im.naturalHeight || 1 }); im.onerror = () => ok({ w: 64, h: 64 }); im.src = src; });
+    /** Resolución (puntos por pulgada) que guarda una imagen PNG (pHYs) o JPEG (JFIF); null si no la dice. */
+    function dpiImagen(src) {
+      try {
+        const i0 = src.indexOf(",") + 1, b64 = src.slice(i0, i0 + 87380);
+        const bin = atob(b64.slice(0, b64.length - (b64.length % 4))), u = (i) => bin.charCodeAt(i) & 255, u32 = (i) => ((u(i) << 24) | (u(i + 1) << 16) | (u(i + 2) << 8) | u(i + 3)) >>> 0;
+        if (bin.startsWith("\x89PNG")) {
+          for (let i = 8; i + 12 <= bin.length; ) {
+            const len = u32(i), tipo = bin.slice(i + 4, i + 8);
+            if (tipo === "pHYs") { const ppm = u32(i + 8); return u(i + 16) === 1 && ppm ? ppm * 0.0254 : null; }
+            if (tipo === "IDAT" || tipo === "IEND") break;
+            i += 12 + len;
+          }
+        } else if (u(0) === 0xff && u(1) === 0xd8 && bin.slice(6, 10) === "JFIF") {
+          const unidad = u(13), x = (u(14) << 8) | u(15);
+          return unidad === 1 && x ? x : unidad === 2 && x ? x * 2.54 : null;
+        }
+      } catch (e) { /* sin resolución: 96 ppp */ }
+      return null;
+    }
+    /** Geometría libre (custGeom) en el formato de geometrias-datos.js: guías, rectángulo del texto y trazos. */
+    function geomLibre(spPr) {
+      const cg = spPr && h1(spPr, "custGeom");
+      if (!cg) return null;
+      const num = (v) => (v != null && v !== "" && !isNaN(+v) ? +v : v || 0);
+      const guias = (n) => (n ? hs(n).filter((g) => g.localName === "gd").map((g) => [at(g, "name"), at(g, "fmla") || "val 0"]) : []);
+      const pts = (c) => todos(c, "pt").flatMap((q) => [num(at(q, "x")), num(at(q, "y"))]);
+      const def = { p: [] }, av = guias(h1(cg, "avLst")), gd = guias(h1(cg, "gdLst"));
+      if (av.length) def.av = av;
+      if (gd.length) def.gd = gd;
+      const rc = h1(cg, "rect");
+      if (rc) def.rect = ["l", "t", "r", "b"].map((k) => num(at(rc, k)));
+      hs(h1(cg, "pathLst")).filter((q) => q.localName === "path").forEach((q) => {
+        const t = { c: [] };
+        if (at(q, "w")) t.w = +at(q, "w");
+        if (at(q, "h")) t.h = +at(q, "h");
+        if (at(q, "fill") && at(q, "fill") !== "norm") t.f = at(q, "fill");
+        if (at(q, "stroke") === "0" || at(q, "stroke") === "false") t.s = 0;
+        hs(q).forEach((c) => {
+          const n = c.localName;
+          if (n === "moveTo") t.c.push(["M", ...pts(c)]);
+          else if (n === "lnTo") t.c.push(["L", ...pts(c)]);
+          else if (n === "arcTo") t.c.push(["A", ...["wR", "hR", "stAng", "swAng"].map((k) => num(at(c, k)))]);
+          else if (n === "quadBezTo") t.c.push(["Q", ...pts(c)]);
+          else if (n === "cubicBezTo") t.c.push(["C", ...pts(c)]);
+          else if (n === "close") t.c.push(["Z"]);
+        });
+        if (t.c.length) def.p.push(t);
+      });
+      return def.p.length ? def : null;
+    }
+    /** Relleno de una forma que no es un color liso: degradado (lineal o radial) o imagen (con su duotono). */
+    async function pinturaDe(spPr, relsX) {
+      const bf = spPr && h1(spPr, "blipFill"), gf = spPr && h1(spPr, "gradFill"), pf = spPr && h1(spPr, "pattFill");
+      if (pf) { const f = await fondoDeRelleno(pf, null, relsX); return f ? { tipo: "trama", prst: f.trama, fg: f.linea, bg: f.color, pp: f.pp, mezcla: f.mezcla } : null; }
+      if (bf) { const f = await fondoDeRelleno(bf, null, relsX); return f && f.src ? { tipo: "img", src: f.src } : null; }
+      if (!gf) return null;
+      const paradas = todos(gf, "gs").map((g) => [Math.round((+(at(g, "pos") || 0) / 100000) * 10000) / 10000, colorCss(g)]).filter((q) => q[1]).sort((a, b) => a[0] - b[0]);
+      if (paradas.length < 2) return null;
+      const lin = h1(gf, "lin"), path = h1(gf, "path");
+      if (path) {
+        const fr = h1(path, "fillToRect"), v = (k) => (fr ? +(at(fr, k) || 0) / 100000 : 0.5);
+        return { tipo: "rad", paradas, cx: Math.round(((v("l") + 1 - v("r")) / 2) * 1000) / 1000, cy: Math.round(((v("t") + 1 - v("b")) / 2) * 1000) / 1000 };
+      }
+      return { tipo: "lin", paradas, ang: lin ? Math.round((+(at(lin, "ang") || 0) / 60000) * 100) / 100 : 90 };
+    }
+    /** Un relleno de DrawingML (sólido, degradado, imagen, trama) → fondo de NOM-COLAB (con su CSS exacto). */
+    async function fondoDeRelleno(f, ph, relsX) {
+      if (!f) return null;
+      const nm = f.localName;
+      if (nm === "solidFill") { const c = colorCss(f, ph); return c ? { tipo: "color", color: c } : null; }
+      if (nm === "gradFill") {
+        const gs = todos(f, "gs").map((g) => ({ p: +(at(g, "pos") || 0) / 1000, c: colorCss(g, ph) })).filter((g) => g.c).sort((a, b) => a.p - b.p);
+        if (!gs.length) return null;
+        const paradas = gs.map((g) => `${g.c} ${Math.round(g.p * 100) / 100}%`).join(", ");
+        const lin = h1(f, "lin"), path = h1(f, "path");
+        let css;
+        if (path) {
+          const fr = h1(path, "fillToRect"), cx = fr ? 50 + ((+(at(fr, "l") || 0)) - (+(at(fr, "r") || 0))) / 2000 : 50, cy = fr ? 50 + ((+(at(fr, "t") || 0)) - (+(at(fr, "b") || 0))) / 2000 : 50;
+          css = `radial-gradient(${at(path, "path") === "circle" ? "circle" : "ellipse"} farthest-corner at ${Math.round(cx)}% ${Math.round(cy)}%, ${paradas})`;
+        } else css = `linear-gradient(${Math.round((90 + (lin ? +(at(lin, "ang") || 0) / 60000 : 90)) * 100) / 100}deg, ${paradas})`;
+        return { tipo: "degradado", c1: gs[0].c, c2: gs[gs.length - 1].c, angulo: 135, css };
+      }
+      if (nm === "blipFill") {
+        // (una imagen de un estilo del tema se busca en las relaciones del TEMA: el mismo rId del patrón es otra cosa)
+        const b2 = todos(f, "blip")[0], rel = b2 && ((f.__tema && relsTema[rid(b2, "embed")]) || relsX[rid(b2, "embed")]);
+        let src = rel ? await dataUrl(rel.destino) : null;
+        if (!src) return null;
+        const duo = b2 && h1(b2, "duotone");
+        if (duo) { const cs = hs(duo).map((ce) => colorDeElemento(ce, ph)).filter(Boolean); if (cs.length === 2) src = await duotono(src, cs[0], cs[1]); }
+        const tile = h1(f, "tile");
+        if (!tile) return { tipo: "imagen", src, ajuste: "estirar" };
+        // mosaico: cada pieza mide lo que la imagen a su resolución (96 ppp si no la dice), por la escala del archivo
+        const md = await medidasImagen(src), dpi = dpiImagen(src) || 96, k = (96 / dpi) * kx;
+        const sx = +(at(tile, "sx") || 100000) / 100000, sy = +(at(tile, "sy") || 100000) / 100000;
+        const r2 = (v) => Math.round(v * 100) / 100;
+        return { tipo: "imagen", src, ajuste: "mosaico", tw: r2(md.w * k * sx), th: r2(md.h * k * sy), tx: r2((+(at(tile, "tx") || 0) / EMU) * kx), ty: r2((+(at(tile, "ty") || 0) / EMU) * ky) };
+      }
+      if (nm === "pattFill") {
+        const fg = h1(f, "fgClr"), bg = h1(f, "bgClr"), cf = fg ? hexDe(fg, ph) : "#000000", cb = bg ? hexDe(bg, ph) : "#FFFFFF";
+        // la trama exacta (y el color parejo que se ve de lejos, por si no se puede dibujar)
+        return { tipo: "trama", trama: at(f, "prst") || "pct50", linea: cf, color: cb, mezcla: colorTrama(at(f, "prst") || "pct50", cf, cb), pp: Math.round(kx * 10000) / 10000 };
+      }
+      return null;
+    }
     const medios = new Map();
     async function dataUrl(ruta) {
       if (medios.has(ruta)) return medios.get(ruta);
@@ -3606,29 +3805,197 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       });
     }
     /** Posición de un elemento (xfrm propio o el de su marcador en el diseño o el patrón). */
+    /** Ajustes de una geometría de Office (<a:avLst><a:gd name="adj" fmla="val 25000"/>): { adj: 25000 }. */
+    function ajustesDe(spPr) {
+      const o = {};
+      todos(todos(spPr, "prstGeom")[0], "gd").forEach((g) => { const m = /^val\s+(-?[\d.]+)/.exec(g.getAttribute("fmla") || ""); if (m && g.getAttribute("name")) o[g.getAttribute("name")] = +m[1]; });
+      return Object.keys(o).length ? o : undefined;
+    }
     function xfrmDe(spPr, ph, heredados) {
       const xf = spPr && h1(spPr, "xfrm");
       const leer = (x) => { const o = h1(x, "off"), e = h1(x, "ext"); return o && e ? { x: +at(o, "x"), y: +at(o, "y"), w: +at(e, "cx"), h: +at(e, "cy"), rot: +(at(x, "rot") || 0), fh: at(x, "flipH") === "1", fv: at(x, "flipV") === "1" } : null; };
       let r = xf ? leer(xf) : null;
-      if (!r && ph) r = heredados[ph.clave] || heredados[ph.tipo] || null;
+      if (!r && ph) r = [heredados["#" + (ph.idx || "")], heredados[ph.clave], heredados[ph.tipo]].find((v) => v && !v.sinPos && v.x != null) || null;
       return r;
     }
     async function marcadores(ruta) {
       const m = {};
       const t = await z.texto(ruta);
       if (!t) return m;
-      todos(P(t), "sp").forEach((sp) => {
+      const dm = P(t);
+      todos(dm, "sp").forEach((sp) => {
         const ph = todos(sp, "ph")[0], xf = todos(sp, "xfrm")[0];
-        if (!ph || !xf) return;
-        const o = h1(xf, "off"), e = h1(xf, "ext");
-        if (!o || !e) return;
-        const v = { x: +at(o, "x"), y: +at(o, "y"), w: +at(e, "cx"), h: +at(e, "cy"), rot: 0 };
+        if (!ph) return;
+        const o = xf && h1(xf, "off"), e = xf && h1(xf, "ext");
+        const v = o && e ? { x: +at(o, "x"), y: +at(o, "y"), w: +at(e, "cx"), h: +at(e, "cy"), rot: 0 } : { sinPos: true };
+        const tb = todos(sp, "txBody")[0];
+        v.lst = tb ? h1(tb, "lstStyle") : null; v.cuerpo = tb ? h1(tb, "bodyPr") : null;
         const tipo = at(ph, "type") || "body", idx = at(ph, "idx") || "";
         m[tipo + ":" + idx] = v;
         if (!m[tipo]) m[tipo] = v;
+        if (idx) m["#" + idx] = v;   // la diapositiva se liga al marcador del diseño por su índice
       });
+      // estilos de texto del patrón (títulos, cuerpo y lo demás)
+      const ts = todos(dm, "txStyles")[0];
+      if (ts) m.__estilos = { title: h1(ts, "titleStyle"), body: h1(ts, "bodyStyle"), other: h1(ts, "otherStyle") };
       return m;
     }
+    // ---------------------------------------------------------------- texto como PowerPoint (16-nov-2026)
+    // Cada propiedad se hereda como en PowerPoint: estilo de la presentación → estilo del patrón (títulos, cuerpo
+    // u otros) → marcador del patrón → marcador del diseño → lista del cuadro → párrafo → tramo. El renglón mide
+    // 1.2 × el tamaño × el interlineado; los márgenes internos, el anclaje y el autoajuste vienen del cuerpo.
+    const kPt = Math.min(kx, ky) * (96 / 72);   // px de la diapositiva por punto (1 en 16:9)
+    const defPres = todos(docP, "defaultTextStyle")[0] || null;
+    const nivelDe = (lst, l) => (lst ? h1(lst, "lvl" + l + "pPr") : null);
+    const WINGDINGS3 = { 0xF084: "▸", 0xF07D: "▴", 0xF07E: "▾", 0xF07C: "◂", 0xF070: "▲", 0xF071: "▼", 0xF075: "◄", 0xF076: "►", 0xF0C6: "⇨", 0xF0C7: "⇦", 0xF022: "➢" };
+    const WINGDINGS = { 0xF0A7: "▪", 0xF0D8: "➢", 0xF0FC: "✓", 0xF0E8: "➔", 0xF06C: "●", 0xF06E: "■", 0xF071: "❑", 0xF075: "◆", 0xF076: "❖", 0xF0A8: "◆", 0xF0B7: "•", 0xF0AB: "★", 0xF0D7: "⮚", 0xF0F0: "⇨", 0xF0FB: "✗", 0xF0FD: "☒", 0xF0FE: "☑", 0xF0A1: "○", 0xF09F: "•", 0xF0B2: "◇" };
+    function leerRPr(el, r) {
+      if (!el) return r;
+      if (at(el, "sz")) r.sz = +at(el, "sz") / 100;
+      if (at(el, "b") != null) r.b = at(el, "b") === "1" || at(el, "b") === "true";
+      if (at(el, "i") != null) r.i = at(el, "i") === "1" || at(el, "i") === "true";
+      if (at(el, "u") != null) r.u = at(el, "u");
+      if (at(el, "strike") != null) r.strike = at(el, "strike");
+      if (at(el, "cap") != null) r.cap = at(el, "cap");
+      if (at(el, "spc") != null) r.spc = +at(el, "spc") / 100;
+      if (at(el, "baseline") != null) r.baseline = +at(el, "baseline") / 1000;
+      const lat = h1(el, "latin"); if (lat && at(lat, "typeface")) r.fuente = at(lat, "typeface");
+      const sf = h1(el, "solidFill") || h1(el, "gradFill"); if (sf) { const c = hexDe(sf); if (c) r.color = c; }
+      if (h1(el, "noFill")) r.color = "transparent";
+      const hl = h1(el, "highlight"); if (hl) { const c = hexDe(hl); if (c) r.resalte = c; }
+      return r;
+    }
+    function leerPPr(el, o) {
+      if (!el) return o;
+      ["algn", "marL", "indent", "rtl"].forEach((k) => { if (at(el, k) != null) o[k] = at(el, k); });
+      const espacio = (n) => { const c = n && hs(n)[0]; if (!c) return null; return c.localName === "spcPts" ? { pts: +at(c, "val") / 100 } : { pct: +at(c, "val") / 100000 }; };
+      const ls = espacio(h1(el, "lnSpc")); if (ls) o.lnSpc = ls;
+      const sb = espacio(h1(el, "spcBef")); if (sb) o.antes = sb;
+      const sa = espacio(h1(el, "spcAft")); if (sa) o.despues = sa;
+      if (h1(el, "buNone")) o.bu = { nada: true };
+      if (h1(el, "buChar")) o.bu = { car: at(h1(el, "buChar"), "char") || "•" };
+      if (h1(el, "buAutoNum")) o.bu = { auto: at(h1(el, "buAutoNum"), "type") || "arabicPeriod", inicio: +(at(h1(el, "buAutoNum"), "startAt") || 1) };
+      if (h1(el, "buFont")) o.buFuente = at(h1(el, "buFont"), "typeface");
+      if (h1(el, "buFontTx")) delete o.buFuente;
+      if (h1(el, "buClr")) o.buColor = hexDe(h1(el, "buClr"));
+      if (h1(el, "buClrTx")) delete o.buColor;
+      if (h1(el, "buSzPct")) o.buTam = { pct: +at(h1(el, "buSzPct"), "val") / 100000 };
+      if (h1(el, "buSzPts")) o.buTam = { pts: +at(h1(el, "buSzPts"), "val") / 100 };
+      if (h1(el, "buSzTx")) delete o.buTam;
+      o.r = leerRPr(h1(el, "defRPr"), Object.assign({}, o.r));
+      return o;
+    }
+    const resolverFuente = (f) => (f === "+mj-lt" ? fuentesTema.mayor : f === "+mn-lt" ? fuentesTema.menor : f && f[0] === "+" ? fuentesTema.menor : f) || fuentesTema.menor || "Calibri";
+    function numeroAuto(tipo, n) {
+      const romano = (x) => { let r = ""; for (const [v, t] of [[1000, "m"], [900, "cm"], [500, "d"], [400, "cd"], [100, "c"], [90, "xc"], [50, "l"], [40, "xl"], [10, "x"], [9, "ix"], [5, "v"], [4, "iv"], [1, "i"]]) while (x >= v) { r += t; x -= v; } return r; };
+      const letra = (x) => { let r = ""; while (x > 0) { r = String.fromCharCode(97 + ((x - 1) % 26)) + r; x = Math.floor((x - 1) / 26); } return r; };
+      const t = String(tipo);
+      let v = /^arabic/.test(t) ? String(n) : /^alphaLc/.test(t) ? letra(n) : /^alphaUc/.test(t) ? letra(n).toUpperCase() : /^romanLc/.test(t) ? romano(n) : /^romanUc/.test(t) ? romano(n).toUpperCase() : String(n);
+      return /ParenBoth$/.test(t) ? `(${v})` : /ParenR$/.test(t) ? `${v})` : /Period$/.test(t) ? `${v}.` : /Minus$/.test(t) ? `${v} -` : v;
+    }
+    /**
+     * Texto de un cuadro de PowerPoint → { html, cuerpo }. ctx: { tipoPh (title, body…, null si no es marcador),
+     * claves (del marcador en el diseño y el patrón), diseno, maestro (los marcadores), enForma }.
+     */
+    function textoPpt(txBody, ctx) {
+      const estilos = (ctx.maestro && ctx.maestro.__estilos) || {};
+      const tipo = ctx.tipoPh;
+      const est = !tipo ? null : /^(title|ctrTitle)$/.test(tipo) ? estilos.title : /^(body|subTitle|obj)$/.test(tipo) || tipo === "_idx" ? estilos.body : estilos.other;
+      const phM = ctx.phMaestro || null, phD = ctx.phDiseno || null;
+      // cuerpo: márgenes internos, anclaje, ajuste, autoajuste, columnas, texto vertical
+      const cuerpo = { l: 91440, t: 45720, r: 91440, b: 45720, anc: "t", wrap: true, escala: 1, reduce: 0, cols: 1, vert: null };
+      [phM && phM.cuerpo, phD && phD.cuerpo, h1(txBody, "bodyPr")].forEach((bp) => {
+        if (!bp) return;
+        [["lIns", "l"], ["tIns", "t"], ["rIns", "r"], ["bIns", "b"]].forEach(([a, k]) => { if (at(bp, a) != null) cuerpo[k] = +at(bp, a); });
+        if (at(bp, "anchor")) cuerpo.anc = at(bp, "anchor");
+        if (at(bp, "wrap")) cuerpo.wrap = at(bp, "wrap") !== "none";
+        if (at(bp, "vert")) cuerpo.vert = at(bp, "vert") === "horz" ? null : at(bp, "vert");
+        if (at(bp, "numCol")) cuerpo.cols = +at(bp, "numCol");
+        if (at(bp, "spcCol")) cuerpo.espCol = +at(bp, "spcCol");
+        const na = h1(bp, "normAutofit");
+        if (na) { cuerpo.escala = at(na, "fontScale") ? +at(na, "fontScale") / 100000 : 1; cuerpo.reduce = at(na, "lnSpcReduction") ? +at(na, "lnSpcReduction") / 100000 : 0; }
+        if (h1(bp, "noAutofit")) { cuerpo.escala = 1; cuerpo.reduce = 0; }
+      });
+      const px = (pt) => Math.round(pt * kPt * 100) / 100, emu = (v) => Math.round((v / 12700) * kPt * 100) / 100;
+      const contadores = {};
+      let h = "", primero = true;
+      hs(txBody, "p").forEach((p) => {
+        const pPr = h1(p, "pPr"), nivel = Math.min(9, (+(at(pPr, "lvl") || 0)) + 1);
+        const o = { r: {} };
+        [defPres && nivelDe(defPres, nivel), est && nivelDe(est, nivel), phM && phM.lst && nivelDe(phM.lst, nivel), phD && phD.lst && nivelDe(phD.lst, nivel), nivelDe(h1(txBody, "lstStyle"), nivel), pPr].forEach((el) => leerPPr(el, o));
+        // tramos
+        const tramos = [];
+        hs(p).forEach((r) => {
+          if (r.localName === "br") { tramos.push({ br: true, r: leerRPr(h1(r, "rPr"), Object.assign({}, o.r)) }); return; }
+          if (r.localName !== "r" && r.localName !== "fld") return;
+          const t = (h1(r, "t") || {}).textContent || "";
+          if (!t) return;
+          tramos.push({ t, r: leerRPr(h1(r, "rPr"), Object.assign({}, o.r)) });
+        });
+        const finR = leerRPr(h1(p, "endParaRPr"), Object.assign({}, o.r));
+        const r0 = (tramos.find((x) => !x.br) || {}).r || finR;
+        const tam0 = (r0.sz || 18) * cuerpo.escala;
+        const ls = o.lnSpc || { pct: 1 };
+        const lh = ls.pts ? `${px(ls.pts)}px` : String(Math.round(1.2 * Math.max(0.1, ls.pct - cuerpo.reduce) * 10000) / 10000);
+        const espacio = (e) => (!e ? 0 : e.pts ? px(e.pts) : px(e.pct * tam0 * 1.2));
+        const st = [`font-size:${px(tam0)}px`, `line-height:${lh}`];
+        if (o.algn) st.push(`text-align:${{ ctr: "center", r: "right", just: "justify", dist: "justify", l: "left" }[o.algn] || "left"}`);
+        const marL = o.marL != null ? emu(+o.marL) : 0, ind = o.indent != null ? emu(+o.indent) : 0;
+        if (marL) st.push(`margin-left:${marL}px`);
+        if (ind) st.push(`text-indent:${ind}px`);
+        // (PowerPoint no pone el espacio de antes en el primer párrafo del cuadro)
+        const mt = primero ? 0 : espacio(o.antes), mb = espacio(o.despues);
+        primero = false;
+        if (mt) st.push(`margin-top:${mt}px`);
+        if (mb) st.push(`margin-bottom:${mb}px`);
+        // viñeta
+        let vin = "";
+        const conTexto = tramos.some((x) => !x.br && x.t.trim());
+        if (o.bu && !o.bu.nada && conTexto) {
+          let car;
+          if (o.bu.auto) {
+            const k = nivel + ":" + o.bu.auto;
+            Object.keys(contadores).forEach((q) => { if (+q.split(":")[0] > nivel) delete contadores[q]; });
+            contadores[k] = (contadores[k] || o.bu.inicio - 1) + 1;
+            car = numeroAuto(o.bu.auto, contadores[k]);
+          } else {
+            car = o.bu.car || "•";
+            const cp = car.codePointAt(0);
+            if (/wingdings|symbol|webdings/i.test(o.buFuente || "")) {
+              const mapa = /wingdings 3/i.test(o.buFuente) ? WINGDINGS3 : /wingdings 2/i.test(o.buFuente) ? {} : WINGDINGS;
+              car = mapa[cp] || mapa[cp + 0xF000] || (cp >= 0xF000 || /wingdings [23]|webdings/i.test(o.buFuente) ? "•" : car);
+            }
+          }
+          const tamV = o.buTam ? (o.buTam.pts ? o.buTam.pts : tam0 * o.buTam.pct) : tam0;
+          const fuenteV = o.bu.auto ? r0.fuente : /wingdings|symbol/i.test(o.buFuente || "") ? r0.fuente : o.buFuente || r0.fuente;
+          const ancho = ind < 0 ? -ind : 0;
+          vin = `<span style="display:inline-block;width:${ancho}px;text-indent:0px;font-size:${px(tamV)}px;color:${esc2(o.buColor || r0.color || "")};font-family:${esc2(NOM.textoRico ? NOM.textoRico.cssFuente(resolverFuente(fuenteV)) : resolverFuente(fuenteV))};font-weight:400;font-style:normal">${NOM.esc(car)}</span>`;
+          if (!ancho) vin += " ";
+        } else if (!o.bu || o.bu.nada || !conTexto) Object.keys(contadores).forEach((q) => { if (+q.split(":")[0] >= nivel) delete contadores[q]; });
+        let cuerpoP = "";
+        tramos.forEach((x) => {
+          if (x.br) { cuerpoP += "<br>"; return; }
+          const r = x.r, s2 = [];
+          const tam = (r.sz || 18) * cuerpo.escala;
+          s2.push(`font-size:${px(r.baseline ? tam * 0.667 : tam)}px`);
+          s2.push(`font-family:${NOM.textoRico ? NOM.textoRico.cssFuente(resolverFuente(r.fuente)) : resolverFuente(r.fuente)}`);
+          if (r.color) s2.push(`color:${r.color}`);
+          if (r.resalte) s2.push(`background-color:${r.resalte}`);
+          s2.push(`font-weight:${r.b ? 700 : 400}`, `font-style:${r.i ? "italic" : "normal"}`);
+          const deco = [r.u && r.u !== "none" ? "underline" : "", r.strike && r.strike !== "noStrike" ? "line-through" : ""].filter(Boolean).join(" ");
+          if (deco) s2.push(`text-decoration:${deco}`);
+          if (r.spc) s2.push(`letter-spacing:${px(r.spc)}px`);
+          if (r.cap === "all") s2.push("text-transform:uppercase"); else if (r.cap === "small") s2.push("font-variant-caps:small-caps");
+          if (r.baseline) s2.push(`vertical-align:${r.baseline > 0 ? "super" : "sub"}`);
+          s2.push(`line-height:${lh}`);
+          cuerpoP += `<span style="${s2.join(";")}">${NOM.esc(x.t)}</span>`;
+        });
+        if (!cuerpoP) cuerpoP = `<span style="font-size:${px((finR.sz || 18) * cuerpo.escala)}px;line-height:${lh}"><br></span>`;
+        h += `<div style="${st.join(";")}">${vin}${cuerpoP}</div>`;
+      });
+      return { html: h, cuerpo: { ins: [emu(cuerpo.l), emu(cuerpo.t), emu(cuerpo.r), emu(cuerpo.b)], anc: cuerpo.anc, ajusta: cuerpo.wrap, cols: cuerpo.cols > 1 ? cuerpo.cols : undefined, espCol: cuerpo.espCol ? emu(cuerpo.espCol) : undefined, vert: cuerpo.vert || undefined } };
+    }
+    const esc2 = (v) => String(v || "").replace(/[;"<>]/g, "");
     /** Párrafos de PowerPoint → HTML con formato (negrita, color, tamaño, viñetas). */
     function htmlTexto(txBody, base) {
       let h = "", lista = null;
@@ -3670,19 +4037,32 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       if (!xml) continue;
       const pg = "p" + ++n;
       paginas.push(pg);
-      const rels = await relsDe(ruta);
+      let rels = await relsDe(ruta);
       const sld = P(xml);
       // Marcadores del diseño y del patrón (para lo que no trae posición propia).
       const relDiseno = Object.values(rels).find((r) => /slideLayout$/.test(r.tipo));
-      let heredados = {};
+      let heredados = {}, mDis = {}, mMae = {};
       if (relDiseno) {
         const relsDis = await relsDe(relDiseno.destino);
         const relMaestro = Object.values(relsDis).find((r) => /slideMaster$/.test(r.tipo));
-        heredados = Object.assign({}, relMaestro ? await marcadores(relMaestro.destino) : {}, await marcadores(relDiseno.destino));
+        // el tema de ESTE patrón (antes de leer colores y fuentes)
+        const relTemaM = relMaestro ? Object.values(await relsDe(relMaestro.destino)).find((r) => /\/theme$/.test(r.tipo)) : null;
+        usarTema(relTemaM ? await leerTema(relTemaM.destino) : temaPres);
+        mMae = relMaestro ? await marcadores(relMaestro.destino) : {};
+        mDis = await marcadores(relDiseno.destino);
+        // mapa de colores: el patrón dice qué es «texto 1» y «fondo 1» (en un tema oscuro, el texto es el claro)
+        const leeMapa = (t) => { const m2 = t && /<(?:\w+:)?(?:clrMap|overrideClrMapping)\s([^>]*)>/.exec(t); const o2 = {}; if (m2) m2[1].replace(/(\w+)="(\w+)"/g, (_, k, v) => { o2[k] = v; }); return o2; };
+        let mapa = relMaestro ? leeMapa(await z.texto(relMaestro.destino)) : {};
+        const ovD = leeMapa(/<p:clrMapOvr>\s*<a:overrideClrMapping[^>]*>/.exec(await z.texto(relDiseno.destino) || "") ? (/<p:clrMapOvr>\s*(<a:overrideClrMapping[^>]*>)/.exec(await z.texto(relDiseno.destino)) || [])[1] : "");
+        const ovS = leeMapa((/<p:clrMapOvr>\s*(<a:overrideClrMapping[^>]*>)/.exec(xml) || [])[1] || "");
+        mapa = Object.assign({}, mapa, ovD, ovS);
+        ["bg1", "tx1", "bg2", "tx2"].forEach((k) => { const v = mapa[k] || { bg1: "lt1", tx1: "dk1", bg2: "lt2", tx2: "dk2" }[k]; if (esquema[v]) esquema[k] = esquema[v]; });
+        heredados = Object.assign({}, mMae);
+        for (const k in mDis) if (!mDis[k].sinPos || !heredados[k]) heredados[k] = mDis[k];
       }
       let orden = 0;
       docCampos["os:" + pg] = ruta;   // de qué diapositiva del archivo viene esta página
-      const agregar = (b) => { const id = "imp" + n + "_" + orden; bloques.push(Object.assign({ id, pagina: pg, orden: ++orden, z: orden, ox: oxActual }, b)); return id; };
+      let agregar = (b) => { const id = "imp" + n + "_" + orden; bloques.push(Object.assign({ id, pagina: pg, orden: ++orden, z: orden, ox: oxActual }, b)); return id; };
       /**
        * SmartArt. Si el archivo trae al lado el dibujo ya acomodado (PowerPoint 2010 en adelante lo
        * guarda), se usan esas figuras con su lugar, su color y su texto. Si no, se arma con su lista
@@ -3754,6 +4134,26 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
         return true;
       }
       const geo = (r) => ({ x: Math.round((r.x / EMU) * kx), y: Math.round((r.y / EMU) * ky), w: Math.max(4, Math.round((r.w / EMU) * kx)), h: Math.max(4, Math.round((r.h / EMU) * ky)), rot: r.rot ? Math.round(r.rot / 60000) : undefined, volteoH: r.fh || undefined, volteoV: r.fv || undefined });
+      /** Línea o conector de Office tal cual: de esquina a esquina de su caja (con sus volteos), su grosor en puntos,
+          su punteado y sus puntas (headEnd al principio, tailEnd al final). */
+      function lineaOffice(el, ajustar) {
+        const spPr = h1(el, "spPr"), r = ajustar(xfrmDe(spPr, null, heredados));
+        if (!r) return;
+        const prst = at(todos(spPr, "prstGeom")[0], "prst") || "line";
+        const est = h1(el, "style"), lnRef = est && h1(est, "lnRef"), ln = spPr && h1(spPr, "ln");
+        if (ln && h1(ln, "noFill")) return;   // sin línea: no se ve
+        const color = ln && h1(ln, "solidFill") ? colorCss(h1(ln, "solidFill")) : lnRef ? hexDe(lnRef) : null;
+        const anchoPt = ln && at(ln, "w") ? +at(ln, "w") / 12700 : lnRef && +at(lnRef, "idx") ? lineasTema[+at(lnRef, "idx")] || 0.75 : 0.75;
+        const guion = ln ? at(h1(ln, "prstDash"), "val") : null;
+        const punta = (n) => { const e = ln && h1(ln, n), t = e && at(e, "type"); return t && t !== "none" ? { t, w: at(e, "w") || "med", l: at(e, "len") || "med" } : undefined; };
+        const r2 = (v) => Math.round(v * 100) / 100;
+        agregar({ tipo: "forma", figura: "linea", lineaOffice: true, prst: NOM.geomOffice && NOM.geomOffice.tiene(prst) ? prst : "line", av: ajustesDe(spPr), sombra: false,
+          borde: color || "#000000", bordeAncho: r2(Math.max(0.1, anchoPt * kPt)), bordeEstilo: guion && guion !== "solid" ? (/dot/i.test(guion) && !/dash/i.test(guion) ? "puntos" : "guiones") : undefined,
+          puntas: punta("headEnd") || punta("tailEnd") ? { ini: punta("headEnd"), fin: punta("tailEnd") } : undefined,
+          x: r2((r.x / EMU) * kx), y: r2((r.y / EMU) * ky), w: r2(Math.max(0, (r.w / EMU) * kx)), h: r2(Math.max(0, (r.h / EMU) * ky)),
+          rot: r.rot ? Math.round(r.rot / 60000) : undefined, volteoH: r.fh || undefined, volteoV: r.fv || undefined });
+      }
+      const LINEAS_PRST = /^(line|straightConnector1|bentConnector[2-5]|curvedConnector[2-5])$/;
       async function elemento(el, grupo) {
         const nm = el.localName;
         if (nm === "grpSp") {
@@ -3774,15 +4174,28 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
         const ajustar = (r) => (grupo && r ? Object.assign({}, r, { x: grupo.tx(r.x), y: grupo.ty(r.y), w: grupo.s(r.w), h: grupo.sy(r.h) }) : r);
         if (nm === "sp") {
           const nv = todos(el, "nvPr")[0], ph = todos(nv, "ph")[0];
-          const phInfo = ph ? { tipo: at(ph, "type") || "body", clave: (at(ph, "type") || "body") + ":" + (at(ph, "idx") || "") } : null;
+          const phInfo = ph ? { tipo: at(ph, "type") || "body", idx: at(ph, "idx") || "", clave: (at(ph, "type") || "body") + ":" + (at(ph, "idx") || "") } : null;
+          // de dónde hereda el texto: el marcador del diseño (por índice o tipo) y el del patrón (por tipo)
+          const ctxTexto = { tipoPh: phInfo ? (at(ph, "type") ? phInfo.tipo : "_idx") : null };
+          if (phInfo) {
+            ctxTexto.phDiseno = (phInfo.idx && mDis["#" + phInfo.idx]) || mDis[phInfo.clave] || mDis[phInfo.tipo] || null;
+            const tm = /^(title|ctrTitle)$/.test(phInfo.tipo) ? "title" : /^(body|subTitle|obj)$/.test(phInfo.tipo) || !at(ph, "type") ? "body" : phInfo.tipo;
+            ctxTexto.phMaestro = mMae[tm] || null;
+          }
+          ctxTexto.maestro = mMae;
           const spPr = h1(el, "spPr"), r = ajustar(xfrmDe(spPr, phInfo, heredados));
           if (!r) return;
           const txBody = h1(el, "txBody");
           const texto = txBody ? txBody.textContent.trim() : "";
           const prst = at(todos(spPr, "prstGeom")[0], "prst");
+          if (prst && LINEAS_PRST.test(prst) && !texto && !phInfo) { lineaOffice(el, ajustar); return; }
           const estSp = h1(el, "style"), conRellenoPropio = spPr && (h1(spPr, "solidFill") || h1(spPr, "noFill") || h1(spPr, "gradFill") || h1(spPr, "blipFill") || h1(spPr, "pattFill"));
-          const relleno = spPr && h1(spPr, "solidFill") ? hexDe(h1(spPr, "solidFill")) : spPr && h1(spPr, "gradFill") ? hexDe(h1(spPr, "gradFill")) : !conRellenoPropio && estSp && +at(h1(estSp, "fillRef"), "idx") ? hexDe(h1(estSp, "fillRef")) : null;
-          const esTexto = !!(phInfo || todos(el, "cNvSpPr").some((c) => at(c, "txBox") === "1") || (!relleno && (!prst || prst === "rect")));
+          // (con su transparencia: un relleno con alpha se ve a través, como en PowerPoint)
+          const relleno = spPr && h1(spPr, "solidFill") ? colorCss(h1(spPr, "solidFill")) : spPr && h1(spPr, "gradFill") ? colorCss(todos(h1(spPr, "gradFill"), "gs")[0] || h1(spPr, "gradFill")) : !conRellenoPropio && estSp && +at(h1(estSp, "fillRef"), "idx") ? hexDe(h1(estSp, "fillRef")) : null;
+          // degradado o imagen de relleno, y geometría libre: es una forma aunque no tenga color liso
+          const pintura = spPr && (h1(spPr, "gradFill") || h1(spPr, "blipFill") || h1(spPr, "pattFill")) ? await pinturaDe(spPr, rels) : null;
+          const libre = geomLibre(spPr);
+          const esTexto = !!(phInfo || todos(el, "cNvSpPr").some((c) => at(c, "txBox") === "1") || (!relleno && !pintura && !libre && (!prst || prst === "rect")));
           const cNv = todos(el, "cNvPr")[0], nombreSp = at(cNv, "name") || "", descr = at(cNv, "descr") || "";
           // Ecuación exportada por NOM-COLAB: la fórmula original viaja en la descripción del cuadro.
           if (/^LaTeX: /.test(descr)) { agregar(Object.assign({ tipo: "ecuacion", tex: descr.slice(7) }, geo(r))); return; }
@@ -3790,13 +4203,17 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
           if (esTexto) {
             if (!texto) return;
             const estilo = titulo ? (phInfo.tipo === "ctrTitle" ? "h1" : "h2") : /^Título \d/.test(nombreSp) ? "h1" : /^Encabezado \d/.test(nombreSp) ? "h2" : "p";
-            agregar(Object.assign({ tipo: "texto", estilo, html: htmlTexto(txBody, { lista: phInfo && phInfo.tipo === "body" }) }, geo(r)));
+            const tp = textoPpt(txBody, ctxTexto);
+            agregar(Object.assign({ tipo: "texto", estilo, html: tp.html, ppt: tp.cuerpo }, geo(r)));
           } else {
             const ln = spPr && h1(spPr, "ln"), tinta = estSp ? hexDe(h1(estSp, "fontRef")) : null;
-            agregar(Object.assign({ tipo: "forma", figura: GEO_INV[prst] || "rect", radio: prst === "rect" || prst === "flowChartProcess" ? 0 : undefined, color: relleno || "#CFE0FF", relleno: spPr && h1(spPr, "noFill") ? false : undefined,
+            agregar(Object.assign({ tipo: "forma", figura: GEO_INV[prst] || "rect", radio: prst === "rect" || prst === "flowChartProcess" || libre ? 0 : undefined, color: relleno || (pintura && pintura.paradas ? pintura.paradas[0][1] : pintura && pintura.mezcla ? pintura.mezcla : "#CFE0FF"), relleno: spPr && h1(spPr, "noFill") ? false : undefined,
+              cust: libre || undefined, pintura: pintura || undefined,
+              // la geometría de Office tal cual (se dibuja con js/geometrias.js) y sus ajustes (las manijas amarillas)
+              prst: prst && NOM.geomOffice && NOM.geomOffice.tiene(prst) ? prst : undefined, av: ajustesDe(spPr),
               borde: ln && h1(ln, "solidFill") ? hexDe(h1(ln, "solidFill")) : estSp && +at(h1(estSp, "lnRef"), "idx") && !(ln && h1(ln, "noFill")) ? hexDe(h1(estSp, "lnRef")) || undefined : undefined,
-              bordeAncho: ln && at(ln, "w") ? Math.max(1, Math.round(+at(ln, "w") / 12700)) : undefined, sombra: false, tColor: tinta && tinta !== "#000000" && texto ? tinta : undefined,
-              texto: texto || "", html: texto ? htmlTexto(txBody, {}) : undefined }, geo(r)));
+              bordeAncho: ln && h1(ln, "noFill") ? undefined : ln && at(ln, "w") ? Math.max(0.25, Math.round((+at(ln, "w") / 12700) * 100) / 100) : estSp && +at(h1(estSp, "lnRef"), "idx") ? lineasTema[+at(h1(estSp, "lnRef"), "idx")] || 0.75 : undefined, sombra: false, tColor: tinta && tinta !== "#000000" && texto ? tinta : undefined,
+              texto: texto || "", html: texto ? textoPpt(txBody, ctxTexto).html : undefined, ppt: texto ? textoPpt(txBody, ctxTexto).cuerpo : undefined }, geo(r)));
           }
           return;
         }
@@ -3854,28 +4271,51 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
           aproximado = true;
           return;
         }
-        if (nm === "cxnSp") {
-          const r = ajustar(xfrmDe(h1(el, "spPr"), null, heredados));
-          if (!r) return;
-          const ln = todos(el, "ln")[0];
-          const flecha = ln && (h1(ln, "tailEnd") || h1(ln, "headEnd"));
-          const g = geo(r);
-          agregar(Object.assign({ tipo: "forma", figura: flecha ? "linea-flecha" : "linea", borde: ln ? hexDe(h1(ln, "solidFill")) || "#4A4854" : "#4A4854", bordeAncho: ln && at(ln, "w") ? Math.max(1, Math.round(+at(ln, "w") / 12700)) : 2 }, g, { h: Math.max(16, g.h) }));
-          return;
-        }
+        if (nm === "cxnSp") { lineaOffice(el, ajustar); return; }
         if (nm === "AlternateContent") { const f = h1(el, "Fallback") || h1(el, "Choice"); if (f) for (const c of hs(f)) await elemento(c, grupo); }
       }
       const arbol = todos(sld, "spTree")[0];
       const hijosArbol = hs(arbol);
       for (let i2 = 0; i2 < hijosArbol.length; i2++) { oxActual = i2; await elemento(hijosArbol[i2], null); }
       oxActual = null;
-      // Fondo
-      const bgPr = todos(todos(sld, "bg")[0], "bgPr")[0];
-      if (bgPr) {
-        const sf = h1(bgPr, "solidFill"), gf = h1(bgPr, "gradFill"), bf = h1(bgPr, "blipFill");
-        if (sf && hexDe(sf)) docCampos["fondo:" + pg] = { tipo: "color", color: hexDe(sf) };
-        else if (gf) { const gs = todos(gf, "gs").map((g) => hexDe(g)).filter(Boolean); if (gs.length >= 2) docCampos["fondo:" + pg] = { tipo: "degradado", c1: gs[0], c2: gs[gs.length - 1], angulo: 135 }; }
-        else if (bf) { const b2 = todos(bf, "blip")[0], rel = b2 && rels[rid(b2, "embed")]; const src = rel ? await dataUrl(rel.destino) : null; if (src) docCampos["fondo:" + pg] = { tipo: "imagen", src, ajuste: "cubrir" }; }
+      // Fondo: el de la diapositiva, o el de su diseño, o el de su patrón (con los rellenos de fondo del tema)
+      const relsDis0 = relDiseno ? await relsDe(relDiseno.destino) : {};
+      const relMae0 = relDiseno ? Object.values(relsDis0).find((r) => /slideMaster$/.test(r.tipo)) : null;
+      const xmlDis0 = relDiseno ? P(await z.texto(relDiseno.destino) || "<x/>") : null, xmlMae0 = relMae0 ? P(await z.texto(relMae0.destino) || "<x/>") : null;
+      async function fondoDeHoja(dx, relsX) {
+        const bg = dx && todos(dx, "bg")[0];
+        if (!bg) return null;
+        const bp = h1(bg, "bgPr");
+        if (bp) { for (const f of hs(bp)) { const r2 = await fondoDeRelleno(f, null, relsX); if (r2) return r2; } return null; }
+        const br = h1(bg, "bgRef");
+        if (br) { const idx = +(at(br, "idx") || 0), f = fondosTema[idx - 1000] || null; return f ? await fondoDeRelleno(f, hexDe(br), relsX) : (hexDe(br) ? { tipo: "color", color: hexDe(br) } : null); }
+        return null;
+      }
+      const fondo = (await fondoDeHoja(sld, rels)) || (await fondoDeHoja(xmlDis0, relsDis0)) || (relMae0 ? await fondoDeHoja(xmlMae0, await relsDe(relMae0.destino)) : null);
+      if (fondo) docCampos["fondo:" + pg] = fondo;
+      // Capa heredada: las formas del patrón y del diseño (no sus marcadores) van debajo de lo de la diapositiva,
+      // como en PowerPoint. Se guarda una vez por diseño y no se escribe en la diapositiva al exportar.
+      if (relDiseno && at(sld.documentElement, "showMasterSp") !== "0") {
+        const clave = relDiseno.destino;
+        if (!capas.has(clave)) {
+          const capa = [], fuentesCapa = [];
+          if (relMae0 && at(xmlDis0.documentElement, "showMasterSp") !== "0") fuentesCapa.push([xmlMae0, await relsDe(relMae0.destino)]);
+          fuentesCapa.push([xmlDis0, relsDis0]);
+          const relsSlide = rels, agregarSlide = agregar;
+          let ord = 0;
+          agregar = (b) => { const id = "cap" + capas.size + "_" + ++ord; capa.push(Object.assign({ id, orden: ord, z: 0 }, b)); return id; };
+          try {
+            for (const [dx, relsX] of fuentesCapa) {
+              rels = relsX;
+              const arbolC = todos(dx, "spTree")[0];
+              for (const h of hs(arbolC)) { if (todos(h, "ph").length) continue; oxActual = null; await elemento(h, null); }
+            }
+          } catch (e) { /* una forma rara del patrón no detiene la importación */ }
+          rels = relsSlide; agregar = agregarSlide; oxActual = null;
+          capas.set(clave, capa);
+          if (capa.length) docCampos["capaBl:" + clave] = capa;
+        }
+        if ((capas.get(clave) || []).length) docCampos["capa:" + pg] = clave;
       }
       // Transición y notas del orador
       const tr = todos(sld, "transition")[0];

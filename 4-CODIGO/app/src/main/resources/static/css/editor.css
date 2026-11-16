@@ -1205,3 +1205,20 @@
 .rejilla-hoja table.xl td.ajusta { white-space: normal; overflow-wrap: anywhere; vertical-align: bottom; }
 .rejilla-hoja table.xl td.col-oculta, .rejilla-hoja table.xl th.col-oculta { padding: 0; border: 0; font-size: 0; }
 .rejilla-hoja table.xl .xl-rell { display: flex; justify-content: space-between; white-space: pre; width: 100%; }
+
+/* ---- Texto de PowerPoint (diapositivas importadas): como lo mide PowerPoint --------------------------
+   Cada párrafo y cada tramo traen su letra, su tamaño y su interlineado (1.2 × tamaño × porcentaje); aquí
+   solo los márgenes internos y el anclaje del cuadro, sin los valores propios de NOM-COLAB. */
+.libre-texto.ppt, .forma .txt.ppt { display: flex; flex-direction: column; justify-content: flex-start; font-size: 18px; line-height: 1.2; font-weight: 400;
+  color: #000; overflow: visible; white-space: pre-wrap; word-break: normal; overflow-wrap: break-word; letter-spacing: normal; text-align: left;
+  font-kerning: normal; text-rendering: geometricPrecision; max-width: none; max-height: none; }
+.libre-texto.ppt[data-anc="ctr"], .forma .txt.ppt[data-anc="ctr"] { justify-content: center; }
+.libre-texto.ppt[data-anc="b"], .forma .txt.ppt[data-anc="b"] { justify-content: flex-end; }
+.libre-texto.ppt > div, .forma .txt.ppt > div { flex: none; min-height: 0; }
+.forma.ppt-forma { display: block; padding: 0; font-weight: 400; }
+.forma.ppt-forma .txt.ppt { position: absolute; z-index: 1; }
+.diapo .libre-texto.ppt { color: #000; font-family: inherit; }
+.bl:has(> .libre-texto.ppt) { overflow: visible !important; }
+/* Líneas de Office: la caja puede medir 0 de alto o de ancho; se deja un margen para poder tocarla */
+.bl.linea-office { min-width: 6px; min-height: 6px; }
+.bl.linea-office .forma { padding: 0; }
