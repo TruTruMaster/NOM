@@ -665,6 +665,59 @@ def x08(x):
     return L.guardar()
 
 
+# ---------------------------------------------------------------- x09: matrices dinámicas, LET y LAMBDA a fondo
+MATRICES = [
+    ("Rango que derrama", "=Datos!C2:C6", 6), ("Rango por 2", "=Datos!E2:E6*2", 6), ("Comparación", "=Datos!E2:E6>40", 6),
+    ("Concatenar rangos", '=Datos!B2:B5&"-"&Datos!C2:C5', 5), ("Largo de cada uno", "=LEN(Datos!D2:D6)", 6), ("Si con matriz", '=IF(Datos!E2:E6>40,"mucho","poco")', 6),
+    ("Redondear matriz", "=ROUND(Datos!F2:F6/3,1)", 6), ("Mayúsculas", "=UPPER(Datos!C2:C4)", 4), ("Buscar V con varias", '=VLOOKUP({"Lápiz";"Regla"},Datos!D2:F61,3,FALSE)', 3),
+    ("Buscar X fila entera", '=XLOOKUP("Mochila",Datos!D2:D61,Datos!D2:G61)', 2), ("Buscar X varias", '=XLOOKUP({"Regla","Lápiz"},Datos!D2:D61,Datos!E2:E61)', 2),
+    ("Índice columna entera", "=INDEX(Datos!A2:G6,0,3)", 6), ("Índice fila entera", "=INDEX(Datos!A2:G6,2,0)", 2), ("Contar si con varias", '=COUNTIF(Datos!B2:B61,{"Norte","Sur","Centro"})', 2),
+    ("Ordenar desc por col 2", "=SORT(Datos!B2:C9,2,-1)", 9), ("Ordenar dos niveles", "=SORT(Datos!B2:E13,{1,4},{1,-1})", 13), ("Ordenar por columnas", "=SORT({3,1,2;30,10,20},1,1,TRUE)", 3),
+    ("Ordenar por dos claves", "=SORTBY(Datos!C2:C13,Datos!B2:B13,1,Datos!E2:E13,-1)", 13), ("Filtrar dos condiciones", '=FILTER(Datos!C2:E61,(Datos!B2:B61="Norte")*(Datos!E2:E61>30))', 10),
+    ("Filtrar o", '=FILTER(Datos!D2:D61,(Datos!E2:E61<8)+(Datos!E2:E61>62),"")', 6), ("Filtrar columnas", "=FILTER(Datos!A1:G3,{1,0,1,0,0,0,1})", 4),
+    ("Filtrar vacío (#CALC!)", "=FILTER(Datos!C2:C61,Datos!E2:E61>1000)", 2), ("Únicos ordenados", "=SORT(UNIQUE(Datos!D2:D61))", 8), ("Únicos una vez", "=UNIQUE({1;2;2;3;4;4;5},FALSE,TRUE)", 5),
+    ("Únicos por columnas", "=UNIQUE({1,2,1,3,2},TRUE)", 2), ("Únicos de dos columnas", "=UNIQUE(Datos!B2:C21)", 16), ("Contar únicos", "=COUNTA(UNIQUE(Datos!C2:C61))", 2),
+    ("Secuencia descendente", "=SEQUENCE(4,1,10,-2.5)", 5), ("Secuencia de fechas", "=TEXT(SEQUENCE(3,1,DATE(2026,11,15),7),\"dd/mm/yyyy\")", 4), ("Suma de secuencia", "=SUM(SEQUENCE(100))", 2),
+    ("Transponer secuencia", "=TRANSPOSE(SEQUENCE(2,3))", 4), ("Apilar horizontal", "=HSTACK({1;2;3},{\"a\";\"b\"})", 4), ("Apilar rangos", "=VSTACK(Datos!C2:D3,Datos!C60:D61)", 5),
+    ("Tomar las últimas", "=TAKE(Datos!C2:E61,-3)", 4), ("Tomar columnas", "=TAKE(Datos!A2:G4,,2)", 4), ("Excluir", "=DROP(Datos!C2:E8,4,1)", 4),
+    ("Excluir del final", "=DROP({1,2,3;4,5,6;7,8,9},-1,-1)", 3), ("Elegir columnas", "=CHOOSECOLS(Datos!A2:G4,3,-1)", 4), ("Elegir filas", "=CHOOSEROWS(Datos!C2:D20,1,3,-1)", 4),
+    ("En columna sin vacíos", "=TOCOL({1,\"\",3;4,5,\"\"},1)", 5), ("En fila por columnas", "=TOROW({1,2;3,4},0,TRUE)", 2), ("Ajustar en filas", "=WRAPROWS(SEQUENCE(7),3,0)", 4),
+    ("Ajustar en columnas", "=WRAPCOLS(SEQUENCE(5),2)", 3), ("Expandir", "=EXPAND({1,2;3,4},3,3,\"-\")", 4), ("Dividir con varios separadores", '=TEXTSPLIT("uno, dos;tres",{",",";"})', 2),
+    ("Dividir sin vacíos", '=TEXTSPLIT("a,,b,,,c",",",,TRUE)', 2), ("Dividir en filas con relleno", '=TEXTSPLIT("a=1;b;c=3","=",";",,,"?")', 4),
+    ("LET con LAMBDA", "=LET(doble,LAMBDA(x,x*2),doble(21))", 2), ("LET con matriz", "=LET(v,SEQUENCE(4),SUM(v*v))", 2), ("LET anidado", "=LET(a,2,b,LET(c,3,a*c),a+b)", 2),
+    ("Por columna (BYCOL)", "=BYCOL({1,2;3,4},LAMBDA(c,MAX(c)))", 2), ("Mapear dos matrices", "=MAP({1,2;3,4},{10,20;30,40},LAMBDA(a,b,a+b))", 3),
+    ("Reducir", "=REDUCE(0,SEQUENCE(10),LAMBDA(a,v,a+v))", 2), ("Reducir a matriz", '=REDUCE("inicio",{"x","y"},LAMBDA(a,v,VSTACK(a,v)))', 4),
+    ("Acumulado (SCAN)", "=SCAN(0,{1,2,3,4},LAMBDA(a,v,a+v))", 2), ("Armar matriz", "=MAKEARRAY(3,3,LAMBDA(r,c,r*c))", 4),
+    ("Parámetro omitido", "=LAMBDA(x,[y],IF(ISOMITTED(y),x,x+y))(5)", 2), ("Función con nombre", "=Hipotenusa(3,4)", 2),
+    ("Frecuencia", "=FREQUENCY(Datos!E2:E61,{20,40,60})", 5), ("Producto de matrices", "=MMULT({1,2;3,4},{5;6})", 3), ("Inversa", "=MINVERSE({4,7;2,6})", 3),
+    ("Determinante", "=MDETERM({4,7;2,6})", 2), ("Identidad", "=MUNIT(3)", 4), ("Suma de un derrame", "=SUM([[Rango por 2]]#)", 2), ("Filas de un derrame", "=ROWS([[Filtrar dos condiciones]]#)", 2),
+    ("Derrame de otro derrame", "=SORT([[Largo de cada uno]]#,1,-1)", 6),
+    ("Intersección implícita", "=@Datos!E2:E61", 2), ("Bloqueado por texto", "=SEQUENCE(3)", 4), ("Bloqueado por combinada", "=SEQUENCE(2,2)", 3),
+]
+
+
+def x09(x):
+    L = Libro(x, "x09-matrices"); b = L.b
+    ws = L.hoja("Matrices")
+    dat = L.hoja("Datos"); ventas(dat)
+    with b.paso("nombre con LAMBDA (Hipotenusa)"):
+        L.wb.Names.Add("Hipotenusa", "=LAMBDA(a,b,SQRT(a^2+b^2))")
+    ws.Range("A1").Value = "Qué"; ws.Range("B1").Value = "Fórmula"; ws.Range("D1").Value = "Resultado"; ws.Range("A1:D1").Font.Bold = True
+    fila, filas = 2, {}
+    for nombre, f, alto in MATRICES: filas[nombre] = fila; fila += alto + 1
+    fila = 2
+    for nombre, f, alto in MATRICES:
+        for k, v in filas.items(): f = f.replace("[[" + k + "]]", f"D{v}")
+        with b.paso("matriz " + nombre):
+            ws.Cells(fila, 1).Value = nombre; ws.Cells(fila, 2).Value = "'" + f
+            if nombre == "Bloqueado por texto": ws.Cells(fila + 2, 4).Value = "estorbo"
+            if nombre == "Bloqueado por combinada": ws.Range(ws.Cells(fila + 1, 5), ws.Cells(fila + 1, 6)).Merge()
+            ws.Cells(fila, 4).Formula2 = f
+        fila += alto + 1
+    ws.Columns("A").ColumnWidth = 26; ws.Columns("B").ColumnWidth = 44
+    return L.guardar()
+
+
 if __name__ == "__main__":
     pythoncom.CoInitialize()
     hacer = {k: v for k, v in globals().items() if k[:1] == "x" and k[1:].isdigit()}

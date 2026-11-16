@@ -184,8 +184,8 @@
         if (filtro.contiene) return txt.toLowerCase().includes(String(filtro.contiene).toLowerCase());
         return true;
       }
-      function calcularVisibles(ev) {
-        const n = t ? t.filas || 30 : 0;
+      function calcularVisibles(ev, minFilas) {
+        const n = t ? Math.max(t.filas || 30, minFilas || 0) : 0;
         let todas = Array.from({ length: n }, (_, i) => i);
         if (xl()) todas = todas.filter((i) => !t["oh:" + (i + 1)]);   // filas ocultas en Excel
         const v = vistaActual();
@@ -802,6 +802,22 @@
         }
         return { v, txt: F().aplicarFormato(v, fmt), st: st.join(";"), negrita, num: F().esNum(v), err: v instanceof F().ErrorF, formula: cr.startsWith("=") ? cr : "" };
       }
+      /** Hasta dónde llegan los derrames de las fórmulas de matrices: { filas, cols }. */
+      function extensionDerrames(ev) {
+        let filas = 0, cols = 0;
+        if (!t || !ev.derrame) return { filas, cols };
+        for (const [c, f] of F().formulasDe(t)()) { const d = ev.derrame(c, f); if (d && !d.bloqueado) { filas = Math.max(filas, f + d.filas); cols = Math.max(cols, c + d.cols); } }
+        return { filas, cols };
+      }
+      let ultimoEv = null;
+      /** Lo que va en la barra de fórmulas: en una celda a la que llega un derrame, la fórmula de origen en gris (como Excel). */
+      function textoBarra(c, f) {
+        const v = crudo(c, f);
+        let fantasma = "";
+        if (v === "" && t) { const ev = ultimoEv || evaluar(), o = ev.origen ? ev.origen(c, f) : null; if (o) fantasma = crudo(o.c, o.f); }
+        fx.placeholder = fantasma;
+        return v;
+      }
       function render() {
         t = tabla();
         if (!t) {
@@ -810,9 +826,12 @@
           return;
         }
         const ev = evaluar();
-        const cols = t.cols || 10;
+        ultimoEv = ev;
+        // lo que derraman las fórmulas de matrices también se ve aunque pase del tamaño de la hoja
+        const ext = extensionDerrames(ev);
+        const cols = Math.max(t.cols || 10, ext.cols);
         const r = rango();
-        visibles = calcularVisibles(ev);
+        visibles = calcularVisibles(ev, ext.filas);
         const v = vistaActual() || {};
         const spans = calcularCombinadas(!vistaActual());
         const conds = reglas("cf");
@@ -858,7 +877,7 @@
                 // Texto que no cabe: se desborda sobre las celdas vacías de al lado, como en Excel: a la derecha si va a la
                 // izquierda, a la izquierda si va a la derecha y a los dos lados si va centrado; «centrar en la selección»,
                 // sobre las vacías de la derecha que también lo piden. Se corta en la primera celda que tiene algo.
-                const libre = (k) => k >= 0 && k < cols && String(crudo(k, f)) === "" && !cubiertas.has(F().ref(k, f)) && !spans.get(F().ref(k, f));
+                const libre = (k) => k >= 0 && k < cols && String(crudo(k, f)) === "" && ev.valor(k, f) === "" && !cubiertas.has(F().ref(k, f)) && !spans.get(F().ref(k, f));
                 let izq = 0, der = 0;
                 if (hx === "centerContinuous") { for (let k = c + 1; libre(k) && (t["ax:" + F().ref(k, f)] || {}).h === "centerContinuous"; k++) der += ancho(k); }
                 else {
@@ -952,7 +971,7 @@
         if (!ancla) { const vis = visible(sel.c, sel.f); if (vis.c !== sel.c || vis.f !== sel.f) sel = vis; }
         const r = rango();
         refEl.textContent = ancla && (ancla.c !== sel.c || ancla.f !== sel.f) ? textoRango(r) : F().ref(sel.c, sel.f);
-        if (document.activeElement !== fx) fx.value = crudo(sel.c, sel.f);
+        if (document.activeElement !== fx) fx.value = textoBarra(sel.c, sel.f);
         $$("td.sel, td.rango", rej).forEach((x) => x.classList.remove("sel", "rango"));
         $$("th.activa", rej).forEach((x) => x.classList.remove("activa"));
         for (let f = r.f1; f <= r.f2; f++) for (let c = r.c1; c <= r.c2; c++) {
@@ -2363,7 +2382,7 @@
         pintarGraficas();
         aplicarFijas();
         colocarAsa();
-        if (document.activeElement !== fx && !editor) fx.value = crudo(sel.c, sel.f);
+        if (document.activeElement !== fx && !editor) fx.value = textoBarra(sel.c, sel.f);
       }
       /** ¿El cambio altera la forma de la tabla (columnas, filas, combinadas, anchos…)? Entonces se repinta todo. */
       const deForma = (k) => /^(filas|cols|fijasF|fijasC|vistaComun|nombre|tipo|eliminado)$/.test(k) || /^(m|aw|ah|dv):/.test(k);

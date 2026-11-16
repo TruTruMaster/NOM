@@ -113,7 +113,9 @@
     "ox",
     // De Word: interlineado exacto (pt), borde y fondo del párrafo, sentido del texto y marca de
     // inicio de sección ("p|2 columnas": hoja nueva; "c|…": en la misma hoja).
-    "lineaPt", "borde", "sombra", "dir", "sec"];
+    "lineaPt", "borde", "sombra", "dir", "sec",
+    // sx: la hoja de la sección de Word que empieza en este párrafo (tamaño, márgenes, columnas…), en JSON
+    "sx"];
   const VINETAS = ["•", "◦", "▪", "–", "➢", "✓", "★", "♦"];
   const NUMFMTS = [["1.", "1. 2. 3."], ["1)", "1) 2) 3)"], ["a.", "a. b. c."], ["a)", "a) b) c)"], ["A.", "A. B. C."], ["I.", "I. II. III."], ["i.", "i. ii. iii."]];
   /** Quién mira el documento (para los párrafos con dueño): lo llena montar(). */
@@ -253,6 +255,7 @@
       if (d.sombra) r.sombra = d.sombra;
       if (d.dir === "rtl") r.dir = "rtl";
       if (d.sec != null && d.sec !== "") r.sec = d.sec;
+      if (d.sx) r.sx = d.sx;
       return r;
     }
     // HTML ajeno (pegado de Word, Google Docs, la web…)
@@ -423,7 +426,7 @@
     if (a.sugBorrar) h = `<span class="wd-sugb" data-sugb="${esc(JSON.stringify(a.sugBorrar))}" style="--c:${esc(a.sugBorrar.c || "#C2372B")}" title="${esc((a.sugBorrar.n || "") + " propone borrarlo")}">${h}</span>`;
     return h;
   }
-  const BLOQUE_OBJ = new Set(["tabla", "salto", "linea", "indice"]);
+  const BLOQUE_OBJ = new Set(["tabla", "salto", "saltocol", "linea", "indice"]);
   function htmlObjeto(it) {
     const t = (it.e && it.e.tipo) || "x";
     return `<span class="wd-obj wd-${esc(t)}${BLOQUE_OBJ.has(t) ? " bloque" : ""}" data-obj data-id="${esc(it.id)}" contenteditable="false"></span>`;
@@ -476,6 +479,7 @@
     if (/^#[0-9a-fA-F]{6}$/.test(pa.sombra || "")) { at += ` data-sombra="${pa.sombra}"`; st += `background-color:${pa.sombra};`; }
     if (pa.dir === "rtl") at += ` dir="rtl" data-dir="rtl"`;
     if (pa.sec != null && pa.sec !== "") { const t = String(pa.sec).slice(2); at += ` data-sec="${esc(pa.sec)}"${t ? ` data-sec-t="${esc("Sección: " + t)}"` : ""}`; }
+    if (pa.sx) at += ` data-sx="${esc(pa.sx)}"`;
     if (st) at += ` style="${st}"`;
     let h = "";
     let i = p.ini;
@@ -686,6 +690,8 @@
             o.classList.toggle("sel", o.dataset.id === imgSel);
             o.style.left = libre ? (+bl.x || 0) + "px" : "";
             o.style.top = libre ? (+bl.y || 0) + "px" : "";
+            // (encima de qué va: el orden de Word entre lo que flota)
+            o.style.zIndex = libre && !bl.detras && +bl.z ? String(2 + +bl.z) : "";
             o.title = ed.soloLectura ? "" : libre ? "Arrastra para moverla a cualquier lugar" : "Arrastra para moverla a otro lugar del texto";
           } else if (e.tipo === "tabla") pintarTabla(o, bl, e.ref);
           else if (e.tipo === "nota") { o.innerHTML = `<sup>${numerosNotas().get(o.dataset.id) || "*"}</sup>`; o.title = bl && bl.texto ? "Nota: " + bl.texto : "Nota al pie (toca para escribirla)"; }
@@ -698,25 +704,19 @@
             o.classList.add("con-grafica");
             o.title = "Gráfico del archivo de Word. Aquí no se edita, pero al descargar en Word sale completo.";
           }
-          else if (e.tipo === "objeto" && e.forma && NOM.geomOffice && +e.w > 0) {
-            // forma o cuadro de texto de Word: su geometría de Office, su relleno, su contorno y su texto, en su lugar
-            const f = e.forma, w = +e.w, h = Math.max(1, +e.h || 1), k = 96 / 72;
-            const tz = NOM.geomOffice.trazos(f.prst || "rect", Math.max(0.01, w), h, f.av || null) || [];
-            const ln = f.linea && !f.linea.no ? f.linea : null, rel = f.relleno && f.relleno !== "none" ? f.relleno : null;
-            const ok = (c) => /^#[0-9A-Fa-f]{6}$/.test(c || "");
-            const svg = `<svg width="${w}" height="${h}" style="position:absolute;inset:0;overflow:visible">${tz.map((z) => `<path d="${z.d}" fill="${z.relleno === "none" || !ok(rel) ? "none" : rel}" stroke="${ln && z.contorno !== false && ok(ln.c) ? ln.c : "none"}" stroke-width="${ln ? Math.max(0.5, (+ln.w || 1) * k) : 0}"/>`).join("")}</svg>`;
-            const rt = NOM.geomOffice.rectTexto(f.prst || "rect", Math.max(0.01, w), h, f.av || null), ins = Array.isArray(f.ins) ? f.ins : [9.6, 4.8, 9.6, 4.8], le = f.letra || {};
-            const txt = Array.isArray(f.texto) ? `<span class="wd-forma-txt" style="left:${rt.l}px;top:${rt.t}px;width:${Math.max(1, rt.r - rt.l)}px;height:${Math.max(1, rt.b - rt.t)}px;padding:${+ins[1] || 0}px ${+ins[2] || 0}px ${+ins[3] || 0}px ${+ins[0] || 0}px;justify-content:${f.ancla === "ctr" ? "center" : f.ancla === "b" ? "flex-end" : "flex-start"};font-size:${+le.tam || 11}pt;color:${ok(le.c) ? le.c : "#000"};${le.b ? "font-weight:700;" : ""}">${f.texto.map((q) => `<span style="display:block;text-align:${{ center: "center", right: "right", end: "right", both: "justify" }[q.al] || "left"}">${esc(q.t) || "&nbsp;"}</span>`).join("")}</span>` : "";
-            // (girada o volteada como en Word; el texto vertical, de arriba abajo o de abajo arriba)
-            const gir = +f.giro || 0, tr = gir || f.vH || f.vV ? `transform:rotate(${gir}deg) scale(${f.vH ? -1 : 1},${f.vV ? -1 : 1});` : "";
-            const txtV = f.vert ? txt.replace('class="wd-forma-txt" style="', `class="wd-forma-txt" style="writing-mode:vertical-rl;${f.vert === "vert270" ? "transform:rotate(180deg);" : ""}`) : txt;
-            o.innerHTML = `<span class="wd-forma" style="width:${w}px;height:${h}px;${tr}">${svg}${txtV}</span>`;
+          else if (e.tipo === "objeto" && (e.forma || e.grupo) && NOM.geomOffice && NOM.geomOffice.htmlDibujo && +e.w > 0) {
+            // forma, cuadro de texto, grupo o lienzo de Word: su geometría de Office, su relleno (color, degradado, trama
+            // o imagen), su contorno, sus efectos y su texto; cada pieza del grupo en su lugar, en el lugar del dibujo
+            const w = +e.w, h = Math.max(1, +e.h || 1);
+            const familia = (n) => (NOM.textoRico ? NOM.textoRico.cssFuente(n) : n);
+            o.innerHTML = `<span class="wd-forma" style="width:${w}px;height:${h}px;${NOM.geomOffice.transformDe(e.forma || e.grupo)}">${NOM.geomOffice.htmlDibujo(e, w, h, familia)}</span>`;
             o.classList.add("con-forma");
             o.classList.toggle("libre", !!e.libre);
             o.classList.toggle("detras", !!(e.libre && e.detras));
             o.style.left = e.libre ? (+e.x || 0) + "px" : "";
             o.style.top = e.libre ? (+e.y || 0) + "px" : "";
-            o.title = "Forma del archivo de Word. Aquí no se edita, pero al descargar en Word sale completa.";
+            o.style.zIndex = e.libre && !e.detras && +e.z ? String(2 + +e.z) : "";
+            o.title = e.grupo ? "Grupo de formas del archivo de Word. Aquí no se edita, pero al descargar en Word sale completo." : "Forma del archivo de Word. Aquí no se edita, pero al descargar en Word sale completa.";
           }
           else if (e.tipo === "objeto") {
             // Lo que aquí no se dibuja (cuadro de texto, SmartArt, gráfico): su texto sí se lee.
@@ -725,7 +725,8 @@
             o.title = "Objeto del archivo de Word (cuadro de texto, forma, gráfico…). Aquí no se puede editar, pero al descargar en Word sale completo.";
           }
           else if (e.tipo === "salto") o.innerHTML = `<span>Salto de página</span>`;
-          if (e.tipo === "objeto" && e.forma && e.libre && e.franja && o.parentElement) franjas.add(o.parentElement);
+          else if (e.tipo === "saltocol") o.innerHTML = `<span>Salto de columna</span>`;
+          if (e.tipo === "objeto" && (e.forma || e.grupo) && e.libre && e.franja && o.parentElement) franjas.add(o.parentElement);
           else if (e.tipo === "linea") o.innerHTML = `<hr>`;
           else if (e.tipo === "indice") pintarIndice(o);
         });
@@ -1676,6 +1677,7 @@
           if (alFinal && ["titulo", "subtitulo", "h1", "h2", "h3"].includes(pa.estilo)) ajuste.estilo = null;
           if (pa.hecho) ajuste.hecho = null;
           if (pa.sec != null) ajuste.sec = null;   // la sección empieza una sola vez: en la primera mitad
+          if (pa.sx != null) ajuste.sx = null;
           if (Object.keys(ajuste).length) doc().seq(B, { k: "f", a: ajuste, r: S().rangos([p.mark]) }, { origen: "comando" });
           if (pendiente && pendiente.pos === s.ini) pendiente.pos = s.ini + 1;
           return { sel: [s.ini + 1, s.ini + 1] };
@@ -2504,15 +2506,388 @@
       let numPaginas = 1;
       /** Quita los empujes y los cortes de la paginación anterior (se calculan de nuevo). */
       function quitarPaginacion() {
-        for (const el of cuerpo.children) if (el.dataset.empuje) { el.style.marginTop = ""; delete el.dataset.empuje; }
+        for (const el of cuerpo.children) {
+          if (el.dataset.empuje) { el.style.marginTop = ""; delete el.dataset.empuje; }
+          if (el.style.getPropertyValue("--sx")) { el.style.removeProperty("--sx"); el.style.removeProperty("--sr"); }
+        }
+        cuerpo.classList.remove("con-secciones");
+        quitarContinuaciones();
         $$(".wd-corte", cuerpo).forEach((x) => { const p = x.parentNode; x.remove(); if (p) p.normalize(); });
         cuerpo.style.minHeight = "";
+      }
+      // ------------------------------------------------------------ secciones de Word: cada una con su hoja
+      /** Las secciones con su propia hoja (párrafos con data-sx): [{ i, g }]. Vacío si el documento no las tiene. */
+      function seccionesDoc() {
+        const out = [];
+        for (let i = 0; i < cuerpo.children.length; i++) {
+          const sx = cuerpo.children[i].dataset.sx;
+          if (!sx) continue;
+          let g = null;
+          try { g = JSON.parse(sx); } catch (e) { g = null; }
+          if (g && +g.w > 50 && +g.h > 50) out.push({ i, g: Object.assign({ m: [96, 96, 96, 96], c: 1, t: "n" }, g) });
+        }
+        return out;
+      }
+      /** Las columnas de una sección: [{ x (desde el margen izquierdo), w }] en px. */
+      function columnasDe(g) {
+        const util = g.w - g.m[2] - g.m[3], n = Math.max(1, +g.c || 1);
+        if (Array.isArray(g.a) && g.a.length > 1) { let x = 0; return g.a.map(([w, e]) => { const c = { x, w: +w }; x += +w + (+e || 0); return c; }); }
+        if (n === 1) return [{ x: 0, w: util }];
+        const e = +g.e || 0, w = (util - e * (n - 1)) / n;
+        return Array.from({ length: n }, (_, k) => ({ x: k * (w + e), w }));
+      }
+      const ROMANOS_PAG = [[1000, "m"], [900, "cm"], [500, "d"], [400, "cd"], [100, "c"], [90, "xc"], [50, "l"], [40, "xl"], [10, "x"], [9, "ix"], [5, "v"], [4, "iv"], [1, "i"]];
+      const numeroCon = (n, f) => {
+        if (f !== "lowerRoman" && f !== "upperRoman") return String(n);
+        let r = "", x = Math.max(1, n);
+        for (const [v, t] of ROMANOS_PAG) while (x >= v) { r += t; x -= v; }
+        return f === "upperRoman" ? r.toUpperCase() : r;
+      };
+      let paginasSec = null;   // (con secciones) [{ top, g, x0, num, fmt }] de cada hoja, para la barra de estado
+      // Lo que sigue de un párrafo partido entre dos columnas se ve en otra capa (una copia que no se edita: al
+      // tocarla, el cursor va al párrafo de verdad).
+      let capaSigue = null;
+      function capaContinuaciones() {
+        if (!capaSigue || !capaSigue.isConnected) {
+          capaSigue = document.createElement("div");
+          capaSigue.setAttribute("aria-hidden", "true");
+          hoja.append(capaSigue);
+          capaSigue.addEventListener("mousedown", (e) => {
+            const c = e.target.closest && e.target.closest(".wd-sigue");
+            const el = c ? cuerpo.children[+c.dataset.par] : null;
+            if (!el) return;
+            e.preventDefault();
+            // el mismo lugar en el párrafo: los caracteres que van antes en la copia más los que se quitaron
+            let rg = null;
+            try { rg = document.caretRangeFromPoint ? document.caretRangeFromPoint(e.clientX, e.clientY) : null; } catch (er) { rg = null; }
+            let cuenta = +c.dataset.desde || 0;
+            if (rg && c.contains(rg.startContainer)) { const r2 = document.createRange(); r2.setStart(c, 0); r2.setEnd(rg.startContainer, rg.startOffset); cuenta += r2.toString().length; }
+            const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+            for (let n = w.nextNode(); n; n = w.nextNode()) {
+              if (n.parentElement && n.parentElement.closest(".wd-corte, [data-obj]")) continue;
+              if (cuenta <= n.length) { const s = getSelection(); s.removeAllRanges(); const r3 = document.createRange(); r3.setStart(n, cuenta); r3.collapse(true); s.addRange(r3); cuerpo.focus({ preventScroll: true }); return; }
+              cuenta -= n.length;
+            }
+          });
+        }
+        // la misma letra que el texto (su fuente, tamaño y variables están en el cuerpo)
+        capaSigue.className = cuerpo.className.replace(/\bcon-secciones\b/, "") + " wd-continuaciones";
+        capaSigue.style.cssText = cuerpo.style.cssText;
+        capaSigue.removeAttribute("contenteditable");
+        return capaSigue;
+      }
+      function quitarContinuaciones() {
+        if (capaSigue) capaSigue.innerHTML = "";
+        for (const el of cuerpo.children) if (el.dataset.clip != null) { el.style.clipPath = ""; delete el.dataset.clip; }
+      }
+      /**
+       * Paginación con secciones de Word: cada hoja con su tamaño y sus márgenes (todas centradas), las columnas de cada
+       * sección (el texto baja por la primera y sigue arriba de la segunda: un párrafo que no cabe se parte entre las
+       * dos, como Word), los saltos de sección continuos (las columnas de arriba se equilibran y la sección nueva sigue en
+       * la misma hoja), a página impar o par (con una hoja en blanco si hace falta), la alineación vertical de la hoja, el
+       * número de página que reinicia una sección y los saltos de página y de columna.
+       */
+      function paginarSecciones(secs) {
+        const kids = cuerpo.children, n = kids.length;
+        if (!secs.length || secs[0].i !== 0) { const pg0 = pagina(); secs.unshift({ i: 0, g: { w: pg0.w, h: pg0.h, m: [pg0.m.s, pg0.m.i, pg0.m.iz, pg0.m.d], c: 1, t: "n" } }); }
+        const Wmax = Math.max(...secs.map((s) => +s.g.w));
+        cuerpo.classList.add("con-secciones");
+        hoja.style.setProperty("--pw", Wmax + "px");
+        hoja.style.setProperty("--miz", "0px"); hoja.style.setProperty("--md", "0px");
+        hoja.style.setProperty("--ms", secs[0].g.m[0] + "px"); hoja.style.setProperty("--mi", "0px");
+        const capa = capaContinuaciones();
+        const pags = [];
+        let fondo = 0, num = 1, fmt = null;
+        const nuevaHoja = (g) => { const p = { top: fondo, g, x0: (Wmax - g.w) / 2, num, fmt, regiones: [], notas: [], primero: null, bajo: null }; pags.push(p); fondo += g.h + GAP; num++; return p; };
+        const medidores = new Map();
+        const medidorDe = (g) => { const a = Math.round(g.w - g.m[2] - g.m[3]); if (!medidores.has(a)) medidores.set(a, medirNotas(a)); return medidores.get(a); };
+        const reservado = (p) => p.notas.reduce((s, x) => s + x.alto, 0) + (p.notas.length ? 14 : 0);
+        const fondoHoja = (p) => p.top + p.g.h - p.g.m[1] - reservado(p);
+        const xDe = (p, c) => p.x0 + p.g.m[2] + c.x;
+        const ponerX = (el, p, c) => { const x = xDe(p, c); el.style.setProperty("--sx", x + "px"); el.style.setProperty("--sr", Math.max(0, Wmax - x - c.w) + "px"); };
+        const mt = (el) => parseFloat(getComputedStyle(el).marginTop) || 0, mb = (el) => parseFloat(getComputedStyle(el).marginBottom) || 0;
+        const empujar = (el, d) => {
+          if (Math.abs(d) < 0.25) return;
+          el.style.marginTop = mt(el) + d + "px";
+          el.dataset.empuje = (+(el.dataset.empuje || 0) + d).toFixed(2);
+        };
+        // alineación vertical: lo de la hoja que se cierra baja (centrada) o se pega abajo
+        const cerrarHoja = (p) => {
+          if (!p || !p.primero || (p.g.v !== "center" && p.g.v !== "bottom") || p.primero.offsetTop < p.top || p.bajo == null) return;
+          const libre = fondoHoja(p) - p.bajo;
+          if (libre > 1) empujar(p.primero, p.g.v === "center" ? libre / 2 : libre);
+        };
+        const anotar = (p, el, notasEl, med) => notasEl.forEach((o) => { if (!p.notas.some((x) => x.id === o.dataset.id)) p.notas.push({ id: o.dataset.id, n: numerosNotas().get(o.dataset.id), texto: textoNota(o.dataset.id), alto: med(o.dataset.id) }); });
+        /** Una copia de lo que sigue de un párrafo desde su línea k (para la columna siguiente). */
+        function continuacion(el, k, lineas) {
+          const er = el.getBoundingClientRect(), z = er.height / (el.offsetHeight || 1) || 1;
+          const punto = inicioDeLinea(el, er.top + lineas[k].t * z);
+          if (!punto) return null;
+          const camino = [];
+          for (let x = punto.node; x && x !== el; x = x.parentNode) camino.unshift([...x.parentNode.childNodes].indexOf(x));
+          const c = el.cloneNode(true);
+          let nc = c;
+          for (const q of camino) nc = nc && nc.childNodes[q];
+          if (!nc) return null;
+          const antes = document.createRange();
+          antes.setStart(el, 0); antes.setEnd(punto.node, punto.off);
+          const quitados = antes.toString().length;
+          const rg = document.createRange();
+          rg.setStart(c, 0); rg.setEnd(nc, punto.off); rg.deleteContents();
+          c.querySelectorAll(".wd-corte").forEach((x) => x.remove());
+          c.classList.add("wd-sigue");
+          ["contenteditable", "data-sx", "data-sec", "data-sec-t", "data-empuje", "data-clip", "data-ox"].forEach((a) => c.removeAttribute(a));
+          c.style.removeProperty("--sx"); c.style.removeProperty("--sr"); c.style.clipPath = "";
+          c.dataset.par = el.dataset.par != null ? el.dataset.par : String(Array.prototype.indexOf.call(kids, el));
+          c.dataset.desde = String((+el.dataset.desde || 0) + quitados);
+          return c;
+        }
+        const recortar = (el, alto) => { el.style.clipPath = `inset(0 0 ${Math.max(0, el.offsetHeight - alto).toFixed(2)}px 0)`; el.dataset.clip = alto.toFixed(2); };
+        const colocarCopia = (c, p, col, y) => {
+          c.style.position = "absolute"; c.style.left = xDe(p, col) + "px"; c.style.top = y + "px"; c.style.width = col.w + "px"; c.style.margin = "0";
+          if (!c.isConnected) capa.append(c);
+        };
+        /**
+         * Acomoda los párrafos [i, hasta) de una sección en las columnas `cols` de la hoja p, desde `arriba` hasta
+         * `abajo` (o el fondo de la hoja). `sigue`: lo que quedó de un párrafo partido, que va primero. Devuelve
+         * { i, sigue, bajo, lleno, hechos: [elementos, copias] }.
+         */
+        function colocarRegion(p, cols, arriba, abajo, i, hasta, sigue, conEspacio, estricto) {
+          let ci = 0, y = arriba, bajo = arriba, primero = true;
+          const hechos = [], copias = [], saltos = [];
+          const lim = () => Math.min(abajo == null ? Infinity : abajo, fondoHoja(p));
+          const sigCol = () => { ci++; y = arriba; primero = true; return ci < cols.length; };
+          for (let vueltas = 0; vueltas < 5000; vueltas++) {
+            let el, esCopia = false;
+            if (sigue) { el = sigue; esCopia = true; }
+            else if (i < hasta) el = kids[i];
+            else break;
+            // salto de columna (Word): lo que sigue va arriba de la columna siguiente (el resto de su párrafo, un renglón vacío)
+            if (!esCopia && el.querySelector(".wd-saltocol") && !saltosHechos.has(el)) {
+              saltosHechos.add(el); saltos.push(el);
+              if (!sigCol()) { return { i, sigue: null, bajo, lleno: true, hechos, copias, saltos }; }
+            }
+            const col = cols[ci];
+            // en su columna, debajo de lo anterior (arriba de la columna: sin su espacio de antes, como Word)
+            const antes = esCopia ? 0 : !primero ? mt(el) : conEspacio && ci === 0 && y === arriba ? mt(el) : 0;
+            if (esCopia) colocarCopia(el, p, col, y);
+            else { ponerX(el, p, col); empujar(el, y + antes - el.offsetTop); }
+            const top = esCopia ? y : el.offsetTop, h = el.offsetHeight;
+            const notasEl = esCopia ? [] : $$(".wd-nota[data-obj]", el), med = medidorDe(p.g), altoNotas = notasEl.reduce((s, o) => s + med(o.dataset.id), 0);
+            const tope = lim() - (altoNotas ? altoNotas + (p.notas.length ? 0 : 14) : 0);
+            if (top + h <= tope + 1) {
+              // cabe
+              if (esCopia) { copias.push(el); sigue = null; } else { hechos.push(el); i++; }
+              anotar(p, el, notasEl, med);
+              if (!p.primero && !esCopia) p.primero = el;
+              p.bajo = Math.max(p.bajo || 0, top + h);
+              y = top + h + mb(el); bajo = Math.max(bajo, y); primero = false;
+              // saltos: de página (lo que sigue, en otra hoja) y de columna (arriba de la siguiente)
+              if (!esCopia && el.querySelector(".wd-salto")) return { i, sigue: null, bajo, lleno: true, hechos, copias, saltos };
+              continue;
+            }
+            // no cabe: se parte (al menos dos líneas en cada lado, como Word) o pasa completo a la columna siguiente
+            const lineas = lineasDe(el);
+            let k = lineas.findIndex((l) => top + l.b > tope + 1);
+            if (k > 0 && lineas.length - k < 2 && k >= 3) k = lineas.length - 2;
+            if (k >= 2 && lineas.length - k >= 2 && !el.querySelector(".wd-obj.bloque, .wd-imagen.libre")) {
+              const c = continuacion(el, k, lineas);
+              if (c) {
+                recortar(el, lineas[k].t);
+                if (esCopia) copias.push(el); else { hechos.push(el); i++; }
+                anotar(p, el, notasEl, med);
+                if (!p.primero && !esCopia) p.primero = el;
+                p.bajo = Math.max(p.bajo || 0, top + lineas[k].t);
+                bajo = Math.max(bajo, top + lineas[k - 1].b);
+                sigue = c;
+                if (!sigCol()) return { i, sigue, bajo, lleno: true, hechos, copias, saltos };
+                continue;
+              }
+            }
+            if (primero && estricto) return { i, sigue, bajo, lleno: true, hechos, copias, saltos };   // (al equilibrar: este alto no alcanza)
+            if (primero) {
+              // ni una línea cabe arriba de la columna: se queda (no hay dónde ponerlo)
+              if (esCopia) { copias.push(el); sigue = null; } else { hechos.push(el); i++; }
+              y = top + h + mb(el); bajo = Math.max(bajo, y); primero = false;
+              continue;
+            }
+            if (!sigCol()) return { i, sigue, bajo, lleno: true, hechos, copias, saltos };
+          }
+          return { i, sigue, bajo, lleno: false, hechos, copias, saltos };
+        }
+        /** Deshace lo que hizo una prueba de colocarRegion (para equilibrar). */
+        const deshacer = (r) => { r.hechos.forEach((el) => { if (el.dataset.clip != null) { el.style.clipPath = ""; delete el.dataset.clip; } }); r.copias.forEach((c) => c.remove()); if (r.sigue && r.sigue.isConnected) r.sigue.remove(); (r.saltos || []).forEach((el) => saltosHechos.delete(el)); };
+        const saltosHechos = new Set();
+        let p = null;
+        for (let s = 0; s < secs.length; s++) {
+          const g = secs[s].g, desde = secs[s].i, hasta = s + 1 < secs.length ? secs[s + 1].i : n, cols = columnasDe(g);
+          const sigContinua = s + 1 < secs.length && secs[s + 1].g.t === "c" && Math.abs(secs[s + 1].g.w - g.w) < 1 && Math.abs(secs[s + 1].g.h - g.h) < 1;
+          let arriba, conEspacio = false;
+          if (p && g.t === "c" && Math.abs(p.g.w - g.w) < 1 && Math.abs(p.g.h - g.h) < 1) {
+            arriba = p.finSeccion != null ? p.finSeccion : p.bajo != null ? p.bajo : p.top + p.g.m[0];
+            conEspacio = true;
+            if (g.n != null) num = +g.n;
+          } else {
+            cerrarHoja(p);
+            // a página impar o par: con el número que seguiría (antes de que la sección lo reinicie), una hoja en blanco
+            if (p && (g.t === "i" || g.t === "p") && ((g.t === "i" && num % 2 === 0) || (g.t === "p" && num % 2 === 1))) { const b = nuevaHoja(g); b.vacia = true; }
+            if (g.n != null) num = +g.n;
+            if (g.f) fmt = g.f;
+            p = nuevaHoja(g);
+            arriba = p.top + g.m[0];
+            // (después de un salto de sección Word deja el espacio de antes del primer párrafo)
+            conEspacio = true;
+          }
+          if (g.f) { fmt = g.f; p.fmt = fmt; }
+          let i = desde, sigue = null;
+          for (let vuelta = 0; vuelta < 2000; vuelta++) {
+            let r;
+            if (cols.length === 1) {
+              // una columna: cada párrafo debajo del anterior; el que no cabe se parte entre hojas (o pasa completo)
+              r = { i, bajo: arriba, lleno: false };
+              let y = arriba, primero = true;
+              while (r.i < hasta) {
+                const el = kids[r.i];
+                ponerX(el, p, cols[0]);
+                empujar(el, y + (!primero || conEspacio ? mt(el) : 0) - el.offsetTop);
+                const top = el.offsetTop, h = el.offsetHeight;
+                const notasEl = $$(".wd-nota[data-obj]", el), med = medidorDe(p.g), altoNotas = notasEl.reduce((sm, o) => sm + med(o.dataset.id), 0);
+                const tope = fondoHoja(p) - (altoNotas ? altoNotas + (p.notas.length ? 0 : 14) : 0);
+                if (top + h > tope + 1 && !(primero && top <= arriba + 1 && h > tope - arriba)) {
+                  // ¿se parte entre esta hoja y las siguientes?
+                  const pAnt = p;
+                  if (partirEntreHojas(el, top, tope, () => { cerrarHoja(p); p = nuevaHoja(g); return { destino: p.top + g.m[0], abajo: fondoHoja(p) }; })) {
+                    anotar(pAnt, el, notasEl, med);
+                    if (!pAnt.primero) pAnt.primero = el;
+                    pAnt.bajo = Math.max(pAnt.bajo || 0, tope);
+                    if (!p.primero) p.primero = el;
+                    p.bajo = el.offsetTop + el.offsetHeight;
+                    y = p.bajo + mb(el); r.i++; primero = false; conEspacio = false;
+                    continue;
+                  }
+                  if (!primero) { r.lleno = true; break; }
+                }
+                anotar(p, el, notasEl, med);
+                if (!p.primero) p.primero = el;
+                p.bajo = Math.max(p.bajo || 0, top + h);
+                y = top + h + mb(el); r.i++; primero = false; conEspacio = false;
+                r.bajo = y;
+                if (el.querySelector(".wd-salto") && r.i < hasta) { r.lleno = true; break; }
+              }
+              i = r.i;
+              if (!r.lleno) { p.finSeccion = y; break; }
+            } else {
+              r = colocarRegion(p, cols, arriba, null, i, hasta, sigue, conEspacio);
+              conEspacio = false;
+              if (!r.lleno && sigContinua && !r.sigue && r.i >= hasta) {
+                // la sección termina en esta hoja y sigue otra continua: sus columnas se equilibran (el alto menor con
+                // el que todo cabe)
+                deshacer(r);
+                let lo = arriba, hi = r.bajo, mejor = null;
+                for (let k = 0; k < 14 && hi - lo > 1; k++) {
+                  const m = (lo + hi) / 2, t = colocarRegion(p, cols, arriba, m, i, hasta, sigue, false, true);
+                  deshacer(t);
+                  if (!t.lleno && !t.sigue && t.i >= hasta) { hi = m; mejor = m; } else lo = m;
+                }
+                r = colocarRegion(p, cols, arriba, mejor != null ? hi : null, i, hasta, sigue, false);
+              }
+              if (g.l) p.regiones.push({ top: arriba, bajo: Math.max(arriba, Math.min(r.bajo, fondoHoja(p))), cols });
+              i = r.i; sigue = r.sigue;
+              if (!r.lleno && !sigue && i >= hasta) { p.finSeccion = r.bajo; break; }
+            }
+            // la hoja se llenó: lo que falta va a una hoja nueva de la misma sección
+            cerrarHoja(p);
+            p = nuevaHoja(g);
+            arriba = p.top + g.m[0];
+          }
+        }
+        cerrarHoja(p);
+        paginasSec = pags;
+        return pags;
+      }
+      /**
+       * Parte un párrafo (de una sección de una columna) que no cabe en su hoja: lo que no cabe baja a la hoja que da
+       * `siguiente()` ({ destino, abajo }). Deja al menos dos líneas en cada hoja, como Word. true si lo partió.
+       */
+      function partirEntreHojas(el, top, abajo, siguiente) {
+        if (el.querySelector(".wd-obj.bloque, .wd-imagen.libre, .wd-imagen.flota-izq, .wd-imagen.flota-der") || !el.firstChild) return false;
+        let partido = false, lim = abajo, desde = top;
+        for (let vuelta = 0; vuelta < 40; vuelta++) {
+          const lineas = lineasDe(el);
+          if (lineas.length < 4) return partido;
+          let k = lineas.findIndex((l) => top + l.b > lim + 1);
+          if (k < 0) return partido;
+          const enHoja = (hasta) => lineas.filter((l, j) => j < hasta && top + l.t >= desde - 1).length;
+          if (k > 0 && lineas.length - k < 2 && enHoja(k) >= 3) k = lineas.length - 2;   // sin línea viuda
+          if (enHoja(k) < 2 || lineas.length - k < 2) return partido;                     // sin línea huérfana
+          const er = el.getBoundingClientRect(), z = er.height / (el.offsetHeight || 1) || 1;
+          const punto = inicioDeLinea(el, er.top + lineas[k].t * z);
+          if (!punto) return partido;
+          const sig = siguiente(), alto = sig.destino - (top + lineas[k].t);
+          if (alto <= 0) return partido;
+          const rg = document.createRange();
+          rg.setStart(punto.node, punto.off);
+          rg.insertNode(crearCorte(alto + "px"));
+          partido = true; lim = sig.abajo; desde = sig.destino;
+        }
+        return partido;
+      }
+      /** Con secciones: las hojas (cada una de su tamaño, centradas), su encabezado y pie, sus notas y la línea entre columnas. */
+      function paginarConSecciones(secs, t0) {
+        const pags = paginarSecciones(secs);
+        tomarRegistros();
+        numPaginas = Math.max(1, pags.length);
+        const ultima = pags[pags.length - 1];
+        cuerpo.style.minHeight = (ultima ? ultima.top + ultima.g.h : 0) + "px";
+        const e = encPie(), fb = formatoBase();
+        const [zonaNum, alNum] = e.pos.split("-");
+        const fila = (zona, texto, al, q) => {
+          const slots = { izq: "", centro: "", der: "" };
+          if (texto && texto.includes("\t")) texto.split("\t").slice(0, 3).forEach((t, k) => { slots[["izq", "centro", "der"][k]] += esc(t); });
+          else if (texto) slots[al] += esc(texto);
+          // (cada sección de Word con su encabezado, su pie y el lugar de su número)
+          const ep = q.g.ep, [zN, aN] = ep ? (ep.np === "no" ? ["", ""] : String(ep.np).split("-")) : [zonaNum, alNum];
+          if ((ep ? ep.np !== "no" : e.nums) && zN === zona) slots[aN] += (slots[aN] ? "&emsp;" : "") + esc(textoNumero(numeroCon(q.num + (ep ? 0 : e.inicio - 1), q.fmt), numPaginas + (ep ? 0 : e.inicio - 1), ep ? ep.nf || "n" : e.fmt));
+          return `<div class="wd-${zona === "enc" ? "enc" : "pie"}"><span class="izq">${slots.izq}</span><span class="centro">${slots.centro}</span><span class="der">${slots.der}</span></div>`;
+        };
+        const estiloEP = `font-family:${esc(fb.fuente ? cssFuente(fb.fuente) : "Calibri, Carlito, sans-serif")};font-size:${Math.min(12, +fb.tam || 11)}pt`;
+        let h = "";
+        pags.forEach((q, i) => {
+          const g = q.g, vacia = q.vacia || (e.primera && i === 0);
+          const bloqueNotas = q.notas.length ? `<div class="wd-notas" style="left:${g.m[2]}px;right:${g.m[3]}px;bottom:${g.m[1]}px">${q.notas.map((x) => `<div class="wd-nota-pie"><sup>${x.n}</sup> ${esc(x.texto)}</div>`).join("")}</div>` : "";
+          // la línea entre columnas (Word: «línea entre columnas»), del alto de lo escrito en ellas
+          const lineas = q.regiones.map((r) => r.cols.slice(1).map((c, k) => { const a = r.cols[k], x = g.m[2] + (a.x + a.w + c.x) / 2; return `<div class="wd-col-linea" style="left:${x.toFixed(2)}px;top:${(r.top - q.top).toFixed(2)}px;height:${Math.max(0, r.bajo - r.top).toFixed(2)}px"></div>`; }).join("")).join("");
+          const ep = g.ep, encT = ep ? ep.e : e.enc, encA = ep ? ep.ea || "izq" : e.encAl, pieT = ep ? ep.p : e.pie, pieA = ep ? ep.pa || "izq" : e.pieAl;
+          h += `<div class="wd-pagina" style="top:${q.top}px;left:${q.x0}px;width:${g.w}px;height:${g.h}px;--ms:${g.m[0]}px;--mi:${g.m[1]}px;--miz:${g.m[2]}px;--md:${g.m[3]}px;${estiloEP}">${vacia ? "" : fila("enc", encT, encA, q) + fila("pie", pieT, pieA, q)}${bloqueNotas}${lineas}${e.marca ? `<div class="wd-marca-agua">${esc(e.marca)}</div>` : ""}</div>`;
+        });
+        pintarNotasFinales();
+        if (capaPaginas.innerHTML !== h) capaPaginas.innerHTML = h;
+        pintarEstado();
+        pintarCursores();
+        if (seguirCursor) { seguirCursor = false; desplazarAlCursor(); }
+        msPaginar = performance.now() - t0;
+        tamPaginado = cuerpo.offsetWidth + "x" + cuerpo.offsetHeight;
+        ed.paginacion = { ms: Math.round(msPaginar), modo: "secciones", paginas: numPaginas, parrafos: cuerpo.children.length, fallo: null,
+          hojas: pags.map((q) => ({ top: q.top, x: q.x0, w: q.g.w, h: q.g.h })) };
+      }
+      /** Sin secciones: la hoja vuelve a ser la del documento (las variables que cambia la paginación con secciones). */
+      function restaurarHoja() {
+        const pg = pagina();
+        hoja.style.setProperty("--pw", pg.w + "px");
+        hoja.style.setProperty("--ms", pg.m.s + "px");
+        hoja.style.setProperty("--mi", pg.m.i + "px");
+        hoja.style.setProperty("--miz", pg.m.iz + "px");
+        hoja.style.setProperty("--md", pg.m.d + "px");
       }
       function paginar() {
         clearTimeout(tPag); tPag = null;
         const t0 = performance.now();
         quitarPaginacion();
         const pg = pagina();
+        // secciones de Word con su propia hoja (otro tamaño, horizontal, columnas): cada hoja con la suya
+        const secs = vista === "paginas" ? seccionesDoc() : [];
+        if (secs.length) return paginarConSecciones(secs, t0);
+        if (paginasSec) { paginasSec = null; restaurarHoja(); }
         if (vista !== "paginas") {
           pintarNotasFinales();
           capaPaginas.innerHTML = "";
@@ -2832,7 +3207,8 @@
         const c = contar(), s = ultimaSel;
         let sel = "";
         if (!s.col) { const t = visPintado.slice(s.ini, s.fin).map((x) => x.c).join(""); sel = `${(t.match(/[\p{L}\p{N}][\p{L}\p{N}'’_-]*/gu) || []).length} de `; }
-        const pg = Math.min(numPaginas, Math.max(1, Math.floor((zona.scrollTop || ed.lienzo.scrollTop) / ((pagina().h + GAP) * zoom)) + 1));
+        const desp = (zona.scrollTop || ed.lienzo.scrollTop) / zoom;
+        const pg = paginasSec ? Math.max(1, paginasSec.filter((q) => q.top <= desp + 1).length) : Math.min(numPaginas, Math.max(1, Math.floor((zona.scrollTop || ed.lienzo.scrollTop) / ((pagina().h + GAP) * zoom)) + 1));
         barraEstado.innerHTML = `<button class="wd-e" data-contar>${vista === "paginas" ? `Página ${pg} de ${numPaginas} · ` : ""}${sel}${c.palabras.toLocaleString("es-MX")} ${c.palabras === 1 ? "palabra" : "palabras"}</button>
           <span class="crece"></span>
           <div class="segmentado wd-vistas" role="group" aria-label="Vista"><button data-vista="paginas" aria-pressed="${vista === "paginas"}" data-micro="Diseño de impresión|Páginas como se imprimen.">${ico("file-text", "ico-s")}</button><button data-vista="continua" aria-pressed="${vista === "continua"}" data-micro="Sin páginas|Texto continuo, cómodo en celular.">${ico("scroll-text", "ico-s")}</button></div>
@@ -3407,7 +3783,7 @@
               }
             });
             // "ox" y "sec" hablan del archivo de origen de aquel documento, no de este
-            if (i < r.parrafos.length - 1) { const pa = Object.assign({}, p.pa || {}); delete pa.ox; delete pa.sec; toks.push({ c: "\n", pa }); }
+            if (i < r.parrafos.length - 1) { const pa = Object.assign({}, p.pa || {}); delete pa.ox; delete pa.sec; delete pa.sx; toks.push({ c: "\n", pa }); }
           });
           const s = leerSel(), meta = metaPegado(toks);
           comando(() => { const fin = insertarEn(s.ini, toks, "pegar", meta); return { sel: [fin, fin] }; });

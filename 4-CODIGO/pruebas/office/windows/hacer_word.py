@@ -1024,6 +1024,120 @@ def w10(w):
     return D.guardar()
 
 
+# ---------------------------------------------------------------- w11: dibujos (grupos, lienzo, rellenos, líneas, efectos)
+def w11(w):
+    D = Doc(w, "w11-dibujos"); b = D.b; d = D.d; cm = D.cm
+    # (Word solo deja agrupar formas con su ventana abierta: se abre fuera de la pantalla)
+    try: w.Visible = True; w.WindowState = 0; w.Left = -3000; w.Top = 0
+    except Exception: pass
+    VAR0 = lambda l: W.VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_VARIANT, l)
+    def VAR(l):
+        # (Word solo agrupa lo que está a la vista: se lleva la ventana a la primera forma)
+        try: sh = d.Shapes(l[-1]); sh.Select(); w.ActiveWindow.ScrollIntoView(sh.Anchor, True)
+        except Exception: pass
+        return VAR0(l)
+    def flotante(x, rel=2):
+        x.RelativeHorizontalPosition = 0; x.RelativeVerticalPosition = rel; x.WrapFormat.Type = 4
+    def espacio(n):
+        for k in range(n): D.p("")
+    D.p("Dibujos de Word: grupos, lienzo, rellenos, líneas y efectos", -63)
+    with b.paso("grupo de tres formas"):
+        a = D.p("Grupo de tres formas con rellenos distintos:")
+        x1 = d.Shapes.AddShape(1, cm(0.5), cm(0.6), cm(4), cm(2.2), a.Range); x1.Fill.ForeColor.RGB = rgb(68, 114, 196)
+        x2 = d.Shapes.AddShape(9, cm(3.5), cm(1.2), cm(3), cm(3), a.Range); x2.Fill.ForeColor.RGB = rgb(237, 125, 49); x2.Fill.Transparency = 0.3
+        x3 = d.Shapes.AddShape(92, cm(7), cm(0.4), cm(3), cm(3), a.Range); x3.Fill.ForeColor.RGB = rgb(255, 192, 0)
+        for k, x in enumerate((x1, x2, x3)): x.Name = f"g1_{k}"; flotante(x)
+        g1 = d.Shapes.Range(VAR(["g1_0", "g1_1", "g1_2"])).Group(); flotante(g1)
+    espacio(6)
+    with b.paso("grupo girado con cuadro de texto"):
+        a = D.p("Grupo girado 15° (cuadro de texto y forma):")
+        t = d.Shapes.AddTextbox(1, cm(0.5), cm(0.8), cm(5), cm(1.6), a.Range); t.TextFrame.TextRange.Text = "Texto dentro de un grupo"; t.Fill.ForeColor.RGB = rgb(226, 239, 218)
+        f = d.Shapes.AddShape(13, cm(6), cm(0.8), cm(3.5), cm(1.6), a.Range); f.Fill.ForeColor.RGB = rgb(112, 48, 160)
+        for k, x in enumerate((t, f)): x.Name = f"g2_{k}"; flotante(x)
+        g2 = d.Shapes.Range(VAR(["g2_0", "g2_1"])).Group(); flotante(g2); g2.Rotation = 15
+    espacio(6)
+    with b.paso("grupo dentro de otro grupo"):
+        a = D.p("Grupo anidado (un grupo y una forma, agrupados otra vez):")
+        y1 = d.Shapes.AddShape(1, cm(0.5), cm(0.6), cm(3), cm(2), a.Range); y1.Fill.ForeColor.RGB = rgb(0, 176, 80)
+        y2 = d.Shapes.AddShape(9, cm(2.5), cm(1.6), cm(2.5), cm(2.5), a.Range); y2.Fill.ForeColor.RGB = rgb(0, 112, 192)
+        y3 = d.Shapes.AddShape(5, cm(7), cm(0.6), cm(4), cm(3), a.Range); y3.Fill.ForeColor.RGB = rgb(192, 0, 0)
+        for k, x in enumerate((y1, y2, y3)): x.Name = f"g3_{k}"; flotante(x); x.WrapFormat.Type = 3
+        gi = d.Shapes.Range(VAR(["g3_0", "g3_1"])).Group(); gi.Name = "g3_in"; gi.WrapFormat.Type = 3
+        g3 = d.Shapes.Range(VAR(["g3_in", "g3_2"])).Group(); flotante(g3)
+    espacio(6)
+    with b.paso("grupo con imagen y volteado"):
+        a = D.p("Grupo con una imagen, volteado de izquierda a derecha:")
+        im = d.Shapes.AddPicture(os.path.join(IMG, "foto1.jpg"), False, True, cm(0.5), cm(0.6), cm(5), cm(3.1), a.Range)
+        fl = d.Shapes.AddShape(33, cm(6), cm(1), cm(4), cm(2), a.Range); fl.Fill.ForeColor.RGB = rgb(255, 0, 102)
+        for k, x in enumerate((im, fl)): x.Name = f"g4_{k}"; flotante(x); x.WrapFormat.Type = 3
+        g4 = d.Shapes.Range(VAR(["g4_0", "g4_1"])).Group(); flotante(g4); g4.Flip(0)
+    espacio(6)
+    with b.paso("lienzo con fondo, formas, imagen y flecha"):
+        a = D.p("Lienzo de dibujo con fondo, formas, una imagen y una flecha:")
+        cv = d.Shapes.AddCanvas(cm(0.5), cm(0.5), cm(14), cm(5), a.Range); flotante(cv)
+        cv.Fill.ForeColor.RGB = rgb(242, 242, 242); cv.Fill.Visible = True
+        c1 = cv.CanvasItems.AddShape(1, 20, 20, 100, 50); c1.Fill.ForeColor.RGB = rgb(91, 155, 213)
+        c2 = cv.CanvasItems.AddShape(9, 250, 60, 90, 60); c2.Fill.ForeColor.RGB = rgb(165, 165, 165)
+        cp = cv.CanvasItems.AddPicture(os.path.join(IMG, "foto2.jpg"), False, True, 150, 10, 70, 70)
+        ln = cv.CanvasItems.AddLine(120, 45, 250, 90); ln.Line.EndArrowheadStyle = 2; ln.Line.Weight = 2
+    espacio(9)
+    with b.paso("degradados de dos colores (todos los estilos)"):
+        a = D.p("Degradados: horizontal, vertical, diagonales, desde la esquina y desde el centro:")
+        for k, (estilo, var) in enumerate([(1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (7, 1)]):
+            g = d.Shapes.AddShape(1, cm(0.2 + k * 2.7), cm(0.5), cm(2.4), cm(2), a.Range); flotante(g)
+            g.Fill.TwoColorGradient(estilo, var); g.Fill.ForeColor.RGB = rgb(31, 78, 121); g.Fill.BackColor.RGB = rgb(222, 235, 247)
+    espacio(5)
+    with b.paso("degradado de un color, predefinido y con transparencia"):
+        a = D.p("Degradado de un color, predefinido y con transparencia:")
+        g = d.Shapes.AddShape(9, cm(0.2), cm(0.5), cm(3.5), cm(2.2), a.Range); flotante(g); g.Fill.OneColorGradient(1, 1, 0.3); g.Fill.ForeColor.RGB = rgb(192, 0, 0)
+        g = d.Shapes.AddShape(1, cm(4.2), cm(0.5), cm(3.5), cm(2.2), a.Range); flotante(g); g.Fill.PresetGradient(1, 1, 2)
+        g = d.Shapes.AddShape(1, cm(8.2), cm(0.5), cm(3.5), cm(2.2), a.Range); flotante(g); g.Fill.TwoColorGradient(1, 1); g.Fill.ForeColor.RGB = rgb(0, 176, 80); g.Fill.BackColor.RGB = rgb(255, 255, 0)
+        g.Fill.GradientStops(1).Transparency = 0.6
+    espacio(5)
+    with b.paso("tramas"):
+        a = D.p("Tramas (varias):")
+        for k, pat in enumerate([1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45]):
+            t = d.Shapes.AddShape(1, cm(0.2 + (k % 6) * 2.6), cm(0.5 + (k // 6) * 2.2), cm(2.3), cm(1.9), a.Range); flotante(t)
+            t.Fill.Patterned(pat); t.Fill.ForeColor.RGB = rgb(68, 84, 106); t.Fill.BackColor.RGB = rgb(255, 255, 255)
+    espacio(7)
+    with b.paso("imagen y textura de relleno, transparencia"):
+        a = D.p("Relleno de imagen, de textura y con transparencia:")
+        i1 = d.Shapes.AddShape(9, cm(0.2), cm(0.5), cm(4), cm(2.5), a.Range); flotante(i1); i1.Fill.UserPicture(os.path.join(IMG, "foto1.jpg"))
+        i2 = d.Shapes.AddShape(5, cm(4.6), cm(0.5), cm(4), cm(2.5), a.Range); flotante(i2); i2.Fill.UserTextured(os.path.join(IMG, "logo.png"))
+        for k, tr in enumerate([0.2, 0.5, 0.8]):
+            t = d.Shapes.AddShape(1, cm(9 + k * 1.2), cm(0.5 + k * 0.5), cm(2.5), cm(2), a.Range); flotante(t); t.Fill.ForeColor.RGB = rgb(0, 112, 192); t.Fill.Transparency = tr
+    espacio(6)
+    with b.paso("líneas: todos los guiones"):
+        a = D.p("Guiones de línea:")
+        for k, dash in enumerate([1, 2, 3, 4, 5, 6, 7, 8]):
+            l = d.Shapes.AddLine(cm(0.5), cm(0.6 + k * 0.45), cm(14), cm(0.6 + k * 0.45), a.Range); l.RelativeHorizontalPosition = 0; l.RelativeVerticalPosition = 2
+            l.Line.DashStyle = dash; l.Line.Weight = 2.25; l.Line.ForeColor.RGB = rgb(38, 38, 38)
+    espacio(5)
+    with b.paso("puntas de flecha (tipos y tamaños)"):
+        a = D.p("Puntas de flecha:")
+        for k, (ini, fin, lw) in enumerate([(2, 2, 1), (3, 3, 2), (4, 4, 3), (5, 5, 1), (6, 6, 2), (1, 2, 3)]):
+            l = d.Shapes.AddLine(cm(0.5), cm(0.6 + k * 0.6), cm(12), cm(0.6 + k * 0.6), a.Range); l.RelativeHorizontalPosition = 0; l.RelativeVerticalPosition = 2
+            l.Line.BeginArrowheadStyle = ini; l.Line.EndArrowheadStyle = fin; l.Line.Weight = 1.5 + k * 0.5
+            l.Line.BeginArrowheadLength = lw; l.Line.EndArrowheadWidth = lw; l.Line.ForeColor.RGB = rgb(192, 0, 0)
+    espacio(6)
+    with b.paso("contornos gruesos, dobles y de color con transparencia"):
+        a = D.p("Contornos:")
+        for k, (peso, estilo) in enumerate([(1, 1), (4.5, 1), (6, 3), (6, 4)]):
+            s = d.Shapes.AddShape(1, cm(0.3 + k * 3.3), cm(0.5), cm(2.8), cm(2), a.Range); flotante(s); s.Fill.ForeColor.RGB = rgb(255, 255, 255)
+            s.Line.Weight = peso; s.Line.Style = estilo; s.Line.ForeColor.RGB = rgb(0, 112, 192)
+        s.Line.Transparency = 0.5
+    espacio(5)
+    with b.paso("efectos: sombra, resplandor y bordes suaves"):
+        a = D.p("Efectos:")
+        e1 = d.Shapes.AddShape(1, cm(0.3), cm(0.5), cm(3), cm(2), a.Range); flotante(e1); e1.Fill.ForeColor.RGB = rgb(91, 155, 213)
+        e1.Shadow.Visible = True; e1.Shadow.OffsetX = 5; e1.Shadow.OffsetY = 5; e1.Shadow.Blur = 6; e1.Shadow.ForeColor.RGB = rgb(0, 0, 0); e1.Shadow.Transparency = 0.6
+        e2 = d.Shapes.AddShape(9, cm(4.5), cm(0.5), cm(3), cm(2), a.Range); flotante(e2); e2.Fill.ForeColor.RGB = rgb(91, 155, 213); e2.Glow.Radius = 8; e2.Glow.Color.RGB = rgb(255, 192, 0)
+        e3 = d.Shapes.AddShape(1, cm(8.7), cm(0.5), cm(3), cm(2), a.Range); flotante(e3); e3.Fill.ForeColor.RGB = rgb(91, 155, 213); e3.SoftEdge.Radius = 6
+    espacio(5)
+    D.p("Fin de los dibujos.")
+    return D.guardar()
+
+
 if __name__ == "__main__":
     pythoncom.CoInitialize()
     hacer = {k: v for k, v in globals().items() if k[:1] == "w" and k[1:].isdigit()}

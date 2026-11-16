@@ -202,7 +202,7 @@
   function refsDe(formula) { const l = []; transformarRefs(formula, (r) => { l.push(r); return null; }); return l; }
 
   // ------------------------------------------------------------ análisis
-  function tokens(s) {
+  function tokens(s, conLugar) {
     const t = []; let i = 0;
     while (i < s.length) {
       const c = s[i];
@@ -213,14 +213,22 @@
         t.push({ k: "str", v }); i = j + 1; continue;
       }
       const r = leerRef(s, i);
-      if (r) { t.push({ k: "ref", v: r.ref }); i = r.fin; continue; }
+      if (r) {
+        const x = { k: "ref", v: r.ref };
+        if (conLugar) x.p = i;
+        i = r.fin;
+        // A1#: la matriz que derrama A1
+        if (s[i] === "#" && r.ref.tipo === "celda" && !/^#(REF!|DIV|NOMBRE|NAME|VALOR|VALUE|N\/|NUM|CICLO|DESBORD|SPILL|CALC|NUL)/.test(s.slice(i))) { x.derrame = true; i++; }
+        t.push(x);
+        continue;
+      }
       const num = /^(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?/.exec(s.slice(i));
       if (num) { t.push({ k: "num", v: parseFloat(num[0]) }); i += num[0].length; continue; }
       const id = /^[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*/.exec(s.slice(i));
-      if (id) { t.push({ k: "id", v: id[0].toUpperCase().replace(/^_XLFN\.|^_XLWS\./, "") }); i += id[0].length; continue; }
-      const op = /^(<=|>=|<>|[-+*/^&(),;=<>%])/.exec(s.slice(i));
+      if (id) { t.push({ k: "id", v: id[0].toUpperCase().replace(/^(_XLFN\.|_XLWS\.|_XLPM\.)+/, "") }); i += id[0].length; continue; }
+      const op = /^(<=|>=|<>|[-+*/^&(),;=<>%{}\\@[\]])/.exec(s.slice(i));
       if (op) { t.push({ k: "op", v: op[0] }); i += op[0].length; continue; }
-      if (c === "#") { const e = /^#(REF!|DIV\/0!|NOMBRE\?|NAME\?|VALOR!|VALUE!|N\/A|NUM!|CICLO!)/.exec(s.slice(i)); if (e) { t.push({ k: "err", v: e[0] }); i += e[0].length; continue; } }
+      if (c === "#") { const e = /^#(REF!|DIV\/0!|NOMBRE\?|NAME\?|VALOR!|VALUE!|N\/A|N\/D|NUM!|CICLO!|DESBORDAMIENTO!|SPILL!|CALC!|NULO!|NULL!)/.exec(s.slice(i)); if (e) { t.push({ k: "err", v: e[0] }); i += e[0].length; continue; } }
       throw E("#VALOR!");
     }
     return t;
@@ -773,6 +781,317 @@
       return (a[4] !== undefined && texto(a[4]) ? prefijoHoja(texto(a[4])) : "") + r;
     },
   });
+
+  // ------------------------------------------------------------ matrices dinámicas (como Excel 365)
+  // Una matriz es un arreglo plano por filas con su número de columnas en .cols (igual que un rango). Las
+  // operaciones (+ - * / ^ & y las comparaciones) y las funciones de un valor se aplican elemento por elemento:
+  // una fila o una columna sola se repite y lo que no alcanza da #N/A. La celda cuya fórmula da una matriz la
+  // «derrama» a la derecha y abajo (el evaluador); si una de esas celdas tiene algo, da #DESBORDAMIENTO!.
+  const colsDe = (v) => (Array.isArray(v) ? v.cols || 1 : 1);
+  const filasDe = (v) => (Array.isArray(v) ? Math.ceil(v.length / colsDe(v)) : 1);
+  function matriz(filas, cols, fn) {
+    const out = new Array(filas * cols);
+    out.cols = cols;
+    for (let r = 0; r < filas; r++) for (let c = 0; c < cols; c++) out[r * cols + c] = fn(r, c);
+    return out;
+  }
+  /** Una matriz de una lista de filas (las cortas se completan con #N/A, como APILARV). */
+  const deFilas = (filas) => { const cols = filas.reduce((m, q) => Math.max(m, q.length), 0); return matriz(filas.length, cols, (r, c) => (c < filas[r].length ? filas[r][c] : E("#N/A"))); };
+  const enM = (v, r, c) => (Array.isArray(v) ? v[r * colsDe(v) + c] : v);
+  const filaDe = (v, r) => { const k = colsDe(v), o = lista(v).slice(r * k, r * k + k); o.cols = k; return o; };
+  const columnaDe = (v, c) => { const o = []; for (let r = 0, n = filasDe(v); r < n; r++) o.push(enM(v, r, c)); o.cols = 1; return o; };
+  function transponer(v) { if (!Array.isArray(v)) return v; const n = filasDe(v), k = colsDe(v); return matriz(k, n, (r, c) => v[c * k + r]); }
+  /** El elemento (r, c) de un operando, con la regla de Excel para las formas distintas. */
+  function elem(v, r, c) {
+    if (!Array.isArray(v)) return v;
+    const n = filasDe(v), k = colsDe(v), rr = n === 1 ? 0 : r, cc = k === 1 ? 0 : c;
+    return rr < n && cc < k ? v[rr * k + cc] : E("#N/A");
+  }
+  const intenta = (fn) => { try { return fn(); } catch (e) { if (e instanceof ErrorF) return e; throw e; } };
+  const unValor = (y) => (Array.isArray(y) ? (y.length === 1 ? y[0] : E("#CALC!")) : y);
+  // (la celda que se calcula usó matrices: al exportar a Excel va como fórmula de matriz dinámica)
+  let usoMatriz = false;
+  /** fn(...valores) elemento por elemento si algún argumento es matriz. conError: los errores también llegan a fn. */
+  function porElemento(args, fn, conError) {
+    if (!args.some((v) => Array.isArray(v))) return fn(...args);
+    usoMatriz = true;
+    let filas = 1, cols = 1;
+    args.forEach((v) => { if (Array.isArray(v)) { filas = Math.max(filas, filasDe(v)); cols = Math.max(cols, colsDe(v)); } });
+    return matriz(filas, cols, (r, c) => {
+      const xs = args.map((v) => elem(v, r, c));
+      if (!conError) { const e = xs.find((x) => x instanceof ErrorF); if (e) return e; }
+      return intenta(() => unValor(fn(...xs)));
+    });
+  }
+  // Funciones de un solo valor que con una matriz dan una matriz (Excel 365): true = todos sus argumentos;
+  // una lista = solo esos (los demás son rangos que la función usa completos).
+  const LEVANTA = {};
+  ("REDONDEAR REDONDEAR.MAS REDONDEAR.MENOS TRUNCAR ENTERO RESIDUO ABS RAIZ POTENCIA SIGNO EXP LN LOG LOG10 SENO COS TAN GRADOS RADIANES " +
+    "ESERROR ESBLANCO ESNUMERO ESTEXTO NO SIERROR MAYUSC MINUSC NOMPROPIO LARGO IZQUIERDA DERECHA EXTRAE ESPACIOS SUSTITUIR REEMPLAZAR " +
+    "ENCONTRAR HALLAR TEXTO VALOR REPETIR IGUAL CARACTER CONCATENAR FECHA AÑO MES DIA DIASEM FIN.MES FECHA.MES SIFECHA DIAS HORA MINUTO SEGUNDO NSHORA " +
+    "HORANUMERO FECHANUMERO NUM.DE.SEMANA ISO.NUM.DE.SEMANA DIAS360 ESNOD ESERR SI.ND ES.PAR ES.IMPAR ESLOGICO ESNOTEXTO N T TEXTOANTES TEXTODESPUES " +
+    "LIMPIAR CODIGO UNICODE UNICAR MONEDA DECIMAL CONVERTIR DEC.A.BIN DEC.A.OCT DEC.A.HEX BIN.A.DEC OCT.A.DEC HEX.A.DEC BASE NUMERO.ARABE " +
+    "NUMERO.ROMANO MULTIPLO.SUPERIOR MULTIPLO.INFERIOR MULTIPLO.SUPERIOR.MAT MULTIPLO.INFERIOR.MAT REDOND.MULT REDONDEA.PAR REDONDEA.IMPAR FACT " +
+    "COMBINAT PERMUTACIONES COCIENTE ASENO ACOS ATAN ATAN2 SENOH COSH TANH DIRECCION ALEATORIO.ENTRE PAGO VF VA NPER PAGOINT PAGOPRIN SLN " +
+    "INT.EFECTIVO TASA.NOMINAL").split(" ").forEach((n) => { LEVANTA[n] = true; });
+  Object.assign(LEVANTA, { BUSCARV: [0], BUSCARH: [0], BUSCARX: [0], COINCIDIR: [0], COINCIDIRX: [0], "CONTAR.SI": [1], "SUMAR.SI": [1],
+    "PROMEDIO.SI": [1], INDICE: [1, 2], ELEGIR: [0], "K.ESIMO.MAYOR": [1], "K.ESIMO.MENOR": [1], JERARQUIA: [0], PERCENTIL: [1], CUARTIL: [1], CAMBIAR: [0] });
+  /** Llama a una función con la regla de Excel 365 para las matrices en los argumentos de un valor. */
+  function llamarFuncion(nombre, fn, args) {
+    const L = nombre === "SI" ? (Array.isArray(args[0]) && args[0].length !== 1 ? [0, 1, 2] : null) : LEVANTA[nombre];
+    if (!L) return fn(args);
+    const a2 = args.slice(), pos = [];
+    (L === true ? args.map((_, k) => k) : L).forEach((k) => {
+      if (!Array.isArray(args[k])) return;
+      if (args[k].length === 1) a2[k] = args[k][0]; else pos.push(k);   // (una matriz de un valor cuenta como ese valor)
+    });
+    if (!pos.length) return fn(a2);
+    return porElemento(pos.map((k) => a2[k]), (...xs) => { const b = a2.slice(); pos.forEach((k, j) => { b[k] = xs[j]; }); const y = fn(b); if (y instanceof ErrorF) throw y; return y; }, true);
+  }
+  const vacioM = (v) => v === "" || v == null;
+  const COLACION = typeof Intl !== "undefined" && Intl.Collator ? new Intl.Collator("es", { sensitivity: "accent" }) : null;
+  /** Orden de Excel al ordenar: números < textos (sin distinguir mayúsculas) < FALSO < VERDADERO < errores. */
+  const claseOrden = (v) => (v instanceof ErrorF ? 4 : typeof v === "boolean" ? 3 : esNum(v) ? 1 : 2);
+  function comparaOrden(a, b, o) {
+    // lo vacío siempre al final
+    if (vacioM(a) || vacioM(b)) return vacioM(a) && vacioM(b) ? 0 : vacioM(a) ? 1 : -1;
+    const x = claseOrden(a), y = claseOrden(b);
+    let d = x - y;
+    if (!d) d = x === 1 ? +a - +b : x === 2 ? (COLACION ? COLACION.compare(String(a), String(b)) : String(a).toLowerCase().localeCompare(String(b).toLowerCase())) : x === 3 ? (a ? 1 : 0) - (b ? 1 : 0) : 0;
+    return d * (o < 0 ? -1 : 1);
+  }
+  /** Llave para comparar filas iguales (UNICOS): sin distinguir mayúsculas, como Excel. */
+  const llaveUnica = (fila) => fila.map((v) => (v instanceof ErrorF ? "e" + v.codigo : esNum(v) ? "n" + +v : typeof v === "boolean" ? "b" + v : "t" + String(v == null ? "" : v).toLowerCase())).join("\u0001");
+  const opcional = (v) => v === undefined || v === "";
+  const lambdaDe = (v) => { if (!v || typeof v.llamar !== "function") throw E("#VALOR!"); return v; };
+  function recortar(a, tomar) {
+    const m = a[0], n = filasDe(m), k = colsDe(m);
+    const rf = opcional(a[1]) ? null : Math.trunc(num(a[1])), rc = opcional(a[2]) ? null : Math.trunc(num(a[2]));
+    if (tomar && (rf === 0 || rc === 0)) throw E("#CALC!");
+    const tramo = (x, total) => (x == null ? [0, total] : tomar ? (x >= 0 ? [0, Math.min(x, total)] : [Math.max(0, total + x), total]) : x >= 0 ? [Math.min(x, total), total] : [0, Math.max(0, total + x)]);
+    const [f1, f2] = tramo(rf, n), [c1, c2] = tramo(rc, k);
+    if (f2 <= f1 || c2 <= c1) throw E("#CALC!");
+    return matriz(f2 - f1, c2 - c1, (r, c) => enM(m, f1 + r, c1 + c));
+  }
+  function aplanar(a, comoFila) {
+    const m = a[0], ign = Math.trunc(num(opcional(a[1]) ? 0 : a[1])), porCol = !opcional(a[2]) && verdad(a[2]);
+    const n = filasDe(m), k = colsDe(m), out = [], deRango = Array.isArray(m) && m.f1 != null;
+    const agrega = (v) => { if ((ign === 1 || ign === 3) && vacioM(v) && (deRango || v == null)) return; if ((ign === 2 || ign === 3) && v instanceof ErrorF) return; out.push(v); };
+    if (porCol) { for (let c = 0; c < k; c++) for (let r = 0; r < n; r++) agrega(enM(m, r, c)); }
+    else for (let r = 0; r < n; r++) for (let c = 0; c < k; c++) agrega(enM(m, r, c));
+    if (!out.length) throw E("#CALC!");
+    out.cols = comoFila ? out.length : 1;
+    return out;
+  }
+  function ajustar(a, porFilas) {
+    const v = a[0];
+    if (filasDe(v) > 1 && colsDe(v) > 1) throw E("#VALOR!");
+    const l = lista(v), w = Math.trunc(num(a[1])), pad = a[2] === undefined ? E("#N/A") : a[2];
+    if (w < 1) throw E("#NUM!");
+    const n = Math.ceil(l.length / w);
+    return porFilas ? matriz(n, w, (r, c) => (r * w + c < l.length ? l[r * w + c] : pad)) : matriz(w, n, (r, c) => (c * w + r < l.length ? l[c * w + r] : pad));
+  }
+  function elegirPiezas(a, cols) {
+    const m = a[0], n = filasDe(m), k = colsDe(m), total = cols ? k : n;
+    const idx = plano(a.slice(1).filter((x) => x !== undefined)).map((v) => { let j = Math.trunc(num(v)); if (j < 0) j = total + j + 1; if (j < 1 || j > total) throw E("#VALOR!"); return j - 1; });
+    if (!idx.length) throw E("#VALOR!");
+    return cols ? matriz(n, idx.length, (r, c) => enM(m, r, idx[c])) : matriz(idx.length, k, (r, c) => enM(m, idx[r], c));
+  }
+  /** Determinante e inversa por eliminación de Gauss (MDETERM y MINVERSA). */
+  function gauss(v, inversa) {
+    const n = filasDe(v);
+    if (n !== colsDe(v) || lista(v).some((x) => !esNum(x))) throw E("#VALOR!");
+    const A = Array.from({ length: n }, (_, r) => Array.from({ length: n }, (_, c) => +enM(v, r, c)).concat(inversa ? Array.from({ length: n }, (_, c) => (r === c ? 1 : 0)) : []));
+    let det = 1;
+    for (let c = 0; c < n; c++) {
+      let p = c;
+      for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+      if (Math.abs(A[p][c]) < 1e-15) { if (inversa) throw E("#NUM!"); return 0; }
+      if (p !== c) { [A[p], A[c]] = [A[c], A[p]]; det = -det; }
+      det *= A[c][c];
+      for (let r = 0; r < n; r++) if (r !== c) { const k = A[r][c] / A[c][c]; for (let j = c; j < A[r].length; j++) A[r][j] -= k * A[c][j]; }
+    }
+    if (!inversa) return det;
+    return matriz(n, n, (r, c) => A[r][n + c] / A[r][r]);
+  }
+  Object.assign(FUNCS, {
+    ORDENAR: (a) => {
+      const m = a[0], n = filasDe(m), k = colsDe(m), porCol = !opcional(a[3]) && verdad(a[3]);
+      const idx = opcional(a[1]) ? [1] : lista(a[1]).map((v) => Math.trunc(num(v)));
+      const ord = opcional(a[2]) ? [1] : lista(a[2]).map((v) => num(v));
+      if (idx.some((j) => j < 1 || j > (porCol ? n : k)) || ord.some((o) => o !== 1 && o !== -1)) throw E("#VALOR!");
+      const piezas = Array.from({ length: porCol ? k : n }, (_, j) => (porCol ? columnaDe(m, j) : filaDe(m, j)));
+      const orden = piezas.map((_, j) => j).sort((p, q) => { for (let j = 0; j < idx.length; j++) { const d = comparaOrden(piezas[p][idx[j] - 1], piezas[q][idx[j] - 1], ord[j] !== undefined ? ord[j] : ord[0]); if (d) return d; } return 0; });
+      const out = deFilas(orden.map((j) => Array.from(piezas[j])));
+      return porCol ? transponer(out) : out;
+    },
+    ORDENARPOR: (a) => {
+      const m = a[0], n = filasDe(m), k = colsDe(m), claves = [];
+      for (let j = 1; j < a.length; j += 2) {
+        const o = opcional(a[j + 1]) ? 1 : num(a[j + 1]);
+        if (a[j] === undefined || (o !== 1 && o !== -1)) throw E("#VALOR!");
+        if (a[j] instanceof ErrorF) throw a[j];
+        claves.push({ l: lista(a[j]), f: filasDe(a[j]), c: colsDe(a[j]), o });
+      }
+      if (!claves.length) throw E("#VALOR!");
+      const vertical = claves.every((q) => q.c === 1 && q.f === n), horizontal = !vertical && claves.every((q) => q.f === 1 && q.c === k);
+      if (!vertical && !horizontal) throw E("#VALOR!");
+      const orden = Array.from({ length: vertical ? n : k }, (_, j) => j).sort((p, q) => { for (const x of claves) { const d = comparaOrden(x.l[p], x.l[q], x.o); if (d) return d; } return 0; });
+      return vertical ? deFilas(orden.map((j) => Array.from(filaDe(m, j)))) : transponer(deFilas(orden.map((j) => Array.from(columnaDe(m, j)))));
+    },
+    FILTRAR: (a) => {
+      const m = a[0], n = filasDe(m), k = colsDe(m), inc = a[1];
+      if (inc instanceof ErrorF) throw inc;
+      const l = lista(inc), fi = filasDe(inc), ci = colsDe(inc);
+      const pasa = (v) => { if (v instanceof ErrorF) throw v; if (typeof v === "boolean") return v; if (esNum(v)) return +v !== 0; if (vacioM(v)) return false; throw E("#VALOR!"); };
+      const sel = [];
+      if (ci === 1 && fi === n) { for (let r = 0; r < n; r++) if (pasa(l[r])) sel.push(Array.from(filaDe(m, r))); if (sel.length) return deFilas(sel); }
+      else if (fi === 1 && ci === k) { for (let c = 0; c < k; c++) if (pasa(l[c])) sel.push(Array.from(columnaDe(m, c))); if (sel.length) return transponer(deFilas(sel)); }
+      else throw E("#VALOR!");
+      if (a[2] !== undefined) return a[2];
+      throw E("#CALC!");
+    },
+    UNICOS: (a) => {
+      const m = a[0], porCol = !opcional(a[1]) && verdad(a[1]), unaVez = !opcional(a[2]) && verdad(a[2]);
+      const piezas = Array.from({ length: porCol ? colsDe(m) : filasDe(m) }, (_, j) => Array.from(porCol ? columnaDe(m, j) : filaDe(m, j)));
+      const cuenta = new Map();
+      piezas.forEach((p) => { const q = llaveUnica(p); cuenta.set(q, (cuenta.get(q) || 0) + 1); });
+      const vistos = new Set(), out = [];
+      piezas.forEach((p) => { const q = llaveUnica(p); if (vistos.has(q)) return; vistos.add(q); if (!unaVez || cuenta.get(q) === 1) out.push(p); });
+      if (!out.length) throw E("#CALC!");
+      return porCol ? transponer(deFilas(out)) : deFilas(out);
+    },
+    SECUENCIA: (a) => {
+      const f = Math.trunc(num(opcional(a[0]) ? 1 : a[0])), c = Math.trunc(num(opcional(a[1]) ? 1 : a[1]));
+      const ini = num(opcional(a[2]) ? 1 : a[2]), paso = num(opcional(a[3]) ? 1 : a[3]);
+      if (f === 0 || c === 0) throw E("#CALC!");
+      if (f < 0 || c < 0) throw E("#VALOR!");
+      if (f * c > 2000000) throw E("#NUM!");
+      return matriz(f, c, (r, k) => ini + (r * c + k) * paso);
+    },
+    MATRIZALEAT: (a) => {
+      const f = Math.trunc(num(opcional(a[0]) ? 1 : a[0])), c = Math.trunc(num(opcional(a[1]) ? 1 : a[1]));
+      const lo = num(opcional(a[2]) ? 0 : a[2]), hi = num(opcional(a[3]) ? 1 : a[3]), ent = !opcional(a[4]) && verdad(a[4]);
+      if (f < 1 || c < 1 || hi < lo || f * c > 2000000) throw E("#VALOR!");
+      return matriz(f, c, () => (ent ? Math.ceil(lo) + Math.floor(Math.random() * (Math.floor(hi) - Math.ceil(lo) + 1)) : lo + Math.random() * (hi - lo)));
+    },
+    TRANSPONER: (a) => transponer(a[0]),
+    APILARV: (a) => {
+      const ps = a.filter((v) => v !== undefined), filas = [];
+      if (!ps.length) throw E("#VALOR!");
+      ps.forEach((v) => { for (let r = 0; r < filasDe(v); r++) filas.push(Array.from(filaDe(v, r))); });
+      return deFilas(filas);
+    },
+    APILARH: (a) => {
+      const ps = a.filter((v) => v !== undefined);
+      if (!ps.length) throw E("#VALOR!");
+      const n = ps.reduce((m, v) => Math.max(m, filasDe(v)), 0), filas = [];
+      for (let r = 0; r < n; r++) { const fila = []; ps.forEach((v) => { for (let c = 0; c < colsDe(v); c++) fila.push(r < filasDe(v) ? enM(v, r, c) : E("#N/A")); }); filas.push(fila); }
+      return deFilas(filas);
+    },
+    TOMAR: (a) => recortar(a, true),
+    EXCLUIR: (a) => recortar(a, false),
+    ELEGIRCOLS: (a) => elegirPiezas(a, true),
+    ELEGIRFILAS: (a) => elegirPiezas(a, false),
+    ENCOL: (a) => aplanar(a, false),
+    ENFILA: (a) => aplanar(a, true),
+    AJUSTARFILAS: (a) => ajustar(a, true),
+    AJUSTARCOLS: (a) => ajustar(a, false),
+    EXPANDIR: (a) => {
+      const m = a[0], n = filasDe(m), k = colsDe(m);
+      const f = opcional(a[1]) ? n : Math.trunc(num(a[1])), c = opcional(a[2]) ? k : Math.trunc(num(a[2]));
+      if (f < n || c < k) throw E("#VALOR!");
+      const pad = a[3] === undefined ? E("#N/A") : a[3];
+      return matriz(f, c, (r, q) => (r < n && q < k ? enM(m, r, q) : pad));
+    },
+    DIVIDIRTEXTO: (a) => {
+      const t = texto(a[0]), sinMay = !opcional(a[4]) && num(a[4]) === 1, ign = !opcional(a[3]) && verdad(a[3]);
+      const delims = (v) => (opcional(v) ? [] : plano([v]).map(texto).filter((d) => d !== "").sort((x, y) => y.length - x.length));
+      const dc = delims(a[1]), df = delims(a[2]);
+      if (!dc.length && !df.length) throw E("#VALOR!");
+      const pad = a[5] === undefined ? E("#N/A") : a[5];
+      const partir = (s, ds) => (ds.length ? s.split(new RegExp(ds.map((d) => d.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), sinMay ? "gi" : "g")) : [s]);
+      let filas = partir(t, df).map((s) => partir(s, dc));
+      if (ign) filas = filas.map((q) => q.filter((x) => x !== "")).filter((q) => q.length);
+      if (!filas.length) throw E("#CALC!");
+      return matriz(filas.length, Math.max(...filas.map((q) => q.length)), (r, c) => (c < filas[r].length ? filas[r][c] : pad));
+    },
+    FRECUENCIA: (a) => {
+      const datos = nums([a[0]]), lim = nums([a[1]]), orden = lim.map((b, j) => [b, j]).sort((x, y) => x[0] - y[0]);
+      const cuenta = new Array(lim.length + 1).fill(0);
+      datos.forEach((d) => { const j = orden.findIndex(([b]) => d <= b); cuenta[j < 0 ? lim.length : orden[j][1]]++; });
+      cuenta.cols = 1;
+      return cuenta;
+    },
+    MMULT: (a) => {
+      const x = a[0], y = a[1], n = filasDe(x), k = colsDe(x), m = colsDe(y);
+      if (k !== filasDe(y) || lista(x).concat(lista(y)).some((v) => !esNum(v))) throw E("#VALOR!");
+      return matriz(n, m, (r, c) => { let s = 0; for (let j = 0; j < k; j++) s += +enM(x, r, j) * +enM(y, j, c); return s; });
+    },
+    "M.UNIDAD": (a) => { const n = Math.trunc(num(a[0])); if (n < 1) throw E("#VALOR!"); return matriz(n, n, (r, c) => (r === c ? 1 : 0)); },
+    MDETERM: (a) => gauss(a[0], false),
+    MINVERSA: (a) => gauss(a[0], true),
+    // con LAMBDA
+    BYROW: (a) => { const m = a[0], lam = lambdaDe(a[1]), out = []; for (let r = 0, n = filasDe(m); r < n; r++) out.push(intenta(() => unValor(lam.llamar([filaDe(m, r)])))); out.cols = 1; return out; },
+    BYCOL: (a) => { const m = a[0], lam = lambdaDe(a[1]), out = []; for (let c = 0, k = colsDe(m); c < k; c++) out.push(intenta(() => unValor(lam.llamar([columnaDe(m, c)])))); out.cols = out.length; return out; },
+    MAP: (a) => {
+      const lam = lambdaDe(a[a.length - 1]), ms = a.slice(0, -1);
+      if (!ms.length) throw E("#VALOR!");
+      return porElemento(ms.map((v) => (Array.isArray(v) || v === undefined ? v : [v])), (...xs) => unValor(lam.llamar(xs)), true);
+    },
+    REDUCE: (a) => {
+      const lam = lambdaDe(a[2]), m = a[1];
+      let acc = a[0] === undefined ? "" : a[0];
+      for (let r = 0, n = filasDe(m); r < n; r++) for (let c = 0, k = colsDe(m); c < k; c++) acc = lam.llamar([acc, enM(m, r, c)]);
+      return acc;
+    },
+    SCAN: (a) => {
+      const lam = lambdaDe(a[2]), m = a[1];
+      let acc = a[0] === undefined ? "" : a[0];
+      return matriz(filasDe(m), colsDe(m), (r, c) => { acc = intenta(() => unValor(lam.llamar([acc, enM(m, r, c)]))); return acc; });
+    },
+    MAKEARRAY: (a) => {
+      const f = Math.trunc(num(a[0])), c = Math.trunc(num(a[1])), lam = lambdaDe(a[2]);
+      if (f < 1 || c < 1 || f * c > 2000000) throw E("#VALOR!");
+      return matriz(f, c, (r, k) => intenta(() => unValor(lam.llamar([r + 1, k + 1]))));
+    },
+    // INDICE y BUSCARX como en Excel 365: la fila o la columna entera (con 0 o sin columna) y la fila de lo encontrado
+    INDICE: (a) => {
+      const m = a[0], n = filasDe(m), k = colsDe(m);
+      let f = opcional(a[1]) ? null : Math.floor(num(a[1])), c = opcional(a[2]) ? null : Math.floor(num(a[2]));
+      if (n === 1 && c === null && f !== null) { c = f; f = 1; }   // (una sola fila: el número es la columna)
+      if (k === 1 && c === null) c = 1;
+      if (f === null) f = n === 1 ? 1 : 0;
+      if (c === null) c = k === 1 ? 1 : 0;
+      if (f < 0 || c < 0 || f > n || c > k) return E("#REF!");
+      if (f === 0 && c === 0) return m;
+      if (f === 0) { usoMatriz = true; return n === 1 ? enM(m, 0, c - 1) : columnaDe(m, c - 1); }
+      if (c === 0) { usoMatriz = true; return k === 1 ? enM(m, f - 1, 0) : filaDe(m, f - 1); }
+      return enM(m, f - 1, c - 1);
+    },
+    BUSCARX: (a) => {
+      const donde = a[1], que = a[2], ld = lista(donde), vertical = colsDe(donde) === 1;
+      if (filasDe(donde) > 1 && colsDe(donde) > 1) throw E("#VALOR!");
+      const modo = opcional(a[4]) ? 0 : Math.trunc(num(a[4])), busq = opcional(a[5]) ? 1 : Math.trunc(num(a[5]));
+      const p = FUNCS.COINCIDIRX([a[0], donde, modo, busq < 0 ? -1 : 1]);
+      if (p instanceof ErrorF) return a[3] === undefined ? E("#N/A") : a[3];
+      const i = p - 1;
+      if (vertical) {
+        if (filasDe(que) !== ld.length) throw E("#VALOR!");
+        return colsDe(que) === 1 ? enM(que, i, 0) : filaDe(que, i);
+      }
+      if (colsDe(que) !== ld.length) throw E("#VALOR!");
+      return filasDe(que) === 1 ? enM(que, 0, i) : columnaDe(que, i);
+    },
+    // (las resuelve el evaluador; aquí solo para que se reconozcan y salgan en la ayuda)
+    LET: () => E("#VALOR!"),
+    LAMBDA: () => E("#CALC!"),
+    ISOMITTED: () => E("#VALOR!"),
+  });
+  /** Funciones que solo existen con matrices dinámicas: la fórmula se guarda en Excel como fórmula de matriz. */
+  const DINAMICAS = new Set(["ORDENAR", "ORDENARPOR", "FILTRAR", "UNICOS", "SECUENCIA", "MATRIZALEAT", "APILARV", "APILARH", "TOMAR", "EXCLUIR",
+    "ELEGIRCOLS", "ELEGIRFILAS", "ENCOL", "ENFILA", "AJUSTARFILAS", "AJUSTARCOLS", "EXPANDIR", "DIVIDIRTEXTO", "BYROW", "BYCOL", "MAP", "REDUCE",
+    "SCAN", "MAKEARRAY"]);
   /** Funciones que trabajan con la referencia y no con su valor (las resuelve el evaluador). */
   const DE_REFERENCIA = new Set(["FILA", "COLUMNA", "FILAS", "COLUMNAS", "INDIRECTO", "DESREF"]);
   DE_REFERENCIA.forEach((n) => { FUNCS[n] = () => E("#VALOR!"); });
@@ -813,6 +1132,11 @@
     // 16-nov-2026
     SUBTOTAL: "SUBTOTALES", AGGREGATE: "AGREGAR", XMATCH: "COINCIDIRX", CONVERT: "CONVERTIR", DEC2BIN: "DEC.A.BIN", DEC2OCT: "DEC.A.OCT", DEC2HEX: "DEC.A.HEX",
     BIN2DEC: "BIN.A.DEC", OCT2DEC: "OCT.A.DEC", HEX2DEC: "HEX.A.DEC", ARABIC: "NUMERO.ARABE", "NÚMERO.ARABE": "NUMERO.ARABE",
+    // matrices dinámicas (17-nov-2026)
+    SORT: "ORDENAR", SORTBY: "ORDENARPOR", FILTER: "FILTRAR", UNIQUE: "UNICOS", "ÚNICOS": "UNICOS", SEQUENCE: "SECUENCIA", RANDARRAY: "MATRIZALEAT",
+    TRANSPOSE: "TRANSPONER", VSTACK: "APILARV", HSTACK: "APILARH", TAKE: "TOMAR", DROP: "EXCLUIR", CHOOSECOLS: "ELEGIRCOLS", CHOOSEROWS: "ELEGIRFILAS",
+    TOCOL: "ENCOL", TOROW: "ENFILA", WRAPROWS: "AJUSTARFILAS", WRAPCOLS: "AJUSTARCOLS", EXPAND: "EXPANDIR", TEXTSPLIT: "DIVIDIRTEXTO",
+    FREQUENCY: "FRECUENCIA", MUNIT: "M.UNIDAD", MINVERSE: "MINVERSA",
   };
   const NOMBRES = Object.keys(FUNCS);
   /** Nombre en inglés para Excel (.xlsx); las funciones nuevas de Excel llevan el prefijo _xlfn. */
@@ -828,6 +1152,13 @@
     "MULTIPLO.SUPERIOR.MAT": "_xlfn.CEILING.MATH", "MULTIPLO.INFERIOR.MAT": "_xlfn.FLOOR.MATH", FACT: "FACT", ACOS: "ACOS", ATAN: "ATAN", ATAN2: "ATAN2", COSH: "COSH", TANH: "TANH",
     MAXA: "MAXA", MINA: "MINA", PERCENTIL: "PERCENTILE", CUARTIL: "QUARTILE", PRONOSTICO: "FORECAST", "COEF.DE.CORREL": "CORREL", "COVARIANZA.P": "_xlfn.COVARIANCE.P",
     "COVARIANZA.M": "_xlfn.COVARIANCE.S", "JERARQUIA.MEDIA": "_xlfn.RANK.AVG", NPER: "NPER", SLN: "SLN" });
+  Object.assign(INGLES, { ORDENAR: "_xlfn._xlws.SORT", FILTRAR: "_xlfn._xlws.FILTER", ORDENARPOR: "_xlfn.SORTBY", UNICOS: "_xlfn.UNIQUE",
+    SECUENCIA: "_xlfn.SEQUENCE", MATRIZALEAT: "_xlfn.RANDARRAY", TRANSPONER: "TRANSPOSE", APILARV: "_xlfn.VSTACK", APILARH: "_xlfn.HSTACK",
+    TOMAR: "_xlfn.TAKE", EXCLUIR: "_xlfn.DROP", ELEGIRCOLS: "_xlfn.CHOOSECOLS", ELEGIRFILAS: "_xlfn.CHOOSEROWS", ENCOL: "_xlfn.TOCOL",
+    ENFILA: "_xlfn.TOROW", AJUSTARFILAS: "_xlfn.WRAPROWS", AJUSTARCOLS: "_xlfn.WRAPCOLS", EXPANDIR: "_xlfn.EXPAND", DIVIDIRTEXTO: "_xlfn.TEXTSPLIT",
+    LET: "_xlfn.LET", LAMBDA: "_xlfn.LAMBDA", BYROW: "_xlfn.BYROW", BYCOL: "_xlfn.BYCOL", MAP: "_xlfn.MAP", REDUCE: "_xlfn.REDUCE", SCAN: "_xlfn.SCAN",
+    MAKEARRAY: "_xlfn.MAKEARRAY", ISOMITTED: "_xlfn.ISOMITTED", FRECUENCIA: "FREQUENCY", MMULT: "MMULT", "M.UNIDAD": "_xlfn.MUNIT", MDETERM: "MDETERM",
+    MINVERSA: "MINVERSE" });
 
   /** Ayuda al escribir: qué pide cada función y qué hace. */
   const FIRMAS = {
@@ -922,6 +1253,27 @@
     FILAS: ["rango", "Cuántas filas tiene el rango."], COLUMNAS: ["rango", "Cuántas columnas tiene el rango."],
     DIRECCION: ["fila; columna; [tipo]", "El nombre de la celda como texto ($A$1)."], INDIRECTO: ["texto", "El valor de la celda cuyo nombre está escrito en el texto."],
     DESREF: ["referencia; filas; columnas; [alto]; [ancho]", "El valor que está a tantas filas y columnas de una celda."],
+    // matrices dinámicas: el resultado se derrama en las celdas de la derecha y de abajo
+    ORDENAR: ["matriz; [columna]; [orden 1 o -1]; [por_columnas]", "Ordena las filas (de menor a mayor con 1, al revés con -1)."],
+    ORDENARPOR: ["matriz; por_matriz1; [orden1]; …", "Ordena las filas según otra columna."],
+    FILTRAR: ["matriz; incluir; [si_vacío]", "Solo las filas que cumplen (incluir: VERDADERO o FALSO por fila)."],
+    UNICOS: ["matriz; [por_columnas]; [solo_una_vez]", "Los valores sin repetir."], SECUENCIA: ["filas; [columnas]; [inicio]; [paso]", "Una lista de números seguidos."],
+    MATRIZALEAT: ["[filas]; [columnas]; [mín]; [máx]; [entero]", "Números al azar."], TRANSPONER: ["matriz", "Cambia filas por columnas."],
+    APILARV: ["matriz1; [matriz2]; …", "Pone las matrices una debajo de otra."], APILARH: ["matriz1; [matriz2]; …", "Pone las matrices una al lado de otra."],
+    TOMAR: ["matriz; filas; [columnas]", "Las primeras (o con negativo, las últimas) filas y columnas."], EXCLUIR: ["matriz; filas; [columnas]", "Quita las primeras (o las últimas) filas y columnas."],
+    ELEGIRCOLS: ["matriz; columna1; [columna2]; …", "Solo esas columnas."], ELEGIRFILAS: ["matriz; fila1; [fila2]; …", "Solo esas filas."],
+    ENCOL: ["matriz; [ignorar]; [por_columna]", "Todos los valores en una columna."], ENFILA: ["matriz; [ignorar]; [por_columna]", "Todos los valores en una fila."],
+    AJUSTARFILAS: ["vector; cuántos; [relleno]", "Parte una lista en filas de tantos valores."], AJUSTARCOLS: ["vector; cuántos; [relleno]", "Parte una lista en columnas de tantos valores."],
+    EXPANDIR: ["matriz; filas; [columnas]; [relleno]", "Agranda la matriz y rellena lo nuevo."],
+    DIVIDIRTEXTO: ["texto; separador_columnas; [separador_filas]; [ignorar_vacíos]; [mayúsculas]; [relleno]", "Parte un texto en celdas."],
+    FRECUENCIA: ["datos; intervalos", "Cuántos datos caen en cada intervalo."], MMULT: ["matriz1; matriz2", "Producto de matrices."],
+    "M.UNIDAD": ["tamaño", "La matriz identidad."], MDETERM: ["matriz", "El determinante."], MINVERSA: ["matriz", "La matriz inversa."],
+    LET: ["nombre1; valor1; [nombre2; valor2]; …; cálculo", "Pone nombre a resultados para usarlos en el cálculo."],
+    LAMBDA: ["[parámetro1]; …; cálculo", "Una función propia: =LAMBDA(x; x*2)(5)."],
+    BYROW: ["matriz; LAMBDA(fila)", "Un resultado por cada fila."], BYCOL: ["matriz; LAMBDA(columna)", "Un resultado por cada columna."],
+    MAP: ["matriz1; [matriz2]; …; LAMBDA", "Aplica la función a cada valor."], REDUCE: ["[inicial]; matriz; LAMBDA(acumulado; valor)", "Acumula todos los valores en uno."],
+    SCAN: ["[inicial]; matriz; LAMBDA(acumulado; valor)", "Cada paso del acumulado."], MAKEARRAY: ["filas; columnas; LAMBDA(fila; columna)", "Arma una matriz con la función."],
+    ISOMITTED: ["parámetro", "VERDADERO si al llamar la LAMBDA no se dio ese parámetro."],
   };
 
   function num(v) {
@@ -950,14 +1302,27 @@
     return t;
   }
 
+  /** Una función hecha con LAMBDA: sus parámetros y el cálculo (los símbolos de la fórmula, sin calcular). */
+  class LambdaF { constructor(params, tk, ini, fin, ambito) { this.params = params; this.tk = tk; this.ini = ini; this.fin = fin; this.ambito = ambito; } toString() { return "#CALC!"; } }
+  const OMITIDO = Object.freeze({ omitido: true });
+  const MAX_DERRAME = 2000000;
+  const ERR_ES = { "#NAME?": "#NOMBRE?", "#VALUE!": "#VALOR!", "#SPILL!": "#DESBORDAMIENTO!", "#N/D": "#N/A", "#NULL!": "#NULO!" };
+  // Fórmulas que pueden dar una matriz (las demás nunca derraman): con un rango, una matriz escrita, un derrame,
+  // la intersección o una función que arma matrices sin recibir un rango.
+  const PUEDE_MATRIZ = /[:{#@]|\b(SECUENCIA|SEQUENCE|MATRIZALEAT|RANDARRAY|DIVIDIRTEXTO|TEXTSPLIT|DESREF|OFFSET|INDIRECTO|INDIRECT|MAKEARRAY|LAMBDA|LET|TRANSPONER|TRANSPOSE|APILARV|APILARH|VSTACK|HSTACK|EXPANDIR|EXPAND|M\.UNIDAD|MUNIT|AJUSTARFILAS|AJUSTARCOLS|WRAPROWS|WRAPCOLS|ENCOL|ENFILA|TOCOL|TOROW)\b/i;
+
   /**
    * Hoja: obtener(c, f) -> texto crudo de la celda. Devuelve un evaluador con caché.
-   * opc: { nombre, filas, cols, hojas(nombre) -> { obtener, filas, cols, nombre } | null } para
-   * las referencias a otras hojas y a columnas enteras.
+   * opc: { nombre, filas, cols, formulas() -> [[c, f, crudo]…], sinDerrame, hojas(nombre) -> { obtener, filas, cols,
+   * nombre, formulas, sinDerrame } | null } para las referencias a otras hojas, las columnas enteras y los derrames.
+   * Una fórmula que da una matriz se derrama en las celdas de la derecha y de abajo, como en Excel 365: si alguna
+   * tiene algo, la fórmula da #DESBORDAMIENTO!. Sin formulas() (o con sinDerrame) se ve solo el primer valor.
    */
   function evaluador(obtener, opc) {
     opc = opc || {};
-    const actual = { obtener, filas: opc.filas || 0, cols: opc.cols || 0, cache: new Map(), nombre: opc.nombre || "" };
+    const nueva = (o, nombre) => ({ obtener: o.obtener, filas: o.filas || 0, cols: o.cols || 0, cache: new Map(), nombre,
+      formulas: o.formulas || null, sinDerrame: !!o.sinDerrame, combinada: o.combinada || null, derrames: new Map(), meta: new Set(), duenos: new Map(), cand: null });
+    const actual = nueva({ obtener, filas: opc.filas, cols: opc.cols, formulas: opc.formulas, sinDerrame: opc.sinDerrame, combinada: opc.combinada }, opc.nombre || "");
     const otras = new Map();
     const pila = new Set();
     function hojaDe(nombre, desde) {
@@ -966,21 +1331,76 @@
       if (opc.nombre && normal(opc.nombre) === k) return actual;
       if (otras.has(k)) return otras.get(k);
       const h = opc.hojas ? opc.hojas(nombre) : null;
-      const x = h ? { obtener: h.obtener, filas: h.filas || 0, cols: h.cols || 0, cache: new Map(), nombre: h.nombre || nombre } : null;
+      const x = h ? nueva(h, h.nombre || nombre) : null;
       otras.set(k, x);
       return x;
+    }
+    const derrama = (h) => !!h.formulas && !h.sinDerrame;
+    /** Las celdas con fórmula de una hoja que podrían derramar, de arriba a abajo. */
+    function candidatos(h) {
+      if (h.cand) return h.cand;
+      h.cand = [];
+      if (!derrama(h)) return h.cand;
+      for (const [c, f, crudo] of h.formulas()) if (PUEDE_MATRIZ.test(String(crudo))) h.cand.push({ c, f, muerto: false });
+      h.cand.sort((a, b) => a.f - b.f || a.c - b.c);
+      return h.cand;
+    }
+    /** Lo que le toca a una celda vacía por el derrame de una fórmula de arriba o de la izquierda. */
+    function derramadoEn(h, c, f) {
+      let saltada = false;
+      for (const a of candidatos(h)) {
+        if (a.f > f) break;
+        if (a.muerto || a.c > c || (a.f === f && a.c === c)) continue;
+        if (pila.has(h.nombre + "|" + a.c + "," + a.f)) { saltada = true; continue; }
+        valorEn(h, a.c, a.f);
+        const d = h.derrames.get(a.c + "," + a.f);
+        if (!d) { a.muerto = true; continue; }
+        if (d.bloqueado) continue;
+        if (c < a.c + d.cols && f < a.f + d.filas) return { v: d.arr[(f - a.f) * d.cols + (c - a.c)], a };
+      }
+      return saltada ? { v: "", sinCache: true } : null;
     }
     function valorEn(h, c, f) {
       const k = c + "," + f;
       if (h.cache.has(k)) return h.cache.get(k);
+      const crudo = h.obtener(c, f);
+      if (crudo === "" || crudo == null) {
+        const d = derrama(h) ? derramadoEn(h, c, f) : null;
+        let v = d ? d.v : "";
+        if (v === OMITIDO || v instanceof LambdaF) v = E("#CALC!");
+        if (d && d.a) h.duenos.set(k, d.a);
+        if (!(d && d.sinCache)) h.cache.set(k, v);
+        return v;
+      }
       const kp = h.nombre + "|" + k;
       if (pila.has(kp)) throw E("#CICLO!");
       pila.add(kp);
+      const antes = usoMatriz;
+      usoMatriz = false;
       let v;
-      try { v = calcular(h.obtener(c, f), h, { c, f }); } catch (e) { v = e instanceof ErrorF ? e : E("#VALOR!"); }
+      try { v = calcular(crudo, h, { c, f }); } catch (e) { v = e instanceof ErrorF ? e : E("#VALOR!"); }
+      const uso = usoMatriz;
+      usoMatriz = antes;
       pila.delete(kp);
+      if (Array.isArray(v)) v = derramar(h, c, f, v);
+      if (uso) h.meta.add(k);
       h.cache.set(k, v);
       return v;
+    }
+    /** Una celda cuya fórmula dio una matriz: se registra su derrame y la celda muestra el primer valor. */
+    function derramar(h, c, f, arr) {
+      const filas = filasDe(arr), cols = colsDe(arr);
+      let bloqueado = false;
+      if (derrama(h)) {
+        if (arr.length > MAX_DERRAME || f + filas > 1048576 || c + cols > 16384) bloqueado = true;
+        else for (let r = 0; r < filas && !bloqueado; r++) for (let q = r ? 0 : 1; q < cols; q++) {
+          const x = h.obtener(c + q, f + r);
+          if ((x !== "" && x != null) || (h.combinada && h.combinada(c + q, f + r))) { bloqueado = true; break; }
+        }
+      }
+      h.derrames.set(c + "," + f, { arr, filas, cols, bloqueado });
+      const v0 = arr[0] === OMITIDO || arr[0] instanceof LambdaF ? E("#CALC!") : arr[0];
+      return bloqueado ? E("#DESBORDAMIENTO!") : v0;
     }
     function rango(r, h) {
       const hh = hojaDe(r.hoja, h);
@@ -992,6 +1412,7 @@
       if ((f2 - f1 + 1) * (c2 - c1 + 1) > 200000) throw E("#NUM!");
       const out = [];
       out.cols = c2 - c1 + 1;   // forma del rango (BUSCARV, INDICE… la usan)
+      out.f1 = f1; out.c1 = c1;  // y su lugar (para la intersección implícita, «@»)
       for (let f = f1; f <= f2; f++) for (let c = c1; c <= c2; c++) {
         const v = valorEn(hh, c, f);
         if (v instanceof ErrorF) throw v;
@@ -1006,18 +1427,23 @@
       // «'» al principio: es texto aunque parezca número o fórmula (como el apóstrofo de Excel)
       if (s[0] === "'") return s.slice(1);
       if (s[0] !== "=") return calcularLiteral(s.trim()) === s.trim() ? s : calcularLiteral(s.trim());
-      const tk = tokens(s.slice(1));
+      let tk = tokens(s.slice(1));
       let i = 0;
+      // nombres de LET y parámetros de LAMBDA (cada uno con el ámbito de afuera)
+      let ambito = null;
       const ver = () => tk[i];
       const es = (v) => tk[i] && tk[i].k === "op" && tk[i].v === v;
       const toma = (v) => { const x = tk[i]; if (!x || (v && (x.k !== "op" || x.v !== v))) throw E("#VALOR!"); i++; return x; };
+      const sep = () => es(",") || es(";");
 
       function expr() {
         let a = suma();
         while (ver() && ver().k === "op" && ["=", "<>", "<", ">", "<=", ">="].includes(ver().v)) {
           const o = toma().v, b = suma();
-          const x = esNum(a) && esNum(b) ? [+a, +b] : [texto(a).toLowerCase(), texto(b).toLowerCase()];
-          a = { "=": x[0] === x[1], "<>": x[0] !== x[1], "<": x[0] < x[1], ">": x[0] > x[1], "<=": x[0] <= x[1], ">=": x[0] >= x[1] }[o];
+          a = porElemento([a, b], (p, q) => {
+            const x = esNum(p) && esNum(q) ? [+p, +q] : [texto(p).toLowerCase(), texto(q).toLowerCase()];
+            return { "=": x[0] === x[1], "<>": x[0] !== x[1], "<": x[0] < x[1], ">": x[0] > x[1], "<=": x[0] <= x[1], ">=": x[0] >= x[1] }[o];
+          });
         }
         return a;
       }
@@ -1025,11 +1451,13 @@
         let a = term();
         while (ver() && ver().k === "op" && ["+", "-", "&"].includes(ver().v)) {
           const o = toma().v, b = term();
-          if (o === "&") { a = texto(a) + texto(b); continue; }
-          const r = o === "+" ? num(a) + num(b) : num(a) - num(b);
-          // Fecha ± días = fecha; fecha - fecha = días.
-          const fa = a instanceof FechaF, fb = b instanceof FechaF;
-          a = (fa && !fb) || (fb && !fa && o === "+") ? new FechaF(r) : r;
+          if (o === "&") { a = porElemento([a, b], (p, q) => texto(p) + texto(q)); continue; }
+          a = porElemento([a, b], (p, q) => {
+            const r = o === "+" ? num(p) + num(q) : num(p) - num(q);
+            // Fecha ± días = fecha; fecha - fecha = días.
+            const fa = p instanceof FechaF, fb = q instanceof FechaF;
+            return (fa && !fb) || (fb && !fa && o === "+") ? new FechaF(r) : r;
+          });
         }
         return a;
       }
@@ -1037,20 +1465,25 @@
         let a = pot();
         while (ver() && ver().k === "op" && ["*", "/"].includes(ver().v)) {
           const o = toma().v, b = pot();
-          if (o === "/") { if (num(b) === 0) throw E("#DIV/0!"); a = num(a) / num(b); } else a = num(a) * num(b);
+          a = porElemento([a, b], (p, q) => {
+            if (o === "/") { if (num(q) === 0) throw E("#DIV/0!"); return num(p) / num(q); }
+            return num(p) * num(q);
+          });
         }
         return a;
       }
       function pot() {
         let a = unario();
-        while (es("^")) { toma(); a = Math.pow(num(a), num(unario())); }
+        while (es("^")) { toma(); const b = unario(); a = porElemento([a, b], (p, q) => Math.pow(num(p), num(q))); }
         return a;
       }
       function unario() {
-        if (es("-")) { toma(); return -num(unario()); }
-        if (es("+")) { toma(); return num(unario()); }
+        if (es("-")) { toma(); return porElemento([unario()], (p) => -num(p)); }
+        if (es("+")) { toma(); return porElemento([unario()], (p) => num(p)); }
+        // «@»: la intersección implícita de Excel (la celda del rango que está en la fila o columna de la fórmula)
+        if (es("@")) { toma(); return interseccion(unario()); }
         let v = primario();
-        while (es("%")) { toma(); v = num(v) / 100; }
+        while (es("%")) { toma(); v = porElemento([v], (p) => num(p) / 100); }
         return v;
       }
       function primario() {
@@ -1058,11 +1491,13 @@
         if (!x) throw E("#VALOR!");
         if (x.k === "num") { i++; return x.v; }
         if (x.k === "str") { i++; return x.v; }
-        if (x.k === "err") { i++; throw E(x.v.replace("#NAME?", "#NOMBRE?").replace("#VALUE!", "#VALOR!")); }
-        if (x.k === "op" && x.v === "(") { toma(); const v = expr(); toma(")"); return v; }
+        if (x.k === "err") { i++; throw E(ERR_ES[x.v] || x.v); }
+        if (x.k === "op" && x.v === "(") { toma(); const v = expr(); toma(")"); return llamadas(v); }
+        if (x.k === "op" && x.v === "{") return matrizEscrita();
         if (x.k === "ref") {
           i++;
           const r = x.v;
+          if (x.derrame) return derrameDe(r);
           if (r.tipo === "celda") {
             const hh = hojaDe(r.hoja, h);
             if (!hh) throw E("#REF!");
@@ -1078,25 +1513,154 @@
             if (es("(")) { toma("("); toma(")"); }   // también como función: =VERDADERO()
             return x.v === "VERDADERO" || x.v === "TRUE";
           }
+          const propio = buscar(x.v);
           if (es("(")) {
+            // una función guardada con LET o un parámetro: =LET(f; LAMBDA(x; x*2); f(5))
+            if (propio instanceof LambdaF) return llamadas(propio);
             toma("(");
             const nombre = ALIAS[x.v] || x.v;
+            if (nombre === "LET") return llamadas(conNombres());
+            if (nombre === "LAMBDA") return llamadas(lambda());
+            if (nombre === "ISOMITTED") {
+              const t = ver(), sig = tk[i + 1];
+              if (t && t.k === "id" && sig && sig.k === "op" && sig.v === ")") { i += 2; return buscar(t.v) === OMITIDO; }
+              return argumentos()[0] === undefined;
+            }
             const fn = FUNCS[nombre];
             if (!fn) throw E("#NOMBRE?");
             if (DE_REFERENCIA.has(nombre)) return deReferencia(nombre);
-            const args = [];
-            if (ver() && !es(")")) {
-              args.push(argumento());
-              while (es(",") || es(";")) { toma(); args.push(es(")") || es(",") || es(";") ? undefined : argumento()); }
-            }
-            toma(")");
-            const r = fn(args);
+            const args = argumentos();
+            if (DINAMICAS.has(nombre)) usoMatriz = true;
+            const r = llamarFuncion(nombre, fn, args);
             if (r instanceof ErrorF) throw r;
-            return r;
+            return llamadas(r);
+          }
+          if (propio !== undefined) {
+            if (propio instanceof ErrorF) throw propio;
+            return propio === OMITIDO ? "" : propio;
           }
           throw E("#NOMBRE?");
         }
         throw E("#VALOR!");
+      }
+      /** Los argumentos de una función (ya se tomó el «(»), hasta el «)». Uno vacío queda undefined. */
+      function argumentos() {
+        const args = [];
+        if (ver() && !es(")")) {
+          args.push(sep() ? undefined : argumento());
+          while (sep()) { toma(); args.push(es(")") || sep() ? undefined : argumento()); }
+        }
+        toma(")");
+        return args;
+      }
+      /** Una LAMBDA seguida de (argumentos) se calcula: =LAMBDA(n; n*n+1)(6). */
+      function llamadas(v) {
+        while (v instanceof LambdaF && es("(")) { toma("("); v = invocar(v, argumentos()); }
+        return v;
+      }
+      function invocar(lam, args) {
+        if (args.length > lam.params.length) throw E("#VALOR!");
+        const m = new Map();
+        lam.params.forEach((p, k) => m.set(p, args[k] === undefined ? OMITIDO : args[k]));
+        const g = [tk, i, ambito];
+        tk = lam.tk; i = lam.ini; ambito = { m, padre: lam.ambito };
+        try {
+          const v = expr();
+          if (i !== lam.fin) throw E("#VALOR!");
+          return v;
+        } finally { [tk, i, ambito] = g; }
+      }
+      function buscar(n) { for (let a = ambito; a; a = a.padre) if (a.m.has(n)) return a.m.get(n); return undefined; }
+      /** LET(nombre1; valor1; …; cálculo), ya tomado el «(». */
+      function conNombres() {
+        const previo = ambito;
+        ambito = { m: new Map(), padre: previo };
+        try {
+          for (;;) {
+            const t = ver(), sig = tk[i + 1];
+            if (t && t.k === "id" && sig && sig.k === "op" && (sig.v === "," || sig.v === ";")) {
+              i += 2;
+              const v = argumento();
+              ambito.m.set(t.v, v);
+              if (!sep()) throw E("#VALOR!");
+              toma();
+              continue;
+            }
+            if (!ambito.m.size) throw E("#VALOR!");
+            const v = expr();
+            toma(")");
+            return v;
+          }
+        } finally { ambito = previo; }
+      }
+      /** LAMBDA(parámetro1; …; cálculo), ya tomado el «(»: el cálculo se guarda para hacerlo al llamarla. */
+      function lambda() {
+        const partes = [];
+        let ini = i, prof = 0, j = i;
+        for (; j < tk.length; j++) {
+          const t = tk[j];
+          if (t.k !== "op") continue;
+          if (t.v === "(" || t.v === "{") prof++;
+          else if (t.v === ")" || t.v === "}") { if (!prof) break; prof--; }
+          else if ((t.v === "," || t.v === ";") && !prof) { partes.push([ini, j]); ini = j + 1; }
+        }
+        if (j >= tk.length) throw E("#VALOR!");
+        partes.push([ini, j]);
+        const [a, b] = partes.pop();
+        if (b <= a) throw E("#VALOR!");
+        // (un parámetro entre corchetes, [y], se puede omitir al llamarla: ISOMITTED dice si se dio)
+        const params = partes.map(([p, q]) => {
+          if (q - p === 3 && tk[p].k === "op" && tk[p].v === "[" && tk[p + 1].k === "id" && tk[p + 2].k === "op" && tk[p + 2].v === "]") return tk[p + 1].v;
+          if (q - p !== 1 || tk[p].k !== "id") throw E("#VALOR!");
+          return tk[p].v;
+        });
+        i = j + 1;
+        usoMatriz = true;
+        const lam = new LambdaF(params, tk, a, b, ambito);
+        lam.llamar = (args) => invocar(lam, args);
+        return lam;
+      }
+      /** {1,2,3;4,5,6}: «,» (o «\») separa columnas y «;» filas. */
+      function matrizEscrita() {
+        toma("{");
+        const filas = [[]];
+        if (!es("}")) for (;;) {
+          filas[filas.length - 1].push(intenta(() => expr()));
+          if (es(",") || es("\\")) { toma(); continue; }
+          if (es(";")) { toma(); filas.push([]); continue; }
+          break;
+        }
+        toma("}");
+        const cols = filas[0].length;
+        if (!cols || filas.some((q) => q.length !== cols)) throw E("#VALOR!");
+        const out = [].concat(...filas);
+        out.cols = cols;
+        return out;
+      }
+      /** A1#: toda la matriz que derrama la celda A1. */
+      function derrameDe(r) {
+        const hh = hojaDe(r.hoja, h);
+        if (!hh) throw E("#REF!");
+        const v = valorEn(hh, r.a.c, r.a.f);
+        const d = hh.derrames.get(r.a.c + "," + r.a.f);
+        if (!d) {
+          if (v instanceof ErrorF) throw v;
+          if (String(hh.obtener(r.a.c, r.a.f))[0] === "=") return v;
+          throw E("#REF!");
+        }
+        if (d.bloqueado) throw E("#DESBORDAMIENTO!");
+        return d.arr;
+      }
+      function interseccion(v) {
+        if (!Array.isArray(v)) return v;
+        if (v.length === 1) return v[0];
+        if (v.f1 != null && donde) {
+          const n = filasDe(v), k = colsDe(v);
+          const fi = n === 1 ? 0 : donde.f - v.f1, ci = k === 1 ? 0 : donde.c - v.c1;
+          if (fi >= 0 && fi < n && ci >= 0 && ci < k) return v[fi * k + ci];
+          throw E("#VALOR!");
+        }
+        return v[0];
       }
       /** El valor de una referencia ya armada (una celda o un rango). */
       function valorDeRef(r) {
@@ -1114,8 +1678,8 @@
       /** FILA, COLUMNA, FILAS, COLUMNAS, INDIRECTO y DESREF: el primer argumento es una referencia, no su valor. */
       function deReferencia(nombre) {
         // ¿el argumento que sigue es una referencia sola? (A1, B2:C5, Hoja2!A1)
-        const refSola = () => { const t = tk[i], sig = tk[i + 1]; if (t && t.k === "ref" && sig && sig.k === "op" && (sig.v === ")" || sig.v === "," || sig.v === ";")) { i++; return t.v; } return null; };
-        const resto = () => { const l = []; while (es(",") || es(";")) { toma(); l.push(es(")") || es(",") || es(";") ? undefined : expr()); } toma(")"); return l; };
+        const refSola = () => { const t = tk[i], sig = tk[i + 1]; if (t && t.k === "ref" && !t.derrame && sig && sig.k === "op" && (sig.v === ")" || sig.v === "," || sig.v === ";")) { i++; return t.v; } return null; };
+        const resto = () => { const l = []; while (sep()) { toma(); l.push(es(")") || sep() ? undefined : expr()); } toma(")"); return l; };
         if (nombre === "FILA" || nombre === "COLUMNA") {
           if (es(")")) { toma(")"); if (!donde) throw E("#VALOR!"); return (nombre === "FILA" ? donde.f : donde.c) + 1; }
           const r = refSola();
@@ -1129,8 +1693,7 @@
           if (r) { toma(")"); const c = cajaDeRef(r); return nombre === "FILAS" ? c.f2 - c.f1 + 1 : c.c2 - c.c1 + 1; }
           const v = expr(); toma(")");
           if (!Array.isArray(v)) return 1;
-          const cols = v.cols || 1;
-          return nombre === "FILAS" ? Math.ceil(v.length / cols) : cols;
+          return nombre === "FILAS" ? filasDe(v) : colsDe(v);
         }
         if (nombre === "INDIRECTO") {
           const t = texto(expr()).trim(); resto();
@@ -1159,8 +1722,8 @@
           if (i < inicio) i = inicio;
           while (i < tk.length) {
             const x = tk[i];
-            if (x.k === "op" && x.v === "(") prof++;
-            else if (x.k === "op" && x.v === ")") { if (prof === 0) break; prof--; }
+            if (x.k === "op" && (x.v === "(" || x.v === "{")) prof++;
+            else if (x.k === "op" && (x.v === ")" || x.v === "}")) { if (prof === 0) break; prof--; }
             else if (x.k === "op" && (x.v === "," || x.v === ";") && prof === 0) break;
             i++;
           }
@@ -1169,13 +1732,25 @@
       }
       const v = expr();
       if (i < tk.length) throw E("#VALOR!");
-      if (Array.isArray(v)) { if (v.length === 1) return v[0]; throw E("#VALOR!"); }
+      if (v instanceof LambdaF) throw E("#CALC!");
+      if (v === OMITIDO) return "";
+      if (Array.isArray(v)) { if (v.length === 1) return v[0] instanceof LambdaF ? E("#CALC!") : v[0]; if (!v.length) throw E("#CALC!"); return v; }
       return v;
     }
 
-    return { valor: (c, f) => valorEn(actual, c, f), limpiar: () => { actual.cache.clear(); otras.clear(); },
+    const abierta = (c, f) => { valorEn(actual, c, f); return actual.derrames.get(c + "," + f) || null; };
+    return {
+      valor: (c, f) => valorEn(actual, c, f),
+      limpiar: () => { actual.cache.clear(); actual.derrames.clear(); actual.meta.clear(); actual.duenos.clear(); actual.cand = null; otras.clear(); },
       // una fórmula que no está en ninguna celda, como si estuviera en (c, f): la de una regla de formato condicional
-      calcular: (crudo, c, f) => { try { return calcular(crudo, actual, { c, f }); } catch (e) { return e instanceof ErrorF ? e : E("#VALOR!"); } } };
+      calcular: (crudo, c, f) => { try { const v = calcular(crudo, actual, { c, f }); return Array.isArray(v) ? v[0] : v; } catch (e) { return e instanceof ErrorF ? e : E("#VALOR!"); } },
+      /** Si la fórmula de (c, f) da una matriz: { filas, cols, bloqueado } (lo que derrama, o no cabe). */
+      derrame: (c, f) => { const d = abierta(c, f); return d ? { filas: d.filas, cols: d.cols, bloqueado: d.bloqueado } : null; },
+      /** ¿La fórmula de (c, f) es de matrices? (dio una matriz o calculó con ellas: Excel la guarda como fórmula de matriz) */
+      esMatriz: (c, f) => !!abierta(c, f) || actual.meta.has(c + "," + f),
+      /** La celda cuya fórmula derrama sobre (c, f), o null: { c, f }. */
+      origen: (c, f) => { valorEn(actual, c, f); const a = actual.duenos.get(c + "," + f); return a ? { c: a.c, f: a.f } : null; },
+    };
   }
 
   // ------------------------------------------------------------ mostrar valores
@@ -1715,14 +2290,55 @@
     return out;
   }
 
+  /**
+   * Una fórmula que Excel guardó sin matrices dinámicas (sin t="array") se calcula como en un Excel viejo: un rango
+   * que va a una operación, a un argumento de un solo valor o al resultado de la celda da solo la celda de su fila o
+   * columna (la intersección implícita). Excel 365 la muestra con «@» ahí (=@A1:A10, =A:A*2 → =@A:A*2): se agrega
+   * igual para que NOM-COLAB la calcule como Excel.
+   */
+  function conInterseccion(formula) {
+    const s = String(formula || "");
+    if (s[0] !== "=" || !/:/.test(s)) return s;
+    let tk;
+    try { tk = tokens(s.slice(1), true); } catch (e) { return s; }
+    const OPS = new Set(["+", "-", "*", "/", "^", "&", "=", "<>", "<", ">", "<=", ">="]);
+    // (estos argumentos ya se calculaban como matriz en el Excel viejo: SUMAPRODUCTO((A1:A9>5)*B1:B9) no lleva «@»)
+    const DE_MATRIZ = { SUMAPRODUCTO: true, MMULT: true, FRECUENCIA: true, MDETERM: true, MINVERSA: true, TRANSPONER: true, INDICE: [0], AGREGAR: [2, 3] };
+    const enMatriz = () => pila.some((c) => { const L = c.fn && DE_MATRIZ[c.fn]; return L === true || (Array.isArray(L) && L.includes(c.arg)); });
+    const pila = [{ fn: null, arg: 0, ini: 0, arriba: true }], pos = [];
+    for (let j = 0; j < tk.length; j++) {
+      const t = tk[j];
+      if (t.k === "op" && (t.v === "(" || t.v === "{")) { const p = tk[j - 1]; pila.push({ fn: t.v === "{" ? "{" : p && p.k === "id" ? ALIAS[p.v] || p.v : null, arg: 0, ini: j + 1 }); continue; }
+      if (t.k === "op" && (t.v === ")" || t.v === "}")) { if (pila.length > 1) pila.pop(); continue; }
+      if (t.k === "op" && (t.v === "," || t.v === ";")) { const c = pila[pila.length - 1]; c.arg++; c.ini = j + 1; continue; }
+      if (t.k !== "ref" || t.v.tipo === "celda" || t.derrame) continue;
+      const p = tk[j - 1], n = tk[j + 1];
+      const antes = p && p.k === "op" && (OPS.has(p.v) || p.v === "@"), despues = n && n.k === "op" && (OPS.has(n.v) || n.v === "%");
+      if ((p && p.k === "op" && p.v === "@") || enMatriz()) continue;
+      let escalar = antes || despues;
+      const ctx = pila[pila.length - 1], solo = ctx.ini === j && (!n || (n.k === "op" && [")", ",", ";", "}"].includes(n.v)));
+      if (!escalar && solo) {
+        if (ctx.arriba) escalar = !n;
+        else if (ctx.fn && ctx.fn !== "{") { const L = ctx.fn === "SI" ? true : LEVANTA[ctx.fn]; escalar = L === true || (Array.isArray(L) && L.includes(ctx.arg)); }
+      }
+      if (escalar) pos.push(t.p + 1);
+    }
+    if (!pos.length) return s;
+    let r = s;
+    pos.sort((a, b) => b - a).forEach((q) => { r = r.slice(0, q) + "@" + r.slice(q); });
+    return r;
+  }
   /** Una fórmula de Excel en inglés (=AVERAGE(A1,B1)) en español (=PROMEDIO(A1;B1)). */
-  function aEspanol(formula) {
+  function aEspanol(formula, conMatrices) {
     const s = String(formula || "");
     if (s[0] !== "=") return s;
-    let r = "=";
+    let r = "=", llaves = 0;
     for (let i = 1; i < s.length; i++) {
       const c = s[i];
       if (c === '"') { let j = i + 1; while (j < s.length) { if (s[j] === '"') { if (s[j + 1] === '"') { j += 2; continue; } break; } j++; } r += s.slice(i, j + 1); i = j; continue; }
+      // (importador de Excel 5: dentro de una matriz escrita, {1,2;3,4}, la coma separa columnas y se queda)
+      if (conMatrices && (c === "{" || c === "}")) { llaves += c === "{" ? 1 : -1; r += c; continue; }
+      if (c === "," && llaves > 0) { r += c; continue; }
       if (c === ",") { r += ";"; continue; }
       const m = /^[A-Za-z_][A-Za-z0-9_.]*/.exec(s.slice(i));
       if (m && !/[A-Za-z0-9_.$!:]/.test(s[i - 1] || "")) {
@@ -1751,14 +2367,32 @@
     return "Hoja" + (i >= 0 ? i + 1 : 1);
   }
   const lectorDe = (b) => (c, f) => { const v = b["c:" + ref(c, f)]; return v == null ? "" : v; };
+  /** Las celdas con fórmula de una tabla: [[c, f, crudo]…] (el evaluador busca ahí las que derraman). */
+  const formulasDe = (b) => () => {
+    const l = [];
+    for (const k in b) if (k.charCodeAt(0) === 99 && k[1] === ":" && typeof b[k] === "string" && b[k][0] === "=") { const p = parseRef(k.slice(2)); if (p) l.push([p.c, p.f, b[k]]); }
+    return l;
+  };
+  // Una hoja importada de Excel antes de la versión 5 del importador trae lo derramado como valores sueltos: ahí la
+  // fórmula muestra su primer valor y no se derrama encima (si no, saldría #DESBORDAMIENTO!).
+  const sinDerrameDe = (b) => !!(b.ox && +b.xlv > 0 && +b.xlv < 5);
+  /** ¿(c, f) está dentro de una celda combinada? (tapa un derrame, como en Excel) */
+  const combinadaDe = (b) => {
+    let caja = null;
+    return (c, f) => {
+      if (!caja) { caja = []; for (const k in b) if (k.startsWith("m:")) { const p = parseRef(k.slice(2)), m = /^(\d+)x(\d+)$/.exec(String(b[k] || "")); if (p && m && +m[1] * +m[2] > 1) caja.push([p.c, p.f, p.c + +m[1] - 1, p.f + +m[2] - 1]); } }
+      return caja.some((z) => c >= z[0] && c <= z[2] && f >= z[1] && f <= z[3]);
+    };
+  };
   /** Evaluador de una tabla que entiende las referencias a las demás hojas del documento. */
   function evaluadorDeTabla(doc, b) {
     const todas = doc ? hojasDe(doc) : [];
     return evaluador(lectorDe(b), {
       nombre: doc ? nombreDeHoja(doc, b) : "", filas: b.filas || b.filasTexto || 30, cols: b.cols || b.colsTexto || 10,
+      formulas: formulasDe(b), sinDerrame: sinDerrameDe(b), combinada: combinadaDe(b),
       hojas: (n) => {
         const x = todas.find((h) => normal(nombreDeHoja(doc, h)) === normal(n));
-        return x ? { obtener: lectorDe(x), filas: x.filas || 30, cols: x.cols || 10, nombre: nombreDeHoja(doc, x) } : null;
+        return x ? { obtener: lectorDe(x), filas: x.filas || 30, cols: x.cols || 10, nombre: nombreDeHoja(doc, x), formulas: formulasDe(x), sinDerrame: sinDerrameDe(x), combinada: combinadaDe(x) } : null;
       },
     });
   }
@@ -1767,6 +2401,6 @@
     hojasDe, nombreDeHoja, evaluadorDeTabla,
     evaluador, formatear, aplicarFormato, formatoXL, ErrorF, FechaF, esNum, colLetra, colNum, ref, parseRef, NOMBRES, FIRMAS, ALIAS, INGLES,
     leerFecha, criterio, desplazar, ajustarEstructura, renombrarHoja, refsDe, textoRef, leerRef, transformarRefs, FORMATOS, esFormatoFecha,
-    cambiarDecimales, leerEntrada, serie, calcularLiteral, prefijoHoja, textoFecha, aEspanol,
+    cambiarDecimales, leerEntrada, serie, calcularLiteral, prefijoHoja, textoFecha, aEspanol, formulasDe, conInterseccion,
   };
 })();

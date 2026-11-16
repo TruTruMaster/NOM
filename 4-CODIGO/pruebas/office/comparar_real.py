@@ -46,26 +46,37 @@ JS_RENGLONES = r"""
   const pagDe = (y) => { for (let i = 0; i < pags.length; i++) if (y >= pags[i].top - 2 && y < pags[i].bottom + 2) return i; return -1; };
   const PT = 0.75 / (window.__zoomNom || 1);
   const letras = [];
-  const tw = document.createTreeWalker(cuerpo, NodeFilter.SHOW_TEXT, { acceptNode: (n) => {
-    const e = n.parentElement;
-    if (!e || e.closest('.wd-corte, [data-obj] .wd-ctl, script, style')) return NodeFilter.FILTER_REJECT;
-    const cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden') return NodeFilter.FILTER_REJECT;
-    return NodeFilter.FILTER_ACCEPT; } });
   const r = document.createRange();
-  let n, parrafo = null, numPar = -1;
-  while ((n = tw.nextNode())) {
-    const p = n.parentElement.closest('.wd-cuerpo > *');
-    if (p !== parrafo) { parrafo = p; numPar++; }
-    const s = n.data;
-    for (let i = 0; i < s.length; i++) {
-      let j = i + 1; const c0 = s.charCodeAt(i); if (c0 >= 0xD800 && c0 < 0xDC00 && j < s.length) j++;
-      r.setStart(n, i); r.setEnd(n, j);
-      const q = r.getClientRects(); if (!q.length) { i = j - 1; continue; }
-      const b = q[q.length - 1];
-      letras.push({ c: s.slice(i, j), x: b.left, y: b.top, h: b.height, w: b.width, p: numPar });
-      i = j - 1;
+  // el texto del cuerpo y, con secciones en columnas, lo que sigue de un párrafo partido (otra capa: va justo
+  // después de su párrafo); lo recortado de un párrafo partido no se ve y no cuenta
+  const kidsC = [...cuerpo.children];
+  for (const raiz of [cuerpo, ...document.querySelectorAll('.wd-continuaciones')]) {
+    const tw = document.createTreeWalker(raiz, NodeFilter.SHOW_TEXT, { acceptNode: (n) => {
+      const e = n.parentElement;
+      // (las marcas del editor de un salto de página o de columna no son texto del documento)
+      if (!e || e.closest('.wd-corte, [data-obj] .wd-ctl, .wd-salto, .wd-saltocol, script, style')) return NodeFilter.FILTER_REJECT;
+      const cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden') return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT; } });
+    let n, parrafo = null, numPar = -1, corte = null, pr = null, zz = 1;
+    while ((n = tw.nextNode())) {
+      const p = raiz === cuerpo ? n.parentElement.closest('.wd-cuerpo > *') : n.parentElement.closest('.wd-continuaciones > *');
+      if (p !== parrafo) {
+        parrafo = p; numPar = raiz === cuerpo ? kidsC.indexOf(p) : +(p && p.dataset.par) + 0.5;
+        corte = p && p.dataset.clip != null ? +p.dataset.clip : null; pr = p ? p.getBoundingClientRect() : null; zz = p && pr ? pr.height / (p.offsetHeight || 1) || 1 : 1;
+      }
+      const s = n.data;
+      for (let i = 0; i < s.length; i++) {
+        let j = i + 1; const c0 = s.charCodeAt(i); if (c0 >= 0xD800 && c0 < 0xDC00 && j < s.length) j++;
+        r.setStart(n, i); r.setEnd(n, j);
+        const q = r.getClientRects(); if (!q.length) { i = j - 1; continue; }
+        const b = q[q.length - 1];
+        if (corte != null && pr && (b.top + b.bottom) / 2 - pr.top > corte * zz) { i = j - 1; continue; }
+        letras.push({ c: s.slice(i, j), x: b.left, y: b.top, h: b.height, w: b.width, p: numPar });
+        i = j - 1;
+      }
     }
   }
+  letras.sort((a, b) => a.p - b.p);
   // renglones: una letra empieza renglón si queda más abajo que la anterior (más de media altura) o a la izquierda en otra fila
   const renglones = [];
   let cur = null;
@@ -112,6 +123,35 @@ def renglones_word(verdad):
         rs.sort(key=lambda r: (round(r["y"]), r["x"]))
         out.append(rs)
     return out
+
+
+def columnas_de(rs):
+    """Dónde empiezan las columnas de texto de una página (x en pt), si la página está en columnas: grupos de al menos
+    4 renglones que empiezan a más de 60 pt uno del otro y que comparten altura en la página."""
+    if len(rs) < 8: return None
+    xs = sorted(r["x"] for r in rs if limpio(r["texto"]))
+    grupos = []
+    for x in xs:
+        if grupos and x - grupos[-1][-1] <= 60: grupos[-1].append(x)
+        else: grupos.append([x])
+    grupos = [g for g in grupos if len(g) >= 4]
+    if len(grupos) < 2: return None
+    inicios = [min(g) for g in grupos]
+    col = lambda r: max([k for k, x0 in enumerate(inicios) if r["x"] >= x0 - 8] or [0])
+    rangos = [[r["y"] for r in rs if col(r) == k] for k in range(len(inicios))]
+    if not all(rangos) or min(max(y) for y in rangos) < max(min(y) for y in rangos): return None   # no comparten altura: no son columnas
+    return inicios
+
+
+def ordenar_columnas(word, nom):
+    """En las páginas en columnas, los renglones de los dos en orden de lectura (columna por columna, cada una de arriba
+    a abajo): Word los da de arriba a abajo mezclando las columnas."""
+    for k, rs in enumerate(word):
+        inicios = columnas_de(rs)
+        if not inicios: continue
+        col = lambda r: max([j for j, x0 in enumerate(inicios) if r["x"] >= x0 - 8] or [0])
+        rs.sort(key=lambda r: (col(r), round(r["y"]), r["x"]))
+        if k < len(nom): nom[k].sort(key=lambda r: (col(r), round(r["y"]), r["x"]))
 
 
 def comparar_renglones(word, nom):
@@ -251,6 +291,10 @@ def igual_excel(a, b):
         t = re.sub(r"#[a-z/0!?]+[!?]?", lambda m: EN_ES.get(m.group(0), m.group(0)), t)
         return re.sub(r"[a-z]+", lambda m: EN_ES.get(m.group(0), m.group(0)), t)
     quita = lambda t: t.replace("¡", "").replace("¿", "").replace(" ", "")
+    # la «fecha corta del sistema» (formato 14 de Excel) sale con el orden de la región de Windows: en esa
+    # computadora (en-US) mes/día/año; NOM-COLAB y un Excel de México la muestran día/mes/año
+    m1, m2 = re.fullmatch(r"(\d{1,2})/(\d{1,2})/(\d{2,4})(.*)", a), re.fullmatch(r"(\d{1,2})/(\d{1,2})/(\d{2,4})(.*)", b)
+    if m1 and m2 and int(m1[1]) == int(m2[2]) and int(m1[2]) == int(m2[1]) and m1[3] == m2[3] and m1[4].strip() == m2[4].strip(): return True
     return quita(es(a)) == quita(es(b)) or quita(es(a)) == quita(b)
 
 
@@ -403,6 +447,7 @@ def comparar(archivo, movil, salida, nav, esp):
         m, caps = medir_docx(nav, esp, archivo, carpeta, verdad)
         word = renglones_word(verdad)
         nom = [pg["renglones"] for pg in m["paginas"]]
+        ordenar_columnas(word, nom)
         rep.update(paginas_word=len(word), paginas_nom=len(nom), aviso=m.get("aviso"), paginacion=m.get("paginacion"),
                    fuera_de_pagina=len(m["fuera"]), **comparar_renglones(word, nom))
         pdf = REAL / "verdad" / (nombre + ".pdf")
@@ -410,6 +455,9 @@ def comparar(archivo, movil, salida, nav, esp):
             offs = pdf_a_png(pdf, carpeta)
             for i in range(max(len(offs), len(caps))):
                 lado_a_lado(offs[i] if i < len(offs) else None, caps[i] if i < len(caps) else None, carpeta / f"lado-{i + 1:02d}.png", f"página {i + 1}")
+            # parecido de cada página como imagen (lo que no es texto: formas, grupos, rellenos, líneas)
+            par = [round(parecido_img(offs[i], caps[i], (306, 396)), 1) for i in range(min(len(offs), len(caps)))]
+            if par: rep.update(parecido_paginas=par, parecido_medio=round(sum(par) / len(par), 1), parecido_min=min(par))
     elif archivo.suffix == ".pptx":
         rep.update(medir_pptx(nav, esp, archivo, carpeta, verdad, nombre))
     elif archivo.suffix == ".xlsx":
@@ -419,7 +467,7 @@ def comparar(archivo, movil, salida, nav, esp):
     if archivo.suffix == ".docx":
         print(f"{archivo.name}: páginas Word {rep.get('paginas_word')} / NOM {rep.get('paginas_nom')} · renglones idénticos "
               f"{rep.get('iguales')}/{rep.get('renglones_word')} ({rep.get('pct_iguales')} %) · en su página {rep.get('pct_misma_pagina')} % · "
-              f"desfase vertical mediana {rep.get('dy_mediana_pt')} pt", flush=True)
+              f"desfase vertical mediana {rep.get('dy_mediana_pt')} pt · imagen {rep.get('parecido_medio')} % (mínimo {rep.get('parecido_min')} %)", flush=True)
     elif archivo.suffix == ".pptx":
         print(f"{archivo.name}: diapositivas {rep.get('diapositivas_office')} / {rep.get('diapositivas_nom')} · parecido medio {rep.get('parecido_medio')} % (mínimo {rep.get('parecido_min')} %)", flush=True)
     else:

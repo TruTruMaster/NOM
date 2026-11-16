@@ -379,7 +379,20 @@
 :root[data-tema="oscuro"] .ed-lienzo.con-wd { --wd-mesa: #101116; }
 .wd { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 1fr auto; min-height: 100%; }
 .wd-zona { position: relative; grid-column: 2; padding: 22px 16px 64px; min-width: 0; }
-.wd-hoja { position: relative; width: var(--pw, 816px); margin: 0 auto; }
+.wd-hoja { position: relative; width: var(--pw, 816px); margin: 0 auto; isolation: isolate; }
+/* secciones de Word: la línea entre columnas */
+.wd-col-linea { position: absolute; width: 0; border-left: .75pt solid #000; pointer-events: none; }
+/* lo que sigue de un párrafo partido entre columnas: una copia (no se edita; tocarla lleva al párrafo) */
+.wd-cuerpo.wd-continuaciones { position: absolute !important; left: 0; top: 0; width: 100%; height: 0; padding: 0 !important; min-height: 0 !important; display: block !important; pointer-events: none; overflow: visible; z-index: 1; background: none !important; box-shadow: none !important; }
+.wd-continuaciones > .wd-sigue { pointer-events: auto; cursor: text; text-indent: 0 !important; }
+.wd-continuaciones > .wd-sigue::before, .wd-continuaciones > .wd-sigue::marker { display: none !important; content: none !important; }
+.wd-cuerpo.con-secciones > [data-sec-t]::before, .wd-cuerpo.con-secciones > [data-sec-t]::after { display: none !important; }
+/* (en la hoja con secciones el salto de columna no ocupa renglón, como en Word) */
+.wd-cuerpo.con-secciones .wd-saltocol { display: none !important; }
+.wd-cuerpo.con-secciones > :has(.wd-saltocol) { min-height: calc(var(--li, 1.15) * var(--af) * 1em) !important; }
+.wd-saltocol { display: flex; align-items: center; gap: 8px; color: #9a9a9a; font: 600 9pt/1 Nunito, sans-serif; margin: 4pt 0; }
+.wd-saltocol::before, .wd-saltocol::after { content: ""; flex: 1; border-top: 1px dotted #bdbdbd; }
+@media print { .wd-continuaciones { display: none !important; } .wd-cuerpo > [data-clip] { clip-path: none !important; } .wd-saltocol { break-after: column; visibility: hidden; height: 0; margin: 0; } }
 .wd-paginas { position: absolute; inset: 0; pointer-events: none; }
 .wd-pagina { position: absolute; left: 0; width: var(--pw); height: var(--ph); background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .10), 0 8px 24px -8px rgba(0, 0, 0, .18); }
 .wd-enc, .wd-pie { position: absolute; left: var(--miz); right: var(--md); font: 9pt/1.2 Calibri, Carlito, "Segoe UI", Arial, sans-serif; color: #6b6b6b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -406,7 +419,7 @@
 .wd[data-vista="continua"] .wd-cuerpo { background: #fff; border-radius: 6px; min-height: calc(100dvh - 220px); box-shadow: 0 1px 2px rgba(0, 0, 0, .10), 0 8px 24px -8px rgba(0, 0, 0, .18); padding: clamp(24px, 6vw, 72px) clamp(18px, 6vw, 72px); }
 
 /* párrafos: estilo Normal de Word (Calibri 11, interlineado 1.15, 8 pt después) */
-.wd-cuerpo > * { margin: var(--antes, 0) 0 var(--desp, 8pt); line-height: calc(var(--li, 1.15) * var(--af)); padding-left: calc(var(--sang, 0) * 36pt); min-height: calc(var(--li, 1.15) * var(--af) * 1em); position: relative; font-size: inherit; font-weight: inherit; }
+.wd-cuerpo > * { margin: var(--antes, 0) var(--sr, 0px) var(--desp, 8pt) var(--sx, 0px); line-height: calc(var(--li, 1.15) * var(--af)); padding-left: calc(var(--sang, 0) * 36pt); min-height: calc(var(--li, 1.15) * var(--af) * 1em); position: relative; font-size: inherit; font-weight: inherit; }
 .wd-cuerpo > [data-alin="centro"] { text-align: center; }
 .wd-cuerpo > [data-alin="der"] { text-align: right; }
 .wd-cuerpo > [data-alin="just"] { text-align: justify; }
@@ -415,7 +428,7 @@
 .wd-cuerpo > h3 { --af: 1.2205; font: 12pt/1.15 "NOM CL", "Calibri Light", Carlito, Calibri, "Segoe UI", sans-serif; color: #1F3763; margin-top: var(--antes, 2pt); margin-bottom: var(--desp, 0); }
 .wd-cuerpo > [data-estilo="titulo"] { font: 28pt/1.05 "Calibri Light", Carlito, Calibri, sans-serif; letter-spacing: -.5pt; margin-bottom: var(--desp, 4pt); }
 .wd-cuerpo > [data-estilo="subtitulo"] { color: #5A5A5A; letter-spacing: .75pt; }
-.wd-cuerpo > [data-estilo="cita"] { font-style: italic; color: #404040; text-align: center; margin: var(--antes, 10pt) 43pt var(--desp, 8pt); }
+.wd-cuerpo > [data-estilo="cita"] { font-style: italic; color: #404040; text-align: center; margin: var(--antes, 10pt) calc(43pt + var(--sr, 0px)) var(--desp, 8pt) calc(43pt + var(--sx, 0px)); }
 .wd-cuerpo > [data-estilo="codigo"] { font-family: "Courier New", "Liberation Mono", Cousine, monospace; font-size: 10pt; background: #F3F3F3; padding: 2pt 6pt; margin-bottom: var(--desp, 0); }
 .wd-cuerpo a { color: #0563C1; text-decoration: underline; cursor: text; }
 .wd-cuerpo sub, .wd-cuerpo sup { font-size: .7em; line-height: 0; }
@@ -1177,7 +1190,7 @@
 /* ---------------------------------------------------------------- lo que viene de Word
    Borde y fondo de párrafo: el recuadro va en las sangrías (como en Word), no de lado a lado, y el
    texto se queda donde estaba (--bext: lo que el recuadro sale hacia afuera; --bpad: su relleno). */
-.wd-cuerpo > :is([data-borde], [data-sombra]):not([data-lista]) { margin-left: calc(var(--sang, 0) * 36pt + (var(--sangiz, 0cm) + var(--francesa, 0cm)) * var(--ks, 1) - var(--bext, 0pt)); margin-right: calc(var(--sangder, 0cm) * var(--ks, 1) - var(--bext, 0pt)); padding-left: var(--bpad, 0pt); padding-right: var(--bpad, 0pt); }
+.wd-cuerpo > :is([data-borde], [data-sombra]):not([data-lista]) { margin-left: calc(var(--sx, 0px) + var(--sang, 0) * 36pt + (var(--sangiz, 0cm) + var(--francesa, 0cm)) * var(--ks, 1) - var(--bext, 0pt)); margin-right: calc(var(--sr, 0px) + var(--sangder, 0cm) * var(--ks, 1) - var(--bext, 0pt)); padding-left: var(--bpad, 0pt); padding-right: var(--bpad, 0pt); }
 .wd-cuerpo > [data-borde] { padding-top: 1pt; padding-bottom: 1pt; }
 /* Texto de derecha a izquierda */
 .wd-cuerpo > [dir="rtl"] { text-align: right; }

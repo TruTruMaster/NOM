@@ -103,16 +103,85 @@
   const EN = { SUMA: "SUM", PROMEDIO: "AVERAGE", CONTAR: "COUNT", CONTARA: "COUNTA", SI: "IF", ESERROR: "ISERROR", SIERROR: "IFERROR",
     Y: "AND", O: "OR", NO: "NOT", REDONDEAR: "ROUND", RAIZ: "SQRT", POTENCIA: "POWER", CONCATENAR: "CONCATENATE", MAYUSC: "UPPER", MINUSC: "LOWER", LARGO: "LEN",
     BUSCARV: "VLOOKUP", "CONTAR.SI": "COUNTIF", "SUMAR.SI": "SUMIF", HOY: "TODAY", FECHA: "DATE", DIAS: "DAYS", "DÍAS": "DAYS" };
-  function formulaExcel(f) {
-    let r = "", enTexto = false;
-    const s = f.replace(/^=/, "");
+  // Los errores de NOM-COLAB con el nombre que acepta Excel en un archivo (los demás Excel los da al recalcular)
+  const ERR_XL = { "#VALOR!": "#VALUE!", "#NOMBRE?": "#NAME?", "#NULO!": "#NULL!", "#DESBORDAMIENTO!": "#VALUE!", "#CALC!": "#VALUE!", "#CICLO!": "#VALUE!" };
+  // Matrices dinámicas en el archivo: la parte de metadatos de celda con el tipo XLDAPR (cm="1" en la celda)
+  const T_META = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata";
+  const CT_META = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml";
+  const META_DA = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:xda="http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray"><metadataTypes count="1"><metadataType name="XLDAPR" minSupportedVersion="120000" copy="1" pasteAll="1" pasteValues="1" merge="1" splitFirst="1" rowColShift="1" clearFormats="1" clearComments="1" assign="1" coerce="1" cellMeta="1"/></metadataTypes><futureMetadata name="XLDAPR" count="1"><bk><extLst><ext uri="{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}"><xda:dynamicArrayProperties fDynamic="1" fCollapsed="0"/></ext></extLst></bk></futureMetadata><cellMetadata count="1"><bk><rc t="1" v="0"/></bk></cellMetadata></metadata>`;
+  /** El cm (desde 1) de la matriz dinámica en la parte de metadatos de un libro, o 0 si no lo tiene. */
+  function cmDeMetadatos(txt) {
+    const tipos = [...txt.matchAll(/<(?:\w+:)?metadataType\b[^>]*?\bname="([^"]*)"/g)].map((q) => q[1]);
+    const t = tipos.indexOf("XLDAPR") + 1;
+    const fm = /<(?:\w+:)?futureMetadata\b[^>]*?\bname="XLDAPR"[^>]*>([\s\S]*?)<\/(?:\w+:)?futureMetadata>/.exec(txt);
+    const cmx = /<(?:\w+:)?cellMetadata\b[^>]*>([\s\S]*?)<\/(?:\w+:)?cellMetadata>/.exec(txt);
+    if (!t || !fm || !cmx) return 0;
+    const v = fm[1].split(/<(?:\w+:)?bk\b[^>]*>/).slice(1).findIndex((b) => /fDynamic="1"/.test(b));
+    if (v < 0) return 0;
+    const k = cmx[1].split(/<(?:\w+:)?bk\b[^>]*>/).slice(1).findIndex((b) => { const rc = /<(?:\w+:)?rc\b([^>]*)>/.exec(b); return rc && new RegExp(`\\bt="${t}"`).test(rc[1]) && new RegExp(`\\bv="${v}"`).test(rc[1]); });
+    return k < 0 ? 0 : k + 1;
+  }
+  /** Nombres de LET y parámetros de LAMBDA de una fórmula (Excel los guarda con «_xlpm.»). */
+  function nombresLambda(s) {
+    const out = new Set(), re = /(?:^|[^A-Za-z0-9_.])(LET|LAMBDA)\s*\(/gi;
+    let m;
+    while ((m = re.exec(s))) {
+      let i = m.index + m[0].length, prof = 0, ini = i, enT = false;
+      const partes = [];
+      for (; i < s.length; i++) {
+        const c = s[i];
+        if (c === '"') { enT = !enT; continue; }
+        if (enT) continue;
+        if (c === "(" || c === "{") prof++;
+        else if (c === ")" || c === "}") { if (!prof) break; prof--; }
+        else if ((c === "," || c === ";") && !prof) { partes.push(s.slice(ini, i).trim()); ini = i + 1; }
+      }
+      partes.push(s.slice(ini, i).trim());
+      const esLet = m[1].toUpperCase() === "LET";
+      partes.forEach((p, k) => { if (k === partes.length - 1 || (esLet && k % 2)) return; const q = /^\[?([A-Za-z_][A-Za-z0-9_.]*)\]?$/.exec(p); if (q) out.add(q[1].toUpperCase()); });
+    }
+    return out;
+  }
+  const RE_REF_FIN = /((?:'[^']*(?:''[^']*)*'|[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*)!)?\$?[A-Za-z]{1,3}\$?\d+$/;
+  const RE_REF_INI = /^((?:'[^']*(?:''[^']*)*'|[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*)!)?\$?[A-Za-z]{1,3}\$?\d+(?::\$?[A-Za-z]{1,3}\$?\d+)?/;
+  /** Una fórmula de NOM-COLAB (en español) como la guarda Excel. xlv: versión del importador con que llegó la hoja
+      (antes de la 5 las matrices escritas se guardaron con «;» entre columnas). */
+  function formulaExcel(f, xlv, vieja) {
+    let r = "", enTexto = false, llaves = 0;
+    const s = f.replace(/^=/, ""), viejo = +xlv > 0 && +xlv < 5;
+    const params = /LET|LAMBDA/i.test(s) ? nombresLambda(s) : null;
     for (let i = 0; i < s.length; i++) {
       const c = s[i];
       if (c === '"') { enTexto = !enTexto; r += c; continue; }
       if (enTexto) { r += c; continue; }
+      // {1,2;3,4}: la coma (o «\\») separa columnas y el punto y coma filas, igual que en Excel
+      if (!viejo && (c === "{" || c === "}")) { llaves += c === "{" ? 1 : -1; r += c; continue; }
+      if (llaves > 0) { r += c === "\\" ? "," : c; continue; }
       if (c === ";") { r += ","; continue; }
+      // [y]: parámetro de LAMBDA que se puede omitir (Excel: _xlop.y)
+      if (c === "[" && params) { const q = /^\[([A-Za-z_][A-Za-z0-9_.]*)\]/.exec(s.slice(i)); if (q && params.has(q[1].toUpperCase())) { r += "_xlop." + q[1]; i += q[0].length - 1; continue; } }
+      // A1#: Excel lo guarda como _xlfn.ANCHORARRAY(A1)
+      if (c === "#") { const q = RE_REF_FIN.exec(r); if (q && !/[A-Za-z0-9_.]/.test(r[q.index - 1] || "")) { r = r.slice(0, q.index) + "_xlfn.ANCHORARRAY(" + q[0] + ")"; continue; } }
+      // @: la intersección implícita, _xlfn.SINGLE(…)
+      if (c === "@") {
+        const resto = s.slice(i + 1), q = RE_REF_INI.exec(resto), fn = /^[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*\s*\(/.exec(resto);
+        // (en una fórmula del Excel viejo la intersección implícita no se escribe: es como se calcula ahí)
+        if (vieja) continue;
+        if (resto[0] === "(") { r += "_xlfn.SINGLE"; continue; }
+        if (q && !fn) { r += "_xlfn.SINGLE(" + q[0] + ")"; i += q[0].length; continue; }
+        if (fn) {
+          let j = fn[0].length, prof = 1, t = false;
+          for (; j < resto.length && prof; j++) { const ch = resto[j]; if (ch === '"') t = !t; else if (!t) { if (ch === "(") prof++; else if (ch === ")") prof--; } }
+          r += "_xlfn.SINGLE(" + formulaExcel("=" + resto.slice(0, j), xlv, vieja) + ")"; i += j; continue;
+        }
+      }
       const m = /^[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*(?=\s*\()/.exec(s.slice(i));
+      if (m && params && params.has(m[0].toUpperCase()) && !/[A-Za-z0-9_.$]/.test(s[i - 1] || "")) { r += "_xlpm." + m[0]; i += m[0].length - 1; continue; }
       if (m) { const n = m[0].toUpperCase(), es = (F().ALIAS || {})[n] || n; r += (F().INGLES || {})[es] || EN[n] || n; i += m[0].length - 1; continue; }
+      if (params) {
+        const q = /^[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*/.exec(s.slice(i));
+        if (q && params.has(q[0].toUpperCase()) && !/[A-Za-z0-9_.$!:'\]]/.test(s[i - 1] || "") && s[i + q[0].length] !== "!") { r += "_xlpm." + q[0]; i += q[0].length - 1; continue; }
+      }
       const b = /^(VERDADERO|FALSO)(?![A-Za-z0-9_.(])/i.exec(s.slice(i));
       if (b && !/[A-Za-z0-9_.]/.test(s[i - 1] || "")) { r += b[1].toUpperCase() === "VERDADERO" ? "TRUE" : "FALSE"; i += b[0].length - 1; continue; }
       r += c;
@@ -757,6 +826,7 @@
             if (!textual && grupo.length > 1 && huellaGrupo([p]) === hu[k][0]) { sale.push(xd.slice(u.i, u.f)); textual = true; textuales++; continue; }
             const ant = sale[sale.length - 1];
             if (unico && unico.tipo === "salto" && q > i && ant && ant.endsWith("</w:p>") && !textual) { sale[sale.length - 1] = ant.slice(0, -6) + '<w:r><w:br w:type="page"/></w:r></w:p>'; continue; }
+            if (unico && unico.tipo === "saltocol" && q > i && ant && ant.endsWith("</w:p>") && !textual) { sale[sale.length - 1] = ant.slice(0, -6) + '<w:r><w:br w:type="column"/></w:r></w:p>'; continue; }
             sale.push(gen(q, u, H(sinOx(p.pa)) === hu[k][1], q === j, grupo.length > 1)); regeneradas++;
           }
         }
@@ -931,6 +1001,7 @@
       const pa = p.pa, unico = p.tramos.length === 1 && p.tramos[0].e;
       if (unico && unico.tipo === "tabla") return tabla(unico) + (i === ps.length - 1 ? "<w:p/>" : "");
       if (unico && unico.tipo === "salto") return '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+      if (unico && unico.tipo === "saltocol") return '<w:p><w:r><w:br w:type="column"/></w:r></w:p>';
       if (unico && unico.tipo === "linea") return '<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="8E8E8E"/></w:pBdr></w:pPr></w:p>';
       if (unico && unico.tipo === "indice") {
         // Campo TOC de Word con las entradas ya escritas (Word lo puede actualizar con F9).
@@ -1465,41 +1536,212 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       return t ? t.slice(0, 4000) : null;
     }
     let temaWord = null;   // colores y letras del tema del documento (para dibujar sus gráficos)
-    /** Una forma o un cuadro de texto de Word (wps:wsp): geometría, ajustes, relleno, contorno, texto y su letra; va
-        en su lugar (desde el párrafo y la columna). Si Word la rodea arriba y abajo, su franja se aparta del texto. */
-    async function formaWord(c, w, h) {
-      const wsp = c.getElementsByTagNameNS("*", "wsp")[0];
-      if (!wsp || !w) return null;
-      const h2 = (n, nm) => [...(n ? n.children : [])].find((x) => x.localName === nm);
-      if (!temaWord) temaWord = temaDeXml(await z.texto("word/theme/theme1.xml"));
-      const col = (n) => (n ? colorConTema(n, temaWord.colores) : null);
-      const spPr = h2(wsp, "spPr"), st = h2(wsp, "style"), prstG = spPr && spPr.getElementsByTagNameNS("*", "prstGeom")[0];
+    // ---- Dibujos de Word (DrawingML): formas y cuadros de texto (wps), imágenes (pic), grupos (wpg) y lienzos (wpc),
+    // con los rellenos de Office (color con transparencia, degradado, trama, imagen), sus líneas (guiones y puntas) y
+    // sus efectos (sombra, resplandor, bordes suaves).
+    const RNS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    const h2 = (n, nm) => [...(n ? n.children : [])].find((x) => x.localName === nm);
+    const r1 = (v) => Math.round(v * 10) / 10;
+    const colW = (n) => (n ? colorConTema(n, temaWord.colores) : null);
+    /** La opacidad de un color de DrawingML (1 = opaco), de su <a:alpha>. */
+    function alfaDe(n) {
+      const cl = n && (/Clr$/.test(n.localName || "") ? n : [...n.children].find((x) => /Clr$/.test(x.localName)));
+      const a = cl && [...cl.children].find((x) => x.localName === "alpha");
+      return a ? Math.round(Math.max(0, Math.min(1, +a.getAttribute("val") / 100000)) * 1000) / 1000 : 1;
+    }
+    /** Relleno que no es un color liso: degradado (lineal o desde un punto), trama o imagen. */
+    async function pinturaWord(spPr) {
+      const gf = h2(spPr, "gradFill"), pf = h2(spPr, "pattFill"), bf = h2(spPr, "blipFill");
+      if (gf) {
+        const paradas = [...gf.getElementsByTagNameNS("*", "gs")].map((g) => [Math.round((+(g.getAttribute("pos") || 0) / 100000) * 10000) / 10000, colW(g), alfaDe(g)]).filter((q) => q[1]).sort((a, b) => a[0] - b[0]);
+        if (!paradas.length) return null;
+        const lin = h2(gf, "lin"), path = h2(gf, "path");
+        if (path) {
+          const fr = h2(path, "fillToRect"), v = (k) => (fr ? +(fr.getAttribute(k) || 0) / 100000 : 0.5);
+          return { tipo: "rad", camino: path.getAttribute("path") || "circle", paradas, cx: Math.round(((v("l") + 1 - v("r")) / 2) * 1000) / 1000, cy: Math.round(((v("t") + 1 - v("b")) / 2) * 1000) / 1000 };
+        }
+        return { tipo: "lin", paradas, ang: lin ? Math.round((+(lin.getAttribute("ang") || 0) / 60000) * 100) / 100 : 90 };
+      }
+      if (pf) return { tipo: "trama", prst: pf.getAttribute("prst") || "pct50", fg: colW(h2(pf, "fgClr")) || "#000000", bg: colW(h2(pf, "bgClr")) || "#FFFFFF", fgA: alfaDe(h2(pf, "fgClr")), bgA: alfaDe(h2(pf, "bgClr")) };
+      if (bf) {
+        const blip = h2(bf, "blip"), rid = blip && (blip.getAttributeNS(RNS, "embed") || blip.getAttribute("r:embed"));
+        const src = rid ? await imagenDe(rid) : null;
+        if (!src) return null;
+        const am = blip && [...blip.children].find((x) => x.localName === "alphaModFix"), tile = h2(bf, "tile"), sr = h2(bf, "srcRect");
+        const recorte = sr ? ["l", "t", "r", "b"].map((k) => +(sr.getAttribute(k) || 0) / 100000) : null;
+        return { tipo: "img", src, alfa: am ? +(am.getAttribute("amt") || 100000) / 100000 : undefined,
+          mosaico: tile ? { sx: +(tile.getAttribute("sx") || 100000) / 100000, sy: +(tile.getAttribute("sy") || 100000) / 100000 } : undefined,
+          recorte: recorte && recorte.some(Boolean) ? recorte : undefined };
+      }
+      return null;
+    }
+    // (grosor de las líneas del tema por índice de estilo: 0.5, 1 y 1.5 pt en el tema de Office)
+    const ANCHO_LN = [0, 0.5, 1, 1.5];
+    /** Contorno de una forma: grosor (pt), color, transparencia, guiones, terminación y puntas de flecha. */
+    function lineaDibujo(spPr, st) {
+      const ln = spPr && h2(spPr, "ln"), lr = st && h2(st, "lnRef");
+      if (ln && h2(ln, "noFill")) return { no: 1 };
+      const idx = lr ? +lr.getAttribute("idx") || 0 : 0;
+      if (!ln && !idx) return null;
+      const sf = ln && (h2(ln, "solidFill") || h2(ln, "gradFill"));
+      const fuente = sf && sf.localName === "gradFill" ? sf.getElementsByTagNameNS("*", "gs")[0] : sf;
+      const pd = ln && h2(ln, "prstDash"), cap = ln && ln.getAttribute("cap");
+      const punta = (k) => { const e = ln && h2(ln, k), t = e && e.getAttribute("type"); return t && t !== "none" ? { t, w: e.getAttribute("w") || "med", l: e.getAttribute("len") || "med" } : null; };
+      const o = { w: ln && ln.getAttribute("w") ? +ln.getAttribute("w") / 12700 : ANCHO_LN[Math.min(3, idx)] || 0.75, c: colW(fuente) || colW(lr) || "#000000" };
+      const a = fuente ? alfaDe(fuente) : 1;
+      if (a < 1) o.alfa = a;
+      if (pd && pd.getAttribute("val") && pd.getAttribute("val") !== "solid") o.guion = pd.getAttribute("val");
+      if (cap === "rnd" || cap === "sq") o.tapa = cap === "rnd" ? "round" : "square";
+      if (ln && ln.getAttribute("cmpd") && ln.getAttribute("cmpd") !== "sng") o.cmpd = ln.getAttribute("cmpd");
+      if (punta("headEnd") || punta("tailEnd")) o.puntas = { ini: punta("headEnd"), fin: punta("tailEnd") };
+      return o;
+    }
+    /** Efectos de la forma: sombra exterior, resplandor y bordes suaves (en px). */
+    function efectosWord(spPr) {
+      const el = spPr && h2(spPr, "effectLst"), o = {};
+      if (!el) return o;
+      const sh = h2(el, "outerShdw");
+      if (sh) { const d = +(sh.getAttribute("dist") || 0) / EMU, dir = ((+(sh.getAttribute("dir") || 0) / 60000) * Math.PI) / 180; o.sombra = { dx: r1(d * Math.cos(dir)), dy: r1(d * Math.sin(dir)), b: r1(+(sh.getAttribute("blurRad") || 0) / EMU), c: colW(sh) || "#000000", a: alfaDe(sh) }; }
+      const gl = h2(el, "glow");
+      if (gl) o.brillo = { r: r1(+(gl.getAttribute("rad") || 0) / EMU), c: colW(gl) || "#FFC000", a: alfaDe(gl) };
+      const se = h2(el, "softEdge");
+      if (se) o.suave = r1(+(se.getAttribute("rad") || 0) / EMU);
+      return o;
+    }
+    /** Geometría libre (custGeom) en el formato de geometrias-datos.js. */
+    function geomLibreW(spPr) {
+      const cg = spPr && h2(spPr, "custGeom");
+      if (!cg) return null;
+      const kids = (n) => [...(n ? n.children : [])];
+      const num = (v) => (v != null && v !== "" && !isNaN(+v) ? +v : v || 0);
+      const guias = (n) => kids(n).filter((g) => g.localName === "gd").map((g) => [g.getAttribute("name"), g.getAttribute("fmla") || "val 0"]);
+      const pts = (c) => [...c.getElementsByTagNameNS("*", "pt")].flatMap((q) => [num(q.getAttribute("x")), num(q.getAttribute("y"))]);
+      const def = { p: [] }, av = guias(h2(cg, "avLst")), gd = guias(h2(cg, "gdLst"));
+      if (av.length) def.av = av;
+      if (gd.length) def.gd = gd;
+      const rc = h2(cg, "rect");
+      if (rc) def.rect = ["l", "t", "r", "b"].map((k) => num(rc.getAttribute(k)));
+      kids(h2(cg, "pathLst")).filter((q) => q.localName === "path").forEach((q) => {
+        const t = { c: [] };
+        if (q.getAttribute("w")) t.w = +q.getAttribute("w");
+        if (q.getAttribute("h")) t.h = +q.getAttribute("h");
+        if (q.getAttribute("fill") && q.getAttribute("fill") !== "norm") t.f = q.getAttribute("fill");
+        if (q.getAttribute("stroke") === "0" || q.getAttribute("stroke") === "false") t.s = 0;
+        kids(q).forEach((c) => {
+          const n = c.localName;
+          if (n === "moveTo") t.c.push(["M", ...pts(c)]);
+          else if (n === "lnTo") t.c.push(["L", ...pts(c)]);
+          else if (n === "arcTo") t.c.push(["A", ...["wR", "hR", "stAng", "swAng"].map((k) => num(c.getAttribute(k)))]);
+          else if (n === "quadBezTo") t.c.push(["Q", ...pts(c)]);
+          else if (n === "cubicBezTo") t.c.push(["C", ...pts(c)]);
+          else if (n === "close") t.c.push(["Z"]);
+        });
+        if (t.c.length) def.p.push(t);
+      });
+      return def.p.length ? def : null;
+    }
+    /** Lo que se dibuja de una forma de Word (wps:wsp): geometría, relleno, contorno, efectos, texto y su letra. */
+    async function formaDeWsp(wsp) {
+      const spPr = h2(wsp, "spPr"), st = h2(wsp, "style"), prstG = spPr && h2(spPr, "prstGeom");
+      const cust = !prstG ? geomLibreW(spPr) : null;
       const prst = prstG ? prstG.getAttribute("prst") : "rect", av = {};
       if (prstG) [...prstG.getElementsByTagNameNS("*", "gd")].forEach((g) => { const m = /^val\s+(-?\d+)/.exec(g.getAttribute("fmla") || ""); if (m) av[g.getAttribute("name")] = +m[1]; });
-      let relleno = null;
-      if (spPr) { if (h2(spPr, "noFill")) relleno = "none"; else { const sf = h2(spPr, "solidFill") || h2(spPr, "gradFill"); if (sf) relleno = col(sf.getElementsByTagNameNS("*", "gs")[0] || sf); } }
-      if (relleno == null && st) { const fr = h2(st, "fillRef"); if (fr && +fr.getAttribute("idx")) relleno = col(fr); }
-      const ln = spPr && h2(spPr, "ln"), lr = st && h2(st, "lnRef");
-      let linea = null;
-      if (ln && h2(ln, "noFill")) linea = { no: 1 };
-      else if (ln || (lr && +lr.getAttribute("idx"))) linea = { w: ln && ln.getAttribute("w") ? +ln.getAttribute("w") / 12700 : 1, c: col(ln && h2(ln, "solidFill")) || col(lr) || "#000000" };
+      let relleno = null, alfa, pintura = null;
+      if (spPr) {
+        const sf = h2(spPr, "solidFill");
+        if (h2(spPr, "noFill")) relleno = "none";
+        else if (sf) { relleno = colW(sf); const a = alfaDe(sf); if (a < 1) alfa = a; }
+        else if (h2(spPr, "gradFill") || h2(spPr, "pattFill") || h2(spPr, "blipFill")) {
+          pintura = await pinturaWord(spPr);
+          if (pintura) relleno = pintura.paradas ? pintura.paradas[0][1] : pintura.fg || "#808080";
+        }
+      }
+      if (relleno == null && !pintura && st) { const fr = h2(st, "fillRef"); if (fr && +fr.getAttribute("idx")) relleno = colW(fr); }
       const tx = wsp.getElementsByTagNameNS("*", "txbxContent")[0];
       const vw = (n) => (n ? n.getAttributeNS(W, "val") || n.getAttribute("w:val") : null);
       const parrafos = tx ? [...tx.getElementsByTagNameNS(W, "p")].map((q) => ({ t: [...q.getElementsByTagNameNS(W, "t")].map((t) => t.textContent).join(""), al: vw(q.getElementsByTagNameNS(W, "jc")[0]) })) : [];
-      const r0 = tx && tx.getElementsByTagNameNS(W, "rPr")[0], sz = r0 && r0.getElementsByTagNameNS(W, "sz")[0], cr = r0 && r0.getElementsByTagNameNS(W, "color")[0], b0 = r0 && r0.getElementsByTagNameNS(W, "b")[0];
+      const rr = tx && tx.getElementsByTagNameNS(W, "rPr")[0], sz = rr && rr.getElementsByTagNameNS(W, "sz")[0], cr = rr && rr.getElementsByTagNameNS(W, "color")[0], b0 = rr && rr.getElementsByTagNameNS(W, "b")[0];
+      const rf = rr && rr.getElementsByTagNameNS(W, "rFonts")[0], fuente = rf ? rf.getAttributeNS(W, "ascii") || rf.getAttribute("w:ascii") : null;
       const fontRef = st && h2(st, "fontRef");
-      const letra = { tam: sz ? +vw(sz) / 2 : 11, c: cr && /^[0-9a-f]{6}$/i.test(vw(cr) || "") ? "#" + vw(cr).toUpperCase() : col(fontRef) || "#000000", b: !!b0 && vw(b0) !== "0" && vw(b0) !== "false" };
+      const letra = { tam: sz ? +vw(sz) / 2 : 11, c: cr && /^[0-9a-f]{6}$/i.test(vw(cr) || "") ? "#" + vw(cr).toUpperCase() : colW(fontRef) || "#000000", b: !!b0 && vw(b0) !== "0" && vw(b0) !== "false" };
+      if (fuente) letra.f = fuente;
       const bp = h2(wsp, "bodyPr");
       const ins = bp ? ["lIns", "tIns", "rIns", "bIns"].map((k, i) => (bp.getAttribute(k) != null ? +bp.getAttribute(k) / EMU : [9.6, 4.8, 9.6, 4.8][i])) : [9.6, 4.8, 9.6, 4.8];
-      // giro y volteo de la forma, y texto vertical del cuadro
-      const xf = spPr && spPr.getElementsByTagNameNS("*", "xfrm")[0];
+      const xf = spPr && h2(spPr, "xfrm");
       const giro = xf && xf.getAttribute("rot") ? +xf.getAttribute("rot") / 60000 : 0, vH = xf && xf.getAttribute("flipH") === "1", vV = xf && xf.getAttribute("flipV") === "1";
       const vert = bp && /^(vert|vert270|eaVert|wordArtVert)$/.test(bp.getAttribute("vert") || "") ? bp.getAttribute("vert") : null;
+      return Object.assign({ prst: cust ? undefined : prst, cust: cust || undefined, av: Object.keys(av).length ? av : undefined, relleno, alfa, pintura: pintura || undefined,
+        linea: lineaDibujo(spPr, st), texto: parrafos.some((q) => q.t) ? parrafos : undefined, letra, ancla: (bp && bp.getAttribute("anchor")) || "t", ins,
+        giro: giro || undefined, vH: vH || undefined, vV: vV || undefined, vert: vert || undefined }, efectosWord(spPr));
+    }
+    /** Una imagen dentro de un grupo o de un lienzo (pic:pic): su archivo, su recorte, su borde y sus efectos. */
+    async function imagenDePic(pic) {
+      const bf = h2(pic, "blipFill"), blip = bf && h2(bf, "blip"), rid = blip && (blip.getAttributeNS(RNS, "embed") || blip.getAttribute("r:embed"));
+      const src = rid ? await imagenDe(rid) : null;
+      if (!src) return null;
+      const sr = bf && h2(bf, "srcRect"), recorte = sr ? ["l", "t", "r", "b"].map((k) => +(sr.getAttribute(k) || 0) / 100000) : null;
+      const spPr = h2(pic, "spPr");
+      return Object.assign({ src, recorte: recorte && recorte.some(Boolean) ? recorte : undefined, linea: lineaDibujo(spPr, null) || undefined }, efectosWord(spPr));
+    }
+    /** Las piezas de un grupo (wpg) o de un lienzo (wpc), en px dentro de la caja de w × h. */
+    async function piezasDe(cont, w, h, esLienzo) {
+      const gx = esLienzo ? null : h2(h2(cont, "grpSpPr"), "xfrm");
+      const ch = gx && h2(gx, "chOff"), ce = gx && h2(gx, "chExt");
+      const ox = ch ? +ch.getAttribute("x") || 0 : 0, oy = ch ? +ch.getAttribute("y") || 0 : 0;
+      const sx = ce && +ce.getAttribute("cx") ? (w * EMU) / +ce.getAttribute("cx") : 1, sy = ce && +ce.getAttribute("cy") ? (h * EMU) / +ce.getAttribute("cy") : 1;
+      const piezas = [];
+      for (const el of cont.children) {
+        const nm = el.localName;
+        if (!["wsp", "pic", "grpSp", "cxnSp"].includes(nm)) continue;
+        const sp = h2(el, nm === "grpSp" ? "grpSpPr" : "spPr"), xf = sp && h2(sp, "xfrm"), off = xf && h2(xf, "off"), ex = xf && h2(xf, "ext");
+        if (!off || !ex) continue;
+        const p = { x: r1(((+off.getAttribute("x") - ox) * sx) / EMU), y: r1(((+off.getAttribute("y") - oy) * sy) / EMU), w: r1((+ex.getAttribute("cx") * sx) / EMU), h: r1((+ex.getAttribute("cy") * sy) / EMU) };
+        const giro = +(xf.getAttribute("rot") || 0) / 60000;
+        if (giro) p.giro = giro;
+        if (xf.getAttribute("flipH") === "1") p.vH = true;
+        if (xf.getAttribute("flipV") === "1") p.vV = true;
+        if (nm === "wsp" || nm === "cxnSp") { p.forma = await formaDeWsp(el); delete p.forma.giro; delete p.forma.vH; delete p.forma.vV; }
+        else if (nm === "pic") { p.img = await imagenDePic(el); if (!p.img) continue; }
+        else p.grupo = { hijos: await piezasDe(el, p.w, p.h, false) };
+        piezas.push(p);
+      }
+      return piezas;
+    }
+    /** Dónde va un dibujo anclado (wp:anchor) de Word: en su lugar, delante o detrás del texto, o «arriba y abajo». */
+    function lugarDe(c, w, h) {
       const fl = comoFlota(c, w, h), anc = c.getElementsByTagNameNS("*", "anchor")[0];
-      // una forma anclada va en su lugar; si Word le pone «arriba y abajo», su franja aparta el texto del párrafo
-      const lugar = anc ? { libre: true, x: fl.libre ? fl.x : xDeFlota(c, w), y: fl.libre ? fl.y : yDeFlota(c), detras: fl.detras, franja: fl.ajuste === "bloque" || undefined } : {};
-      return Object.assign({ forma: { prst, av: Object.keys(av).length ? av : undefined, relleno, linea, texto: parrafos.some((q) => q.t) ? parrafos : undefined, letra, ancla: (bp && bp.getAttribute("anchor")) || "t", ins,
-        giro: giro || undefined, vH: vH || undefined, vV: vV || undefined, vert: vert || undefined }, w, h }, lugar);
+      const rh = anc ? Math.max(0, Math.min(9000, Math.round((+(anc.getAttribute("relativeHeight") || 251658240) - 251658240) / 1024))) : 0;
+      return anc ? { libre: true, x: fl.libre ? fl.x : xDeFlota(c, w), y: fl.libre ? fl.y : yDeFlota(c), detras: fl.detras || anc.getAttribute("behindDoc") === "1" || undefined, franja: fl.ajuste === "bloque" || undefined, z: rh || undefined } : {};
+    }
+    /** Una forma o un cuadro de texto de Word (wps:wsp), en su lugar (desde el párrafo y la columna). Si Word la rodea
+        arriba y abajo, su franja se aparta del texto. */
+    async function formaWord(c, w, h) {
+      const wsp = c.getElementsByTagNameNS("*", "wsp")[0];
+      if (!wsp || !w) return null;
+      if (!temaWord) temaWord = temaDeXml(await z.texto("word/theme/theme1.xml"));
+      return Object.assign({ forma: await formaDeWsp(wsp), w, h }, lugarDe(c, w, h));
+    }
+    /** Un grupo de formas (wpg:wgp) o un lienzo de dibujo (wpc:wpc) de Word, con todas sus piezas, en su lugar. */
+    async function grupoWord(c, w, h) {
+      if (!w) return null;
+      if (!temaWord) temaWord = temaDeXml(await z.texto("word/theme/theme1.xml"));
+      const wgp = c.getElementsByTagNameNS("*", "wgp")[0], wpc = !wgp ? c.getElementsByTagNameNS("*", "wpc")[0] : null, cont = wgp || wpc;
+      if (!cont) return null;
+      const grupo = { hijos: await piezasDe(cont, w, h, !!wpc) };
+      if (wgp) {
+        const xf = h2(h2(wgp, "grpSpPr"), "xfrm");
+        if (xf && +xf.getAttribute("rot")) grupo.giro = +xf.getAttribute("rot") / 60000;
+        if (xf && xf.getAttribute("flipH") === "1") grupo.vH = true;
+        if (xf && xf.getAttribute("flipV") === "1") grupo.vV = true;
+      } else {
+        // el lienzo: su fondo y su contorno
+        const bg = h2(wpc, "bg"), wh = h2(wpc, "whole");
+        const sf = bg && h2(bg, "solidFill");
+        if (sf) grupo.fondo = colW(sf);
+        const l = wh ? lineaDibujo(wh, null) : null;
+        if (l && !l.no) grupo.linea = l;
+      }
+      return Object.assign({ grupo, w, h }, lugarDe(c, w, h));
     }
     // (la posición de un ancla sin importar su ajuste, para las formas)
     function xDeFlota(c, w) { const t = comoFlota(c, w, 1, true); return t.x || 0; }
@@ -1532,7 +1774,9 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       const y = pv && pv.off != null ? (pv.rel === "page" || pv.rel === "topMargin" ? pv.off - mSu : pv.off) : 0;
       const tipo = wrap ? wrap.localName : "wrapNone";
       if (soloPosicion) return { x: Math.round(x), y: Math.round(y) };
-      if (tipo === "wrapNone") return { libre: true, x: Math.round(x), y: Math.round(y), detras: anc.getAttribute("behindDoc") === "1" || undefined };
+      // (qué va encima de qué: Word lo guarda en relativeHeight, de 1024 en 1024 desde 251658240)
+      const z = Math.max(0, Math.min(9000, Math.round((+(anc.getAttribute("relativeHeight") || 251658240) - 251658240) / 1024))) || undefined;
+      if (tipo === "wrapNone") return { libre: true, x: Math.round(x), y: Math.round(y), detras: anc.getAttribute("behindDoc") === "1" || undefined, z };
       if (tipo === "wrapTopAndBottom") return { ajuste: "bloque", alin: x + w / 2 < col * 0.4 ? (x > 4 ? undefined : "izq") : x + w / 2 > col * 0.6 ? "der" : "centro", dx: x > 4 && x + w / 2 < col * 0.4 ? Math.round(x) : undefined };
       // cuadrado, estrecho o transparente: el texto la rodea por el lado libre
       return { ajuste: x + w / 2 > col / 2 ? "der" : "izq" };
@@ -1642,9 +1886,12 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
             else if (cn === "tab") tramos.push({ x: "\t", a });
             else if (cn === "br" || cn === "cr") {
               const tipo = c.getAttributeNS(W, "type") || c.getAttribute("w:type");
-              if (tipo === "page") parrafo.salto = true; else tramos.push({ x: "\u2028", a });
+              if (tipo === "page") parrafo.salto = true; else if (tipo === "column") parrafo.saltoCol = true; else tramos.push({ x: "\u2028", a });
             } else if (cn === "drawing" || cn === "pict") {
-              const blip = c.getElementsByTagNameNS("*", "blip")[0], img = c.getElementsByTagNameNS("*", "imagedata")[0];
+              // (una forma con relleno de imagen o un grupo con una foto también traen «blip»: solo es imagen si el dibujo lo es)
+              const gd0 = c.getElementsByTagNameNS("*", "graphicData")[0], uri0 = (gd0 && gd0.getAttribute("uri")) || "";
+              const esDibujo = /wordprocessingShape|wordprocessingGroup|wordprocessingCanvas|chart|diagram/.test(uri0);
+              const blip = esDibujo ? null : c.getElementsByTagNameNS("*", "blip")[0], img = esDibujo ? null : c.getElementsByTagNameNS("*", "imagedata")[0];
               const rid = blip ? (blip.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "embed") || blip.getAttribute("r:embed")) : img && (img.getAttribute("r:id") || img.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id"));
               const src = rid ? await imagenDe(rid) : null;
               const ext = c.getElementsByTagNameNS("*", "extent")[0];
@@ -1653,11 +1900,12 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
               else {
                 // Forma, cuadro de texto, gráfico o SmartArt: aquí se ve como una marca y al exportar sale el original.
                 const g = c.getElementsByTagNameNS("*", "graphicData")[0], uri = (g && g.getAttribute("uri")) || "";
-                const que = /chart/.test(uri) ? "Gráfico" : /diagram/.test(uri) ? "SmartArt" : c.getElementsByTagNameNS("*", "txbxContent")[0] ? "Cuadro de texto" : /picture/.test(uri) || img ? "Imagen" : "Forma";
+                const que = /chart/.test(uri) ? "Gráfico" : /diagram/.test(uri) ? "SmartArt" : /wordprocessingGroup/.test(uri) ? "Grupo" : /wordprocessingCanvas/.test(uri) ? "Lienzo" : c.getElementsByTagNameNS("*", "txbxContent")[0] ? "Cuadro de texto" : /picture/.test(uri) || img ? "Imagen" : "Forma";
                 // un gráfico se dibuja como Word (js/graficas-office.js), del tamaño que tiene en el documento;
-                // una forma o un cuadro de texto, con su geometría de Office, su relleno, su contorno y su texto
+                // una forma o un cuadro de texto, con su geometría de Office, su relleno, su contorno y su texto;
+                // un grupo o un lienzo, con todas sus piezas en su lugar
                 const gOf = /chart/.test(uri) ? await graficaWord(c) : null;
-                const fOf = !gOf && /wordprocessingShape/.test(uri) ? await formaWord(c, w, h) : null;
+                const fOf = !gOf && /wordprocessingShape/.test(uri) ? await formaWord(c, w, h) : !gOf && /wordprocessingGroup|wordprocessingCanvas/.test(uri) ? await grupoWord(c, w, h) : null;
                 tramos.push({ e: Object.assign({ tipo: "objeto", que, oe: ordinal(c), txt: (await textoObjeto(c)) || undefined }, gOf || {}, fOf || {}), a: {} }); aproximado = true;
               }
             } else if (cn === "AlternateContent" || cn === "object") {
@@ -1666,7 +1914,9 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
               // una forma o un cuadro de texto de Word 2010 en adelante: su dibujo va en el Choice (el Fallback es VML)
               const dibAC = !gOf && cn === "AlternateContent" ? c.getElementsByTagNameNS("*", "drawing")[0] : null;
               const extAC = dibAC && dibAC.getElementsByTagNameNS("*", "extent")[0];
-              const fOf = dibAC && dibAC.getElementsByTagNameNS("*", "wsp")[0] && extAC ? await formaWord(dibAC, Math.round(+extAC.getAttribute("cx") / EMU), Math.round(+extAC.getAttribute("cy") / EMU)) : null;
+              const gdAC = dibAC && dibAC.getElementsByTagNameNS("*", "graphicData")[0], uriAC = (gdAC && gdAC.getAttribute("uri")) || "";
+              const wAC = extAC ? Math.round(+extAC.getAttribute("cx") / EMU) : 0, hAC = extAC ? Math.round(+extAC.getAttribute("cy") / EMU) : 0;
+              const fOf = !dibAC || !extAC ? null : /wordprocessingGroup|wordprocessingCanvas/.test(uriAC) ? await grupoWord(dibAC, wAC, hAC) : dibAC.getElementsByTagNameNS("*", "wsp")[0] ? await formaWord(dibAC, wAC, hAC) : null;
               tramos.push({ e: Object.assign({ tipo: "objeto", que, oe: ordinal(c), txt: (await textoObjeto(c)) || undefined }, gOf || {}, fOf || {}), a: {} }); aproximado = true;
             } else if (cn === "footnoteReference") {
               const id = c.getAttributeNS(W, "id") || c.getAttribute("w:id");
@@ -1741,17 +1991,36 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     // ---- secciones: cada una puede traer otra hoja y otro número de columnas
     const TAMS = { carta: [816, 1056], a4: [794, 1123], oficio: [816, 1344], a5: [559, 794], media: [529, 816] };
     function datosSeccion(sect) {
-      const sz = hijo(sect, "pgSz"), co = hijo(sect, "cols"), g = (n, k) => +(at(n, k) || 0) || 0;
+      const sz = hijo(sect, "pgSz"), co = hijo(sect, "cols"), mg = hijo(sect, "pgMar"), g = (n, k) => +(at(n, k) || 0) || 0;
       const w = sz ? g(sz, "w") / TWIP : 816, h = sz ? g(sz, "h") / TWIP : 1056;
-      const n = co ? Math.max(1, +(at(co, "num") || 0) || hijos(co, "col").length || 1) : 1;
-      return { sect, w, h, hor: w > h, cols: n, tipo: val(hijo(sect, "type")) || "nextPage" };
+      const colsXml = co ? hijos(co, "col") : [];
+      const n = co ? Math.max(1, +(at(co, "num") || 0) || colsXml.length || 1) : 1;
+      // columnas: iguales (con su espacio, 720 twips si no lo dice) o cada una con su ancho y el espacio que la sigue
+      const igual = !co || at(co, "equalWidth") !== "0" || !colsXml.length;
+      const esp = co && at(co, "space") != null ? g(co, "space") / TWIP : 48;
+      const anchos = !igual ? colsXml.map((c) => [Math.round((g(c, "w") / TWIP) * 10) / 10, Math.round((g(c, "space") / TWIP) * 10) / 10]) : null;
+      // márgenes (el de encuadernación se suma a la izquierda) y alineación vertical de la página
+      const m = mg ? [Math.abs(g(mg, "top")), Math.abs(g(mg, "bottom")), g(mg, "left") + g(mg, "gutter"), g(mg, "right")].map((x) => Math.round((x / TWIP) * 10) / 10) : [96, 96, 96, 96];
+      const pn = hijo(sect, "pgNumType");
+      return { sect, w, h, hor: w > h, cols: n, tipo: val(hijo(sect, "type")) || "nextPage", m, igual, esp, anchos, sep: !!co && /^(1|true|on)$/.test(at(co, "sep") || ""),
+        va: val(hijo(sect, "vAlign")) || "top", numIni: pn && at(pn, "start") != null ? +at(pn, "start") : null, numFmt: pn ? at(pn, "fmt") || null : null };
     }
+    /** La hoja de una sección como la guarda el párrafo que la empieza (pa.sx): tamaño, márgenes, columnas, tipo de
+        salto, alineación vertical y número de página con que empieza (si Word lo reinicia). */
+    const sxDe = (s) => JSON.stringify({ w: Math.round(s.w * 10) / 10, h: Math.round(s.h * 10) / 10, m: s.m, c: s.cols, e: Math.round(s.esp * 10) / 10, a: s.anchos || undefined,
+      l: s.sep ? 1 : undefined, t: s.tipo === "continuous" ? "c" : s.tipo === "oddPage" ? "i" : s.tipo === "evenPage" ? "p" : "n", v: s.va !== "top" ? s.va : undefined, n: s.numIni != null ? s.numIni : undefined,
+      f: s.numFmt && s.numFmt !== "decimal" ? s.numFmt : undefined });
     const secciones = [];
     hijos(cuerpo).forEach((c) => {
       const sp = c.localName === "p" ? hijo(hijo(c, "pPr"), "sectPr") : c.localName === "sectPr" ? c : null;
       if (sp) secciones.push(datosSeccion(sp));
     });
     let nSec = 0, secPendiente = secciones.length && secciones[0].cols > 1 ? "c|" + secciones[0].cols + " columnas" : null;
+    // Con secciones de otra hoja, con columnas o centradas: cada sección lleva su hoja en su primer párrafo (pa.sx)
+    const geoSec = (s) => [Math.round(s.w), Math.round(s.h), s.m.join(","), s.cols, Math.round(s.esp), JSON.stringify(s.anchos), s.sep, s.va].join("|");
+    const conSecciones = secciones.length > 0 && (new Set(secciones.map(geoSec)).size > 1 || secciones.some((s) => s.cols > 1 || s.va !== "top"));
+    let sxPendiente = conSecciones ? sxDe(secciones[0]) : null, sxK = 0;
+    const paSx = [];   // [pa, índice de la sección]
     /** Marca con la que empieza una sección: "p|…" si arranca en hoja nueva, "c|…" si sigue en la misma. */
     function marcaSeccion(nueva, ant) {
       const partes = [];
@@ -1773,11 +2042,15 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
           pa.ox = ox;
           if (unidad == null) {
             if (secPendiente != null) { pa.sec = secPendiente; secPendiente = null; }
-            if (hijo(ppr, "sectPr") && secciones[nSec + 1]) { secPendiente = marcaSeccion(secciones[nSec + 1], secciones[nSec]); nSec++; }
+            if (sxPendiente != null) { pa.sx = sxPendiente; paSx.push([pa, sxK]); sxPendiente = null; }
+            if (hijo(ppr, "sectPr") && secciones[nSec + 1]) { secPendiente = marcaSeccion(secciones[nSec + 1], secciones[nSec]); if (conSecciones) { sxPendiente = sxDe(secciones[nSec + 1]); sxK = nSec + 1; } nSec++; }
           }
           await runs(c, ap.letra, tramos, info);
           if (info.salto && tramos.length) { parrafos.push({ pa, tramos }); parrafos.push({ pa: { ox }, tramos: [{ e: { tipo: "salto" } }] }); }
           else if (info.salto) parrafos.push({ pa: { ox }, tramos: [{ e: { tipo: "salto" } }] });
+          // (salto de columna de Word: lo que sigue va arriba de la columna siguiente)
+          else if (info.saltoCol && tramos.length) { parrafos.push({ pa, tramos }); parrafos.push({ pa: { ox }, tramos: [{ e: { tipo: "saltocol" } }] }); }
+          else if (info.saltoCol) parrafos.push({ pa: { ox }, tramos: [{ e: { tipo: "saltocol" } }] });
           else parrafos.push({ pa, tramos });
         } else if (c.localName === "tbl") {
           const filas = hijos(c, "tr"), celdas = {};
@@ -1856,14 +2129,14 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       const lb = pb ? ladoBorde(hijo(pb, "top")) || ladoBorde(hijo(pb, "left")) || ladoBorde(hijo(pb, "bottom")) || ladoBorde(hijo(pb, "right")) : null;
       // borde de página: grosor (pt), estilo, color y a cuántos px del canto de la hoja (o del texto) va
       if (lb) pagina.borde = { a: lb[0], e: lb[1], c: lb[2], d: Math.round((lb[3] * 96) / 72), hoja: at(pb, "offsetFrom") === "page" || undefined };
-      if (secciones.some((x) => Math.abs(x.w - sec0.w) > 8 || Math.abs(x.h - sec0.h) > 8)) avisos.push("Este documento cambia de tamaño u orientación de hoja a media obra: aquí se ve todo con la hoja del principio (al descargar en Word sale cada sección con la suya)");
-      if (secciones.some((x) => x.cols > 1)) avisos.push("Las partes en columnas se ven aquí a una sola columna, con una marca donde empiezan (al descargar en Word salen en columnas)");
+      if (!conSecciones && secciones.some((x) => Math.abs(x.w - sec0.w) > 8 || Math.abs(x.h - sec0.h) > 8)) avisos.push("Este documento cambia de tamaño u orientación de hoja a media obra: aquí se ve todo con la hoja del principio (al descargar en Word sale cada sección con la suya)");
+      if (!conSecciones && secciones.some((x) => x.cols > 1)) avisos.push("Las partes en columnas se ven aquí a una sola columna, con una marca donde empiezan (al descargar en Word salen en columnas)");
     }
     // Encabezado y pie de la primera sección: su texto (izquierda, centro y derecha van separados por
     // tabuladores) y dónde va el número de página.
     const R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-    async function zona(etiqueta) {
-      const refs = sect ? hijos(sect, etiqueta) : [];
+    async function zona(etiqueta, sectZ) {
+      const deSec = sectZ || sect, refs = deSec ? hijos(deSec, etiqueta) : [];
       const ref = refs.find((x) => (at(x, "type") || "default") === "default");
       const rid = ref && (ref.getAttributeNS(R_NS, "id") || ref.getAttribute("r:id")), destino = rid && rels[rid];
       const xml = destino ? await z.texto(rutaDe(destino)) : null;
@@ -1926,6 +2199,27 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         if (ini > 1) docCampos.numInicio = ini;
       }
       if (sect && hijo(sect, "titlePg") && activo(hijo(sect, "titlePg")) && (docCampos.encabezado || docCampos.pie || num)) docCampos.primeraDistinta = true;
+    }
+    // Con secciones: cada una con su encabezado y su pie (si no trae los suyos, los de la anterior, como Word) y dónde
+    // va su número de página
+    if (paSx.length) {
+      const porSec = [];
+      let antE = null, antP = null;
+      for (let k = 0; k < secciones.length; k++) {
+        const e = (await zona("headerReference", secciones[k].sect)) || antE, p2 = (await zona("footerReference", secciones[k].sect)) || antP;
+        porSec.push({ e, p: p2 });
+        antE = e; antP = p2;
+      }
+      paSx.forEach(([pa, k]) => {
+        const z = porSec[k];
+        if (!z) return;
+        let g;
+        try { g = JSON.parse(pa.sx); } catch (e) { return; }
+        const num = (z.p && z.p.num) || (z.e && z.e.num);
+        g.ep = { e: z.e ? z.e.texto : "", ea: z.e && z.e.alin !== "izq" ? z.e.alin : undefined, p: z.p ? z.p.texto : "", pa: z.p && z.p.alin !== "izq" ? z.p.alin : undefined,
+          np: num ? (z.p && z.p.num ? "pie-" : "enc-") + num.lado : "no", nf: num && num.fmt !== "n" ? num.fmt : undefined };
+        pa.sx = JSON.stringify(g);
+      });
     }
     if (aproximado) avisos.unshift("Las formas, los gráficos y los cuadros de texto de Word no se editan aquí: se ve su texto en un recuadro y al descargar en Word salen completos");
     while (parrafos.length > 1 && !parrafos[parrafos.length - 1].tramos.length && !Object.keys(parrafos[parrafos.length - 1].pa).length) parrafos.pop();
@@ -2096,16 +2390,31 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     }
     /** ¿El valor escrito es una fecha? (para darle formato de fecha si la celda no tiene uno). */
     const esFechaLit = (crudo) => crudo !== "" && !crudo.startsWith("=") && F().calcularLiteral(crudo.trim()) instanceof F().FechaF;
+    /** El valor calculado como lo guarda Excel: { tipo, val } (los errores con su nombre en inglés). */
+    const valorXml = (v) => (F().esNum(v) ? { tipo: "", val: `<v>${+v}</v>` } : typeof v === "boolean" ? { tipo: ' t="b"', val: `<v>${v ? 1 : 0}</v>` }
+      : v instanceof F().ErrorF ? { tipo: ' t="e"', val: `<v>${x(ERR_XL[v.codigo] || v.codigo)}</v>` } : { tipo: ' t="str"', val: `<v>${x(v)}</v>` });
+    /** El cm de las fórmulas de matriz dinámica (0: el libro no lo tiene y se guardan como fórmulas de matriz). */
+    const cmDinamica = () => { fab.usaDA = true; return fab.cmDA == null ? 1 : fab.cmDA; };
     /** XML de una celda con el valor del modelo y el estilo `sx` (ya calculado). */
     function celda(t, ev, ref, c, f, sx) {
       const crudo = t["c:" + ref] == null ? "" : String(t["c:" + ref]), s = sx ? ` s="${sx}"` : "";
       if (crudo.startsWith("=")) {
-        const v = ev.valor(c, f);
-        const val = F().esNum(v) ? `<v>${+v}</v>` : typeof v === "boolean" ? `<v>${v ? 1 : 0}</v>` : v instanceof F().ErrorF ? `<v>${x(v.codigo)}</v>` : `<v>${x(v)}</v>`;
-        const tipo = typeof v === "boolean" ? ' t="b"' : v instanceof F().ErrorF ? ' t="e"' : F().esNum(v) ? "" : ' t="str"';
-        return `<c r="${ref}"${s}${tipo}><f>${x(formulaExcel(crudo))}</f>${val}</c>`;
+        const v = ev.valor(c, f), { tipo, val } = valorXml(v), matrizD = !!(ev.esMatriz && ev.esMatriz(c, f));
+        const fx = x(formulaExcel(crudo, t.xlv, !matrizD));
+        // una fórmula de matrices (da una matriz o calcula con ellas): Excel la guarda con t="array", el lugar que
+        // derrama y cm (matriz dinámica); sin eso Excel la leería como una fórmula vieja (con intersección implícita)
+        if (matrizD) {
+          const d = ev.derrame(c, f), cm = cmDinamica();
+          const area = d && !d.bloqueado && d.filas * d.cols > 1 ? `${ref}:${F().ref(c + d.cols - 1, f + d.filas - 1)}` : ref;
+          return `<c r="${ref}"${s}${tipo}${cm ? ` cm="${cm}"` : ""}><f t="array" ref="${area}">${fx}</f>${val}</c>`;
+        }
+        return `<c r="${ref}"${s}${tipo}><f>${fx}</f>${val}</c>`;
       }
-      if (crudo === "") return `<c r="${ref}"${s}/>`;
+      if (crudo === "") {
+        // lo que derrama la fórmula de otra celda: Excel guarda ahí el valor (sin fórmula)
+        if (ev.origen && ev.origen(c, f)) { const v = ev.valor(c, f); if (v !== "" && v != null) { const { tipo, val } = valorXml(v); return `<c r="${ref}"${s}${tipo}>${val}</c>`; } }
+        return `<c r="${ref}"${s}/>`;
+      }
       if (crudo.startsWith("'")) return `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${x(crudo.slice(1))}</t></is></c>`;
       if (t["f:" + ref] === "@") return `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${x(crudo)}</t></is></c>`;
       const lit = F().calcularLiteral(crudo.trim());
@@ -2142,7 +2451,8 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     const panel = (t) => { const ff = +t.fijasF || 0, fc = +t.fijasC || 0; return ff || fc ? `<pane${fc ? ` xSplit="${fc}"` : ""}${ff ? ` ySplit="${ff}"` : ""} topLeftCell="${F().ref(fc, ff)}" activePane="${ff && fc ? "bottomRight" : ff ? "bottomLeft" : "topRight"}" state="frozen"/>` : ""; };
     /** Ancla de una gráfica en el dibujo de la hoja (con sus espacios de nombres: sirve suelta). */
     const anclaGrafica = (rid, ng, colIni, fila0) => `<xdr:twoCellAnchor xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" editAs="oneCell"><xdr:from><xdr:col>${colIni}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${fila0}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>${colIni + 8}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${fila0 + 16}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="${ng + 1000}" name="Gráfica ${ng}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" r:id="${rid}"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor>`;
-    return { fuentes, rellenos, bordes, xfs, numFmts, dxfs, estilo, estiloDesde, dxf, celda, esFechaLit, combinadas, regla, validacion, panel, anclaGrafica };
+    const fab = { fuentes, rellenos, bordes, xfs, numFmts, dxfs, estilo, estiloDesde, dxf, celda, esFechaLit, combinadas, regla, validacion, panel, anclaGrafica, usaDA: false, cmDA: null };
+    return fab;
   }
 
   /** Hoja de cálculo → .xlsx. Si el documento vino de un Excel, se parte de ese archivo (xlsxConOrigen). */
@@ -2198,16 +2508,17 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfs.length}">${xfs.join("")}</cellXfs>
 <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>${dxfs.length ? `<dxfs count="${dxfs.length}">${dxfs.join("")}</dxfs>` : ""}</styleSheet>`;
     const relsLibro = [...hojas.map((_, i) => ({ id: "rId" + (i + 1), tipo: T.hoja, destino: `worksheets/hoja${i + 1}.xml` })),
-      { id: "rIdEst", tipo: T.estilos, destino: "styles.xml" }];
+      { id: "rIdEst", tipo: T.estilos, destino: "styles.xml" }, ...(fab.usaDA ? [{ id: "rIdMeta", tipo: T_META, destino: "metadata.xml" }] : [])];
     return zip([
       { nombre: "[Content_Types].xml", datos: CT(`<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${fab.usaDA ? `<Override PartName="/xl/metadata.xml" ContentType="${CT_META}"/>` : ""}
 ${hojas.map((_, i) => `<Override PartName="/xl/worksheets/hoja${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}
 ${dibujos.map((d) => `<Override PartName="/xl/drawings/drawing${d.n}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>`).join("")}
 ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`).join("")}`) },
       { nombre: "_rels/.rels", datos: RELS([{ tipo: T.doc, destino: "xl/workbook.xml" }]) },
       { nombre: "xl/workbook.xml", datos: libro },
       { nombre: "xl/styles.xml", datos: estilos },
+      ...(fab.usaDA ? [{ nombre: "xl/metadata.xml", datos: META_DA }] : []),
       { nombre: "xl/_rels/workbook.xml.rels", datos: RELS(relsLibro) },
       ...hojas.map((h, i) => ({ nombre: `xl/worksheets/hoja${i + 1}.xml`, datos: h })),
       ...relsHojas.map((r, i) => (r ? { nombre: `xl/worksheets/_rels/hoja${i + 1}.xml.rels`, datos: RELS(r) } : null)).filter(Boolean),
@@ -2391,6 +2702,24 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       } else if (k === "fijasF" || k === "fijasC") cPane = true;
     });
     if (!celdas.size && !filasAlto.size && !colsCamb.size && !cM && !cPane && !cCf && !cDv) return null;
+    // Matrices dinámicas: si la hoja cambió, lo que derrama cada fórmula se vuelve a escribir con sus valores de hoy
+    // (y se borra lo que ya no alcanza); la fórmula, si cambió el tamaño de lo que derrama (su «ref»).
+    if (celdas.size && ev.derrame) {
+      const zona = (txt) => { const [a, b] = String(txt || "").split(":").map((q) => F().parseRef(q)); return a && b ? { c1: a.c, f1: a.f, c2: b.c, f2: b.f } : null; };
+      const anclas = new Set();
+      Object.keys(base).forEach((k) => { if (k.startsWith("fa:")) anclas.add(k.slice(3)); });
+      Object.keys(t).forEach((k) => { if (k.startsWith("c:") && String(t[k])[0] === "=") anclas.add(k.slice(2)); });
+      const marca = (r) => (celdas.get(r) || celdas.set(r, new Set()).get(r)).add("c");
+      anclas.forEach((r) => {
+        const p = F().parseRef(r);
+        if (!p) return;
+        const d = String(t["c:" + r] || "")[0] === "=" ? ev.derrame(p.c, p.f) : null;
+        const antes = zona(base["fa:" + r]), ahora = d && !d.bloqueado && d.filas * d.cols > 1 ? { c1: p.c, f1: p.f, c2: p.c + d.cols - 1, f2: p.f + d.filas - 1 } : null;
+        if (!antes && !ahora) return;
+        [antes, ahora].forEach((z) => { if (z) for (let ff = z.f1; ff <= z.f2; ff++) for (let cc = z.c1; cc <= z.c2; cc++) { const q = F().ref(cc, ff); if ((cc !== p.c || ff !== p.f) && String(t["c:" + q] || "") === "") marca(q); } });
+        if (!antes || !ahora || antes.c2 !== ahora.c2 || antes.f2 !== ahora.f2) marca(r);
+      });
+    }
     const S = seccionesHoja(xml), pf = S.pf;
     const tiene = (v) => v != null && v !== "" && v !== false;
 
@@ -2428,7 +2757,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
           const attrs = quitaAttr(xml.slice(oc.a, oc.af), "s") + (s ? ` s="${s}"` : "");
           return oc.ci === oc.f ? `<${oc.n}${attrs}/>` : `<${oc.n}${attrs}>${xml.slice(oc.ci, oc.cf)}</${oc.n}>`;
         }
-        if (crudo === "") return s ? pf(`<c r="${ref}" s="${s}"/>`) : "";
+        if (crudo === "") { const hijo = fab.celda(t, ev, ref, c, f, s); return hijo.includes("<v>") ? pf(hijo) : s ? pf(`<c r="${ref}" s="${s}"/>`) : ""; }
         return pf(fab.celda(t, ev, ref, c, f, s));
       };
       const filaNueva = (n) => {
@@ -2531,6 +2860,12 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       if (t[k] === "" || t[k] == null || t[k] === false) return;
       celdasCon.add(ref);
     });
+    // lo que derraman las fórmulas de matrices (Excel guarda esos valores en sus celdas)
+    if (ev.derrame) [...celdasCon].forEach((ref) => {
+      if (String(t["c:" + ref] || "")[0] !== "=") return;
+      const p = F().parseRef(ref), d = ev.derrame(p.c, p.f);
+      if (d && !d.bloqueado) for (let f = p.f; f < p.f + d.filas; f++) for (let c = p.c; c < p.c + d.cols; c++) celdasCon.add(F().ref(c, f));
+    });
     celdasCon.forEach((ref) => { const r = F().parseRef(ref); (porFila[r.f] = porFila[r.f] || []).push({ c: r.c, ref }); });
     Object.keys(t).forEach((k) => { if (k.startsWith("ah:") && t[k]) { const f = +k.slice(3) - 1; porFila[f] = porFila[f] || []; } });
     const filas = Object.keys(porFila).map(Number).sort((a, b) => a - b).map((f) => {
@@ -2579,6 +2914,10 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     if (!estTxt || !libroTxt) throw new Error("al archivo original le faltan partes");
     const EO = estilosOrigen(estTxt), fab = fabricaXlsx(doc, { origen: EO });
     fab.xfOrigen = (s) => EO.xfs[s] || null;
+    // matrices dinámicas: el cm que ya trae el libro; si trae metadatos sin él, se guardan como fórmulas de matriz
+    const relMeta = relsL.find((r) => /\/sheetMetadata$/.test(r.tipo || ""));
+    const metaRuta = relMeta ? pq.resolver(LIBRO, relMeta.destino) : null;
+    fab.cmDA = metaRuta && pq.tiene(metaRuta) ? cmDeMetadatos(pq.texto(metaRuta) || "") : null;
     const usados = new Set(), nombres = [];
     let cambio = false, nNueva = 0, nGraf = 0, nDib = 0;
     const tiene = (v) => v != null && v !== "" && v !== false;
@@ -2689,6 +3028,11 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       }
     }
     pq.pon(LIBRO, aplicarPiezas(libroTxt, piezasL));
+    if (fab.usaDA && fab.cmDA == null) {
+      // el libro no tenía metadatos de celda: se agrega la parte con la matriz dinámica (cm="1")
+      pq.pon("xl/metadata.xml", META_DA); pq.tipo("xl/metadata.xml", CT_META);
+      pq.agregaRel(LIBRO, "rIdNomMeta", T_META, "/xl/metadata.xml");
+    }
     if (fab.fuentes.length || fab.rellenos.length || fab.bordes.length || fab.xfs.length || fab.numFmts.length || fab.dxfs.length) pq.pon(estRuta, estilosConNuevos(estTxt, EO, fab));
     return pq.zip();
   }
@@ -2717,8 +3061,10 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
    */
   // Versiones del importador de Excel (lo que se guarda y lo que se exporta se compara con la misma versión):
   // 1 la primera · 2 formato de números y medidas de Excel · 3 tinte exacto de Excel, colores indexados, bordes
-  // con su estilo y color, y los estilos de tabla (los que Excel trae de fábrica y los del libro).
-  const VERSION_XL = 4;
+  // con su estilo y color, y los estilos de tabla (los que Excel trae de fábrica y los del libro) · 4 alineación
+  // completa, tramas, degradados y diagonales · 5 matrices dinámicas: lo derramado no se guarda como valores
+  // sueltos (fa: guarda el lugar que derramaba), {1,2;3,4} con sus separadores, A1#, «@» y LAMBDA sin «_xlpm.».
+  const VERSION_XL = 5;
   function modeloXlsx(z, version) {
     const V = version || VERSION_XL;
     const P = (t) => new DOMParser().parseFromString(t, "application/xml");
@@ -3290,6 +3636,11 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
           const d = nombresXl[n.toLowerCase()];
           return d != null ? antes + (/^[-\d.]+$/.test(d) ? d : "(" + d + ")") : todo;
         }))).join("");
+        // (versión 5) una función propia guardada como nombre (MiFuncion = LAMBDA(x, x*2)): MiFuncion(5) → (LAMBDA(…))(5)
+        if (V >= 5) r = r.split(/("(?:[^"]|"")*")/).map((parte, i) => (i % 2 ? parte : parte.replace(/(^|[^\w.!'$\]])([A-Za-z_\\][\w.]*)(?=\s*\()/g, (todo, antes, n) => {
+          const d = nombresXl[n.toLowerCase()];
+          return d != null && /^(_xlfn\.)?LAMBDA\s*\(/i.test(d) ? antes + "(" + d + ")" : todo;
+        }))).join("");
       }
       return r;
     }
@@ -3363,6 +3714,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       }
       let maxF = 0, maxC = 0;
       const compartidas = {};
+      const derramadas = new Set();   // (versión 5) celdas a las que llega lo que derrama una fórmula de matriz
       todos(doc, "row").forEach((row) => {
         const ht = +at(row, "ht");
         const rnum = +at(row, "r");
@@ -3385,8 +3737,22 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
               else if (compartidas[si]) fx = F().desplazar(compartidas[si].f, p.c - compartidas[si].c, p.f - compartidas[si].r).slice(1);
             }
             if (fx && V >= 2) fx = sinEstructuradas(fx, nombre, p.c, p.f);
-            crudo = fx ? F().aEspanol("=" + fx.replace(/_xlfn\.|_xlws\./g, "")) : "";
-          } else if (tipo === "s") crudo = textos[+(v ? v.textContent : 0)] || "";
+            // (versión 5) matrices dinámicas: A1# (ANCHORARRAY), «@» (SINGLE) y los parámetros de LAMBDA sin «_xlpm.»
+            if (fx && V >= 5) fx = fx.replace(/_xlfn\.ANCHORARRAY\(([^()]+)\)/gi, "$1#").replace(/_xlfn\.SINGLE\(/gi, "@(").replace(/_xlop\.([A-Za-z_][\w.]*)/gi, "[$1]").replace(/_xlpm\./gi, "");
+            crudo = fx ? F().aEspanol("=" + fx.replace(/_xlfn\.|_xlws\./g, ""), V >= 5) : "";
+            // (versión 5) sin t="array" es una fórmula del Excel viejo: «@» donde Excel 365 hace la intersección implícita
+            if (crudo && V >= 5 && at(f, "t") !== "array") crudo = F().conInterseccion(crudo);
+            // (versión 5) una fórmula de matriz: las demás celdas de su lugar son lo que derrama (no se guardan sueltas)
+            if (V >= 5 && at(f, "t") === "array") {
+              const [a1, b1] = String(at(f, "ref") || "").split(":").map((q) => F().parseRef(q));
+              if (a1 && b1 && (b1.c > a1.c || b1.f > a1.f)) {
+                campos["fa:" + F().ref(p.c, p.f)] = `${F().ref(a1.c, a1.f)}:${F().ref(b1.c, b1.f)}`;
+                for (let ff = a1.f; ff <= Math.min(b1.f, MAX_F - 1); ff++) for (let cc = a1.c; cc <= Math.min(b1.c, MAX_C - 1); cc++) if (ff !== p.f || cc !== p.c) derramadas.add(F().ref(cc, ff));
+                maxF = Math.max(maxF, Math.min(b1.f + 1, MAX_F)); maxC = Math.max(maxC, Math.min(b1.c + 1, MAX_C));
+              }
+            }
+          } else if (V >= 5 && derramadas.has(F().ref(p.c, p.f))) crudo = "";
+          else if (tipo === "s") crudo = textos[+(v ? v.textContent : 0)] || "";
           else if (tipo === "inlineStr") crudo = todos(c, "t").map((t) => t.textContent).join("");
           else if (tipo === "b") crudo = v && v.textContent === "1" ? "VERDADERO" : "FALSO";
           else if (tipo === "str" || tipo === "e") crudo = v ? v.textContent : "";
