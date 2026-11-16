@@ -1184,3 +1184,54 @@ equipo dio un archivo real para probar el texto: una tesis de 2005 en Word 97-20
 - **Publicada el mismo día:** commit `563fa92` en `main` (Azure desplegó bien; la Web App sigue apagada),
   Raspberry en 0.14.2 (humo 30 de 30), release v0.14.2 con la APK (el enlace de «Descarga la app» entrega
   exactamente esa APK). La app del emulador y una computadora contra la Raspberry: 15 de 15.
+
+## 64. Paridad con Office real: fuentes, Excel como Excel y PowerPoint como PowerPoint (0.15.0, 15 y 16 de noviembre de 2026)
+
+Petición: con una computadora con Windows y Office 2024 de verdad conectada a la red del equipo, analizar todo lo
+que ofrecen Word, Excel y PowerPoint, hacer los archivos más complejos posibles con todas sus herramientas y que
+NOM-COLAB (web y app) los muestre **idénticos**, sin importar la combinación. Ya no LibreOffice ni archivos raros
+de internet: Office real.
+
+- **Cómo se mide** (`4-CODIGO/docs/PARIDAD-OFFICE-REAL.md`): 28 archivos hechos por Office mismo por
+  automatización (10 Word, 8 Excel, 10 PowerPoint, `pruebas/office/windows/`), su «verdad» medida en Office (cada
+  renglón de Word con su página y posición, cada celda de Excel con su texto, color, ancho y alto, cada
+  diapositiva como imagen) y la comparación contra la app (`pruebas/office/comparar_real.py`). Office no guarda
+  desde una sesión remota, así que todo corre como tarea programada en la sesión del escritorio.
+- **Fuentes:** 32 familias con las medidas exactas de las de Office (Aptos, Aptos Narrow, Aptos Display, Calibri,
+  Cambria, Arial, Times, Georgia, Verdana, Tahoma, Consolas, Segoe UI y más) sobre dibujos libres (licencia OFL):
+  el ancho de cada letra, el alto del renglón, el subrayado, el interletraje y las ligaduras de la fuente de
+  Office; nunca su dibujo (`4-CODIGO/herramientas/fuentes/`).
+- **Word:** interlineado como lo calcula Word (múltiplo del alto natural de cada fuente), justificado que encoge
+  los espacios hasta 20 % como Word, interletraje y ligaduras solo si el documento los pide.
+- **Excel:** formato de números completo (fracciones, colores, condiciones, contabilidad), la cuadrícula con las
+  medidas de Excel (ancho de columna y alto de fila exactos, letra del libro, `####`), tablas con referencias
+  estructuradas, nombres definidos y funciones nuevas. Importador versión 3: el tinte de los colores del tema
+  como lo calcula Excel (medido: 37 de 37 colores iguales; los grises redondean), los 64 colores indexados, bordes
+  con su estilo y color (un relleno tapa la cuadrícula; un borde grueso no agranda la fila), los 60 estilos de
+  tabla y 84 de tabla dinámica que Excel trae de fábrica (`4-CODIGO/herramientas/estilos-tabla/`), botones de
+  filtro, sin cuadrícula dentro de tablas, y el **formato condicional** completo: reglas de valor, de texto y de
+  fórmula, repetidos, primeros y últimos, sobre y bajo el promedio, escalas de color (con el paso truncado de
+  Excel), barras de datos y juegos de íconos. Cada hoja guarda la versión con que se leyó, así que lo importado
+  antes se sigue comparando con su lectura al descargar.
+- **PowerPoint:** las 187 geometrías predefinidas de Office con sus ajustes y las formas libres
+  (`4-CODIGO/herramientas/geometrias/`); el texto con la herencia de PowerPoint (estilos del patrón, marcadores,
+  listas, párrafo y tramo), márgenes internos, anclaje, autoajuste y columnas; cada patrón con su tema; fondos
+  heredados (duotono, mosaico, degradados); las formas del patrón y del diseño debajo de cada diapositiva;
+  rellenos con degradado, imagen o trama (las 54 tramas de Office medidas en PowerPoint real); líneas y
+  conectores con volteos, punteado y puntas de flecha. Arreglo de paso: las imágenes de fondo de una diapositiva
+  rompían el estilo en las miniaturas, el visor y la exportación a imagen.
+- **Medidas** (antes → después): PowerPoint, parecido medio de la imagen: presentación con tema 34.8 → 96.8 %,
+  temas 85.3 → 98.8 %, formas 94.1 → 99.0 %, rellenos 86.7 → 95.2 %, imágenes 90.7 → 98.0 %. Excel: texto de
+  celdas 97 a 100 % en los ocho libros, anchos de columna 0 → 100 %, rellenos de las tablas, tablas dinámicas y
+  formato condicional 0 → 100 %. Word, renglones idénticos a los de Word: estilos y listas 64.2 → 96.6 %, revisión 11.4 → 94.3 %, referencias 56.1 → 91.2 %, párrafo 27.2 → 82.4 %, letra 63.5 → 85.4 %; las páginas coinciden en 7 de 10 (las otras tres son secciones de otro tamaño, objetos flotantes y tablas).
+- **Pruebas:** `regresion.sh rapido` con la 0.15.0: seguridad 380 de 380, límites, carga, cuentas 61 de 61, sin Internet, extremo a extremo, ayuda, red, presentaciones, diagramas, citas, datos, biblioteca y fuentes, bien; `funciones` 201 de 201 (la prueba buscaba el nombre «Times New Roman» y ahora se dibuja con «NOM TI», su misma medida: se corrigió la prueba) y `rastreo` marca las mismas acciones que ya se revisaron a mano en la 0.14.2 (un tercer nivel de submenú y la animación al cerrar la ruedita); fidelidad de Excel (abrir y descargar sin tocar) 99.8 % en 46
+  archivos, el único distinto es un archivo de LibreOffice con espacios de más en la lista de hojas.
+- **Defecto encontrado por `ediciones.py` y corregido antes de publicar:** al editar el título de una diapositiva
+  cuyo fondo viene del tema (`bgRef`), la exportación agregaba a esa diapositiva una imagen y una relación que
+  nadie usaba (el fondo heredado se armaba aunque no hubiera cambiado). Ahora el fondo solo se arma si alguien lo
+  cambió. PowerPoint editado y descargado: 78 de 78; los 206 archivos editados y descargados pasan el validador de
+  Microsoft (Open XML SDK) sin errores nuevos; humo 30 de 30.
+- **Falta (fase 22):** gráficas de Office con un solo dibujante para las tres apps (la hoja todavía no muestra las
+  gráficas, imágenes ni formas del archivo), Word con secciones de otro tamaño u orientación, columnas, objetos
+  flotantes y división automática de palabras, tramas y degradados en celdas, tablas y SmartArt de PowerPoint, la
+  vuelta en Office real y la paridad en la app de Android.

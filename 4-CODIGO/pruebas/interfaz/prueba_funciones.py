@@ -746,7 +746,8 @@ def prueba_cuentas(P, c, e, salida):
         P.abrir(d2)
         xy = P.centro("[contenteditable=true]"); p.mouse.click(xy[0], xy[1] - 10); p.keyboard.type("Texto con letra"); P.t(400)
         fuente = (estilo_de(P, "Texto con letra") or {}).get("fuente", "")
-        ok_letra = "Times" in fuente
+        # (desde la 0.15.0, Times New Roman se dibuja con «NOM TI»: la misma medida de Times New Roman sobre un dibujo libre)
+        ok_letra = "Times" in fuente or "NOM TI" in fuente
         check("letra del espacio: un texto nuevo nace en Times New Roman", ok_letra, fuente)
     else:
         check("«Letra de los textos nuevos…» abre su ventana", False, "")

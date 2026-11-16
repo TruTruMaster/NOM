@@ -628,6 +628,32 @@ tesis real de 2005 en Word 97-2003 (`Tesis.doc`, 32 MB, 46 600 palabras, 39 tabl
 - [ ] Propuesta sin decidir: abrir `.doc` (Word 97-2003) directamente, sin pasar por Word. Es otro formato
       completo (binario); calcularlo antes de prometerlo.
 
+## Fase 22. Paridad con Office real (15 y 16 de noviembre de 2026, versión 0.15.0)
+
+Pedido del equipo (15-nov): con una computadora con Windows y Office 2024 de verdad, analizar todo lo que
+ofrecen Word, Excel y PowerPoint, hacer los archivos más complejos posibles y que NOM-COLAB (web y app) los
+muestre **idénticos**. Método y medidas: `docs/PARIDAD-OFFICE-REAL.md` (28 archivos hechos por Office por
+automatización, su «verdad» medida en Office y la comparación renglón por renglón, celda por celda o imagen por
+imagen con `pruebas/office/comparar_real.py`).
+
+- [x] Herramientas: `pruebas/office/windows/` (hacer los archivos y medir la verdad en Office real),
+      `office_real.py` (mandar, correr y traer), `comparar_real.py` (Word, Excel y PowerPoint).
+- [x] Fuentes con las medidas de Office (32 familias, `herramientas/fuentes/`) e interlineado y justificado como Word.
+- [x] Excel: formato de números, cuadrícula con las medidas de Excel, tablas, nombres, funciones nuevas.
+- [x] Excel (importador versión 3): tinte exacto, colores indexados, bordes con estilo y color, estilos de tabla y
+      de tabla dinámica de fábrica (`herramientas/estilos-tabla/`), botones de filtro, formato condicional completo.
+- [x] PowerPoint: geometrías de Office (`herramientas/geometrias/`), texto con la herencia de PowerPoint, temas por
+      patrón, fondos heredados, formas del patrón y del diseño, degradados, imágenes y tramas de relleno, líneas.
+- [x] Arreglo: las imágenes de fondo de una diapositiva rompían el estilo en las miniaturas, el visor y la exportación.
+- [x] Arreglo (lo encontró `ediciones.py`): al editar una diapositiva con fondo del tema, la descarga agregaba una
+      imagen y una relación sin usar; el fondo solo se arma si cambió.
+- [ ] Gráficas de Office con un solo dibujante para Excel, Word y PowerPoint (y en la hoja: imágenes y formas).
+- [ ] Word: secciones con otro tamaño u orientación, columnas, objetos flotantes, división automática de palabras.
+- [ ] Excel: tramas y degradados en celdas, bordes diagonales, texto girado, alineación vertical, filas de alto fijo.
+- [ ] PowerPoint: tablas con su estilo, SmartArt.
+- [ ] La vuelta: lo que exporta NOM-COLAB abierto en Office real (sin reparar y con el mismo aspecto).
+- [ ] Paridad en la app de Android (emulador y A55).
+
 ## Cómo quedó (8 de noviembre de 2026)
 
 Las fases 8 y 9 están construidas en Spring, en el servidor del teléfono (`ApiTelefono`) y en la
@@ -673,6 +699,12 @@ sesión anterior: `./desplegar.sh roles` para las columnas nuevas de usuarios.
 - La copia de trabajo `~/NOM-COLAB` no se actualizó en esta sesión (es más vieja que `~/NOM`).
 
 ## Orden recomendado para la siguiente sesión
+
+**Desde el 16 de noviembre de 2026:** la 0.15.0 (fase 22, paridad con Office real) quedó publicada. Lo que sigue de
+esa fase, en este orden: gráficas de Office (un dibujante para las tres), Word (secciones, columnas, objetos
+flotantes), lo que falta de Excel y PowerPoint, la vuelta en Office real y la paridad en la app. La computadora con
+Office: `pruebas/office/office_real.py` (ver `docs/PARIDAD-OFFICE-REAL.md`, sección 1). Lo de abajo sigue vigente
+para el A55 y la fase 20.
 
 **Desde el 15 de noviembre de 2026 (noche), hasta la entrega del 20 de noviembre:** nada nuevo; solo lo que
 falta de la fase 21: (1) el A55 real (volver a vincular la depuración inalámbrica y repetir

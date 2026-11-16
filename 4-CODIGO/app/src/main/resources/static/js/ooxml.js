@@ -3432,7 +3432,9 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       const figuras = figurasL.join("\n");
       // 8.3 Fondo de la diapositiva (color, degradado o imagen), del tema o propio.
       let fondo = "";
-      if (!esDiagrama && NOM.diapo) {
+      // (al parchar una diapositiva del original, su fondo solo se escribe si alguien lo cambió: si no, ni se arma,
+      // para no sumar una imagen ni una relación que nadie usa)
+      if (!esDiagrama && NOM.diapo && !(O && O.sinFondo)) {
         const f = NOM.diapo.fondoDe(doc, p);
         let relleno = "";
         if (f && f.tipo === "color") relleno = `<a:solidFill><a:srgbClr val="${color(f.color, "FFFFFF")}"/></a:solidFill>`;
@@ -3635,7 +3637,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
           if (d) orig = orig.replace(/(<p:cNvPr\b[^>]*?)\sdescr="[^"]*"/, "$1").replace(/<p:cNvPr\b/, `<p:cNvPr descr="${d[1]}"`);
           return fig.slice(0, i0) + orig + fig.slice(i1 + nv.length + 5);
         };
-        const r = armar(p, n, Object.assign({ idBase: maxId + 1,
+        const r = armar(p, n, Object.assign({ idBase: maxId + 1, sinFondo: !cF,
           genera: (b) => !mismas && (b.ox == null || !hp.e[b.ox] || !us[b.ox] || /^(nuevo|texto)/.test(modo(b.ox))),
           hereda: (b) => (b.ox != null && hp.e[b.ox] && us[b.ox] && /^texto/.test(modo(b.ox)) ? fmts[b.ox] || {} : false) }, esc));
         if (!mismas) {

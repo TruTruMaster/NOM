@@ -108,4 +108,70 @@ detalles. Para Word y Excel las medidas son exactas: un renglón o una celda son
 
 ## 5. Avance
 
-(se llena por tanda; cada tanda con su medida antes y después)
+### Tanda 1 (15 y 16 de noviembre de 2026, versión 0.15.0)
+
+**Fuentes y párrafo (Word).** 32 familias con las medidas de las de Office (avances, alto de renglón,
+subrayado, interletraje y ligaduras) sobre dibujos libres OFL (`herramientas/fuentes/`); interlineado de
+Word (múltiplo del alto natural de cada fuente), justificado que encoge espacios hasta 20 % como Word,
+interletraje y ligaduras solo si el documento los pide.
+
+**Excel (importador versión 3).** Formato de números completo de Excel (fracciones, colores, condiciones,
+contabilidad, escalas), cuadrícula con las medidas de Excel (ancho de columna y alto de fila exactos, letra del
+libro, `####`), tablas con referencias estructuradas y nombres definidos, y funciones nuevas. El tinte de los
+colores del tema como lo calcula Excel (HLS de Windows con HLSMAX = 240: 37 de 37 colores iguales a Excel; los
+grises redondean), los 64 colores indexados, bordes con su estilo y color, los 60 estilos de tabla y 84 de
+tabla dinámica de fábrica (ECMA-376) con la precedencia de Excel, botones de filtro, y el formato condicional
+completo (reglas de valor, texto, fórmula, repetidos, primeros y últimos, promedio, escalas de color con el
+paso truncado de Excel, barras de datos y juegos de íconos). Lo importado antes conserva su versión: lo que se
+descarga se compara con la misma lectura.
+
+**PowerPoint.** Las 187 geometrías predefinidas de Office con sus ajustes y las formas libres; el texto con la
+herencia de PowerPoint (estilos del patrón, marcadores, listas, párrafo y tramo), márgenes internos, anclaje,
+autoajuste y columnas; cada patrón con su tema (colores, fuentes, líneas, rellenos de fondo) y su mapa de
+colores; fondos heredados (duotono, mosaico a la resolución de la imagen, degradados con todas sus paradas);
+las formas del patrón y del diseño debajo de la diapositiva; rellenos con degradado, imagen o trama (las 54
+tramas de Office medidas en PowerPoint real); líneas y conectores con volteos, punteado y puntas de flecha.
+
+| PowerPoint | Antes (mínimo) | Después (mínimo) |
+|---|---|---|
+| p01 texto | 96.2 % (87.8) | 97.6 % (90.2) |
+| p02 formas | 94.1 % (88.2) | 99.0 % (94.5) |
+| p03 rellenos y efectos | 86.7 % (69.4) | 95.2 % (89.8) |
+| p04 imágenes | 90.7 % (42.1) | 98.0 % (91.7) |
+| p05 tablas y gráficas | 92.1 % (80.8) | 92.1 % (80.8) |
+| p06 SmartArt | 93.3 % (85.9) | 94.0 % (86.3) |
+| p07 temas | 85.3 % (29.4) | 98.8 % (96.1) |
+| p08 animaciones | 98.5 % (97.7) | 99.5 % (98.8) |
+| p09 presentación | 34.8 % (29.3) | 96.8 % (82.3) |
+| p10 raros | 96.8 % (92.9) | 97.9 % (93.2) |
+
+| Excel | Texto de celdas | Fondos | Anchos | Altos |
+|---|---|---|---|---|
+| x01 formato | 84.9 → 97.3 % | 26.2 → 67.5 % | 0 → 100 % | 98.2 % |
+| x02 fórmulas | 78.4 → 98.3 % | 0 → 100 % | 0 → 100 % | 100 % |
+| x03 condicional | 97.5 → 100 % | 0 → 100 % | 0 → 100 % | 100 % |
+| x04 gráficas | 100 % | — | 0 → 100 % | 100 % |
+| x05 tablas dinámicas | 94.1 → 100 % | 0 → 100 % | 0 → 100 % | 100 % |
+| x06 objetos | 100 % | — | 0 → 100 % | 100 % |
+| x07 hojas | 72.7 → 100 % | — | 0 → 100 % | 100 % |
+| x08 registro | 100 % | 100 % | 0 → 100 % | 100 % |
+
+| Word | Renglones idénticos (antes → después) | Páginas Word / NOM |
+|---|---|---|
+| w01 letra | 63.5 → 85.4 % | 6 / 6 |
+| w02 párrafo | 27.2 → 82.4 % | 9 / 9 |
+| w03 estilos y listas | 64.2 → 96.6 % | 7 / 7 |
+| w04 secciones | 6.1 → 38.4 % | 9 / 8 (secciones de otro tamaño u orientación y columnas: falta) |
+| w05 tablas | 62.9 → 85.7 % | 8 / 9 |
+| w06 objetos | 23.6 → 57.4 % | 18 / 14 (objetos flotantes: falta) |
+| w07 referencias | 56.1 → 91.2 % | 6 / 6 |
+| w08 revisión | 11.4 → 94.3 % | 2 / 2 |
+| w09 informe | 58.9 → 77.3 % | 9 / 9 |
+| w10 raros | 16.0 → 18.1 % | 6 / 6 (división automática de palabras: falta) |
+
+**Lo que sigue (por impacto):** gráficas de Office (un solo dibujante para Excel, Word y PowerPoint: hoy la hoja
+no muestra las gráficas, imágenes ni formas del archivo y PowerPoint las dibuja con el estilo de NOM-COLAB);
+Word: secciones con otro tamaño u orientación, columnas, objetos flotantes (cuadros de texto, formas,
+imágenes) y la división automática de palabras; Excel: tramas y degradados en celdas, bordes diagonales, texto
+girado y alineación vertical, filas de alto fijo que recortan; PowerPoint: tablas con su estilo y SmartArt;
+la vuelta (lo exportado abierto en Office real) y la paridad en la app de Android.
