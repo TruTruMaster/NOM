@@ -1317,3 +1317,13 @@ y que se pueda encontrar en Google y los demás buscadores buscando «nomcolab»
   arregla todo: que DigitalPlat meta `qd.je` a la lista pública de sufijos. `robots.txt` y `sitemap.xml` van con
   `no-cache` (Cloudflare los guardaba 4 horas).
 
+
+## 68. Formas y cuadros de texto de Word (para la 0.15.3, 16 de noviembre de 2026)
+
+- **Formas y cuadros de texto de Word** (wps, también los que Word 2010 envuelve en `mc:AlternateContent`): su
+  geometría de Office con sus ajustes, relleno, contorno, texto con su letra y alineación, giro, volteo y texto
+  vertical, en su lugar desde el párrafo y la columna (delante o detrás del texto). Las que Word rodea «arriba y
+  abajo» apartan su franja del texto del párrafo. Documento de objetos: páginas 17 → 18 (como Word), renglones
+  idénticos 73.0 → 77.0 %, en su página 54.1 → 60.8 %.
+- **Falta:** rellenos con degradado, trama o imagen en las formas de Word, puntas y guiones de las líneas, efectos
+  (sombra, resplandor), grupos de formas y lienzos de dibujo.

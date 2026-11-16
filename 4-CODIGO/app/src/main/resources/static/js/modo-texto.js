@@ -660,6 +660,7 @@
 
       /** Lo que se dibuja dentro de los objetos (no forma parte del html del párrafo). */
       function llenarObjetos(raizEl) {
+        const franjas = new Set();   // párrafos con formas de Word «arriba y abajo»: su franja aparta el texto
         $$("[data-obj]", raizEl).forEach((o) => {
           const it = sec().item(o.dataset.id);
           if (!it || !it.e) return;
@@ -697,6 +698,26 @@
             o.classList.add("con-grafica");
             o.title = "Gráfico del archivo de Word. Aquí no se edita, pero al descargar en Word sale completo.";
           }
+          else if (e.tipo === "objeto" && e.forma && NOM.geomOffice && +e.w > 0) {
+            // forma o cuadro de texto de Word: su geometría de Office, su relleno, su contorno y su texto, en su lugar
+            const f = e.forma, w = +e.w, h = Math.max(1, +e.h || 1), k = 96 / 72;
+            const tz = NOM.geomOffice.trazos(f.prst || "rect", Math.max(0.01, w), h, f.av || null) || [];
+            const ln = f.linea && !f.linea.no ? f.linea : null, rel = f.relleno && f.relleno !== "none" ? f.relleno : null;
+            const ok = (c) => /^#[0-9A-Fa-f]{6}$/.test(c || "");
+            const svg = `<svg width="${w}" height="${h}" style="position:absolute;inset:0;overflow:visible">${tz.map((z) => `<path d="${z.d}" fill="${z.relleno === "none" || !ok(rel) ? "none" : rel}" stroke="${ln && z.contorno !== false && ok(ln.c) ? ln.c : "none"}" stroke-width="${ln ? Math.max(0.5, (+ln.w || 1) * k) : 0}"/>`).join("")}</svg>`;
+            const rt = NOM.geomOffice.rectTexto(f.prst || "rect", Math.max(0.01, w), h, f.av || null), ins = Array.isArray(f.ins) ? f.ins : [9.6, 4.8, 9.6, 4.8], le = f.letra || {};
+            const txt = Array.isArray(f.texto) ? `<span class="wd-forma-txt" style="left:${rt.l}px;top:${rt.t}px;width:${Math.max(1, rt.r - rt.l)}px;height:${Math.max(1, rt.b - rt.t)}px;padding:${+ins[1] || 0}px ${+ins[2] || 0}px ${+ins[3] || 0}px ${+ins[0] || 0}px;justify-content:${f.ancla === "ctr" ? "center" : f.ancla === "b" ? "flex-end" : "flex-start"};font-size:${+le.tam || 11}pt;color:${ok(le.c) ? le.c : "#000"};${le.b ? "font-weight:700;" : ""}">${f.texto.map((q) => `<span style="display:block;text-align:${{ center: "center", right: "right", end: "right", both: "justify" }[q.al] || "left"}">${esc(q.t) || "&nbsp;"}</span>`).join("")}</span>` : "";
+            // (girada o volteada como en Word; el texto vertical, de arriba abajo o de abajo arriba)
+            const gir = +f.giro || 0, tr = gir || f.vH || f.vV ? `transform:rotate(${gir}deg) scale(${f.vH ? -1 : 1},${f.vV ? -1 : 1});` : "";
+            const txtV = f.vert ? txt.replace('class="wd-forma-txt" style="', `class="wd-forma-txt" style="writing-mode:vertical-rl;${f.vert === "vert270" ? "transform:rotate(180deg);" : ""}`) : txt;
+            o.innerHTML = `<span class="wd-forma" style="width:${w}px;height:${h}px;${tr}">${svg}${txtV}</span>`;
+            o.classList.add("con-forma");
+            o.classList.toggle("libre", !!e.libre);
+            o.classList.toggle("detras", !!(e.libre && e.detras));
+            o.style.left = e.libre ? (+e.x || 0) + "px" : "";
+            o.style.top = e.libre ? (+e.y || 0) + "px" : "";
+            o.title = "Forma del archivo de Word. Aquí no se edita, pero al descargar en Word sale completa.";
+          }
           else if (e.tipo === "objeto") {
             // Lo que aquí no se dibuja (cuadro de texto, SmartArt, gráfico): su texto sí se lee.
             o.innerHTML = e.txt ? `<span class="wd-obj-caja"><b>${esc(e.que || "Objeto")}</b><span>${esc(e.txt)}</span></span>` : `<span>${esc(e.que || "Objeto")}</span>`;
@@ -704,8 +725,18 @@
             o.title = "Objeto del archivo de Word (cuadro de texto, forma, gráfico…). Aquí no se puede editar, pero al descargar en Word sale completo.";
           }
           else if (e.tipo === "salto") o.innerHTML = `<span>Salto de página</span>`;
+          if (e.tipo === "objeto" && e.forma && e.libre && e.franja && o.parentElement) franjas.add(o.parentElement);
           else if (e.tipo === "linea") o.innerHTML = `<hr>`;
           else if (e.tipo === "indice") pintarIndice(o);
+        });
+        franjas.forEach((p) => {
+          const fs = [...p.querySelectorAll(":scope > .wd-objeto.con-forma.libre")];
+          if (!fs.length) return;
+          const it = (o) => { const x = sec().item(o.dataset.id); return x && x.e ? x.e : null; };
+          const ys = fs.map((o) => { const e = it(o); return e ? [+e.y || 0, (+e.y || 0) + (+e.h || 0)] : [0, 0]; });
+          const y0 = Math.min(...ys.map((q) => q[0])), y1 = Math.max(...ys.map((q) => q[1]));
+          p.style.paddingTop = Math.max(0, y1 - y0) + "px";
+          fs.forEach((o) => { const e = it(o); if (e) o.style.top = (+e.y || 0) - y0 + "px"; });
         });
       }
 

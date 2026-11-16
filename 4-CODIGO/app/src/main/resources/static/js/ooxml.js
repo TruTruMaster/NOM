@@ -1465,10 +1465,49 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       return t ? t.slice(0, 4000) : null;
     }
     let temaWord = null;   // colores y letras del tema del documento (para dibujar sus gráficos)
+    /** Una forma o un cuadro de texto de Word (wps:wsp): geometría, ajustes, relleno, contorno, texto y su letra; va
+        en su lugar (desde el párrafo y la columna). Si Word la rodea arriba y abajo, su franja se aparta del texto. */
+    async function formaWord(c, w, h) {
+      const wsp = c.getElementsByTagNameNS("*", "wsp")[0];
+      if (!wsp || !w) return null;
+      const h2 = (n, nm) => [...(n ? n.children : [])].find((x) => x.localName === nm);
+      if (!temaWord) temaWord = temaDeXml(await z.texto("word/theme/theme1.xml"));
+      const col = (n) => (n ? colorConTema(n, temaWord.colores) : null);
+      const spPr = h2(wsp, "spPr"), st = h2(wsp, "style"), prstG = spPr && spPr.getElementsByTagNameNS("*", "prstGeom")[0];
+      const prst = prstG ? prstG.getAttribute("prst") : "rect", av = {};
+      if (prstG) [...prstG.getElementsByTagNameNS("*", "gd")].forEach((g) => { const m = /^val\s+(-?\d+)/.exec(g.getAttribute("fmla") || ""); if (m) av[g.getAttribute("name")] = +m[1]; });
+      let relleno = null;
+      if (spPr) { if (h2(spPr, "noFill")) relleno = "none"; else { const sf = h2(spPr, "solidFill") || h2(spPr, "gradFill"); if (sf) relleno = col(sf.getElementsByTagNameNS("*", "gs")[0] || sf); } }
+      if (relleno == null && st) { const fr = h2(st, "fillRef"); if (fr && +fr.getAttribute("idx")) relleno = col(fr); }
+      const ln = spPr && h2(spPr, "ln"), lr = st && h2(st, "lnRef");
+      let linea = null;
+      if (ln && h2(ln, "noFill")) linea = { no: 1 };
+      else if (ln || (lr && +lr.getAttribute("idx"))) linea = { w: ln && ln.getAttribute("w") ? +ln.getAttribute("w") / 12700 : 1, c: col(ln && h2(ln, "solidFill")) || col(lr) || "#000000" };
+      const tx = wsp.getElementsByTagNameNS("*", "txbxContent")[0];
+      const vw = (n) => (n ? n.getAttributeNS(W, "val") || n.getAttribute("w:val") : null);
+      const parrafos = tx ? [...tx.getElementsByTagNameNS(W, "p")].map((q) => ({ t: [...q.getElementsByTagNameNS(W, "t")].map((t) => t.textContent).join(""), al: vw(q.getElementsByTagNameNS(W, "jc")[0]) })) : [];
+      const r0 = tx && tx.getElementsByTagNameNS(W, "rPr")[0], sz = r0 && r0.getElementsByTagNameNS(W, "sz")[0], cr = r0 && r0.getElementsByTagNameNS(W, "color")[0], b0 = r0 && r0.getElementsByTagNameNS(W, "b")[0];
+      const fontRef = st && h2(st, "fontRef");
+      const letra = { tam: sz ? +vw(sz) / 2 : 11, c: cr && /^[0-9a-f]{6}$/i.test(vw(cr) || "") ? "#" + vw(cr).toUpperCase() : col(fontRef) || "#000000", b: !!b0 && vw(b0) !== "0" && vw(b0) !== "false" };
+      const bp = h2(wsp, "bodyPr");
+      const ins = bp ? ["lIns", "tIns", "rIns", "bIns"].map((k, i) => (bp.getAttribute(k) != null ? +bp.getAttribute(k) / EMU : [9.6, 4.8, 9.6, 4.8][i])) : [9.6, 4.8, 9.6, 4.8];
+      // giro y volteo de la forma, y texto vertical del cuadro
+      const xf = spPr && spPr.getElementsByTagNameNS("*", "xfrm")[0];
+      const giro = xf && xf.getAttribute("rot") ? +xf.getAttribute("rot") / 60000 : 0, vH = xf && xf.getAttribute("flipH") === "1", vV = xf && xf.getAttribute("flipV") === "1";
+      const vert = bp && /^(vert|vert270|eaVert|wordArtVert)$/.test(bp.getAttribute("vert") || "") ? bp.getAttribute("vert") : null;
+      const fl = comoFlota(c, w, h), anc = c.getElementsByTagNameNS("*", "anchor")[0];
+      // una forma anclada va en su lugar; si Word le pone «arriba y abajo», su franja aparta el texto del párrafo
+      const lugar = anc ? { libre: true, x: fl.libre ? fl.x : xDeFlota(c, w), y: fl.libre ? fl.y : yDeFlota(c), detras: fl.detras, franja: fl.ajuste === "bloque" || undefined } : {};
+      return Object.assign({ forma: { prst, av: Object.keys(av).length ? av : undefined, relleno, linea, texto: parrafos.some((q) => q.t) ? parrafos : undefined, letra, ancla: (bp && bp.getAttribute("anchor")) || "t", ins,
+        giro: giro || undefined, vH: vH || undefined, vV: vV || undefined, vert: vert || undefined }, w, h }, lugar);
+    }
+    // (la posición de un ancla sin importar su ajuste, para las formas)
+    function xDeFlota(c, w) { const t = comoFlota(c, w, 1, true); return t.x || 0; }
+    function yDeFlota(c) { const t = comoFlota(c, 1, 1, true); return t.y || 0; }
     /** Cómo va una imagen anclada de Word (wp:anchor) en la página de NOM-COLAB: sin ajuste (libre, en su lugar,
         delante o detrás del texto), cuadrado/estrecho/transparente (a la izquierda o a la derecha del texto) o arriba
         y abajo (en su propio renglón, con su alineación). Las medidas, desde el párrafo y la columna. */
-    function comoFlota(c, w, h) {
+    function comoFlota(c, w, h, soloPosicion) {
       const anc = c.getElementsByTagNameNS("*", "anchor")[0];
       if (!anc) return {};
       const hijo2 = (n, nm) => [...(n ? n.children : [])].find((x) => x.localName === nm);
@@ -1492,6 +1531,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       }
       const y = pv && pv.off != null ? (pv.rel === "page" || pv.rel === "topMargin" ? pv.off - mSu : pv.off) : 0;
       const tipo = wrap ? wrap.localName : "wrapNone";
+      if (soloPosicion) return { x: Math.round(x), y: Math.round(y) };
       if (tipo === "wrapNone") return { libre: true, x: Math.round(x), y: Math.round(y), detras: anc.getAttribute("behindDoc") === "1" || undefined };
       if (tipo === "wrapTopAndBottom") return { ajuste: "bloque", alin: x + w / 2 < col * 0.4 ? (x > 4 ? undefined : "izq") : x + w / 2 > col * 0.6 ? "der" : "centro", dx: x > 4 && x + w / 2 < col * 0.4 ? Math.round(x) : undefined };
       // cuadrado, estrecho o transparente: el texto la rodea por el lado libre
@@ -1614,14 +1654,20 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
                 // Forma, cuadro de texto, gráfico o SmartArt: aquí se ve como una marca y al exportar sale el original.
                 const g = c.getElementsByTagNameNS("*", "graphicData")[0], uri = (g && g.getAttribute("uri")) || "";
                 const que = /chart/.test(uri) ? "Gráfico" : /diagram/.test(uri) ? "SmartArt" : c.getElementsByTagNameNS("*", "txbxContent")[0] ? "Cuadro de texto" : /picture/.test(uri) || img ? "Imagen" : "Forma";
-                // un gráfico se dibuja como Word (js/graficas-office.js), del tamaño que tiene en el documento
+                // un gráfico se dibuja como Word (js/graficas-office.js), del tamaño que tiene en el documento;
+                // una forma o un cuadro de texto, con su geometría de Office, su relleno, su contorno y su texto
                 const gOf = /chart/.test(uri) ? await graficaWord(c) : null;
-                tramos.push({ e: Object.assign({ tipo: "objeto", que, oe: ordinal(c), txt: (await textoObjeto(c)) || undefined }, gOf || {}), a: {} }); aproximado = true;
+                const fOf = !gOf && /wordprocessingShape/.test(uri) ? await formaWord(c, w, h) : null;
+                tramos.push({ e: Object.assign({ tipo: "objeto", que, oe: ordinal(c), txt: (await textoObjeto(c)) || undefined }, gOf || {}, fOf || {}), a: {} }); aproximado = true;
               }
             } else if (cn === "AlternateContent" || cn === "object") {
               const que = cn === "object" ? "Objeto incrustado" : c.getElementsByTagNameNS("*", "txbxContent")[0] ? "Cuadro de texto" : /drawingml\/2006\/chart/.test(c.innerHTML || "") ? "Gráfico" : c.getElementsByTagNameNS("*", "relIds")[0] ? "SmartArt" : "Forma";
               const gOf = que === "Gráfico" ? await graficaWord(c) : null;
-              tramos.push({ e: Object.assign({ tipo: "objeto", que, oe: ordinal(c), txt: (await textoObjeto(c)) || undefined }, gOf || {}), a: {} }); aproximado = true;
+              // una forma o un cuadro de texto de Word 2010 en adelante: su dibujo va en el Choice (el Fallback es VML)
+              const dibAC = !gOf && cn === "AlternateContent" ? c.getElementsByTagNameNS("*", "drawing")[0] : null;
+              const extAC = dibAC && dibAC.getElementsByTagNameNS("*", "extent")[0];
+              const fOf = dibAC && dibAC.getElementsByTagNameNS("*", "wsp")[0] && extAC ? await formaWord(dibAC, Math.round(+extAC.getAttribute("cx") / EMU), Math.round(+extAC.getAttribute("cy") / EMU)) : null;
+              tramos.push({ e: Object.assign({ tipo: "objeto", que, oe: ordinal(c), txt: (await textoObjeto(c)) || undefined }, gOf || {}, fOf || {}), a: {} }); aproximado = true;
             } else if (cn === "footnoteReference") {
               const id = c.getAttributeNS(W, "id") || c.getAttribute("w:id");
               tramos.push({ e: { tipo: "nota", texto: notasPie[id] || "", oe: ordinal(c) }, a: {} });

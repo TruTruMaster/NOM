@@ -688,7 +688,7 @@ ${formas.join("\n")}
         if (t.e.tipo === "tabla") { ops.push({ id: "imp:b" + ref, bloque: ref, campos: Object.assign({ tipo: "tabla", enTexto: true, filasTexto: t.e.filas, colsTexto: t.e.cols }, t.e.celdas), t: 1, n: "importar" }); return { e: { tipo: "tabla", ref } }; }
         if (t.e.tipo === "nota" || t.e.tipo === "ecuacion") { ops.push({ id: "imp:b" + ref, bloque: ref, campos: Object.assign({ enTexto: true }, t.e), t: 1, n: "importar" }); return { e: { tipo: t.e.tipo, ref } }; }
         // (un gráfico de Word lleva además su modelo de Office y su tamaño, para dibujarlo como Word)
-        return { e: limpio({ tipo: t.e.tipo, oe: t.e.oe, que: t.e.que, txt: t.e.txt, g: t.e.g, w: t.e.w, h: t.e.h }) };
+        return { e: limpio({ tipo: t.e.tipo, oe: t.e.oe, que: t.e.que, txt: t.e.txt, g: t.e.g, w: t.e.w, h: t.e.h, forma: t.e.forma, libre: t.e.libre, x: t.e.x, y: t.e.y, detras: t.e.detras, franja: t.e.franja }) };
       });
       ps.push({ tramos, a: limpio(p.pa) });
     });

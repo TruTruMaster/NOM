@@ -1260,3 +1260,10 @@
 .wd-objeto.con-grafica[data-obj] > span.wd-grafica { display: inline-block; padding: 0; margin: 0; border: 0; border-radius: 0; background: none; vertical-align: bottom; line-height: 0; }
 .wd-objeto.con-grafica[data-obj] > span.wd-grafica > svg { display: block; }
 @media print { .wd-objeto.con-grafica[data-obj] { display: inline; } }
+/* Formas y cuadros de texto de Word: su geometría y su texto, en su lugar desde el párrafo (detrás o delante) */
+.wd-objeto.con-forma[data-obj] > span.wd-forma { display: inline-block; position: relative; padding: 0; margin: 0; border: 0; border-radius: 0; background: none; vertical-align: bottom; line-height: 1.15; font-weight: 400; color: #000; }
+.wd-objeto.con-forma.libre { position: absolute; z-index: 2; }
+.wd-objeto.con-forma.libre.detras { z-index: -1; }
+.wd-cuerpo > :has(.wd-objeto.con-forma.libre.detras) { z-index: 0; }
+.wd-forma-txt { position: absolute; display: flex; flex-direction: column; box-sizing: border-box; overflow: visible; white-space: pre-wrap; font-family: inherit; }
+@media print { .wd-objeto.con-forma[data-obj] { display: inline; } }
