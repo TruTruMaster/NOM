@@ -925,6 +925,13 @@
 .wd-img-pie b { font-style: normal; }
 .wd-imagen.flota-izq { float: left; margin: 2px 14px 6px 0; }
 .wd-imagen.flota-der { float: right; margin: 2px 0 6px 14px; }
+/* Word: imagen «arriba y abajo» en su propio renglón (izquierda, centro o derecha) y «detrás del texto» */
+.wd-imagen.en-renglon { display: table; margin-top: 2px; margin-bottom: 6px; }
+.wd-imagen.en-renglon[data-alin="centro"] { margin-left: auto; margin-right: auto; }
+.wd-imagen.en-renglon[data-alin="der"] { margin-left: auto; margin-right: 0; }
+/* (detrás del texto: el párrafo hace su propia capa y la imagen va al fondo de esa capa, bajo las letras) */
+.wd-cuerpo > :has(.wd-imagen.libre.detras) { z-index: 0; }
+.wd-imagen.libre.detras { z-index: -1; }
 .wd-recorte-vista { display: grid; place-items: center; padding: 10px; background: repeating-conic-gradient(#eee 0 25%, #fff 0 50%) 0 0 / 16px 16px; border-radius: var(--r-s); min-height: 120px; }
 /* 8.2 paginación: corte de párrafo entre páginas, notas al pie y ecuaciones */
 .wd-corte { display: inline-block; width: 100%; vertical-align: top; pointer-events: none; user-select: none; }

@@ -1465,6 +1465,38 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       return t ? t.slice(0, 4000) : null;
     }
     let temaWord = null;   // colores y letras del tema del documento (para dibujar sus gráficos)
+    /** Cómo va una imagen anclada de Word (wp:anchor) en la página de NOM-COLAB: sin ajuste (libre, en su lugar,
+        delante o detrás del texto), cuadrado/estrecho/transparente (a la izquierda o a la derecha del texto) o arriba
+        y abajo (en su propio renglón, con su alineación). Las medidas, desde el párrafo y la columna. */
+    function comoFlota(c, w, h) {
+      const anc = c.getElementsByTagNameNS("*", "anchor")[0];
+      if (!anc) return {};
+      const hijo2 = (n, nm) => [...(n ? n.children : [])].find((x) => x.localName === nm);
+      const wrap = [...anc.children].find((x) => /^wrap/.test(x.localName));
+      const pos = (nm) => { const e = hijo2(anc, nm); if (!e) return null; const o = hijo2(e, "posOffset"), a = hijo2(e, "align"); return { rel: e.getAttribute("relativeFrom") || "", off: o ? Math.round(+o.textContent / EMU) : null, al: a ? a.textContent.trim() : null }; };
+      const ph = pos("positionH"), pv = pos("positionV");
+      // ancho del texto (columna) y márgenes de la página (de la primera sección; en px a 96 ppp)
+      // (la primera sección: la de la lista si ya se leyó; si no, la primera «sectPr» del documento)
+      const sec = (secciones[0] && secciones[0].sect) || cuerpo.getElementsByTagNameNS(W, "sectPr")[0] || null, pgSz = sec && hijo(sec, "pgSz"), pgMar = sec && hijo(sec, "pgMar");
+      const anchoPag = pgSz ? Math.round(+(pgSz.getAttributeNS(W, "w") || pgSz.getAttribute("w:w") || 12240) / 15) : 816;
+      const mIz = pgMar ? Math.round(+(pgMar.getAttributeNS(W, "left") || pgMar.getAttribute("w:left") || 1440) / 15) : 96;
+      const mDe = pgMar ? Math.round(+(pgMar.getAttributeNS(W, "right") || pgMar.getAttribute("w:right") || 1440) / 15) : 96;
+      const mSu = pgMar ? Math.round(+(pgMar.getAttributeNS(W, "top") || pgMar.getAttribute("w:top") || 1440) / 15) : 96;
+      const col = anchoPag - mIz - mDe;
+      // posición horizontal dentro de la columna
+      let x = 0;
+      if (ph) {
+        if (ph.off != null) x = ph.rel === "page" ? ph.off - mIz : ph.off;
+        else if (ph.al === "right" || ph.al === "outside") x = ph.rel === "page" ? anchoPag - mIz - w : col - w;
+        else if (ph.al === "center") x = (ph.rel === "page" ? anchoPag : col) / 2 - w / 2 - (ph.rel === "page" ? mIz : 0);
+      }
+      const y = pv && pv.off != null ? (pv.rel === "page" || pv.rel === "topMargin" ? pv.off - mSu : pv.off) : 0;
+      const tipo = wrap ? wrap.localName : "wrapNone";
+      if (tipo === "wrapNone") return { libre: true, x: Math.round(x), y: Math.round(y), detras: anc.getAttribute("behindDoc") === "1" || undefined };
+      if (tipo === "wrapTopAndBottom") return { ajuste: "bloque", alin: x + w / 2 < col * 0.4 ? (x > 4 ? undefined : "izq") : x + w / 2 > col * 0.6 ? "der" : "centro", dx: x > 4 && x + w / 2 < col * 0.4 ? Math.round(x) : undefined };
+      // cuadrado, estrecho o transparente: el texto la rodea por el lado libre
+      return { ajuste: x + w / 2 > col / 2 ? "der" : "izq" };
+    }
     /** El gráfico de un dibujo de Word (también dentro de mc:AlternateContent): su modelo de Office y su tamaño. */
     async function graficaWord(c) {
       if (!NOM.graficaOffice) return null;
@@ -1577,7 +1609,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
               const src = rid ? await imagenDe(rid) : null;
               const ext = c.getElementsByTagNameNS("*", "extent")[0];
               const w = ext ? Math.round(+ext.getAttribute("cx") / EMU) : 320, h = ext ? Math.round(+ext.getAttribute("cy") / EMU) : 0;
-              if (src) tramos.push({ e: { tipo: "imagen", src, w, h, oe: ordinal(c) }, a: {} });
+              if (src) tramos.push({ e: Object.assign({ tipo: "imagen", src, w, h, oe: ordinal(c) }, comoFlota(c, w, h)), a: {} });
               else {
                 // Forma, cuadro de texto, gráfico o SmartArt: aquí se ve como una marca y al exportar sale el original.
                 const g = c.getElementsByTagNameNS("*", "graphicData")[0], uri = (g && g.getAttribute("uri")) || "";

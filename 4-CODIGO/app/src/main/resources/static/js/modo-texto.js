@@ -673,6 +673,12 @@
             if (bl && (bl.recorte || +bl.rot)) acomodarImagen($(".wd-img-caja", o), +w, bl.recorte, +bl.rot || 0);
             o.classList.toggle("flota-izq", !!(bl && bl.ajuste === "izq" && !bl.libre));
             o.classList.toggle("flota-der", !!(bl && bl.ajuste === "der" && !bl.libre));
+            // Word: «arriba y abajo» (en su propio renglón, con su alineación) y «detrás del texto»
+            const bloque = !!(bl && bl.ajuste === "bloque" && !bl.libre);
+            o.classList.toggle("en-renglon", bloque);
+            o.dataset.alin = bloque ? bl.alin || "" : "";
+            o.style.marginLeft = bloque && +bl.dx ? +bl.dx + "px" : "";
+            o.classList.toggle("detras", !!(bl && bl.libre && bl.detras));
             // Imagen libre ("delante del texto"): se dibuja encima, desplazada (x, y) desde su párrafo.
             const libre = !!(bl && bl.libre);
             o.classList.toggle("libre", libre);
