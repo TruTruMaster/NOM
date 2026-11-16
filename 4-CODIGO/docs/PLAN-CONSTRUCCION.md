@@ -651,9 +651,11 @@ imagen con `pruebas/office/comparar_real.py`).
 - [x] Excel: imágenes, formas, grupos, SmartArt, conectores, controles de formulario y notas en la hoja, en su ancla.
 - [x] PowerPoint: tablas con su estilo del archivo, celdas combinadas, rellenos, bordes y márgenes.
 - [ ] Gráficas nuevas de Excel (cascada, histograma, rectángulos, proyección solar, embudo, caja y bigotes) y 3D.
-- [ ] Word: secciones con otro tamaño u orientación, columnas, objetos flotantes, división automática de palabras.
+- [x] Word: estilos de tabla, numeración «Chapter %1» con cuenta por lista, imágenes flotantes, gráficos (0.15.2).
+- [ ] Word: formas y cuadros de texto, secciones con otro tamaño u orientación, columnas, puntos guía del índice,
+      división automática de palabras.
 - [ ] Excel: tramas y degradados en celdas, bordes diagonales, texto girado, alineación vertical, filas de alto fijo.
-- [ ] PowerPoint: SmartArt sin dibujo guardado. Word: estilos de tabla, numeración «Chapter %1», puntos guía del índice.
+- [ ] PowerPoint: SmartArt sin dibujo guardado.
 - [ ] La vuelta: lo que exporta NOM-COLAB abierto en Office real (sin reparar y con el mismo aspecto).
 - [ ] Paridad en la app de Android (emulador y A55).
 
@@ -703,9 +705,9 @@ sesión anterior: `./desplegar.sh roles` para las columnas nuevas de usuarios.
 
 ## Orden recomendado para la siguiente sesión
 
-**Desde el 16 de noviembre de 2026:** la 0.15.0 (fase 22, paridad con Office real) quedó publicada. Lo que sigue de
-esa fase, en este orden: gráficas de Office (un dibujante para las tres), Word (secciones, columnas, objetos
-flotantes), lo que falta de Excel y PowerPoint, la vuelta en Office real y la paridad en la app. La computadora con
+**Desde el 16 de noviembre de 2026:** la 0.15.0, la 0.15.1 y la 0.15.2 (fase 22, paridad con Office real) quedaron
+publicadas. Lo que sigue de esa fase, en este orden: formas y cuadros de texto de Word, secciones y columnas de Word,
+gráficas nuevas de Excel, lo que falta de Excel y PowerPoint, la vuelta en Office real y la paridad en la app. La computadora con
 Office: `pruebas/office/office_real.py` (ver `docs/PARIDAD-OFFICE-REAL.md`, sección 1). Lo de abajo sigue vigente
 para el A55 y la fase 20.
 

@@ -1264,3 +1264,22 @@ Sigue el pedido de la entrada 64 (que todo archivo de Office se vea idéntico en
 - **Falta:** gráficas nuevas de Excel (cascada, histograma, rectángulos, proyección solar, embudo, caja y bigotes)
   y las 3D (se dibujan planas), Word con secciones, columnas, objetos flotantes, estilos de tabla, numeración
   «Chapter %1» y puntos guía del índice.
+
+## 66. Word: estilos de tabla, numeración como Word e imágenes flotantes (0.15.2, 16 de noviembre de 2026)
+
+Sigue el pedido de la entrada 64.
+
+- **Estilos de tabla de Word** (Tabla con cuadrícula 4 – Énfasis 2 y los demás, con su herencia): por capas según
+  lo que pide la tabla (`tblLook`): toda la tabla, franjas de filas y columnas, primera y última fila y columna,
+  esquinas; relleno, negrita, cursiva, color y los bordes de cada celda. Lo propio de cada celda gana.
+- **Numeración como la escribe Word:** «Chapter %1», «%1.%2», letras y romanos por nivel; el número va en el
+  renglón con la letra y el color del título; cada lista de Word lleva su cuenta aunque haya texto en medio (antes
+  todos los capítulos decían «1») y un nivel con formato «ninguno» no lleva marca (antes salía una viñeta).
+- **Imágenes flotantes de Word:** sin ajuste (en su lugar, delante o detrás del texto), cuadrado, estrecho y
+  transparente (a un lado del texto) y arriba y abajo (en su propio renglón con su alineación), desde el párrafo y
+  la columna. Documento de objetos: renglones idénticos a Word 57.4 → 73.0 %, en su página 37.8 → 54.1 %, desfase
+  vertical mediano 39.5 → 1.3 pt.
+- **Gráficos de Word** dibujados como Word (ver la entrada 65), también los que Word 2010 envuelve en
+  `mc:AlternateContent`; **PowerPoint:** los cuadros de texto con relleno y contorno propios.
+- **Falta:** las formas y los cuadros de texto de Word (siguen como recuadro con su texto), secciones de otro tamaño
+  u orientación, columnas, puntos guía del índice y la división automática de palabras.
