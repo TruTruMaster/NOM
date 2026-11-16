@@ -5248,7 +5248,37 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
           });
           if (hechas) return true;
         }
-        // ---- sin dibujo guardado: los cuadros de su lista
+        // ---- sin dibujo guardado: se acomoda con su diseño, sus colores y su estilo, como PowerPoint (js/smartart.js)
+        if (NOM.smartart && typeof document !== "undefined") {
+          try {
+            const parte = async (k) => { const rl = rels[rid(dg, k)]; const t = rl ? await z.texto(rl.destino) : null; return t ? P(t) : null; };
+            const partes = { datos: P(datos), diseno: await parte("lo"), colores: await parte("cs"), estilo: await parte("qs") };
+            const W = anchoOrig || r.w, H = altoOrig || r.h, fx = anchoOrig ? r.w / anchoOrig : 1, fy = altoOrig ? r.h / altoOrig : 1;
+            const lienzoM = document.createElement("canvas").getContext("2d"), fam = fuentesTema.menor || "Calibri";
+            const css = NOM.textoRico ? NOM.textoRico.cssFuente(fam) : fam;
+            const medir = (t, pt) => { lienzoM.font = `${pt}pt ${css}`; return lienzoM.measureText(t).width * EMU; };
+            const formas = partes.diseno ? NOM.smartart.acomodar(partes, { w: W, h: H, color: (el) => colorDeElemento(el), anchoLinea: (i) => (lineasTema[i] || [0, 0.75, 1, 1.5][i] || 1) * 12700, medir }) : null;
+            if (formas && formas.length) {
+              const nombresAv = (prst) => (((NOM.GEOMETRIAS || {})[prst] || {}).av || []).map((q) => q[0]);
+              const kPx = (pt) => Math.round(pt * (96 / 72) * kx * 100) / 100;
+              formas.forEach((f) => {
+                const prst = NOM.geomOffice && NOM.geomOffice.tiene(f.prst) ? f.prst : "rect";
+                // ajustes de la forma: los del diseño son fracciones (0.1 = 10000); los ángulos del arco, en grados
+                const av = {}, ns = nombresAv(prst);
+                Object.keys(f.adj || {}).forEach((k) => { const n = ns.length === 1 ? ns[0] : ns[+k - 1]; if (n) av[n] = f.arcoGrados ? Math.round(f.adj[k] * 60000) : Math.round(f.adj[k] * 100000); });
+                const g = geo({ x: r.x + f.x * fx, y: r.y + f.y * fy, w: f.w * fx, h: f.h * fy, rot: (f.rot || 0) * 60000 });
+                const html = f.texto ? f.texto.map((ln) => `<div style="text-align:${ln.nivel ? "left" : { l: "left", r: "right" }[f.alin] || "center"};font-size:${kPx(f.tam * (ln.nivel ? 0.8 : 1))}px;line-height:0.9${ln.nivel ? `;padding-left:${kPx(f.tam * 0.6)}px` : ""}">${ln.nivel ? "•&nbsp;" : ""}${NOM.esc(ln.t) || "&nbsp;"}</div>`).join("") : undefined;
+                agregar(Object.assign({ tipo: "forma", figura: GEO_INV[prst] || "rect", prst, av: Object.keys(av).length ? av : undefined, radio: prst === "rect" ? 0 : undefined,
+                  color: f.relleno || "#FFFFFF", relleno: f.relleno ? undefined : false, borde: f.linea && f.linea.c ? f.linea.c : undefined,
+                  bordeAncho: f.linea && f.linea.c ? Math.max(0.25, Math.round((f.linea.w / 12700) * 100) / 100) : undefined, sombra: false,
+                  tColor: f.colorTexto || undefined, texto: f.texto ? f.texto.map((x) => x.t).join("\n") : "", html,
+                  ppt: f.texto ? { ins: (f.margen || [0, 0, 0, 0]).map((v) => Math.round((v / EMU) * kx * 100) / 100), anc: { t: "t", mid: "ctr", b: "b" }[f.ancla] || "ctr", ajusta: true } : undefined }, g));
+              });
+              return true;
+            }
+          } catch (e) { if (typeof console !== "undefined") console.warn("SmartArt sin dibujo: no se pudo acomodar con su diseño", e); }
+        }
+        // ---- (último recurso) los cuadros de su lista
         const dm = P(datos), pts = {}, hijosDe = {};
         todos(dm, "pt").forEach((q) => { const tipo = at(q, "type") || "node"; if (tipo === "doc" || tipo === "node" || tipo === "asst") pts[at(q, "modelId")] = { tipo, texto: todos(h1(q, "t"), "p").map((x2) => x2.textContent.trim()).filter(Boolean).join("\n") }; });
         todos(dm, "cxn").filter((c) => (at(c, "type") || "parOf") === "parOf" && pts[at(c, "srcId")] && pts[at(c, "destId")]).sort((a, b) => +at(a, "srcOrd") - +at(b, "srcOrd"))
