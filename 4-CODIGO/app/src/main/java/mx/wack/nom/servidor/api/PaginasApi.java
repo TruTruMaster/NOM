@@ -13,6 +13,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.context.request.ServletWebRequest;
 
 import jakarta.servlet.http.HttpServletRequest;
 import mx.wack.nom.core.servicio.PaginasLimpias;
@@ -25,6 +26,10 @@ import mx.wack.nom.core.servicio.PaginasLimpias;
  * en su direccion limpia, sin diagonal final y sin index.html (/legal/terminos); las formas viejas
  * (/legal/terminos/ y /legal/terminos/index.html) redirigen a ella. Los archivos guardan enlaces
  * relativos para la app; al servirlos se cambian por direcciones completas (PaginasLimpias).
+ *
+ * Buscadores: la portada y cada pagina de ayuda y legal salen con su direccion principal, lo que
+ * muestran las redes al compartirlas y sus datos estructurados; robots.txt y sitemap.xml se arman
+ * con la direccion principal (NOM_CANONICO). Ver Buscadores.
  */
 @Controller
 public class PaginasApi {
@@ -45,6 +50,40 @@ public class PaginasApi {
         return "forward:/index.html";
     }
 
+    /** La portada (y /index.html): la pagina de la app con lo que leen los buscadores y las redes. */
+    @GetMapping({ "/", "/index.html" })
+    public ResponseEntity<String> portada(HttpServletRequest req) throws IOException {
+        String html = leer("index.html");
+        if (html == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        html = Buscadores.cabecera(html, Buscadores.base(req), "");
+        String etiqueta = "\"" + Integer.toHexString(html.hashCode()) + "\"";
+        if (new ServletWebRequest(req).checkNotModified(etiqueta)) return ResponseEntity.status(HttpStatus.NOT_MODIFIED).eTag(etiqueta).build();
+        return ResponseEntity.ok().contentType(HTML).eTag(etiqueta).cacheControl(org.springframework.http.CacheControl.noCache()).body(html);
+    }
+
+    @GetMapping(value = "/robots.txt", produces = "text/plain;charset=UTF-8")
+    @org.springframework.web.bind.annotation.ResponseBody
+    public String robots(HttpServletRequest req) {
+        return Buscadores.robots(Buscadores.base(req));
+    }
+
+    @GetMapping(value = "/sitemap.xml", produces = "application/xml;charset=UTF-8")
+    public ResponseEntity<String> sitemap(HttpServletRequest req) throws IOException {
+        String escrito = leer("sitemap.xml");
+        if (escrito == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        return ResponseEntity.ok().body(Buscadores.sitemap(escrito, Buscadores.base(req)));
+    }
+
+    /** Un archivo de static/ (o de donde digan las ubicaciones configuradas) como texto; null si no esta. */
+    private String leer(String archivo) throws IOException {
+        for (String lugar : lugares) {
+            Resource r = archivos.getResource((lugar.endsWith("/") ? lugar : lugar + "/") + archivo);
+            if (!r.isReadable()) continue;
+            try (InputStream en = r.getInputStream()) { return new String(en.readAllBytes(), StandardCharsets.UTF_8); }
+        }
+        return null;
+    }
+
     @GetMapping({ "/ayuda", "/legal", "/ayuda/{a:[a-z0-9-]+}", "/legal/{a:[a-z0-9-]+}", "/ayuda/{a:[a-z0-9-]+}/{b:[a-z0-9-]+}" })
     public ResponseEntity<String> limpia(HttpServletRequest req) throws IOException {
         String pagina = req.getRequestURI().substring(1);
@@ -53,7 +92,10 @@ public class PaginasApi {
             if (!r.isReadable()) continue;
             String html;
             try (InputStream en = r.getInputStream()) { html = new String(en.readAllBytes(), StandardCharsets.UTF_8); }
-            return ResponseEntity.ok().contentType(HTML).body(PaginasLimpias.limpiar(html, pagina));
+            html = PaginasLimpias.limpiar(html, pagina);
+            // La busqueda de la ayuda no es una pagina para los buscadores (robots.txt tampoco la deja leer).
+            if (!pagina.equals("ayuda/buscar")) html = Buscadores.cabecera(html, Buscadores.base(req), pagina);
+            return ResponseEntity.ok().contentType(HTML).body(html);
         }
         return ResponseEntity.status(HttpStatus.NOT_FOUND).contentType(HTML)
                 .body("<!doctype html><html lang=\"es\"><meta charset=\"utf-8\"><title>No existe</title><p>Esa página no existe. <a href=\"/ayuda\">Ir a la ayuda</a></p></html>");

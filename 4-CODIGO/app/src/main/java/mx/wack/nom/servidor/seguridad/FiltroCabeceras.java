@@ -45,6 +45,8 @@ public class FiltroCabeceras extends OncePerRequestFilter {
         // Fase 14: la ayuda de la Raspberry se deja encontrar en buscadores; la de Azure no (es de adorno).
         String host = req.getHeader("Host");
         if (host != null && host.toLowerCase(java.util.Locale.ROOT).contains("azurewebsites.net")) res.setHeader("X-Robots-Tag", "noindex");
+        // Las direcciones de un solo uso (unirse a un espacio, ver una proyección) no van en los buscadores.
+        else if (req.getRequestURI().startsWith("/unirse") || req.getRequestURI().startsWith("/proyectar")) res.setHeader("X-Robots-Tag", "noindex");
         if ("https".equalsIgnoreCase(req.getHeader("X-Forwarded-Proto")) || req.isSecure())
             res.setHeader("Strict-Transport-Security", "max-age=15552000");
         cadena.doFilter(req, res);

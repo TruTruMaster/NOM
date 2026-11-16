@@ -7,6 +7,9 @@ computadora de la casa y estar en internet **gratis**, sin abrir puertos del mó
 > (ver "En la Raspberry Pi", abajo). Los servicios de la laptop (`nomcolab.service`,
 > `nomcolab-tunel.service`) están apagados y deshabilitados; lo que se describe de la laptop queda
 > como la forma de montarlo en otra computadora.
+>
+> **16 de noviembre de 2026:** también el nombre corto `nom.qd.je` (Cloudflare for SaaS sobre la misma
+> zona y el mismo túnel) y lo de los buscadores: ver `docs/DOMINIO-Y-BUSCADORES.md`.
 
 | | Azure | Servidor propio (Raspberry Pi) |
 |---|---|---|

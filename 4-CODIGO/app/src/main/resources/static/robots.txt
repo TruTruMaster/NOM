@@ -1,5 +1,9 @@
+# NOM-COLAB
 User-agent: *
-Allow: /ayuda
-Allow: /legal
+Allow: /
 Disallow: /api/
+Disallow: /unirse
+Disallow: /proyectar
+Disallow: /ayuda/buscar
+
 Sitemap: https://nomcolab.dpdns.org/sitemap.xml

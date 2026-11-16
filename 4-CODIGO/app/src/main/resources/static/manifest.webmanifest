@@ -1,7 +1,9 @@
 {
   "name": "NOM-COLAB",
   "short_name": "NOM",
-  "description": "Suite colaborativa en red local",
+  "id": "./",
+  "description": "Escribe, calcula, presenta y dibuja en equipo, al mismo tiempo, con o sin Internet. Abre y guarda Word, Excel y PowerPoint.",
+  "categories": ["productivity", "education", "business"],
   "lang": "es",
   "start_url": "./",
   "display": "standalone",

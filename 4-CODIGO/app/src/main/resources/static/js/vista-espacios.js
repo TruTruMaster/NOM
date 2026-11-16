@@ -89,7 +89,7 @@
     if (NOM.anfitrion && NOM.anfitrion.esLocal && NOM.anfitrion.esLocal()) return "este teléfono (comparte sin Internet)";
     const dir = api.empaquetada ? api.servidor() : location.origin;
     const equipo = (dir.replace(/^https?:\/\//i, "").match(/^\[[^\]]*\]|^[^/:]+/) || [""])[0].toLowerCase();
-    if (/(^|\.)nomcolab\.dpdns\.org$|azurewebsites\.net$|\.ts\.net$/.test(equipo)) return "NOM-COLAB en Internet";
+    if (/(^|\.)nomcolab\.dpdns\.org$|(^|\.)nom\.qd\.je$|azurewebsites\.net$|\.ts\.net$/.test(equipo)) return "NOM-COLAB en Internet";
     if (/^(localhost|127(\.\d+){3}|\[::1\])$/.test(equipo)) return "este equipo (es el servidor)";
     return "el equipo " + equipo;
   }

@@ -12,8 +12,9 @@
   const NOM = window.NOM;
   const { esc, ico, html, $, aviso, hoja } = NOM;
   const api = () => NOM.api;
-  /** La nube de NOM-COLAB (la Raspberry): donde viven las cuentas. */
-  const NUBE = "https://nomcolab.dpdns.org";
+  /** La nube de NOM-COLAB (la Raspberry): donde viven las cuentas. Tiene dos nombres, nomcolab.dpdns.org
+   *  y nom.qd.je (el corto); la página abierta con el corto le habla a la nube con ese mismo nombre. */
+  const NUBE = /^(www\.)?nom\.qd\.je$/.test(location.hostname) ? location.origin : "https://nomcolab.dpdns.org";
   NOM.NUBE = NUBE;
   /** Alias, invitados y cuentas que llegaron con un pase: no tienen contraseña aquí. */
   NOM.sinContrasena = (u) => !!(u && (u.invitado || u.alias || u.nube || u.retirada));

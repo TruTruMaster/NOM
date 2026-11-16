@@ -11,6 +11,8 @@
 #   nomcolab-pi bitacora [servidor|tunel|vigia] [líneas]
 #   nomcolab-pi llave         muestra la llave del cifrado en reposo (guárdala FUERA de la Pi y de
 #                             la laptop de los respaldos: sin ella no se abren los datos ni los respaldos)
+#   nomcolab-pi dominio       revisa si el nombre corto (nom.qd.je) ya llega a este servidor; si sí, lo
+#                             vuelve la dirección principal para los buscadores (NOM_CANONICO)
 set -u
 VAR=/var/lib/nomcolab
 OPT=/opt/nomcolab
@@ -35,7 +37,8 @@ estado() {
   done
   if contesta 5; then echo "servidor:  contesta en http://127.0.0.1:$P"; else echo "servidor:  NO contesta en el puerto $P"; fi
   t=$(wget -q -O - -T 5 http://127.0.0.1:20242/ready 2>/dev/null | sed -n 's/.*"readyConnections":\([0-9]*\).*/\1/p')
-  echo "túnel:     ${t:-0} conexiones con Cloudflare (nomcolab.dpdns.org)"
+  echo "túnel:     ${t:-0} conexiones con Cloudflare (nomcolab.dpdns.org$(grep -q 'nom.qd.je' /etc/cloudflared/nomcolab.yml 2>/dev/null && echo ' y nom.qd.je'))"
+  echo "principal: $(sed -n 's/^export NOM_CANONICO=//p' /etc/nomcolab.conf 2>/dev/null | tail -1 | grep . || echo 'la de cada nombre (sin NOM_CANONICO)')"
   echo "jar:       $(ls -l $JAR 2>/dev/null | awk '{print $5" bytes, "$6" "$7" "$8}')"
   echo "datos:     $(du -sh $VAR/datos 2>/dev/null | cut -f1) en $VAR/datos"
   u=$(ls -1t $VAR/respaldos/datos-*.tar.gz 2>/dev/null | head -1)
@@ -75,9 +78,24 @@ case "${1:-estado}" in
     [ -r "$f" ] || { echo "llave: todavía no hay (la crea el servidor al arrancar con cifrado)"; exit 1; }
     echo "Llave del cifrado en reposo (base64). Guárdala en un lugar seguro, separada de los respaldos:"
     cat "$f" ;;
+  dominio)
+    CORTO=https://nom.qd.je
+    if wget -q -O /dev/null -T 15 "$CORTO/api/red/info" 2>/dev/null; then
+      echo "dominio: $CORTO contesta"
+      if grep -q '^export NOM_CANONICO=' /etc/nomcolab.conf 2>/dev/null; then
+        echo "dominio: ya es la dirección principal ($(sed -n 's/^export NOM_CANONICO=//p' /etc/nomcolab.conf | tail -1))"
+      else
+        printf '\n# Dirección principal para los buscadores (la puso nomcolab-pi dominio el %s).\nexport NOM_CANONICO=%s\n' "$(date +%Y-%m-%d)" "$CORTO" >> /etc/nomcolab.conf
+        s6-svc -r $RUN/nomcolab-servidor; sleep 2
+        if esperar 120; then echo "dominio: listo, $CORTO es la dirección principal"; else echo "dominio: el servidor no contesta tras el cambio (nomcolab-pi bitacora)"; exit 1; fi
+      fi
+    else
+      echo "dominio: $CORTO todavía no llega aquí (faltan pasos de docs/DOMINIO-Y-BUSCADORES.md o el DNS no se ha propagado)"
+      exit 1
+    fi ;;
   bitacora)
     s=${2:-servidor}; case "$s" in servidor|tunel|vigia) ;; *) echo "bitacora: servidor, tunel o vigia"; exit 1 ;; esac
     n=${3:-60}; case "$n" in *[!0-9]*|'') n=60 ;; esac
     tail -n "$n" /var/log/nomcolab-$s/current ;;
-  *) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+  *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac

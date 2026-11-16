@@ -46,6 +46,15 @@ ok("chat leer",r("GET",f"/api/espacios/{e}/chat",t=tk["a"])[0]==200)
 ok("descargar mis datos",r("GET","/api/cuentas/datos",t=tk["b"])[0]==200)
 ok("llave pública de pases",r("GET","/api/cuentas/pase/llave")[0]==200)
 pa=r("POST","/api/cuentas/pase",{},tk["b"]); ok(f"pase firmado ({pa[0]})",pa[0] in(200,201))
+# Lo que leen los buscadores (Buscadores.java): la dirección principal, el sitemap y los datos de la portada.
+def texto(u, h=None):
+    try:
+        with urllib.request.urlopen(urllib.request.Request(B+u,headers=dict(AG)),timeout=30) as x: return x.status,dict(x.headers),x.read().decode("utf-8","replace")
+    except urllib.error.HTTPError as e: return e.code,dict(e.headers),""
+rb=texto("/robots.txt"); ok("robots.txt con Sitemap",rb[0]==200 and "Sitemap: http" in rb[2] and "Disallow: /api/" in rb[2])
+sm=texto("/sitemap.xml"); ok("sitemap.xml con la portada y la ayuda",sm[0]==200 and "<loc>" in sm[2] and "/ayuda/" in sm[2] and sm[2].count("<loc>")>20)
+po=texto("/"); ok("portada con canonical, og:image y schema.org",po[0]==200 and 'rel="canonical"' in po[2] and 'og:image' in po[2] and '"WebSite"' in po[2])
+un=texto("/unirse?c=x"); ok("/unirse sin indexar",un[0]==200 and "noindex" in (un[1].get("X-Robots-Tag") or ""))
 ok("borrar doc a papelera",r("DELETE",f"/api/documentos/{d}",t=tk["a"])[0]==200)
 for n in ("a","b","c"):
     ok(f"borrar cuenta {n}",r("POST","/api/cuentas/eliminar",{"contrasena":CL,"confirmacion":"BORRAR"},tk[n])[0]==200)

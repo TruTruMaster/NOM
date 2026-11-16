@@ -401,7 +401,7 @@
         if (p) f.append(p);
       } else if (api.empaquetada) {
         const srv = api.servidor().replace(/^https?:\/\//, "");
-        const internet = /(^|\.)nomcolab\.dpdns\.org$|azurewebsites\.net|\.ts\.net$/.test(srv.replace(/\/.*$/, ""));
+        const internet = /(^|\.)nomcolab\.dpdns\.org$|(^|\.)nom\.qd\.je$|azurewebsites\.net|\.ts\.net$/.test(srv.replace(/\/.*$/, ""));
         // H-8: a un equipo del Wi-Fi se entra con una cuenta de ESE equipo. Se dice arriba y en grande,
         // para que nadie escriba ahí la contraseña de su cuenta de Internet.
         if (!internet && !f.querySelector("[data-aviso-wifi]")) {

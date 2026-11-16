@@ -425,10 +425,13 @@ def main():
         print("Enlaces rotos:\n  " + "\n  ".join(rotos)); sys.exit(1)
 
     escribir("ayuda/indice.json", json.dumps(indice, ensure_ascii=False, separators=(",", ":")))
-    # robots.txt y sitemap.xml (la Raspberry se deja encontrar; Azure manda noindex en sus cabeceras)
-    escribir("robots.txt", f"User-agent: *\nAllow: /ayuda\nAllow: /legal\nDisallow: /api/\nSitemap: {PUBLICO}/sitemap.xml\n")
+    # robots.txt y sitemap.xml (la Raspberry se deja encontrar; Azure manda noindex en sus cabeceras).
+    # Por la red los arma el servidor con la dirección principal (NOM_CANONICO, ver Buscadores.java);
+    # estos son los de la app y la base del sitemap. La portada va primero.
+    escribir("robots.txt", f"# NOM-COLAB\nUser-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /unirse\nDisallow: /proyectar\nDisallow: /ayuda/buscar\n\nSitemap: {PUBLICO}/sitemap.xml\n")
     hoy = datetime.date.today().isoformat()
     escribir("sitemap.xml", '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+             + f"  <url><loc>{PUBLICO}/</loc><lastmod>{hoy}</lastmod></url>\n"
              + "".join(f"  <url><loc>{PUBLICO}/{limpia(u)}</loc><lastmod>{hoy}</lastmod></url>\n" for u in sorted(set(urls)))
              + "</urlset>\n")
     escribir(".well-known/security.txt", f"# NOM-COLAB: cómo reportar una falla de seguridad (RFC 9116)\nContact: {CONTACTO['seguridad']}\n"

@@ -1283,3 +1283,28 @@ Sigue el pedido de la entrada 64.
   `mc:AlternateContent`; **PowerPoint:** los cuadros de texto con relleno y contorno propios.
 - **Falta:** las formas y los cuadros de texto de Word (siguen como recuadro con su texto), secciones de otro tamaño
   u orientación, columnas, puntos guía del índice y la división automática de palabras.
+
+## 67. El nombre corto nom.qd.je y los buscadores (16 de noviembre de 2026)
+
+Pedido: que el sitio también salga con `nom.qd.je` (más corto), con todo funcionando (cuentas, base de datos),
+y que se pueda encontrar en Google y los demás buscadores buscando «nomcolab» o «nom».
+
+- **Por qué Cloudflare no acepta nom.qd.je:** `dpdns.org` está en la lista pública de sufijos y `qd.je` no;
+  para Cloudflare es un subdominio (zona solo con Enterprise). La salida: **Cloudflare for SaaS** (gratis hasta
+  100 nombres) sobre la zona `nomcolab.dpdns.org`, con el origen de respaldo `origen.nomcolab.dpdns.org` (ya
+  creado) apuntando al mismo túnel. Los pasos del panel, el DNS de `nom.qd.je` (DigitalPlat solo delega:
+  dns.he.net con ALIAS) y la Raspberry están en `4-CODIGO/docs/DOMINIO-Y-BUSCADORES.md`.
+- **Dos nombres, una dirección principal:** sin redirección (cada nombre guarda aparte la sesión y lo de sin
+  Internet en el navegador). `NOM_CANONICO` decide la dirección que ven los buscadores; `NOM_NUBE` sigue siendo
+  `nomcolab.dpdns.org` para que los pases valgan en los APK ya instalados. `servidor-propio/pi/dominio-corto.sh`
+  (una vez, con `doas`) y `nomcolab-pi dominio` (sin contraseña) lo ponen en la Pi.
+- **Buscadores** (`Buscadores.java`): dirección principal, Open Graph, tarjeta de X, imagen para compartir
+  (`img/compartir.png`), schema.org (WebSite con «NOM», «NOMCOLAB», «NOM COLAB»; Organization; WebApplication;
+  migas en la ayuda), `robots.txt` y `sitemap.xml` armados por el servidor (con la portada), `noindex` en
+  `/unirse` y `/proyectar`, título que dice qué es, portada con texto en `index.html` que la app quita al
+  arrancar, IndexNow (`herramientas/buscadores/avisar.py`).
+- **Pruebas:** humo 34 de 34 (4 nuevas de buscadores), seguridad 318 de 318, ayuda 24 de 24; la portada se va al
+  arrancar en Chromium y Firefox, en computadora y celular, sin errores.
+- **Falta (del dueño):** la cuenta de dns.he.net, Cloudflare for SaaS en el panel, `doas sh dominio-corto.sh` en la
+  Pi, Search Console, Bing Webmaster y Yandex. El APK no se recompiló: la app sigue con `nomcolab.dpdns.org` y
+  los cambios de la página entran en el siguiente.

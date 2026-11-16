@@ -171,6 +171,9 @@
     try { await rutaInterna(); } finally { fin(); }
   }
   async function rutaInterna() {
+    // La portada que trae index.html (para buscadores y mientras carga) se va con la primera pantalla.
+    const fija = raiz.querySelector(".portada-fija");
+    if (fija) fija.remove();
     const mio = ++turno;
     const vigente = () => mio === turno;
     const montar = async (promesa) => {
@@ -197,7 +200,11 @@
       await montar(NOM.editor.abrir(raiz, decodeURIComponent(m[1]), { local: true, vigente }));
       return;
     }
-    if (!api.token() && !NOM.local.activo()) { NOM.vistaCuentas.pintar(raiz, cuentasModo ? { modo: cuentasModo } : undefined); cuentasModo = null; return; }
+    if (!api.token() && !NOM.local.activo()) {
+      // La entrada es la portada del sitio: el mismo título que index.html (es el que muestran los buscadores).
+      document.title = "NOM-COLAB: documentos, hojas y presentaciones en equipo";
+      NOM.vistaCuentas.pintar(raiz, cuentasModo ? { modo: cuentasModo } : undefined); cuentasModo = null; return;
+    }
     if (h.startsWith("#/dispositivo")) {
       const v = cascaron("dispositivo", NOM.etiquetaEquipo());
       app.fijarFab(null);
