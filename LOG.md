@@ -1350,3 +1350,30 @@ y que se pueda encontrar en Google y los demás buscadores buscando «nomcolab»
 - **Falta:** gráficas 3D, la circular separada y los estilos de gráfica 205 y 209 (86 a 88 %); matrices dinámicas,
   LET y LAMBDA en el motor de fórmulas; en las formas de Word, rellenos con degradado, trama o imagen, puntas y
   guiones de las líneas, efectos, grupos de formas y lienzos de dibujo.
+
+## 69. 0.15.4: gráficas de Office en 3D, con su estilo y su eje secundario (16 de noviembre de 2026)
+
+Sigue el pedido de la entrada 64; se midió cada una de las 37 gráficas del libro de gráficas contra la imagen que
+exporta Excel de ella (ver la entrada 68).
+
+- **Columnas 3D** como Excel con ejes en ángulo recto: el frente sin deformar, la profundidad hacia arriba a la
+  derecha (seno del giro en Y y seno del giro en X por coseno del giro en Y), cada serie en su fila, paredes con su
+  cuadrícula, las series escritas a la derecha del piso y las caras con la luz de Excel (arriba 0.76 y el lado 0.63
+  del color). 84.9 → 97.2 %.
+- **Circular 3D:** la elipse aplastada por el giro en X, la pared de enfrente con la luz de izquierda a derecha.
+  85.6 → 95.1 %. **Circular separada:** el radio se achica para que quepan las rebanadas separadas. 88.2 → 96.6 %.
+- **Estilos de gráfica:** degradados del fondo, del área de trazado y de las barras (lineales y desde un foco),
+  transparencia de los colores, rótulos en mayúsculas y los rótulos de datos dentro de la barra (antes salían
+  arriba, blancos sobre blanco). Estilos 205 y 209: 86.4 y 87.8 → 93.4 y 94.9 %.
+- **Eje secundario** (gráfica combinada): la serie va con su propia escala y sus rótulos a la derecha. 90.6 → 95.2 %.
+- **Márgenes de Office:** 11 pt a la derecha del área de trazado y medio rótulo más en las barras horizontales;
+  casi todas las columnas suben un punto. Las 37 gráficas quedan entre 92 y 98 %; PowerPoint igual o mejor (la
+  presentación de tablas y gráficas 97.5 → 97.9 %).
+- **Versión 0.15.4** (interfaz 20: las gráficas guardan su vista 3D, sus degradados y su transparencia), APK
+  código 30.
+- **Pruebas:** `regresion.sh rapido` bien (seguridad 380 de 380, cuentas 61 de 61, funciones 201 de 201; `rastreo`
+  solo con las marcas conocidas de «Pegar especial»), pantalla 32 de 32, PowerPoint de verdad igual o mejor que en
+  la 0.15.3 y Word sin cambios.
+- **Falta:** líneas de tendencia, barras de error y la tabla de datos debajo de la gráfica; matrices dinámicas,
+  LET y LAMBDA; lo de Word de la entrada 68.
+

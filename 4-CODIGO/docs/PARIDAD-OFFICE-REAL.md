@@ -244,8 +244,16 @@ texto ajustado (en x01 una fila guardada con 75 pt se ve de 45): pasó una vez e
 guardado. x02: lo que da distinto es del motor de fórmulas: matrices dinámicas (ORDENAR, FILTRAR, UNICOS,
 SECUENCIA, TOMAR, APILARV, DIVIDIRTEXTO, BYROW, MAP), LET, LAMBDA y TIR con una matriz escrita.
 
-**Lo que sigue (por impacto):** las gráficas 3D (columnas 3D 84.9 %, circular 3D 85.6 %), la circular separada
-(88.2 %) y los estilos de gráfica 205 y 209 (86 a 88 %); matrices dinámicas, LET y LAMBDA en el motor de fórmulas;
+**0.15.4, gráficas (las 37 medidas contra `Chart.Export`):** columnas 3D 84.9 → 97.2 % (proyección oblicua de
+Excel con ejes en ángulo recto: profundidad (sen rotY, sen rotX · cos rotY) por unidad, una fila por serie de un
+ancho de categoría por la profundidad, el frente de alto 0.37 veces su ancho; caras arriba 0.76 y lado 0.63 del
+color), circular 3D 85.6 → 95.1 % (elipse de 0.47 con rotX 30, pared de 0.23 del radio, 85 % del ancho), circular
+separada 88.2 → 96.6 %, estilos 205 y 209 86–88 → 93–95 % (degradados, transparencia, mayúsculas, rótulos dentro
+de la barra), combinada con eje secundario 90.6 → 95.2 %; Office deja 11 pt a la derecha del área de trazado y,
+en barras horizontales, medio rótulo más. Todas entre 92 y 98 %.
+
+**Lo que sigue (por impacto):** líneas de tendencia, barras de error y tabla de datos de las gráficas («Formato
+detallado» 93 %); matrices dinámicas, LET y LAMBDA en el motor de fórmulas;
 Word: rellenos con degradado, trama o imagen en las formas, puntas y guiones de las líneas, grupos y lienzos,
 secciones de otro tamaño u orientación, columnas, puntos guía del índice y la división automática de palabras; la
 vuelta en Office real y la paridad en la app de Android.

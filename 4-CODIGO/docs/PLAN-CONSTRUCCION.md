@@ -652,7 +652,9 @@ imagen con `pruebas/office/comparar_real.py`).
 - [x] PowerPoint: tablas con su estilo del archivo, celdas combinadas, rellenos, bordes y márgenes.
 - [x] Gráficas nuevas de Excel (cascada, histograma, Pareto, rectángulos, proyección solar, embudo, caja y bigotes)
       con sus datos vivos (0.15.3); cada gráfica medida contra la imagen que exporta Excel.
-- [ ] Gráficas 3D (columnas y circular), circular separada y estilos de gráfica 205 y 209.
+- [x] Gráficas 3D (columnas y circular), circular separada, estilos de gráfica (degradados, transparencia,
+      mayúsculas, rótulos dentro) y eje secundario (0.15.4).
+- [ ] Gráficas: líneas de tendencia, barras de error y tabla de datos.
 - [ ] Motor de fórmulas: matrices dinámicas (ORDENAR, FILTRAR, UNICOS, SECUENCIA…), LET y LAMBDA.
 - [x] Word: estilos de tabla, numeración «Chapter %1» con cuenta por lista, imágenes flotantes, gráficos (0.15.2).
 - [x] Word: formas y cuadros de texto en su lugar, con su geometría, relleno, contorno y texto (0.15.3).
@@ -711,9 +713,9 @@ sesión anterior: `./desplegar.sh roles` para las columnas nuevas de usuarios.
 
 ## Orden recomendado para la siguiente sesión
 
-**Desde el 16 de noviembre de 2026 (tarde):** la 0.15.0 a la 0.15.3 (fase 22, paridad con Office real) quedaron
-publicadas. Lo que sigue de esa fase, en este orden: gráficas 3D y estilos de gráfica (los más flojos de
-`comparar_real.py x04-graficas.xlsx`), matrices dinámicas, LET y LAMBDA en el motor de fórmulas, secciones y
+**Desde el 16 de noviembre de 2026 (tarde):** la 0.15.0 a la 0.15.4 (fase 22, paridad con Office real) quedaron
+publicadas. Lo que sigue de esa fase, en este orden: líneas de tendencia, barras de error y tabla de datos de las
+gráficas (lo más flojo de `comparar_real.py x04-graficas.xlsx`), matrices dinámicas, LET y LAMBDA en el motor de fórmulas, secciones y
 columnas de Word, rellenos y líneas de las formas de Word, lo que falta de PowerPoint, la vuelta en Office real y la
 paridad en la app. La computadora con
 Office: `pruebas/office/office_real.py` (ver `docs/PARIDAD-OFFICE-REAL.md`, sección 1). Lo de abajo sigue vigente
