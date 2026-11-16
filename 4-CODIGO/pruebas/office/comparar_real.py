@@ -197,13 +197,15 @@ def medir_docx(nav, esp, archivo, carpeta, verdad):
 
 
 JS_DIAPO = r"""
-async (i) => {
+async ([i, k]) => {
+  // (k: escala para que la diapositiva quepa a lo ancho de la pantalla, como en el celular)
   const doc = NOM.editorActual.doc, p = doc.paginas()[i];
   let cont = document.getElementById('__diapo_prueba');
   if (!cont) { cont = document.createElement('div'); cont.id = '__diapo_prueba'; cont.style.cssText = 'position:fixed;left:0;top:0;z-index:99999;background:#fff'; document.body.append(cont); }
   const T = NOM.diapo.tam(doc);
   cont.innerHTML = `<div class="diapo diapo-foto" style="${NOM.diapo.estiloDiapo(doc, p)}position:relative;left:0;top:0;transform:none;border-radius:0;box-shadow:none;margin:0">${NOM.lienzoVista.htmlDiapositiva(doc, p)}</div>`;
   cont.style.width = T.w + 'px'; cont.style.height = T.h + 'px';
+  cont.style.transformOrigin = '0 0'; cont.style.transform = k && k !== 1 ? `scale(${k})` : '';
   await document.fonts.ready; await new Promise((r) => setTimeout(r, 120));
   const imgs = [...cont.querySelectorAll('img')]; await Promise.all(imgs.map((im) => im.complete ? 0 : new Promise((r) => { im.onload = im.onerror = r; })));
   return { w: T.w, h: T.h, n: doc.paginas().length };
@@ -276,10 +278,14 @@ def medir_pptx(nav, esp, archivo, carpeta, verdad, nombre):
     r = importar(nav, esp, archivo)
     n = p.evaluate("() => NOM.editorActual.doc.paginas().length")
     diapos = []
+    ancho = (p.viewport_size or {}).get("width") or 1300
     for i in range(n):
-        info = p.evaluate(JS_DIAPO, i)
+        k = min(1.0, ancho / 960.0)
+        info = p.evaluate(JS_DIAPO, [i, k])
+        k = min(1.0, ancho / float(info["w"]))
+        if k < 1: info = p.evaluate(JS_DIAPO, [i, k])
         ruta = carpeta / f"nom-{i + 1:02d}.png"
-        p.screenshot(path=str(ruta), clip={"x": 0, "y": 0, "width": info["w"], "height": info["h"]})
+        p.screenshot(path=str(ruta), clip={"x": 0, "y": 0, "width": info["w"] * k, "height": info["h"] * k})
         Image.open(ruta).resize((1920, int(round(1920 * info["h"] / info["w"])))).save(ruta)
         of = REAL / "verdad" / f"{nombre}-{i + 1:02d}.png"
         d = {"n": i + 1}
