@@ -49,8 +49,8 @@ pa=r("POST","/api/cuentas/pase",{},tk["b"]); ok(f"pase firmado ({pa[0]})",pa[0] 
 # Lo que leen los buscadores (Buscadores.java): la dirección principal, el sitemap y los datos de la portada.
 def texto(u, h=None):
     try:
-        with urllib.request.urlopen(urllib.request.Request(B+u,headers=dict(AG)),timeout=30) as x: return x.status,dict(x.headers),x.read().decode("utf-8","replace")
-    except urllib.error.HTTPError as e: return e.code,dict(e.headers),""
+        with urllib.request.urlopen(urllib.request.Request(B+u,headers=dict(AG)),timeout=30) as x: return x.status,x.headers,x.read().decode("utf-8","replace")
+    except urllib.error.HTTPError as e: return e.code,e.headers,""
 rb=texto("/robots.txt"); ok("robots.txt con Sitemap",rb[0]==200 and "Sitemap: http" in rb[2] and "Disallow: /api/" in rb[2])
 sm=texto("/sitemap.xml"); ok("sitemap.xml con la portada y la ayuda",sm[0]==200 and "<loc>" in sm[2] and "/ayuda/" in sm[2] and sm[2].count("<loc>")>20)
 po=texto("/"); ok("portada con canonical, og:image y schema.org",po[0]==200 and 'rel="canonical"' in po[2] and 'og:image' in po[2] and '"WebSite"' in po[2])
