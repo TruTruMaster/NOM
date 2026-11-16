@@ -525,6 +525,8 @@
         }
         return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">${g}</svg>`;
       }
+      const BOTON_FILTRO = `url('data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="0.5" y="0.5" width="14" height="14" fill="#FDFDFD" stroke="#ABABAB"/><path d="M4 6h7l-3.5 4z" fill="#404040"/></svg>')}')`;
+      const BOTON_FILTRADO = `url('data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="0.5" y="0.5" width="14" height="14" fill="#FDFDFD" stroke="#ABABAB"/><path d="M2.5 3.5h7l-2.6 3.2v3.6l-1.8 1v-4.6z" fill="#404040"/><path d="M10 9h3.5l-1.75 2.2z" fill="#404040"/></svg>')}')`;
       const urlSvg = (svg) => `url('data:image/svg+xml,${encodeURIComponent(svg).replace(/'/g, "%27").replace(/\(/g, "%28").replace(/\)/g, "%29")}')`;
 
       // ------------------------------------------------------------ pintar
@@ -535,14 +537,13 @@
         let color = t["k:" + ref] || "", fondo = t["r:" + ref] || "", negrita = !!t["n:" + ref];
         for (const rg of conds) if (dentro(rg.r, c, f) && cumple(rg, v)) { if (rg.color) color = rg.color; if (rg.fondo) fondo = rg.fondo; if (rg.negrita) negrita = true; break; }
         // formato condicional de Excel: gana sobre el formato propio de la celda (como en Excel)
-        const cx = cfx ? cfx.de(c, f) : null;
+        const cx = cfx ? cfx.de(c, f) : null, capas = [], tams = [], pos = [];
         if (cx) {
           if (cx.fondo) fondo = cx.fondo;
           if (cx.color) color = cx.color;
           if (cx.negrita != null) negrita = cx.negrita;
           if (cx.cursiva) st.push("font-style:italic");
           if (cx.subrayado || cx.tachado) st.push("text-decoration-line:" + [cx.subrayado ? "underline" : "", cx.tachado ? "line-through" : ""].filter(Boolean).join(" "));
-          const capas = [], tams = [], pos = [];
           if (cx.icono) { capas.push(urlSvg(svgIcono(cx.icono.set, cx.icono.i, cx.icono.n))); tams.push("16px 16px"); pos.push("2px 50%"); }
           if (cx.barra) {
             // barra de datos: de 2 px a la izquierda, con su largo entre el mínimo y el máximo de Excel (en % del ancho)
@@ -554,8 +555,10 @@
             tams.push(`calc(${(largo * 100).toFixed(2)}% - 3px) calc(100% - 4px)`); pos.push(`calc(${(ini * 100).toFixed(2)}% + 2px) 2px`);
             if (b.borde && /^#[0-9A-F]{6}$/i.test(b.borde)) { capas.push(`linear-gradient(${b.borde}, ${b.borde})`); tams.push(`calc(${(largo * 100).toFixed(2)}% - 1px) calc(100% - 2px)`); pos.push(`calc(${(ini * 100).toFixed(2)}% + 1px) 1px`); }
           }
-          if (capas.length) st.push(`background-image:${capas.join(",")};background-size:${tams.join(",")};background-position:${pos.join(",")};background-repeat:no-repeat`);
         }
+        // botón de filtro de Excel (tablas, filtros de la hoja y tablas dinámicas), a la derecha de la celda
+        if (xl() && t["fb:" + ref]) { capas.unshift(t["fb:" + ref] === 2 ? BOTON_FILTRADO : BOTON_FILTRO); tams.unshift("15px 15px"); pos.unshift("right 1px center"); }
+        if (capas.length) st.push(`background-image:${capas.join(",")};background-size:${tams.join(",")};background-position:${pos.join(",")};background-repeat:no-repeat`);
         if (color) st.push("color:" + color);
         if (fondo) st.push("background-color:" + fondo);
         const al = t["al:" + ref];

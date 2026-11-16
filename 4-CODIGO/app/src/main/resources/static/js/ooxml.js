@@ -2567,9 +2567,9 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         const a1 = F().parseRef(ref[0] || ""), a2 = F().parseRef(ref[1] || ref[0] || "");
         if (!a1 || !a2) return;
         const cols = todos(td, "tableColumn").map((c) => at(c, "name") || "");
-        const tsi = todos(td, "tableStyleInfo")[0], si = (a) => at(tsi, a) === "1" || at(tsi, a) === "true";
+        const tsi = todos(td, "tableStyleInfo")[0], si = (a) => at(tsi, a) === "1" || at(tsi, a) === "true", conFiltro = hijo(td, "autoFilter");
         const info = { hoja: at(h, "name") || "", c1: a1.c, f1: a1.f, c2: a2.c, f2: a2.f, enc: at(td, "headerRowCount") === "0" ? 0 : 1, tot: +(at(td, "totalsRowCount") || 0), cols,
-          estilo: tsi ? at(tsi, "name") : null, rayasF: si("showRowStripes"), rayasC: si("showColumnStripes"), primeraC: si("showFirstColumn"), ultimaC: si("showLastColumn") };
+          estilo: tsi ? at(tsi, "name") : null, rayasF: si("showRowStripes"), rayasC: si("showColumnStripes"), primeraC: si("showFirstColumn"), ultimaC: si("showLastColumn"), filtro: conFiltro };
         [at(td, "displayName"), at(td, "name")].filter(Boolean).forEach((n) => (tablasXl[n.toLowerCase()] = info));
       });
     }
@@ -2671,11 +2671,20 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       });
       return reglas.length ? reglas : null;
     }
+    /** Botones de filtro de Excel en el encabezado de un filtro (de tabla o de la hoja): sin los que el archivo esconde
+        (hiddenButton) y con el embudo donde hay un filtro puesto. */
+    function botonesFiltro(af, c1, c2, f, campos) {
+      const cols = {};
+      hijos(af, "filterColumn").forEach((fc) => { cols[+at(fc, "colId")] = at(fc, "hiddenButton") === "1" ? "oculto" : hijos(fc).length ? "activo" : "normal"; });
+      for (let c = c1; c <= c2 && c < MAX_C; c++) { const e = cols[c - c1]; if (e !== "oculto") campos["fb:" + F().ref(c, f)] = e === "activo" ? 2 : true; }
+    }
     function estilosDeTabla(hoja, campos) {
       const vistas = new Set();
       for (const tb of Object.values(tablasXl)) {
-        if (tb.hoja !== hoja || vistas.has(tb) || !tb.estilo) continue;
+        if (tb.hoja !== hoja || vistas.has(tb)) continue;
         vistas.add(tb);
+        if (tb.filtro && tb.enc) botonesFiltro(tb.filtro, tb.c1, tb.c2, tb.f1, campos);   // botones de filtro
+        if (!tb.estilo) continue;
         const est2 = estilosTablaLibro[tb.estilo] || (NOM.ESTILOS_TABLA || {})[tb.estilo];
         if (!est2) continue;
         const { c1, c2, f1, f2 } = tb, fEnc = tb.enc ? f1 : -1, fTot = tb.tot ? f2 : -1, d1 = f1 + (tb.enc ? 1 : 0), d2 = f2 - (tb.tot ? 1 : 0);
@@ -2696,35 +2705,124 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
           if (f === fEnc && c === c2) pon("lastHeaderCell", c, f, c, f);
           if (f === fTot && c === c1) pon("firstTotalCell", c, f, c, f);
           if (f === fTot && c === c2) pon("lastTotalCell", c, f, c, f);
-          let relleno = null, tinta = null, negrita = false, cursiva = false;
-          const lados = {};
-          for (const x of capas) {
-            const e = x.e;
-            if (e.f) relleno = e.f;
-            if (e.k) tinta = e.k;
-            if (e.b) negrita = true;
-            if (e.i) cursiva = true;
-            if (e.bd) {
-              const bd = e.bd, ar = f === x.rf1 ? bd.t : bd.h, ab = f === x.rf2 ? bd.b : bd.h, iz = c === x.rc1 ? bd.l : bd.v, de = c === x.rc2 ? bd.r : bd.v;
-              if (ar) lados.a = ar;
-              if (ab) lados.b = ab;
-              if (iz) lados.i = iz;
-              if (de) lados.d = de;
-            }
-          }
-          const R = F().ref(c, f);
-          if (relleno && !campos["r:" + R]) { const x = colorTabla(relleno); if (x) campos["r:" + R] = x; }
-          if (tinta && !campos["k:" + R]) { const x = colorTabla(tinta); if (x && x !== "#000000") campos["k:" + R] = x; }
-          if (negrita && !campos["n:" + R]) campos["n:" + R] = true;
-          if (cursiva && !campos["i:" + R]) campos["i:" + R] = true;
-          if (Object.keys(lados).length) {
-            const propios = {};
-            String(campos["bx:" + R] || "").split(";").filter(Boolean).forEach((q) => (propios[q.split(":")[0]] = q));
-            for (const l in lados) if (!propios[l]) propios[l] = `${l}:${lados[l][0]}:${colorTabla(lados[l][1]) || "#000000"}`;
-            campos["bx:" + R] = Object.values(propios).join(";");
-          }
+          pintarCapas(capas, c, f, campos);
+          if (!campos["r:" + F().ref(c, f)]) campos["r:" + F().ref(c, f)] = "#FFFFFF";   // sin cuadrícula adentro, como Excel
         }
       }
+    }
+    /** Pinta una celda con las capas de un estilo de tabla (de menor a mayor precedencia): relleno, letra y bordes
+        (los de afuera de cada región o las líneas de adentro). Lo propio de la celda gana. */
+    function pintarCapas(capas, c, f, campos) {
+      let relleno = null, tinta = null, negrita = false, cursiva = false;
+      const lados = {};
+      for (const x of capas) {
+        const e = x.e;
+        if (e.f) relleno = e.f;
+        if (e.k) tinta = e.k;
+        if (e.b) negrita = true;
+        if (e.i) cursiva = true;
+        if (e.bd) {
+          const bd = e.bd, ar = f === x.rf1 ? bd.t : bd.h, ab = f === x.rf2 ? bd.b : bd.h, iz = c === x.rc1 ? bd.l : bd.v, de = c === x.rc2 ? bd.r : bd.v;
+          if (ar) lados.a = ar;
+          if (ab) lados.b = ab;
+          if (iz) lados.i = iz;
+          if (de) lados.d = de;
+        }
+      }
+      const R = F().ref(c, f);
+      if (relleno && !campos["r:" + R]) { const x = colorTabla(relleno); if (x) campos["r:" + R] = x; }
+      if (tinta && !campos["k:" + R]) { const x = colorTabla(tinta); if (x && x !== "#000000") campos["k:" + R] = x; }
+      if (negrita && !campos["n:" + R]) campos["n:" + R] = true;
+      if (cursiva && !campos["i:" + R]) campos["i:" + R] = true;
+      if (Object.keys(lados).length) {
+        const propios = {};
+        String(campos["bx:" + R] || "").split(";").filter(Boolean).forEach((q) => (propios[q.split(":")[0]] = q));
+        for (const l in lados) if (!propios[l]) propios[l] = `${l}:${lados[l][0]}:${colorTabla(lados[l][1]) || "#000000"}`;
+        campos["bx:" + R] = Object.values(propios).join(";");
+      }
+    }
+    // ---- Tablas dinámicas (versión 3): su estilo pintado sobre sus áreas (filtros, encabezado, etiquetas de fila,
+    // subtítulos y subtotales, total general de filas y de columnas), con la precedencia de Excel.
+    const ORDEN_DINAMICA = ["wholeTable", "pageFieldLabels", "pageFieldValues", "firstColumnStripe", "secondColumnStripe", "firstRowStripe", "secondRowStripe", "blankRow",
+      "firstColumn", "firstSubtotalColumn", "secondSubtotalColumn", "thirdSubtotalColumn", "firstColumnSubheading", "secondColumnSubheading", "thirdColumnSubheading",
+      "firstRowSubheading", "secondRowSubheading", "thirdRowSubheading", "firstSubtotalRow", "secondSubtotalRow", "thirdSubtotalRow", "lastColumn", "headerRow", "firstHeaderCell", "totalRow"];
+    const NIVEL = ["first", "second", "third"];
+    function estilosDinamicas(ruta, campos) {
+      const relsH = z.texto(ruta.replace(/([^/]+)$/, "_rels/$1.rels"));
+      if (!relsH) return;
+      todos(P(relsH), "Relationship").filter((r) => /\/pivotTable$/.test(at(r, "Type") || "")).forEach((r) => {
+        const tg = at(r, "Target") || "", rt = tg.startsWith("/") ? tg.slice(1) : ruta.replace(/[^/]+$/, "") + tg;
+        const norm = rt.split("/").reduce((a, x) => { if (x === "..") a.pop(); else if (x && x !== ".") a.push(x); return a; }, []).join("/");
+        const tx = z.texto(norm);
+        if (!tx) return;
+        const pd = P(tx).documentElement, loc = hijo(pd, "location"), si = hijo(pd, "pivotTableStyleInfo");
+        if (!loc || !si) return;
+        const est2 = estilosTablaLibro[at(si, "name")] || (NOM.ESTILOS_TABLA || {})[at(si, "name")];
+        if (!est2) return;
+        const [a1, a2] = String(at(loc, "ref") || "").split(":").map((q) => F().parseRef(q));
+        if (!a1) return;
+        const c1 = a1.c, f1 = a1.f, c2 = (a2 || a1).c, f2 = (a2 || a1).f;
+        const fData = f1 + +(at(loc, "firstDataRow") || 0), cData = c1 + +(at(loc, "firstDataCol") || 0), fEnc = f1 + +(at(loc, "firstHeaderRow") || 0);
+        const si1 = (a) => at(si, a) === "1";
+        const filasI = hijos(hijo(pd, "rowItems"), "i"), colsI = hijos(hijo(pd, "colItems"), "i");
+        const nCamposF = hijos(hijo(pd, "rowFields"), "field").length, nCamposC = hijos(hijo(pd, "colFields"), "field").filter((x) => at(x, "x") !== "-2").length;
+        const prof = (i) => +(at(i, "r") || 0) + Math.max(1, hijos(i, "x").length) - 1;
+        const capas = new Map();
+        const pon = (tipo, rc1, rf1, rc2, rf2) => {
+          if (!est2[tipo]) return;
+          for (let f = rf1; f <= rf2; f++) for (let c = rc1; c <= rc2; c++) {
+            const k = c + "," + f;
+            if (!capas.has(k)) capas.set(k, []);
+            capas.get(k).push({ tipo, e: est2[tipo], rc1, rf1, rc2, rf2 });
+          }
+        };
+        // botones de filtro de Excel: etiquetas de fila y de columna, y el valor de cada filtro
+        if (nCamposF) campos["fb:" + F().ref(c1, fEnc)] = true;
+        if (nCamposC && fEnc > f1) campos["fb:" + F().ref(cData, fEnc - 1)] = true;
+        pon("wholeTable", c1, f1, c2, f2);
+        // filtros (campos de página): encima de la tabla, con un renglón vacío en medio
+        const nPag = +(at(loc, "rowPageCount") || 0), nPagC = Math.max(1, +(at(loc, "colPageCount") || 0));
+        const nCamposP = hijos(hijo(pd, "pageFields"), "pageField").length;
+        for (let k = 0; k < nCamposP; k++) {
+          const fp = f1 - 1 - nPag + (k % Math.max(1, nPag)), cp = c1 + 3 * Math.floor(k / Math.max(1, nPag));
+          if (fp < 0) continue;
+          pon("pageFieldLabels", cp, fp, cp, fp);
+          pon("pageFieldValues", cp + 1, fp, cp + 1, fp);
+          campos["fb:" + F().ref(cp + 1, fp)] = true;
+        }
+        if (si1("showColStripes")) for (let c = cData; c <= c2; c++) { const s1 = (est2.firstColumnStripe || {}).s || 1, s2 = (est2.secondColumnStripe || {}).s || 1, k = (c - cData) % (s1 + s2); pon(k < s1 ? "firstColumnStripe" : "secondColumnStripe", c, fData, c, f2); }
+        if (si1("showRowStripes")) for (let f = fData; f <= f2; f++) { const s1 = (est2.firstRowStripe || {}).s || 1, s2 = (est2.secondRowStripe || {}).s || 1, k = (f - fData) % (s1 + s2); pon(k < s1 ? "firstRowStripe" : "secondRowStripe", c1, f, c2, f); }
+        if (si1("showRowHeaders") && cData > c1) pon("firstColumn", c1, fData, cData - 1, f2);
+        // cada fila de datos según su elemento: total general, subtotal, renglón vacío o subtítulo de un nivel de afuera
+        filasI.forEach((i, k) => {
+          const f = fData + k, t = at(i, "t");
+          if (f > f2) return;
+          if (t === "grand") pon("totalRow", c1, f, c2, f);
+          else if (t === "blank") pon("blankRow", c1, f, c2, f);
+          else if (t && t !== "data") pon(NIVEL[Math.min(2, prof(i))] + "SubtotalRow", c1, f, c2, f);
+          else if (nCamposF > 1 && prof(i) < nCamposF - 1) pon(NIVEL[Math.min(2, prof(i))] + "RowSubheading", c1, f, c2, f);
+        });
+        colsI.forEach((i, k) => {
+          const c = cData + k, t = at(i, "t");
+          if (c > c2) return;
+          if (t === "grand") { if (si1("showLastColumn")) pon("lastColumn", c, f1, c, f2); }
+          else if (t && t !== "data") pon(NIVEL[Math.min(2, prof(i))] + "SubtotalColumn", c, f1, c, f2);
+          else if (nCamposC > 1 && prof(i) < nCamposC - 1) pon(NIVEL[Math.min(2, prof(i))] + "ColumnSubheading", c, f1, c, fData - 1);
+        });
+        if (si1("showColHeaders") && fData > f1) pon("headerRow", c1, f1, c2, fData - 1);
+        pon("firstHeaderCell", c1, fEnc, c1, fEnc);
+        for (const [k, lista] of capas) {
+          const [c, f] = k.split(",").map(Number);
+          lista.sort((a, b) => ORDEN_DINAMICA.indexOf(a.tipo) - ORDEN_DINAMICA.indexOf(b.tipo));
+          pintarCapas(lista, c, f, campos);
+        }
+        // Excel no dibuja la cuadrícula dentro de una tabla dinámica (ni en sus filtros): fondo blanco donde no hay otro
+        for (let f = Math.max(0, f1 - 1 - nPag); f <= f2; f++) for (let c = c1; c <= c2; c++) {
+          if (f < f1 && !(capas.has(c + "," + f))) continue;
+          const R = F().ref(c, f);
+          if (!campos["r:" + R]) campos["r:" + R] = "#FFFFFF";
+        }
+      });
     }
     const hojaRef = (n) => (/^[A-Za-z_][A-Za-z0-9_.]*$/.test(n) ? n : "'" + n.replace(/'/g, "''") + "'");
     // Nombres definidos del libro (IVA = 0.16, Ventas = Datos!$A$1:$G$61…) y el orden de las hojas (referencias 3D)
@@ -2902,7 +3000,11 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
           campos["dv:x" + k] = { rango, tipo: "numero", min: op === "lessThanOrEqual" ? "" : f1.textContent, max: op === "between" && f2 ? f2.textContent : op === "lessThanOrEqual" ? f1.textContent : "" };
         }
       });
-      if (V >= 3) { estilosDeTabla(nombre, campos); const cfx = formatoCondicional(doc, nombre); if (cfx) campos.cfx = cfx; }
+      if (V >= 3) {
+        const af = hijo(doc.documentElement, "autoFilter"), [q1, q2] = String(at(af, "ref") || "").split(":").map((q) => F().parseRef(q));
+        if (q1) botonesFiltro(af, q1.c, (q2 || q1).c, q1.f, campos);
+      }
+      if (V >= 3) { estilosDeTabla(nombre, campos); estilosDinamicas(ruta, campos); const cfx = formatoCondicional(doc, nombre); if (cfx) campos.cfx = cfx; }
       if (todos(doc, "drawing").length) aviso = aviso || "Las gráficas e imágenes del archivo no se ven aquí, pero se conservan: al descargarlo en Excel salen igual";
       campos.filas = Math.max(30, maxF + 5);
       campos.cols = Math.max(10, Math.min(MAX_C, maxC + 2));
