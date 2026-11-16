@@ -1847,6 +1847,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         return `<c r="${ref}"${s}${tipo}><f>${x(formulaExcel(crudo))}</f>${val}</c>`;
       }
       if (crudo === "") return `<c r="${ref}"${s}/>`;
+      if (crudo.startsWith("'")) return `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${x(crudo.slice(1))}</t></is></c>`;
       if (t["f:" + ref] === "@") return `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${x(crudo)}</t></is></c>`;
       const lit = F().calcularLiteral(crudo.trim());
       if (typeof lit === "boolean") return `<c r="${ref}"${s} t="b"><v>${lit ? 1 : 0}</v></c>`;
@@ -2300,9 +2301,12 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
 
   /** .xlsx a partir del archivo del que vino el documento: se cambia solo lo editado. */
   function xlsxConOrigen(doc, og) {
-    const O = NOM.origen, pq = paqueteDe(og), hojasBase = {};
+    const O = NOM.origen, pq = paqueteDe(og), hojasBase = {}, hojasBase1 = {};
     // Lo que se importó de cada hoja se vuelve a sacar del original: la diferencia es lo que editó la persona.
-    modeloXlsx(og.zip).hojas.forEach((h) => { hojasBase[h.campos.ox] = h.campos; });
+    // (con la misma versión del importador con que se importó: si no, un cambio de lectura parecería una edición)
+    modeloXlsx(og.zip, 2).hojas.forEach((h) => { hojasBase[h.campos.ox] = h.campos; });
+    let v1 = null;
+    const baseDe = (t, ox) => { if (+t.xlv >= 2) return hojasBase[ox]; if (!v1) { v1 = true; modeloXlsx(og.zip, 1).hojas.forEach((h) => { hojasBase1[h.campos.ox] = h.campos; }); } return hojasBase1[ox] || hojasBase[ox]; };
     const tablas = F().hojasDe(doc);
     if (!tablas.length) throw new Error("Este documento no tiene ninguna tabla");
     const LIBRO = "xl/workbook.xml";
@@ -2326,7 +2330,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     planes.forEach((p, i) => {
       const t = p.t, ev = F().evaluadorDeTabla(doc, t);
       if (p.ox) {
-        const r = parcharHoja(pq.texto(p.ox), hojasBase[p.ox], t, fab, ev);
+        const r = parcharHoja(pq.texto(p.ox), baseDe(t, p.ox), t, fab, ev);
         if (r != null) { pq.pon(p.ox, r); cambio = true; }
       } else {
         // hoja creada en NOM-COLAB dentro de un libro importado
@@ -2429,6 +2433,11 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
   // ------------------------------------------------------------ importar Excel (.xlsx)
   const FMT_EXCEL = { 1: "0", 2: "0.00", 3: "#,##0", 4: "#,##0.00", 5: "$#,##0", 6: "$#,##0", 7: "$#,##0.00", 8: "$#,##0.00", 9: "0%", 10: "0.00%",
     14: "dd/mm/yyyy", 15: "d-mmm-yy", 16: "d-mmm", 17: "mmm-yy", 18: "h:mm AM/PM", 19: "h:mm:ss AM/PM", 20: "hh:mm", 21: "hh:mm:ss", 22: "dd/mm/yyyy hh:mm", 37: "#,##0", 38: "#,##0", 39: "#,##0.00", 40: "#,##0.00", 49: "@" };
+  // Versión 2 del importador de Excel (16-nov-2026): los formatos internos que faltaban y el «'» de los textos que
+  // parecen número o fórmula. Lo importado antes (versión 1) se compara al exportar con la lectura de entonces.
+  // (los 20, 21 y 47 de Excel son «h:mm», «h:mm:ss» y «mm:ss.0»; la norma publica «mmss.0», que Excel no usa)
+  const FMT_EXCEL_V2 = Object.assign({}, FMT_EXCEL, { 11: "0.00E+00", 12: "# ?/?", 13: "# ??/??", 20: "h:mm", 21: "h:mm:ss", 37: "#,##0 ;(#,##0)", 38: "#,##0 ;[Red](#,##0)",
+    39: "#,##0.00;(#,##0.00)", 40: "#,##0.00;[Red](#,##0.00)", 45: "mm:ss", 46: "[h]:mm:ss", 47: "mm:ss.0", 48: "##0.0E+0" });
   /** .xlsx → { hojas: [{ nombre, campos }], aviso }: cada hoja con sus celdas, formato, combinadas, anchos y filas fijas. */
   async function leerXlsx(archivo) {
     if (archivo.size > 30 * 1024 * 1024) throw new Error("El archivo pesa más de 30 MB");
@@ -2443,7 +2452,8 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
    * importado con la versión anterior eso se verá como "la persona lo quitó". Al cambiar lo que se
    * lee hay que cuidar esos documentos (Word y PowerPoint no tienen el problema: guardan huellas).
    */
-  function modeloXlsx(z) {
+  function modeloXlsx(z, version) {
+    const V = version || 2;
     const P = (t) => new DOMParser().parseFromString(t, "application/xml");
     const libro = z.texto("xl/workbook.xml");
     if (!libro) throw new Error("El archivo no parece un libro de Excel (.xlsx)");
@@ -2459,7 +2469,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     const textos = sst ? todos(P(sst), "si").map((si) => todos(si, "t").map((t) => t.textContent).join("")) : [];
     // Estilos.
     const est = P(z.texto("xl/styles.xml") || "<styleSheet/>");
-    const fmts = Object.assign({}, FMT_EXCEL);
+    const fmts = Object.assign({}, V >= 2 ? FMT_EXCEL_V2 : FMT_EXCEL);
     todos(est, "numFmt").forEach((n) => (fmts[+at(n, "numFmtId")] = at(n, "formatCode")));
     // Colores del tema (en Excel van por número: 0 fondo 1, 1 texto 1, 2 fondo 2, 3 texto 2, 4 a 9 los
     // acentos) con su "tinte": positivo aclara, negativo oscurece.
@@ -2487,6 +2497,101 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       return { num: +at(xf, "numFmtId") || 0, fuente: fuentes[+at(xf, "fontId") || 0] || {}, relleno: rellenos[+at(xf, "fillId") || 0] || null, borde: bordes[+at(xf, "borderId") || 0] || "", al: al ? { left: "izq", center: "centro", centerContinuous: "centro", right: "der" }[at(al, "horizontal")] || null : null, aj: al ? at(al, "wrapText") === "1" : false };
     });
     const hojasXml = todos(P(libro), "sheet");
+    // Tablas de Excel (ListObject) de todas las hojas: su nombre, su rango y sus columnas, para traducir las
+    // referencias estructuradas (Tabla[Columna], [@Columna]…) a referencias normales que el motor entiende.
+    const tablasXl = {};
+    if (V >= 2) for (const h of hojasXml) {
+      let rh = destino[h.getAttribute("r:id") || h.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id")] || "";
+      rh = rh.startsWith("/") ? rh.slice(1) : "xl/" + rh.replace(/^\.\//, "");
+      const relsH = z.texto(rh.replace(/([^/]+)$/, "_rels/$1.rels"));
+      if (!relsH) continue;
+      todos(P(relsH), "Relationship").filter((r) => /\/table$/.test(at(r, "Type") || "")).forEach((r) => {
+        const tg = at(r, "Target") || "", rt = tg.startsWith("/") ? tg.slice(1) : rh.replace(/[^/]+$/, "") + tg;
+        const norm = rt.split("/").reduce((a, x) => { if (x === "..") a.pop(); else if (x && x !== ".") a.push(x); return a; }, []).join("/");
+        const tx = z.texto(norm); if (!tx) return;
+        const td = P(tx).documentElement, ref = String(at(td, "ref") || "").split(":");
+        const a1 = F().parseRef(ref[0] || ""), a2 = F().parseRef(ref[1] || ref[0] || "");
+        if (!a1 || !a2) return;
+        const cols = todos(td, "tableColumn").map((c) => at(c, "name") || "");
+        const info = { hoja: at(h, "name") || "", c1: a1.c, f1: a1.f, c2: a2.c, f2: a2.f, enc: at(td, "headerRowCount") === "0" ? 0 : 1, tot: +(at(td, "totalsRowCount") || 0), cols };
+        [at(td, "displayName"), at(td, "name")].filter(Boolean).forEach((n) => (tablasXl[n.toLowerCase()] = info));
+      });
+    }
+    const hojaRef = (n) => (/^[A-Za-z_][A-Za-z0-9_.]*$/.test(n) ? n : "'" + n.replace(/'/g, "''") + "'");
+    // Nombres definidos del libro (IVA = 0.16, Ventas = Datos!$A$1:$G$61…) y el orden de las hojas (referencias 3D)
+    const nombresXl = {};
+    if (V >= 2) todos(P(libro), "definedName").forEach((d) => {
+      const n = at(d, "name") || "";
+      if (!n || /^_xlnm\./i.test(n) || at(d, "localSheetId") != null) return;
+      nombresXl[n.toLowerCase()] = d.textContent.trim();
+    });
+    const ordenHojas = hojasXml.map((h) => at(h, "name") || "");
+    /** Lo que el motor no entiende escrito como Excel lo guarda → lo mismo con referencias normales: referencias 3D
+        (Enero:Marzo!B2 → Enero!B2,Febrero!B2,Marzo!B2) y nombres definidos (IVA → 0.16). */
+    function sinNombres(fx) {
+      if (V < 2) return fx;
+      let r = fx.replace(/('[^']+'|[A-Za-z_][\w.]*):('[^']+'|[A-Za-z_][\w.]*)!(\$?[A-Z]{1,3}\$?\d+(?::\$?[A-Z]{1,3}\$?\d+)?)/g, (todo, h1, h2, ref) => {
+        const limpia = (h) => h.replace(/^'|'$/g, "").replace(/''/g, "'");
+        const i1 = ordenHojas.indexOf(limpia(h1)), i2 = ordenHojas.indexOf(limpia(h2));
+        if (i1 < 0 || i2 < 0) return todo;
+        return ordenHojas.slice(Math.min(i1, i2), Math.max(i1, i2) + 1).map((h) => hojaRef(h) + "!" + ref).join(",");
+      });
+      if (Object.keys(nombresXl).length) {
+        // fuera de los textos entre comillas: un identificador que es un nombre definido (y no una función)
+        r = r.split(/("(?:[^"]|"")*")/).map((parte, i) => (i % 2 ? parte : parte.replace(/(^|[^\w.!'$\]])([A-Za-z_\\][\w.]*)(?![\w.(!\[])/g, (todo, antes, n) => {
+          const d = nombresXl[n.toLowerCase()];
+          return d != null ? antes + (/^[-\d.]+$/.test(d) ? d : "(" + d + ")") : todo;
+        }))).join("");
+      }
+      return r;
+    }
+    /** Fórmula con referencias estructuradas → la misma con referencias normales (para la celda c,f de la hoja). */
+    function sinEstructuradas(fx, hojaAct, c, f) {
+      fx = sinNombres(fx);
+      if (!Object.keys(tablasXl).length || !/\[/.test(fx)) return fx;
+      const colDe = (T, n) => T.cols.findIndex((x) => x.toLowerCase() === String(n).replace(/^'|'$/g, "").replace(/'(.)/g, "$1").toLowerCase());
+      const rango = (T, cA, cB, fA, fB) => {
+        const pre = T.hoja && T.hoja !== hojaAct ? hojaRef(T.hoja) + "!" : "";
+        const r1 = F().ref(T.c1 + cA, fA), r2 = F().ref(T.c1 + cB, fB);
+        return pre + (r1 === r2 ? r1 : r1 + ":" + r2);
+      };
+      const traducir = (T, dentro) => {
+        const datosA = T.f1 + T.enc, datosB = T.f2 - T.tot;
+        let partes = [], m;
+        const reCol = /\[([^\[\]]*)\]/g;
+        if (!/\[/.test(dentro)) partes = [dentro.trim()]; else while ((m = reCol.exec(dentro))) partes.push(m[1]);
+        const especial = partes.filter((x) => /^#/.test(x)).map((x) => x.toLowerCase()), nombres = partes.filter((x) => x && !/^#/.test(x));
+        let esta = especial.includes("#this row") || especial.includes("#esta fila") || /^@/.test(dentro.trim());
+        const nombresL = nombres.map((n) => n.replace(/^@/, "").trim()).filter(Boolean);
+        let fA = datosA, fB = datosB;
+        if (especial.includes("#all") || especial.includes("#todo")) { fA = T.f1; fB = T.f2; }
+        else if (especial.includes("#headers") || especial.includes("#encabezados")) { fA = fB = T.f1; if (especial.includes("#data") || especial.includes("#datos")) fB = datosB; }
+        else if (especial.includes("#totals") || especial.includes("#totales")) { fA = fB = T.f2; if (especial.includes("#data") || especial.includes("#datos")) fA = datosA; }
+        if (esta) { fA = fB = f; }
+        let cA = 0, cB = T.c2 - T.c1;
+        if (nombresL.length) {
+          const i1 = colDe(T, nombresL[0]), i2 = colDe(T, nombresL[nombresL.length - 1]);
+          if (i1 < 0 || i2 < 0) return null;
+          cA = Math.min(i1, i2); cB = Math.max(i1, i2);
+        }
+        return rango(T, cA, cB, fA, fB);
+      };
+      // Tabla[...] o Tabla[[...],[...]]; y [@Col] / [[#This Row],[Col]] sin nombre (la tabla de la celda)
+      let r = fx.replace(/([A-Za-z_\\][\w.\\]*)(\[(?:[^\[\]]|\[[^\[\]]*\])*\])/g, (todo, nom, br) => {
+        const T = tablasXl[nom.toLowerCase()];
+        if (!T) return todo;
+        const x = traducir(T, br.slice(1, -1));
+        return x || todo;
+      });
+      const propia = Object.values(tablasXl).find((T) => T.hoja === hojaAct && c >= T.c1 && c <= T.c2 && f >= T.f1 && f <= T.f2);
+      if (propia) r = r.replace(/(^|[^\w\]'!])(\[(?:[^\[\]]|\[[^\[\]]*\])*\])/g, (todo, antes, br) => { const x = traducir(propia, br.slice(1, -1)); return x ? antes + x : todo; });
+      return r;
+    }
+    // La fuente del libro (la primera de styles.xml: Aptos Narrow 11 en Office 2024) define el ancho de las
+    // columnas (el ancho del dígito más ancho) y el alto de las filas, como en Excel.
+    const fuenteLibro = fuentes[0] || { nombre: "Calibri", sz: 11 };
+    const MDW = Math.max(5, Math.round((fuenteLibro.sz || 11) * 96 / 72 * 0.4885));   // ≈7 px con 11 pt
+    const pxCol = (w) => Math.floor(((256 * w + Math.floor(128 / MDW)) / 256) * MDW);   // fórmula de Excel
     let aviso = null;
     const MAX_F = LIM_F, MAX_C = LIM_C;
     const res = [];
@@ -2497,13 +2602,25 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       const xmlH = z.texto(ruta);
       if (!xmlH) continue;
       const doc = P(xmlH);
-      const campos = { nombre: nombre.slice(0, 31), ox: ruta };
+      const campos = { nombre: nombre.slice(0, 31), ox: ruta, xlv: V };
+      // Cómo se ve la hoja en Excel: fuente y tamaño del libro, ancho y alto por omisión, cuadrícula, oculta…
+      {
+        const fp = todos(doc, "sheetFormatPr")[0], sv = todos(doc, "sheetView")[0];
+        const dcw = +at(fp, "defaultColWidth"), bcw = at(fp, "baseColWidth"), drh = +at(fp, "defaultRowHeight");
+        const w0 = dcw ? pxCol(dcw) : bcw != null ? Math.round((+bcw + 0.43) * MDW + 5) : Math.round(8.43 * MDW + 5);
+        const estado = at(h, "state");
+        campos.xl = { fuente: fuenteLibro.nombre || "Calibri", tam: fuenteLibro.sz || 11, w0, h0: Math.round((drh || 15) * 96 / 72),
+          rejilla: !(sv && at(sv, "showGridLines") === "0"), rtl: !!(sv && at(sv, "rightToLeft") === "1"), zoom: sv && +at(sv, "zoomScale") ? +at(sv, "zoomScale") : 100,
+          oculta: estado === "hidden" || estado === "veryHidden" };
+      }
       let maxF = 0, maxC = 0;
       const compartidas = {};
       todos(doc, "row").forEach((row) => {
         const ht = +at(row, "ht");
         const rnum = +at(row, "r");
         if (at(row, "customHeight") === "1" && ht && rnum && rnum <= MAX_F) campos["ah:" + rnum] = Math.round(ht / 0.75);
+        else if (ht && rnum && rnum <= MAX_F) campos["ahx:" + rnum] = Math.round(ht / 0.75);   // alto que Excel calculó (letra grande, texto ajustado)
+        if (at(row, "hidden") === "1" && rnum && rnum <= MAX_F) campos["oh:" + rnum] = true;
         hijos(row, "c").forEach((c) => {
           const ref = at(c, "r"), p = F().parseRef(ref || "");
           if (!p) return;
@@ -2517,6 +2634,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
               if (fx) compartidas[si] = { f: "=" + fx, c: p.c, r: p.f };
               else if (compartidas[si]) fx = F().desplazar(compartidas[si].f, p.c - compartidas[si].c, p.f - compartidas[si].r).slice(1);
             }
+            if (fx && V >= 2) fx = sinEstructuradas(fx, nombre, p.c, p.f);
             crudo = fx ? F().aEspanol("=" + fx.replace(/_xlfn\.|_xlws\./g, "")) : "";
           } else if (tipo === "s") crudo = textos[+(v ? v.textContent : 0)] || "";
           else if (tipo === "inlineStr") crudo = todos(c, "t").map((t) => t.textContent).join("");
@@ -2526,7 +2644,9 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
           const R = F().ref(p.c, p.f);
           // Un texto que parece número o fecha se queda como texto (formato @).
           const esTexto = (tipo === "s" || tipo === "inlineStr") && crudo !== "" && F().esNum(F().calcularLiteral(crudo.trim()));
-          if (crudo !== "") campos["c:" + R] = crudo;
+          // y un texto que parece número, fecha o fórmula lleva «'» (el apóstrofo de Excel): se ve tal cual
+          const ambiguo = (tipo === "s" || tipo === "inlineStr" || tipo === "str") && !f && crudo !== "" && (esTexto || /^[=']/.test(crudo) || F().calcularLiteral(crudo.trim()) !== crudo.trim());
+          if (crudo !== "") campos["c:" + R] = ambiguo && V >= 2 ? "'" + crudo : crudo;
           if (s) {
             const cod = esTexto ? "@" : fmts[s.num];
             if (cod && cod !== "General") campos["f:" + R] = cod.replace(/\[\$-[^\]]*\]/g, "").replace(/;@$/, "");
@@ -2535,6 +2655,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
             if (s.fuente.u) campos["u:" + R] = true;
             if (s.fuente.k && s.fuente.k !== "#000000") campos["k:" + R] = s.fuente.k;
             if (s.fuente.sz && Math.abs(s.fuente.sz - 11) > 0.1) campos["tl:" + R] = Math.round((s.fuente.sz / 1.0476) * 2) / 2;
+            if (s.fuente.sz && Math.abs(s.fuente.sz - (fuenteLibro.sz || 11)) > 0.01) campos["tp:" + R] = s.fuente.sz;   // tamaño exacto (modo Excel)
             // tipo de letra de la celda, si no es el del libro (el de su primera fuente)
             if (s.fuente.nombre && s.fuente.nombre !== ((fuentes[0] || {}).nombre || "Calibri")) campos["tf:" + R] = s.fuente.nombre;
             if (s.relleno) campos["r:" + R] = s.relleno;
@@ -2552,7 +2673,12 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       todos(doc, "col").forEach((c) => {
         const w = +at(c, "width"), min = +at(c, "min"), max = Math.min(+at(c, "max"), MAX_C);
         if (!w || at(c, "customWidth") !== "1") return;
-        for (let k = min; k <= max && k - min < MAX_C; k++) campos["aw:" + F().colLetra(k - 1)] = Math.round(w * 7 + 5);
+        for (let k = min; k <= max && k - min < MAX_C; k++) { campos["aw:" + F().colLetra(k - 1)] = Math.round(w * 7 + 5); campos["ap:" + F().colLetra(k - 1)] = pxCol(w); }
+      });
+      todos(doc, "col").forEach((c) => {
+        if (at(c, "hidden") !== "1") return;
+        const min = +at(c, "min"), max = Math.min(+at(c, "max"), MAX_C);
+        for (let k = min; k <= max && k - min < MAX_C; k++) campos["ow:" + F().colLetra(k - 1)] = true;
       });
       const pane = todos(doc, "pane")[0];
       if (pane && at(pane, "state") === "frozen") { if (+at(pane, "ySplit")) campos.fijasF = +at(pane, "ySplit"); if (+at(pane, "xSplit")) campos.fijasC = +at(pane, "xSplit"); }

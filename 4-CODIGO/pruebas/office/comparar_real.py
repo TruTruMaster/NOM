@@ -218,12 +218,35 @@ JS_CELDAS = r"""
     out[(+td.dataset.f + 1) + ',' + (+td.dataset.c + 1)] = { t: td.innerText, fondo: cs.backgroundColor, color: cs.color, b: +cs.fontWeight >= 600, i: cs.fontStyle === 'italic',
       al: cs.textAlign, fuente: cs.fontFamily, tam: parseFloat(cs.fontSize) * 0.75, w: td.getBoundingClientRect().width, h: td.getBoundingClientRect().height };
   });
-  const cols = [...rej.querySelectorAll('col')].slice(1).map((c) => parseFloat(c.style.width) || c.getBoundingClientRect().width);
+  // ancho PINTADO de cada columna (el de su encabezado), no el que dice el <col>
+  const cols = [...rej.querySelectorAll('thead th[data-col]')].map((th) => th.getBoundingClientRect().width);
   const filas = [...rej.querySelectorAll('tr[data-fila]')].map((tr) => ({ f: +tr.dataset.fila + 1, h: tr.getBoundingClientRect().height }));
   const a1 = rej.querySelector('td[data-c="0"][data-f="0"]'), r = a1 ? a1.getBoundingClientRect() : null;
   return { celdas: out, cols, filas, a1: r ? { x: r.left, y: r.top } : null };
 }
 """
+
+
+EN_ES = {}
+for en, es in zip("January February March April May June July August September October November December".split(), "enero febrero marzo abril mayo junio julio agosto septiembre octubre noviembre diciembre".split()):
+    EN_ES[en.lower()] = es; EN_ES[en[:3].lower()] = es[:3]
+for en, es in zip("Sunday Monday Tuesday Wednesday Thursday Friday Saturday".split(), "domingo lunes martes miércoles jueves viernes sábado".split()):
+    EN_ES[en.lower()] = es; EN_ES[en[:3].lower()] = es[:3]
+EN_ES.update({"am": "a. m.", "pm": "p. m.", "true": "verdadero", "false": "falso", "#value!": "#¡valor!", "#div/0!": "#¡div/0!", "#n/a": "#n/d", "#name?": "#¿nombre?",
+              "#ref!": "#¡ref!", "#num!": "#¡num!", "#null!": "#¡nulo!", "#spill!": "#¡desbordamiento!", "#calc!": "#¡calc!"})
+
+
+def igual_excel(a, b):
+    """Mismo texto de celda, sin contar el idioma (Excel en inglés frente a NOM-COLAB en español) ni los
+    espacios que Excel agrega para llenar el ancho (formato contable)."""
+    norm = lambda t: re.sub(r"\s+", " ", (t or "").replace("\u00a0", " ")).strip().lower()
+    a, b = norm(a), norm(b)
+    if a == b: return True
+    def es(t):
+        t = re.sub(r"#[a-z/0!?]+[!?]?", lambda m: EN_ES.get(m.group(0), m.group(0)), t)
+        return re.sub(r"[a-z]+", lambda m: EN_ES.get(m.group(0), m.group(0)), t)
+    quita = lambda t: t.replace("¡", "").replace("¿", "").replace(" ", "")
+    return quita(es(a)) == quita(es(b)) or quita(es(a)) == quita(b)
 
 
 def rgb_hex(c):
@@ -275,19 +298,24 @@ def medir_xlsx(nav, esp, archivo, carpeta, verdad, nombre):
     r = importar(nav, esp, archivo)
     pags = p.evaluate("() => NOM.editorActual.doc.paginas()")
     hojas_vis = [h for h in verdad.get("hojas", []) if h.get("visible") == -1]
+    nombres_nom = p.evaluate("() => { const d = NOM.editorActual.doc; return d.paginas().map((pg) => { const h = NOM.formulas.hojasDe(d).find((x) => x.pagina === pg); return h ? NOM.formulas.nombreDeHoja(d, h) : ''; }); }")
     res = {"aviso": r.get("aviso"), "hojas_office": len(verdad.get("hojas", [])), "hojas_visibles_office": len(hojas_vis), "hojas_nom": len(pags), "hojas": []}
     tot_txt = ok_txt = tot_fondo = ok_fondo = tot_col = ok_col = 0
+    tot_fil, ok_fil = [0], [0]
     for hi, h in enumerate(hojas_vis):
-        if hi >= len(pags): break
-        p.evaluate("(pid) => { const b = document.querySelector(`.pestana-hoja[data-pag=\"${pid}\"]`); if (b) b.click(); }", pags[hi])
+        if h["nombre"] not in nombres_nom: continue
+        pid = pags[nombres_nom.index(h["nombre"])]
+        p.evaluate("(pid) => { const ed = NOM.editorActual; const b = document.querySelector(`.pestana-hoja[data-pag=\"${pid}\"]`); if (b) b.click(); }", pid)
         p.wait_for_timeout(900)
         m = p.evaluate(JS_CELDAS)
         malas = []
+        f_ocultas = {fi["f"] for fi in h.get("filas", []) if fi.get("oculta")}; c_ocultas = {co["c"] for co in h.get("columnas", []) if co.get("oculta")}
         for c in h.get("celdas", []):
+            if c["f"] in f_ocultas or c["c"] in c_ocultas: continue   # Excel no las muestra
             k = f"{c['f']},{c['c']}"; n = m["celdas"].get(k)
             tot_txt += 1
             tn = (n or {}).get("t", "").replace("\n", " ").strip(); to = (c.get("texto") or "").replace("\n", " ").strip()
-            if tn == to: ok_txt += 1
+            if tn == to or igual_excel(to, tn): ok_txt += 1
             elif len(malas) < 60: malas.append({"celda": k, "excel": to, "nom": tn, "formula": c.get("formula")})
             if c.get("fondo"):
                 tot_fondo += 1
@@ -297,6 +325,9 @@ def medir_xlsx(nav, esp, archivo, carpeta, verdad, nombre):
             if j < len(m["cols"]) and not col.get("oculta"):
                 tot_col += 1
                 if abs(m["cols"][j] - col["w"] * 96 / 72) <= 2: ok_col += 1
+        filas_ok = sum(1 for fi in h.get("filas", [])[:60] if not fi.get("oculta") and any(abs(x["h"] - fi["h"] * 96 / 72) <= 1.5 for x in m["filas"] if x["f"] == fi["f"]))
+        filas_tot = sum(1 for fi in h.get("filas", [])[:60] if not fi.get("oculta") and any(x["f"] == fi["f"] for x in m["filas"]))
+        tot_fil[0] += filas_tot; ok_fil[0] += filas_ok
         hoja = {"nombre": h["nombre"], "texto_distinto": malas}
         # imagen: cuadrícula desde A1 en los dos
         of = REAL / "verdad" / f"{nombre}-h{verdad['hojas'].index(h) + 1}.png"
@@ -310,7 +341,8 @@ def medir_xlsx(nav, esp, archivo, carpeta, verdad, nombre):
             hoja["parecido"] = parecido_img(carpeta / f"office-h{hi + 1}.png", ruta, (625, 400))
         res["hojas"].append(hoja)
     res.update(celdas=tot_txt, texto_igual=ok_txt, pct_texto=round(100 * ok_txt / max(1, tot_txt), 1), fondos=tot_fondo, fondo_igual=ok_fondo,
-               pct_fondo=round(100 * ok_fondo / max(1, tot_fondo), 1), columnas=tot_col, ancho_igual=ok_col, pct_ancho=round(100 * ok_col / max(1, tot_col), 1))
+               pct_fondo=round(100 * ok_fondo / max(1, tot_fondo), 1), columnas=tot_col, ancho_igual=ok_col, pct_ancho=round(100 * ok_col / max(1, tot_col), 1),
+               pct_alto=round(100 * ok_fil[0] / max(1, tot_fil[0]), 1))
     return res
 
 
@@ -348,7 +380,7 @@ def comparar(archivo, movil, salida, nav, esp):
         print(f"{archivo.name}: diapositivas {rep.get('diapositivas_office')} / {rep.get('diapositivas_nom')} · parecido medio {rep.get('parecido_medio')} % (mínimo {rep.get('parecido_min')} %)", flush=True)
     else:
         print(f"{archivo.name}: hojas {rep.get('hojas_visibles_office')} / {rep.get('hojas_nom')} · texto de celdas igual {rep.get('pct_texto')} % de {rep.get('celdas')} · "
-              f"fondos {rep.get('pct_fondo')} % de {rep.get('fondos')} · anchos de columna {rep.get('pct_ancho')} %", flush=True)
+              f"fondos {rep.get('pct_fondo')} % de {rep.get('fondos')} · anchos de columna {rep.get('pct_ancho')} % · altos de fila {rep.get('pct_alto')} %", flush=True)
     return rep
 
 

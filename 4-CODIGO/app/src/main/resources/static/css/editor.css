@@ -1193,3 +1193,15 @@
    una palabra más; luego el justificado reparte lo que sobra. --ae es el ancho del espacio de la fuente (em). */
 .wd-cuerpo.encoge { --encoger: 0.2; }
 .wd-cuerpo.encoge > [data-alin="just"], .wd-cuerpo.encoge > [data-alin="just"] span[style*="--ae"] { word-spacing: calc(var(--ae, 0.25) * var(--encoger) * -1em); }
+
+/* ---- Hoja en modo Excel (libro importado de Excel): se ve como en Excel ----------------------------
+   La fuente y el tamaño del libro, filas de 20 px y columnas de 64 px (o las del archivo), texto abajo,
+   cuadrícula de Excel, sin puntos suspensivos y con el ancho exacto de cada letra. */
+.rejilla-hoja table.xl { font-family: var(--xl-fuente); font-size: var(--xl-tam); font-kerning: none; font-variant-ligatures: none; text-rendering: geometricPrecision; }
+.rejilla-hoja table.xl td { padding: 0 2px 1px; vertical-align: bottom; line-height: normal; color: #000; font-variant-numeric: normal;
+  border-right: 1px solid #E0E0E0; border-bottom: 1px solid #E0E0E0; text-overflow: clip; }
+.rejilla-hoja table.xl.sin-rejilla td { border-right-color: transparent; border-bottom-color: transparent; }
+.rejilla-hoja table.xl td.desborda { overflow: visible; position: relative; z-index: 1; }
+.rejilla-hoja table.xl td.ajusta { white-space: normal; overflow-wrap: anywhere; vertical-align: bottom; }
+.rejilla-hoja table.xl td.col-oculta, .rejilla-hoja table.xl th.col-oculta { padding: 0; border: 0; font-size: 0; }
+.rejilla-hoja table.xl .xl-rell { display: flex; justify-content: space-between; white-space: pre; width: 100%; }

@@ -455,6 +455,24 @@
   };
   FUNCS.CONCAT = FUNCS.CONCATENAR;
 
+  /** DEC.A.BIN/OCT/HEX: número decimal en la base, con negativos en complemento a 10 dígitos (como Excel). */
+  function baseDe(a, b) {
+    let n = Math.floor(num(a[0])); const lugares = a[1] === undefined ? 0 : Math.floor(num(a[1]));
+    const lim = { 2: 512, 8: 536870912, 16: 549755813888 }[b];
+    if (n < -lim || n >= lim) throw E("#NUM!");
+    if (n < 0) n = Math.pow(b, 10) + n;
+    const t = n.toString(b).toUpperCase();
+    if (lugares && t.length > lugares) throw E("#NUM!");
+    return lugares ? t.padStart(lugares, "0") : t;
+  }
+  /** BIN/OCT/HEX.A.DEC: de la base a decimal (10 dígitos con signo en complemento). */
+  function aDec(a, b) {
+    const t = texto(a[0]).trim(); if (!t) return 0;
+    if (t.length > 10 || !new RegExp("^[" + "0123456789ABCDEF".slice(0, b) + "]+$", "i").test(t)) throw E("#NUM!");
+    let n = parseInt(t, b);
+    if (t.length === 10 && parseInt(t[0], b) >= b / 2) n -= Math.pow(b, 10);
+    return n;
+  }
   // ------------------------------------------------------------ más funciones (0.13.2)
   const oDef = (v, def) => (v === undefined || v === "" ? def : v);
   const fraccionDia = (v) => { const n = num(v); return n - Math.floor(n + 1e-9); };
@@ -608,6 +626,74 @@
     UNICAR: (a) => { const n = Math.floor(num(a[0])); if (n < 1 || n > 0x10FFFF) throw E("#VALOR!"); return String.fromCodePoint(n); },
     MONEDA: (a) => { const n = num(a[0]), d = a[1] === undefined ? 2 : num(a[1]); return (redondeo(n, Math.floor(d)) < 0 ? "-" : "") + "$" + conMiles(n, d, true); },
     DECIMAL: (a) => { const n = num(a[0]), d = a[1] === undefined ? 2 : num(a[1]); return (redondeo(n, Math.floor(d)) < 0 ? "-" : "") + conMiles(n, d, !(a[2] !== undefined && verdad(a[2]) && a[2] !== 0)); },
+    // 16-nov-2026 (paridad con Excel)
+    SUBTOTALES: (a) => {
+      const f = Math.floor(num(a[0])) % 100, resto = a.slice(1);
+      const m = { 1: "PROMEDIO", 2: "CONTAR", 3: "CONTARA", 4: "MAX", 5: "MIN", 6: "PRODUCTO", 7: "DESVEST", 8: "DESVESTP", 9: "SUMA", 10: "VAR", 11: "VARP" }[f];
+      if (!m) throw E("#VALOR!");
+      return FUNCS[m](resto);
+    },
+    AGREGAR: (a) => {
+      const f = Math.floor(num(a[0])), op = Math.floor(num(oDef(a[1], 0)));
+      const m = { 1: "PROMEDIO", 2: "CONTAR", 3: "CONTARA", 4: "MAX", 5: "MIN", 6: "PRODUCTO", 7: "DESVEST", 8: "DESVESTP", 9: "SUMA", 10: "VAR", 11: "VARP", 12: "MEDIANA", 13: "MODA" }[f];
+      if (!m && f !== 14 && f !== 15 && f !== 16 && f !== 19) throw E("#VALOR!");
+      const sinErr = (v) => (Array.isArray(v) ? v.map(sinErr) : v instanceof ErrorF ? "" : v);
+      const datos = [6, 7, 2, 3].includes(op) ? sinErr(a.slice(2, f >= 14 ? 3 : undefined)) : a.slice(2, f >= 14 ? 3 : undefined);
+      if (f === 14) return FUNCS["K.ESIMO.MAYOR"]([datos[0], a[3]]);
+      if (f === 15) return FUNCS["K.ESIMO.MENOR"]([datos[0], a[3]]);
+      if (f === 16) return FUNCS.PERCENTIL([datos[0], a[3]]);
+      if (f === 19) return FUNCS.PERCENTIL([datos[0], num(a[3]) / 4]);
+      return FUNCS[m](datos);
+    },
+    COINCIDIRX: (a) => {
+      const vals = lista(a[1]).flat(Infinity), modo = Math.floor(num(oDef(a[2], 0))), busq = Math.floor(num(oDef(a[3], 1)));
+      const orden = busq < 0 ? vals.map((_, i) => vals.length - 1 - i) : vals.map((_, i) => i);
+      const b = a[0];
+      if (modo === 0 || modo === 2) {
+        const p = criterio(esNum(b) ? +b : "=" + texto(b));
+        for (const i of orden) if (p(vals[i])) return i + 1;
+        return E("#N/A");
+      }
+      let mejor = -1;
+      for (const i of orden) {
+        const v = vals[i]; if (!esNum(v) || !esNum(b)) { if (texto(v).toLowerCase() === texto(b).toLowerCase()) return i + 1; continue; }
+        const d = +v - +b;
+        if (d === 0) return i + 1;
+        if (modo === -1 && d < 0 && (mejor < 0 || +v > +vals[mejor])) mejor = i;
+        if (modo === 1 && d > 0 && (mejor < 0 || +v < +vals[mejor])) mejor = i;
+      }
+      return mejor < 0 ? E("#N/A") : mejor + 1;
+    },
+    CONVERTIR: (a) => {
+      const n = num(a[0]), de = texto(a[1]), a2 = texto(a[2]);
+      const T = { C: 1, F: 1, K: 1, cel: 1, fah: 1, kel: 1 };
+      if (T[de] && T[a2]) {
+        const k = de === "C" || de === "cel" ? n + 273.15 : de === "F" || de === "fah" ? (n - 32) * 5 / 9 + 273.15 : n;
+        return a2 === "C" || a2 === "cel" ? k - 273.15 : a2 === "F" || a2 === "fah" ? (k - 273.15) * 9 / 5 + 32 : k;
+      }
+      const U = {
+        m: ["l", 1], km: ["l", 1000], cm: ["l", 0.01], mm: ["l", 0.001], mi: ["l", 1609.344], ft: ["l", 0.3048], in: ["l", 0.0254], yd: ["l", 0.9144], Nmi: ["l", 1852], ang: ["l", 1e-10],
+        g: ["m", 1], kg: ["m", 1000], mg: ["m", 0.001], lbm: ["m", 453.59237], ozm: ["m", 28.349523125], ton: ["m", 907184.74],
+        sec: ["t", 1], s: ["t", 1], mn: ["t", 60], min: ["t", 60], hr: ["t", 3600], day: ["t", 86400], d: ["t", 86400], yr: ["t", 31557600],
+        l: ["v", 1], L: ["v", 1], lt: ["v", 1], ml: ["v", 0.001], gal: ["v", 3.785411784], qt: ["v", 0.946352946], pt: ["v", 0.473176473], cup: ["v", 0.2365882365], oz: ["v", 0.0295735295625], tsp: ["v", 0.00492892159375], tbs: ["v", 0.01478676478125], m3: ["v", 1000],
+        J: ["e", 1], kJ: ["e", 1000], cal: ["e", 4.1868], kcal: ["e", 4186.8], Wh: ["e", 3600], kWh: ["e", 3600000],
+        W: ["p", 1], kW: ["p", 1000], HP: ["p", 745.69987158227], h: ["p", 745.69987158227], Pa: ["pr", 1], atm: ["pr", 101325], mmHg: ["pr", 133.322], psi: ["pr", 6894.75729316836], bar: ["pr", 100000],
+        "km/h": ["vel", 1000 / 3600], "m/s": ["vel", 1], mph: ["vel", 0.44704], kn: ["vel", 1852 / 3600], ha: ["a", 10000], m2: ["a", 1], km2: ["a", 1e6], ft2: ["a", 0.09290304], ac: ["a", 4046.8564224],
+      };
+      const x = U[de], y = U[a2];
+      if (!x || !y || x[0] !== y[0]) return E("#N/A");
+      return (n * x[1]) / y[1];
+    },
+    "DEC.A.BIN": (a) => baseDe(a, 2, 10), "DEC.A.OCT": (a) => baseDe(a, 8, 10), "DEC.A.HEX": (a) => baseDe(a, 16, 10),
+    "BIN.A.DEC": (a) => aDec(a, 2), "OCT.A.DEC": (a) => aDec(a, 8), "HEX.A.DEC": (a) => aDec(a, 16),
+    BASE: (a) => { const n = Math.floor(num(a[0])), b = Math.floor(num(a[1])), l = Math.floor(num(oDef(a[2], 0))); if (n < 0 || b < 2 || b > 36) throw E("#NUM!"); return n.toString(b).toUpperCase().padStart(l, "0"); },
+    "NUMERO.ARABE": (a) => {
+      const t = texto(a[0]).trim().toUpperCase(); if (!t) return 0;
+      const V = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 }; let s = 0, neg = t[0] === "-";
+      const r = neg ? t.slice(1) : t;
+      for (let i = 0; i < r.length; i++) { const v = V[r[i]], w = V[r[i + 1]] || 0; if (!v) throw E("#VALOR!"); s += v < w ? -v : v; }
+      return neg ? -s : s;
+    },
     "NUMERO.ROMANO": (a) => { let n = Math.floor(num(a[0])), r = ""; if (n < 0 || n > 3999) throw E("#VALOR!"); for (const [v, t] of ROMANOS) while (n >= v) { r += t; n -= v; } return r; },
     // matemáticas
     "MULTIPLO.SUPERIOR": (a) => { const n = num(a[0]), m = a[1] === undefined ? 1 : num(a[1]); if (m === 0) return 0; if (n > 0 && m < 0) throw E("#NUM!"); return Math.ceil(n / m - 1e-10) * m; },
@@ -724,6 +810,9 @@
     "RANK.AVG": "JERARQUIA.MEDIA", "JERARQUÍA.MEDIA": "JERARQUIA.MEDIA",
     PMT: "PAGO", PV: "VA", FV: "VF", RATE: "TASA", NPV: "VNA", IRR: "TIR", IPMT: "PAGOINT", PPMT: "PAGOPRIN", EFFECT: "INT.EFECTIVO", NOMINAL: "TASA.NOMINAL",
     ROW: "FILA", COLUMN: "COLUMNA", ROWS: "FILAS", COLUMNS: "COLUMNAS", ADDRESS: "DIRECCION", "DIRECCIÓN": "DIRECCION", INDIRECT: "INDIRECTO", OFFSET: "DESREF",
+    // 16-nov-2026
+    SUBTOTAL: "SUBTOTALES", AGGREGATE: "AGREGAR", XMATCH: "COINCIDIRX", CONVERT: "CONVERTIR", DEC2BIN: "DEC.A.BIN", DEC2OCT: "DEC.A.OCT", DEC2HEX: "DEC.A.HEX",
+    BIN2DEC: "BIN.A.DEC", OCT2DEC: "OCT.A.DEC", HEX2DEC: "HEX.A.DEC", ARABIC: "NUMERO.ARABE", "NÚMERO.ARABE": "NUMERO.ARABE",
   };
   const NOMBRES = Object.keys(FUNCS);
   /** Nombre en inglés para Excel (.xlsx); las funciones nuevas de Excel llevan el prefijo _xlfn. */
@@ -732,6 +821,8 @@
   Object.assign(INGLES, { MIN: "MIN", MAX: "MAX", ABS: "ABS", PI: "PI", EXP: "EXP", LN: "LN", LOG: "LOG", LOG10: "LOG10", COS: "COS", TAN: "TAN",
     "SI.CONJUNTO": "_xlfn.IFS", BUSCARX: "_xlfn.XLOOKUP", CONCAT: "_xlfn.CONCAT", UNIRCADENAS: "_xlfn.TEXTJOIN", "MAX.SI.CONJUNTO": "_xlfn.MAXIFS",
     "MIN.SI.CONJUNTO": "_xlfn.MINIFS", DIAS: "_xlfn.DAYS", CONCATENAR: "CONCATENATE", DESVEST: "STDEV", DESVESTP: "STDEVP", VAR: "VAR", VARP: "VARP", JERARQUIA: "RANK", MODA: "MODE" });
+  Object.assign(INGLES, { SUBTOTALES: "SUBTOTAL", AGREGAR: "_xlfn.AGGREGATE", COINCIDIRX: "_xlfn.XMATCH", CONVERTIR: "CONVERT", "DEC.A.BIN": "DEC2BIN", "DEC.A.OCT": "DEC2OCT",
+    "DEC.A.HEX": "DEC2HEX", "BIN.A.DEC": "BIN2DEC", "OCT.A.DEC": "OCT2DEC", "HEX.A.DEC": "HEX2DEC", "NUMERO.ARABE": "_xlfn.ARABIC", BASE: "_xlfn.BASE" });
   Object.assign(INGLES, { DIAS360: "DAYS360", "ISO.NUM.DE.SEMANA": "_xlfn.ISOWEEKNUM", "SI.ND": "_xlfn.IFNA", CAMBIAR: "_xlfn.SWITCH", XO: "_xlfn.XOR", N: "N", T: "T",
     TEXTOANTES: "_xlfn.TEXTBEFORE", TEXTODESPUES: "_xlfn.TEXTAFTER", UNICAR: "_xlfn.UNICHAR", UNICODE: "_xlfn.UNICODE", DECIMAL: "FIXED",
     "MULTIPLO.SUPERIOR.MAT": "_xlfn.CEILING.MATH", "MULTIPLO.INFERIOR.MAT": "_xlfn.FLOOR.MATH", FACT: "FACT", ACOS: "ACOS", ATAN: "ATAN", ATAN2: "ATAN2", COSH: "COSH", TANH: "TANH",
@@ -912,6 +1003,8 @@
     function calcular(crudo, h, donde) {
       if (crudo == null || crudo === "") return "";
       const s = String(crudo);
+      // «'» al principio: es texto aunque parezca número o fórmula (como el apóstrofo de Excel)
+      if (s[0] === "'") return s.slice(1);
       if (s[0] !== "=") return calcularLiteral(s.trim()) === s.trim() ? s : calcularLiteral(s.trim());
       const tk = tokens(s.slice(1));
       let i = 0;
@@ -1197,8 +1290,323 @@
     const cero = /^[0.,]*$/.test(numero.replace(/,/g, ""));
     return (neg && !cero ? "-" : "") + pre + numero + pos;
   }
+  // ------------------------------------------------------------ formato de número exactamente como Excel
+  // Lo que muestra Excel (en español de México) para un valor y un código de formato: secciones
+  // (positivo;negativo;cero;texto), condiciones [>=1000], colores [Red] y [ColorN], escala con comas,
+  // porcentaje, notación científica, fracciones, literales, _x (espacio del ancho de x), *x (relleno),
+  // @ (el texto), fechas del sistema 1900 de Excel (con su día 0 y su 29 de febrero de 1900) y horas
+  // transcurridas [h]. Devuelve { t, color, relleno } (relleno: la letra que llena el ancho de la celda y
+  // en qué lugar de t va, marcado con \u0000).
+  const COLOR_XL = { black: "#000000", negro: "#000000", blue: "#0000FF", azul: "#0000FF", cyan: "#00FFFF", aguamarina: "#00FFFF",
+    green: "#00FF00", verde: "#00FF00", magenta: "#FF00FF", red: "#FF0000", rojo: "#FF0000", white: "#FFFFFF", blanco: "#FFFFFF", yellow: "#FFFF00", amarillo: "#FFFF00" };
+  const PALETA_XL = "000000 FFFFFF FF0000 00FF00 0000FF FFFF00 FF00FF 00FFFF 800000 008000 000080 808000 800080 008080 C0C0C0 808080 9999FF 993366 FFFFCC CCFFFF 660066 FF8080 0066CC CCCCFF 000080 FF00FF FFFF00 00FFFF 800080 800000 008080 0000FF 00CCFF CCFFFF CCFFCC FFFF99 99CCFF FF99CC CC99FF FFCC99 3366FF 33CCCC 99CC00 FFCC00 FF9900 FF6600 666699 969696 003366 339966 003300 333300 993300 993366 333399 333333".split(" ");
+  /** Redondea a d decimales como Excel (mitad hacia afuera, sobre los 15 dígitos significativos). */
+  function redondeaXL(x, d) {
+    if (!isFinite(x)) return x;
+    const n = Number(Math.abs(x).toPrecision(15));
+    const r = Number(Math.round(Number(n + "e" + d)) + "e-" + d);
+    return x < 0 ? -r : r;
+  }
+  function fijoXL(x, d) {
+    const r = redondeaXL(Math.abs(x), d);
+    let t = r.toFixed(Math.min(100, d));
+    if (/e/i.test(t)) t = BigInt(Math.round(r)).toString();
+    return t;
+  }
+  /** Separa una sección en piezas y saca su color, su condición y su moneda. */
+  function piezasXL(sec) {
+    const p = []; let color = null, cond = null;
+    for (let i = 0; i < sec.length;) {
+      const c = sec[i], resto = sec.slice(i);
+      if (c === '"') { const j = sec.indexOf('"', i + 1); p.push({ t: "lit", v: sec.slice(i + 1, j < 0 ? sec.length : j) }); i = j < 0 ? sec.length : j + 1; continue; }
+      if (c === "\\") { p.push({ t: "lit", v: sec[i + 1] || "" }); i += 2; continue; }
+      if (c === "_") { p.push({ t: "lit", v: " " }); i += 2; continue; }
+      if (c === "*") { p.push({ t: "relleno", v: sec[i + 1] || " " }); i += 2; continue; }
+      if (c === "[") {
+        const j = sec.indexOf("]", i), dentro = sec.slice(i + 1, j < 0 ? sec.length : j); i = j < 0 ? sec.length : j + 1;
+        let m;
+        if (COLOR_XL[dentro.toLowerCase()]) color = COLOR_XL[dentro.toLowerCase()];
+        else if ((m = /^(?:color|color)\s*(\d+)$/i.exec(dentro))) color = "#" + (PALETA_XL[+m[1] - 1] || "000000");
+        else if ((m = /^(<=|>=|<>|<|>|=)\s*(-?[\d.]+(?:E[+-]?\d+)?)$/i.exec(dentro))) cond = { op: m[1], n: +m[2] };
+        else if ((m = /^\$([^-\]]*)(?:-[0-9A-Za-z-]+)?$/.exec(dentro))) { if (m[1]) p.push({ t: "lit", v: m[1] }); }
+        else if (/^(h+|m+|s+)$/i.test(dentro)) p.push({ t: "trans", v: dentro.toLowerCase() });
+        continue;
+      }
+      let m = /^(yyyy|yyy|yy|y|aaaa|aa|mmmmm|mmmm|mmm|mm|m|dddd|ddd|dd|d|hh|h|ss|s|am\/pm|a\/p|e)/i.exec(resto);
+      if (m && !/^e[+-]/i.test(resto)) {
+        const v = m[0].toLowerCase();
+        p.push({ t: /^(am\/pm|a\/p)$/.test(v) ? "ampm" : "fecha", v, orig: m[0] }); i += m[0].length; continue;
+      }
+      if ((m = /^[eE]([+-])/.exec(resto))) { p.push({ t: "E", v: m[1] }); i += 2; continue; }
+      if ("0#?".includes(c)) { p.push({ t: "dig", v: c }); i++; continue; }
+      if (c === ".") { p.push({ t: "punto" }); i++; continue; }
+      if (c === ",") { p.push({ t: "coma" }); i++; continue; }
+      if (c === "%") { p.push({ t: "pct" }); i++; continue; }
+      if (c === "/") { p.push({ t: "barra" }); i++; continue; }
+      if (c === "@") { p.push({ t: "arroba" }); i++; continue; }
+      p.push({ t: "lit", v: c }); i++;
+    }
+    return { p, color, cond };
+  }
+  const esSeccionFecha = (p) => p.some((x) => x.t === "fecha" || x.t === "ampm" || x.t === "trans") && !p.some((x) => x.t === "E");
+  /** Partes de la fecha de un número de serie de Excel (sistema 1900, con sus rarezas). */
+  function partesSerie(serie) {
+    const ent = Math.floor(serie + 1e-9);
+    let a, m, d, sem;
+    if (ent === 0) { a = 1900; m = 1; d = 0; sem = 6; }
+    else if (ent === 60) { a = 1900; m = 2; d = 29; sem = 3; }
+    else if (ent < 60) { const f = new Date(Date.UTC(1900, 0, ent)); a = 1900; m = f.getUTCMonth() + 1; d = f.getUTCDate(); sem = (ent - 1) % 7; }
+    else { const f = fechaDe(ent); a = f.getUTCFullYear(); m = f.getUTCMonth() + 1; d = f.getUTCDate(); sem = f.getUTCDay(); }
+    return { a, m, d, sem };
+  }
+  function fechaXL(v, p) {
+    if (v < 0 || v > 2958465.99999) return { t: "#".repeat(12), gato: true };
+    const conSeg = p.some((x) => x.t === "fecha" && /^s/.test(x.v));
+    // décimas de segundo: "ss.0" (el punto y los ceros tras los segundos)
+    let decSeg = 0;
+    for (let k = 0; k < p.length; k++) if (p[k].t === "punto" && p.slice(0, k).some((x) => x.t === "fecha" && /^s/.test(x.v))) { let j = k + 1; while (p[j] && p[j].t === "dig" && p[j].v === "0") { decSeg++; j++; } }
+    // Excel redondea al segundo (o a la décima que se muestra) y luego corta: 10:57:38.9 con «h:mm» es 10:57
+    const unidad = decSeg ? 86400 * Math.pow(10, decSeg) : 86400;
+    const total = Math.round(v * unidad);   // redondeo al último lugar que se muestra (como Excel)
+    const dias = Math.floor(total / unidad), resto = total - dias * unidad;
+    const segT = unidad >= 86400 ? resto / (unidad / 86400) : resto * 60;
+    const hh = Math.floor(segT / 3600), mi = Math.floor((segT % 3600) / 60), ss = Math.floor(segT % 60), fr = segT - Math.floor(segT);
+    const F = partesSerie(dias);
+    const ampm = p.some((x) => x.t === "ampm");
+    const p2 = (n) => String(n).padStart(2, "0");
+    let out = "", relleno = null;
+    for (let k = 0; k < p.length; k++) {
+      const x = p[k];
+      if (x.t === "lit") { out += x.v; continue; }
+      if (x.t === "relleno") { relleno = x.v; out += "\u0000"; continue; }
+      if (x.t === "trans") {
+        const tot = v * 86400;
+        out += x.v[0] === "h" ? String(Math.floor((total / unidad) * 24 + 1e-9)).padStart(x.v.length, "0") : x.v[0] === "m" ? String(Math.floor((total / unidad) * 1440 + 1e-9)).padStart(x.v.length, "0") : String(Math.round(tot)).padStart(x.v.length, "0");
+        continue;
+      }
+      if (x.t === "ampm") { out += x.v === "a/p" ? (hh < 12 ? "a" : "p") : hh < 12 ? "a. m." : "p. m."; continue; }
+      if (x.t === "punto" && decSeg && p.slice(0, k).some((y) => y.t === "fecha" && /^s/.test(y.v))) { out += "." + String(Math.round(fr * Math.pow(10, decSeg))).padStart(decSeg, "0").slice(0, decSeg); k += decSeg; continue; }
+      if (x.t === "fecha") {
+        const ant = p.slice(0, k).reverse().find((y) => y.t === "fecha" || y.t === "trans"), sig = p.slice(k + 1).find((y) => y.t === "fecha" || y.t === "trans");
+        const esMin = /^m{1,2}$/.test(x.v) && ((ant && /^h|^\[?h/.test(ant.v)) || (sig && /^s/.test(sig.v)) || (ant && ant.t === "trans" && ant.v[0] === "h"));
+        switch (x.v) {
+          case "yyyy": case "yyy": case "aaaa": case "e": out += String(F.a); break;
+          case "yy": case "y": case "aa": out += p2(F.a % 100); break;
+          case "mmmmm": out += MESES[F.m - 1][0]; break;
+          case "mmmm": out += MESES[F.m - 1]; break;
+          case "mmm": out += MESES_C[F.m - 1]; break;
+          case "mm": out += esMin ? p2(mi) : p2(F.m); break;
+          case "m": out += esMin ? String(mi) : String(F.m); break;
+          case "dddd": out += DIAS_S[F.sem]; break;
+          case "ddd": out += DIAS_C[F.sem]; break;
+          case "dd": out += p2(F.d); break;
+          case "d": out += String(F.d); break;
+          case "hh": out += p2(ampm ? hh % 12 || 12 : hh); break;
+          case "h": out += String(ampm ? hh % 12 || 12 : hh); break;
+          case "ss": out += p2(ss); break;
+          case "s": out += String(ss); break;
+          default: out += x.orig;
+        }
+        continue;
+      }
+      if (x.t === "punto") { out += "."; continue; }
+      if (x.t === "coma") { out += ","; continue; }
+      if (x.t === "dig") { out += x.v === "0" ? "0" : ""; continue; }
+      if (x.t === "pct") { out += "%"; continue; }
+      if (x.t === "barra") { out += "/"; continue; }
+    }
+    return { t: out, relleno };
+  }
+  /** Llena los lugares de dígitos de la parte entera, de derecha a izquierda (con literales intercalados). */
+  function enteroXL(digitos, lugares, miles) {
+    // lugares: [{t:'dig',v}, {t:'lit',v}, ...] de la parte entera
+    const solo = lugares.filter((x) => x.t === "dig");
+    if (miles && solo.length === lugares.length) {
+      const minimo = solo.filter((x) => x.v === "0").length, conEsp = solo.filter((x) => x.v === "?").length;
+      let d = digitos === "0" && !solo.some((x) => x.v === "0") ? "" : digitos;
+      if (d.length < minimo) d = d.padStart(minimo, "0");
+      d = d.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      const faltan = Math.max(0, minimo + conEsp - digitos.length - (minimo ? 0 : 0));
+      return (d.length < minimo + conEsp ? " ".repeat(Math.max(0, minimo + conEsp - d.replace(/,/g, "").length)) : "") + d;
+    }
+    const salida = [];
+    let i = digitos.length - 1;
+    if (digitos === "0") i = -1;   // el cero se escribe solo donde hay "0"
+    for (let k = lugares.length - 1; k >= 0; k--) {
+      const x = lugares[k];
+      if (x.t !== "dig") { salida.unshift(x.v); continue; }
+      const esPrimero = !lugares.slice(0, k).some((y) => y.t === "dig");
+      if (i >= 0) {
+        if (esPrimero) { salida.unshift(digitos.slice(0, i + 1)); i = -1; }
+        else salida.unshift(digitos[i--]);
+      } else salida.unshift(x.v === "0" ? "0" : x.v === "?" ? " " : "");
+    }
+    let r = salida.join("");
+    if (miles) r = r.replace(/\d+/, (q) => q.replace(/\B(?=(\d{3})+(?!\d))/g, ","));
+    return r;
+  }
+  function numeroXL(v, p) {
+    let x = v;
+    const pct = p.filter((y) => y.t === "pct").length;
+    if (pct) x *= Math.pow(100, pct);
+    // escala: comas pegadas después del último dígito de la parte entera (o al final del número)
+    const idxDig = p.map((y, k) => (y.t === "dig" ? k : -1)).filter((k) => k >= 0);
+    const iPunto = p.findIndex((y) => y.t === "punto"), iE = p.findIndex((y) => y.t === "E"), iBarra = p.findIndex((y) => y.t === "barra");
+    const finEnt = (() => { const lim = [iPunto, iE, iBarra].filter((k) => k >= 0); const l = lim.length ? Math.min(...lim) : p.length; let u = -1; for (const k of idxDig) if (k < l) u = k; return u; })();
+    let escala = 0;
+    for (let k = finEnt + 1; k < p.length && p[k].t === "coma"; k++) escala++;
+    // también las comas pegadas al último dígito del número (decimal o no): «0.0,"K"»
+    const ultDig = idxDig.length ? idxDig[idxDig.length - 1] : -1;
+    const comasFin = new Set();
+    if (ultDig > finEnt) for (let k = ultDig + 1; k < p.length && p[k].t === "coma"; k++) { escala++; comasFin.add(k); }
+    if (escala) x /= Math.pow(1000, escala);
+    const miles = p.some((y, k) => y.t === "coma" && k < finEnt && p.slice(0, k).some((z) => z.t === "dig"));
+    const comaEscala = new Set(); { let k = finEnt + 1; while (k < p.length && p[k].t === "coma") comaEscala.add(k++); }
+    const lit = (y) => (y.t === "lit" ? y.v : y.t === "pct" ? "%" : y.t === "relleno" ? "\u0000" : "");
+    let relleno = (p.find((y) => y.t === "relleno") || {}).v || null;
+    // ---- fracción
+    if (iBarra >= 0) {
+      const den = []; let k = iBarra + 1;
+      while (k < p.length && (p[k].t === "dig" || (p[k].t === "lit" && /\d/.test(p[k].v)))) den.push(p[k++]);
+      const fijo = den.length && den.every((y) => y.t === "lit") ? +den.map((y) => y.v).join("") : null;
+      const numL = []; let j = iBarra - 1;
+      while (j >= 0 && p[j].t === "dig") numL.unshift(p[j--]);
+      const antes = p.slice(0, j + 1), hayEntero = antes.some((y) => y.t === "dig");
+      const a = Math.abs(x);
+      let ent = hayEntero ? Math.floor(a) : 0, fr = a - ent, num, dn;
+      if (fijo) { dn = fijo; num = Math.round(fr * dn); }
+      else {
+        // Excel usa las convergentes de la fracción continua (no la mejor aproximación): 0.4567 con «?/?» es 1/2
+        const maxD = Math.pow(10, den.filter((y) => y.t === "dig").length) - 1;
+        let h0 = 0, h1 = 1, k0 = 1, k1 = 0, r = fr;
+        num = 0; dn = 1;
+        for (let it = 0; it < 40; it++) {
+          const a0 = Math.floor(r + 1e-12);
+          const h2 = a0 * h1 + h0, k2 = a0 * k1 + k0;
+          if (k2 > maxD) break;
+          num = h2; dn = k2; h0 = h1; h1 = h2; k0 = k1; k1 = k2;
+          const resto = r - a0; if (resto < 1e-10) break; r = 1 / resto;
+        }
+        if (dn === 0) { num = 0; dn = 1; }
+      }
+      if (num === dn && hayEntero) { ent += 1; num = 0; }
+      const neg = "";
+      const anchoN = Math.max(1, numL.length), anchoD = fijo ? String(fijo).length : den.filter((y) => y.t === "dig").length;
+      let txtEnt = hayEntero ? enteroXL(String(ent), antes.filter((y) => y.t === "dig"), false) : "";
+      const sepLit = hayEntero ? antes.slice(antes.map((y) => y.t).lastIndexOf("dig") + 1).map(lit).join("") : "";
+      const preLit = antes.slice(0, antes.findIndex((y) => y.t === "dig")).map(lit).join("");
+      let fracc;
+      if (num === 0 && hayEntero) { fracc = " ".repeat(anchoN + 1 + anchoD); if (!txtEnt) txtEnt = "0"; }
+      else fracc = String(num).padStart(anchoN, " ") + "/" + (fijo ? String(dn) : String(dn).padEnd(anchoD, " "));
+      const despues = p.slice(k).map(lit).join("");
+      return { t: neg + (hayEntero ? preLit + txtEnt + (num === 0 ? " ".repeat(sepLit.length) : sepLit) : antes.map(lit).join("")) + fracc + despues, relleno };
+    }
+    // ---- científica
+    if (iE >= 0) {
+      const mant = p.slice(0, iE), expL = p.slice(iE + 1).filter((y) => y.t === "dig");
+      const entL = mant.filter((y, k) => y.t === "dig" && (iPunto < 0 || k < iPunto)), decL = iPunto >= 0 ? mant.filter((y, k) => y.t === "dig" && k > iPunto) : [];
+      const a = Math.abs(x);
+      let e = a === 0 ? 0 : Math.floor(Math.log10(a));
+      const paso = entL.length > 1 && entL.some((y) => y.v === "#") ? entL.length : 1;
+      if (paso > 1) e = Math.floor(e / paso) * paso; else e = e - (entL.length - 1);
+      let m = a / Math.pow(10, e);
+      let mt = fijoXL(m, decL.length);
+      if (+mt >= Math.pow(10, Math.max(1, paso > 1 ? paso : entL.length))) { e += paso; m = a / Math.pow(10, e); mt = fijoXL(m, decL.length); }
+      let [me, md = ""] = mt.split(".");
+      const ex = String(Math.abs(e)).padStart(expL.length, "0");
+      const signo = e < 0 ? "-" : p[iE].v === "+" ? "+" : "";
+      const pre = mant.slice(0, mant.findIndex((y) => y.t === "dig")).map(lit).join("");
+      return { t: pre + me + (decL.length ? "." + md : "") + "E" + signo + ex + p.slice(iE + 1).filter((y) => y.t !== "dig").map(lit).join(""), relleno };
+    }
+    // ---- número normal
+    const decL = iPunto >= 0 ? p.filter((y, k) => y.t === "dig" && k > iPunto) : [];
+    const nd = decL.length;
+    const a = Math.abs(x);
+    let txt = fijoXL(a, nd);
+    let [e, d = ""] = txt.split(".");
+    // decimales: # quita ceros finales, ? los vuelve espacios
+    if (nd) {
+      const chars = d.split("");
+      for (let k = nd - 1; k >= 0; k--) { if (chars[k] !== "0") break; if (decL[k].v === "#") chars[k] = ""; else if (decL[k].v === "?") chars[k] = " "; else break; }
+      d = chars.join("");
+    }
+    const primerDig = p.findIndex((y) => y.t === "dig");
+    const ultEnt = iPunto >= 0 ? iPunto : (() => { let u = -1; p.forEach((y, k) => { if (y.t === "dig") u = k; }); return u + 1; })();
+    const zonaEnt = primerDig >= 0 ? p.slice(primerDig, ultEnt).filter((y, k) => y.t !== "coma" && !comaEscala.has(primerDig + k)) : [];
+    const txtEnt = primerDig < 0 || (iPunto >= 0 && primerDig > iPunto) ? "" : enteroXL(e, zonaEnt, miles);
+    const pre = p.slice(0, Math.max(0, primerDig < 0 ? p.length : primerDig)).map(lit).join("");
+    const post = p.slice(iPunto >= 0 ? iPunto + 1 : ultEnt).filter((y) => y.t !== "dig" && y.t !== "coma").map(lit).join("");
+    void comasFin;
+    const cuerpo = txtEnt + (iPunto >= 0 ? "." + d : "");
+    return { t: pre + cuerpo + post, relleno, esCero: Number(txt) === 0 };
+  }
+  /** El formato General de Excel: hasta 11 caracteres; muy grande o muy chico, en notación científica. */
+  function generalXL(n) {
+    if (n === 0) return "0";
+    const a = Math.abs(n), neg = n < 0 ? "-" : "";
+    if (a >= 1e11 || a < 1e-9) {
+      let [m, e] = a.toExponential(5).split("e");
+      m = m.replace(/\.?0+$/, "");
+      const ex = Math.abs(+e);
+      return neg + m + "E" + (+e < 0 ? "-" : "+") + String(ex).padStart(2, "0");
+    }
+    for (let d = 10; d >= 0; d--) {
+      const t = String(redondeaXL(a, d));
+      const s = /e/i.test(t) ? a.toFixed(d) : t;
+      if (s.replace("-", "").length <= 11) return neg + s;
+    }
+    return neg + String(Math.round(a));
+  }
+  /** Lo que muestra Excel para un valor con un formato: { t, color, relleno, gato (no cabe), num }. */
+  function formatoXL(v, cod) {
+    if (v instanceof ErrorF) return { t: v.codigo };
+    if (v instanceof FechaF) v = v.serie;
+    const codigo = cod == null || cod === "" ? "General" : String(cod);
+    if (typeof v === "boolean") return { t: v ? "VERDADERO" : "FALSO" };
+    const texto = typeof v === "string" && !esNum(v);
+    const secs = secciones(codigo).map(piezasXL);
+    if (texto || v === "" || v == null) {
+      if (v === "" || v == null) return { t: "" };
+      const s4 = secs[3] || (secs.length === 1 && secs[0].p.some((x) => x.t === "arroba") ? secs[0] : null);
+      if (!s4) return { t: String(v) };
+      let relleno = null;
+      const t = s4.p.map((x) => (x.t === "arroba" ? String(v) : x.t === "lit" ? x.v : x.t === "relleno" ? ((relleno = x.v), "\u0000") : "")).join("");
+      return { t, color: s4.color, relleno };
+    }
+    const n = +v;
+    if (!isFinite(n)) return { t: "#¡DIV/0!" };
+    if (/^general$/i.test(codigo.trim())) return { t: generalXL(n), num: true };
+    // elegir sección
+    let s, absoluto = false;
+    const conCond = secs.some((x) => x.cond);
+    if (conCond) {
+      const cumple = (c) => !c || ({ "<": n < c.n, "<=": n <= c.n, ">": n > c.n, ">=": n >= c.n, "=": n === c.n, "<>": n !== c.n })[c.op];
+      if (secs[0].cond && cumple(secs[0].cond)) s = secs[0];
+      else if (secs[1] && secs[1].cond && cumple(secs[1].cond)) s = secs[1];
+      else if (secs[1] && !secs[1].cond && (!secs[2] || secs[2].p.some((x) => x.t === "arroba"))) s = secs[1];
+      else s = secs[2] || secs[1] || secs[0];
+    } else if (n < 0 && secs.length >= 2 && secs[1].p.length) { s = secs[1]; absoluto = true; }
+    else if (n === 0 && secs.length >= 3 && secs[2].p.length) s = secs[2];
+    else s = secs[0];
+    if (!s.p.length && secs.length > 1) return { t: "", color: s.color };   // ;;; (oculto)
+    if (/^general$/i.test(s.p.map((x) => (x.t === "lit" ? x.v : x.orig || x.v || "")).join("").trim()) || (s.p.length && s.p.every((x) => x.t === "lit") && /^general$/i.test(s.p.map((x) => x.v).join("")))) {
+      return { t: (absoluto ? generalXL(Math.abs(n)) : generalXL(n)), color: s.color, num: true };
+    }
+    if (esSeccionFecha(s.p)) { const r = fechaXL(n, s.p); return { t: r.t, color: s.color, relleno: r.relleno, gato: r.gato, num: true }; }
+    if (s.p.some((x) => x.t === "arroba") && !s.p.some((x) => x.t === "dig")) return { t: s.p.map((x) => (x.t === "arroba" ? generalXL(n) : x.t === "lit" ? x.v : "")).join(""), color: s.color, num: true };
+    // con condiciones, Excel da formato al valor sin signo y le antepone el menos (aun con literales)
+    const sinSigno = conCond || absoluto;
+    const r = numeroXL(Math.abs(n), s.p);
+    let t = r.t;
+    if (n < 0 && !absoluto && (conCond || !r.esCero)) t = "-" + t;
+    void sinSigno;
+    return { t, color: s.color, relleno: r.relleno, num: true };
+  }
   /** Un valor con su formato de número (código como los de Excel). Sin formato: formatear(). */
   function aplicarFormato(v, cod) {
+    if (NOM.formatoExcel !== false && !(v instanceof FechaF && (!cod || /^general$/i.test(cod)))) {
+      try { return formatoXL(v, cod).t.replace(/\u0000/g, ""); } catch (e) { /* cae a lo de antes */ }
+    }
     if (!cod || /^general$/i.test(cod)) return formatear(v);
     if (v instanceof ErrorF) return v.codigo;
     if (cod === "@") return texto(v);
@@ -1355,7 +1763,7 @@
 
   NOM.formulas = {
     hojasDe, nombreDeHoja, evaluadorDeTabla,
-    evaluador, formatear, aplicarFormato, ErrorF, FechaF, esNum, colLetra, colNum, ref, parseRef, NOMBRES, FIRMAS, ALIAS, INGLES,
+    evaluador, formatear, aplicarFormato, formatoXL, ErrorF, FechaF, esNum, colLetra, colNum, ref, parseRef, NOMBRES, FIRMAS, ALIAS, INGLES,
     leerFecha, criterio, desplazar, ajustarEstructura, renombrarHoja, refsDe, textoRef, leerRef, transformarRefs, FORMATOS, esFormatoFecha,
     cambiarDecimales, leerEntrada, serie, calcularLiteral, prefijoHoja, textoFecha, aEspanol,
   };

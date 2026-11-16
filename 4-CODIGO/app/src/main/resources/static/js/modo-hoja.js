@@ -91,8 +91,23 @@
       };
       const textoRango = (r) => (r.c1 === r.c2 && r.f1 === r.f2 ? F().ref(r.c1, r.f1) : `${F().ref(r.c1, r.f1)}:${F().ref(r.c2, r.f2)}`);
       const cadaCelda = (r, fn) => { for (let f = r.f1; f <= r.f2; f++) for (let c = r.c1; c <= r.c2; c++) fn(c, f, F().ref(c, f)); };
-      const ancho = (c) => +(t && t["aw:" + F().colLetra(c)]) || ANCHO;
-      const alto = (f) => +(t && t["ah:" + (f + 1)]) || 0;
+      // Modo Excel (libro importado de Excel): anchos y altos exactos de Excel, la fuente del libro, etc.
+      const xl = () => (t && t.xl) || null;
+      const ancho = (c) => {
+        const L = F().colLetra(c), aw = +(t && t["aw:" + L]);
+        const X = xl();
+        if (!X) return aw || ANCHO;
+        if (t["ow:" + L] && !aw) return 0;
+        const ap = +t["ap:" + L];
+        if (ap && aw && Math.abs(aw - (ap + 5)) <= 2) return ap;   // el de Excel (nadie lo cambió aquí)
+        return aw || X.w0 || 64;
+      };
+      const alto = (f) => {
+        const h = +(t && t["ah:" + (f + 1)]) || 0;
+        const X = xl();
+        if (!X || h) return h;
+        return +t["ahx:" + (f + 1)] || X.h0 || 20;
+      };
 
       // ------------------------------------------------------------ 4.1 vista personal (filtro y orden)
       const claveVista = () => (ed.local ? "nom.local.filtro." + ed.id : NOM.api.clave("filtro." + ed.id));
@@ -127,7 +142,8 @@
       }
       function calcularVisibles(ev) {
         const n = t ? t.filas || 30 : 0;
-        const todas = Array.from({ length: n }, (_, i) => i);
+        let todas = Array.from({ length: n }, (_, i) => i);
+        if (xl()) todas = todas.filter((i) => !t["oh:" + (i + 1)]);   // filas ocultas en Excel
         const v = vistaActual();
         if (!v) return todas;
         const enc = v.encabezado ? 1 : 0;
@@ -334,6 +350,18 @@
           if (sh.length) st.push("box-shadow:" + sh.join(","));
         }
         const cr = String(crudo(c, f));
+        const X = xl();
+        if (X && F().formatoXL) {
+          // Como Excel: el color que pide el formato ([Rojo]…), el relleno «*» (contabilidad) y la letra exacta
+          let r; try { r = F().formatoXL(v, fmt); } catch (e) { r = { t: F().aplicarFormato(v, fmt) }; }
+          if (r.color) st.push("color:" + r.color);
+          const tp = +t["tp:" + ref], tlv = +t["tl:" + ref];
+          if (tp && (!tlv || Math.abs(tlv - Math.round((tp / 1.0476) * 2) / 2) < 0.01)) st.push("font-size:" + tp + "pt");
+          else if (tlv) st.push("font-size:" + Math.round(tlv * 1.0476 * 2) / 2 + "pt");
+          const esN = F().esNum(v) && !String(cr).startsWith("'") && fmt !== "@", esB = typeof v === "boolean", esE = v instanceof F().ErrorF;
+          if (!al) st.push("text-align:" + (esN ? "right" : esB || esE ? "center" : "left"));
+          return { v, txt: r.t, relleno: r.relleno, gato: r.gato, st: st.join(";"), negrita, num: esN, err: esE, formula: cr.startsWith("=") ? cr : "", ajusta: !!t["aj:" + ref] };
+        }
         return { v, txt: F().aplicarFormato(v, fmt), st: st.join(";"), negrita, num: F().esNum(v), err: v instanceof F().ErrorF, formula: cr.startsWith("=") ? cr : "" };
       }
       function render() {
@@ -351,11 +379,16 @@
         const spans = calcularCombinadas(!vistaActual());
         const conds = reglas("cf");
         const listas = reglas("dv").filter((x) => x.tipo === "lista");
-        let h = `<table><colgroup><col style="width:46px">${Array.from({ length: cols }, (_, c) => `<col style="width:${ancho(c)}px">`).join("")}</colgroup>
+        const X = xl();
+        // (en modo Excel la tabla mide justo la suma de sus columnas: si se estira, reparte el sobrante y ninguna mide lo de Excel)
+        const anchoTotal = X ? 46 + Array.from({ length: cols }, (_, c) => ancho(c)).reduce((a, b) => a + b, 0) : 0;
+        const estXl = X ? ` class="xl${X.rejilla ? "" : " sin-rejilla"}" style="width:${anchoTotal}px;--xl-fuente:${esc(NOM.textoRico ? NOM.textoRico.cssFuente(X.fuente) : X.fuente)};--xl-tam:${+X.tam || 11}pt"${X.rtl ? ' dir="rtl"' : ""}` : "";
+        let h = `<table${estXl}><colgroup><col style="width:46px">${Array.from({ length: cols }, (_, c) => `<col style="width:${ancho(c)}px">`).join("")}</colgroup>
           <thead><tr><th data-todo title="Elegir todo"></th>${Array.from({ length: cols }, (_, c) => `<th data-col="${c}" class="${c >= r.c1 && c <= r.c2 ? "activa" : ""}${v.orden && v.orden.c === c ? " ordenada" : ""}${(v.filtros || {})[c] ? " filtrada" : ""}">${F().colLetra(c)}${ed.soloLectura ? "" : `<span class="redim-c" data-redim-c="${c}" aria-hidden="true"></span>`}</th>`).join("")}</tr></thead><tbody>`;
         for (const f of visibles) {
           const hf = alto(f);
           h += `<tr data-fila="${f}"${hf ? ` style="height:${hf}px"` : ""}><th data-filah="${f}" class="${f >= r.f1 && f <= r.f2 ? "activa" : ""}">${f + 1}${ed.soloLectura ? "" : `<span class="redim-f" data-redim-f="${f}" aria-hidden="true"></span>`}</th>`;
+          let tapada = -1;   // modo Excel: hasta qué columna llega el texto que se desbordó desde la izquierda
           for (let c = 0; c < cols; c++) {
             const ref = F().ref(c, f);
             if (cubiertas.has(ref)) continue;
@@ -364,11 +397,26 @@
               c === sel.c && f === sel.f ? "sel" : (dentro(r, c, f) ? "rango" : ""),
               resaltadas.has(ref) ? "cambiada" : "", comentadas.has(ref) ? "con-comentario" : "", halladas.has(ref) ? "hallada" : "",
               listas.some((x) => dentro(x.r, c, f)) ? "con-lista" : "", sp ? "combinada" : ""].join(" ");
-            h += `<td data-c="${c}" data-f="${f}" data-id="${esc(t.id)}!${ref}" class="${clases}"${sp ? ` colspan="${sp.cs}" rowspan="${sp.rs}"` : ""} ${a.negrita ? "data-negrita" : ""} ${t["i:" + ref] ? "data-cursiva" : ""} ${t["u:" + ref] ? "data-subrayado" : ""} ${a.st ? `style="${esc(a.st)}"` : ""} title="${esc(a.formula)}">${esc(a.txt)}</td>`;
+            let contenido = esc(a.txt), extra = "";
+            if (X) {
+              // relleno «*» (contabilidad): lo de la izquierda pegado a la izquierda y el número a la derecha
+              if (a.relleno != null && a.txt.includes("\u0000")) { const [iz, de] = a.txt.split("\u0000"); contenido = `<span class="xl-rell"><span>${esc(iz)}</span><span>${esc(de)}</span></span>`; }
+              if (t["ow:" + F().colLetra(c)]) extra += " col-oculta";
+              // texto que no cabe: se desborda sobre las celdas vacías de la derecha, como en Excel
+              if (!a.num && a.txt && !a.ajusta && !sp && !/text-align:(right|center)/.test(a.st)) {
+                let k = c + 1; while (k < cols && String(crudo(k, f)) === "" && !cubiertas.has(F().ref(k, f))) k++;
+                if (k > c + 1) { extra += " desborda"; tapada = k - 1; }
+              }
+              if (c <= tapada && a.txt === "" && c !== tapada + 1) extra += "";
+              if (a.ajusta) extra += " ajusta";
+              if (a.gato) contenido = "#".repeat(30);
+            }
+            h += `<td data-c="${c}" data-f="${f}" data-id="${esc(t.id)}!${ref}" class="${clases}${extra}"${sp ? ` colspan="${sp.cs}" rowspan="${sp.rs}"` : ""} ${a.negrita ? "data-negrita" : ""} ${t["i:" + ref] ? "data-cursiva" : ""} ${t["u:" + ref] ? "data-subrayado" : ""} ${a.st ? `style="${esc(a.st)}"` : ""} title="${esc(a.formula)}">${contenido}</td>`;
           }
           h += "</tr>";
         }
         rej.innerHTML = h + "</tbody></table>";
+        if (X) ajustarComoExcel();
         rej.append(asa);
         pintarBanda();
         aplicarFijas();
@@ -377,6 +425,29 @@
         pintarBandeja();
         marcarCopiado();
         ed.pintarPresencia();
+      }
+
+      /**
+       * Modo Excel, después de pintar: un número o una fecha que no cabe en su columna se ve como «####»;
+       * uno en formato General primero pierde decimales (o pasa a notación científica), como en Excel.
+       */
+      function ajustarComoExcel() {
+        rej.querySelectorAll("td.num").forEach((td) => {
+          if (td.scrollWidth <= td.clientWidth + 1) return;
+          const c = +td.dataset.c, f = +td.dataset.f, ref = F().ref(c, f), fmt = t["f:" + ref];
+          const v = evaluar().valor(c, f);
+          if ((!fmt || /^general$/i.test(fmt)) && F().esNum(v)) {
+            const n = +v, a = Math.abs(n);
+            const intentos = [];
+            for (let d = 9; d >= 0; d--) intentos.push(String(Math.round(n * Math.pow(10, d)) / Math.pow(10, d)));
+            for (let d = 5; d >= 0; d--) { let [m, e] = n.toExponential(d).split("e"); intentos.push(m + "E" + (+e < 0 ? "-" : "+") + String(Math.abs(+e)).padStart(2, "0")); }
+            for (const x of intentos) { if (a >= 1 && x.replace(/[-.]/g, "").length < String(Math.trunc(a)).length && !/E/.test(x)) continue; td.textContent = x; if (td.scrollWidth <= td.clientWidth + 1) return; }
+          }
+          td.textContent = "#";
+          let n = 1;
+          while (td.scrollWidth <= td.clientWidth && n < 200) { n++; td.textContent = "#".repeat(n); }
+          td.textContent = "#".repeat(Math.max(1, n - 1));
+        });
       }
 
       function pintarSeleccion() {
@@ -410,7 +481,8 @@
         const b = $("[data-bandeja]", raiz);
         const hojas = F().hojasDe(doc());
         const nombreDe = (p, i) => { const h = hojas.find((x) => x.pagina === p); return h ? F().nombreDeHoja(doc(), h) : "Hoja" + (i + 1); };
-        b.innerHTML = `<div class="hojas-pestanas" role="tablist">${pags.map((p, i) => `<button class="pestana-hoja ${p === ed.pagina ? "activa" : ""}" role="tab" aria-selected="${p === ed.pagina}" data-pag="${esc(p)}" data-micro="${esc(nombreDe(p, i))}|Toca para abrirla. Doble clic o mantener: nombre, duplicar, mover o eliminar.">${esc(nombreDe(p, i))}</button>`).join("")}</div>
+        const oculta = (p) => { const h = hojas.find((x) => x.pagina === p); return !!(h && h.xl && h.xl.oculta) && p !== ed.pagina; };
+        b.innerHTML = `<div class="hojas-pestanas" role="tablist">${pags.map((p, i) => oculta(p) ? "" : `<button class="pestana-hoja ${p === ed.pagina ? "activa" : ""}" role="tab" aria-selected="${p === ed.pagina}" data-pag="${esc(p)}" data-micro="${esc(nombreDe(p, i))}|Toca para abrirla. Doble clic o mantener: nombre, duplicar, mover o eliminar.">${esc(nombreDe(p, i))}</button>`).join("")}</div>
           ${ed.soloLectura ? "" : `<button class="icono-btn" data-nueva data-micro="Nueva hoja|Agrega otra hoja a este libro.">${ico("plus")}</button>`}
           <span class="crece"></span>
           ${libres.length ? `<span class="chip" data-micro="Bloques libres|Texto, figuras o imágenes de otros modos. Se conservan aunque aquí no se editen.">${ico("layers", "ico-s")} ${libres.length} bloque${libres.length > 1 ? "s" : ""} libre${libres.length > 1 ? "s" : ""}</span>` : ""}`;
