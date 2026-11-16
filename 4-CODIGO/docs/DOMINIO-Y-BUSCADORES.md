@@ -53,21 +53,25 @@ navegador ──https://nom.qd.je──▶ Cloudflare (nombre personalizado de l
 ## 3. Paso A: quién responde por nom.qd.je (DNS)
 
 DigitalPlat solo **delega**: no guarda registros, solo dice qué servidores de nombres responden por
-`nom.qd.je`. Hace falta un DNS gratis que acepte un subdominio como zona y que tenga registro
-**ALIAS** (en la raíz de una zona no se puede poner CNAME):
+`nom.qd.je`. Hace falta un DNS gratis que acepte un subdominio como zona. Se usa **deSEC**
+(<https://desec.io>), que acepta cualquier correo. Hurricane Electric (dns.he.net) no aceptó ni Gmail
+ni Yahoo al registrarse (16-nov).
 
-1. Crear cuenta en **Hurricane Electric Free DNS**: <https://dns.he.net> (gratis).
-2. «Add a new domain» → `nom.qd.je`.
+1. <https://desec.io> → «Sign up»: correo y captcha. Confirmar con el enlace que llega al correo.
+2. «+» (nuevo dominio) → `nom.qd.je`. deSEC muestra sus servidores de nombres: `ns1.desec.io` y
+   `ns2.desec.org`. Los registros DS (DNSSEC) se ignoran: DigitalPlat no los pide.
 3. En el panel de DigitalPlat (<https://dash.domain.digitalplat.org>), en `nom.qd.je`, poner como
-   servidores de nombres: `ns1.he.net`, `ns2.he.net`, `ns3.he.net`, `ns4.he.net`, `ns5.he.net`.
-4. En dns.he.net, dentro de `nom.qd.je`, «New ALIAS»: nombre `nom.qd.je`, destino
-   `origen.nomcolab.dpdns.org`, TTL 5 minutos.
+   servidores de nombres `ns1.desec.io` y `ns2.desec.org`.
+4. En deSEC, dentro de `nom.qd.je`, agregar con el «Subname» **vacío** (es el propio `nom.qd.je`):
+   - tipo **A**: `104.21.87.200` y `172.67.145.239`
+   - tipo **AAAA**: `2606:4700:3037::ac43:91ef` y `2606:4700:3034::6815:57c8`
 
-Si dns.he.net no deja agregar `nom.qd.je`, otra opción es **deSEC** (<https://desec.io>, gratis).
-deSEC no tiene ALIAS: en su lugar se ponen registros A y AAAA con las direcciones que hoy da
-`dig origen.nomcolab.dpdns.org` (`104.21.87.200`, `172.67.145.239`, `2606:4700:3037::ac43:91ef`,
-`2606:4700:3034::6815:57c8`). Funciona igual, pero si Cloudflare cambia esas direcciones hay que
-actualizarlas a mano.
+   Son las direcciones de Cloudflare de la zona (`dig origen.nomcolab.dpdns.org`; las mismas que las de
+   `nomcolab.dpdns.org`). deSEC no tiene ALIAS, así que se ponen a mano. Cloudflare casi nunca las cambia,
+   pero si lo hiciera el nombre corto dejaría de abrir. Con un token de la API de deSEC se puede programar
+   una revisión que las actualice sola.
+5. Los registros TXT del paso B van en el mismo dominio, con «Subname» `_cf-custom-hostname` y
+   `_acme-challenge`. Si deSEC rechaza el valor, se escribe entre comillas dobles: `"valor"`.
 
 ## 4. Paso B: Cloudflare for SaaS (panel de Cloudflare)
 
@@ -80,7 +84,7 @@ En la zona `nomcolab.dpdns.org` → **SSL/TLS → Custom Hostnames**:
 3. **Add Custom Hostname:** `nom.qd.je`; *Certificate validation method*: **TXT**. Lo demás, como
    viene.
 4. Cloudflare muestra dos registros TXT: uno de propiedad (`_cf-custom-hostname.nom.qd.je`) y uno del
-   certificado (`_acme-challenge.nom.qd.je`). Agregar los dos, tal cual, en dns.he.net.
+   certificado (`_acme-challenge.nom.qd.je`). Agregar los dos, tal cual, en deSEC (paso A.5).
 5. Esperar a que *Hostname status* y *Certificate status* digan **Active**. Tarda de minutos a un par
    de horas.
 
@@ -117,7 +121,7 @@ es gratis.
 
 | Buscador | Qué hacer | Cubre |
 |---|---|---|
-| **Google** | [Search Console](https://search.google.com/search-console) → Agregar propiedad → **Dominio** → `nom.qd.je` → copiar el TXT `google-site-verification=…` en dns.he.net (registro TXT en `nom.qd.je`) → Verificar. Después: Sitemaps → `https://nom.qd.je/sitemap.xml`, e Inspección de URL → `https://nom.qd.je/` → «Solicitar indexación». Hacer lo mismo con `nomcolab.dpdns.org`, poniendo su TXT en el DNS de Cloudflare. | Google, Android, Chrome |
+| **Google** | [Search Console](https://search.google.com/search-console) → Agregar propiedad → **Dominio** → `nom.qd.je` → copiar el TXT `google-site-verification=…` en deSEC (registro TXT con «Subname» vacío) → Verificar. Después: Sitemaps → `https://nom.qd.je/sitemap.xml`, e Inspección de URL → `https://nom.qd.je/` → «Solicitar indexación». Hacer lo mismo con `nomcolab.dpdns.org`, poniendo su TXT en el DNS de Cloudflare. | Google, Android, Chrome |
 | **Bing** | [Bing Webmaster Tools](https://www.bing.com/webmasters) → «Importar desde Google Search Console» (toma los sitios y los sitemaps ya comprobados). | Bing, DuckDuckGo, Yahoo, Ecosia, Edge, Copilot |
 | **Yandex** | [Yandex Webmaster](https://webmaster.yandex.com) → agregar `https://nom.qd.je` → comprobar con DNS (TXT `yandex-verification: …`) → Indexing → Sitemap files. | Yandex |
 | **IndexNow** | Después de cada publicación: `python3 4-CODIGO/herramientas/buscadores/avisar.py` (lee el sitemap del servidor y avisa de todas sus páginas). | Bing, Yandex, Seznam, Naver, Yep |

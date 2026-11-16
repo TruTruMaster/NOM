@@ -1293,7 +1293,7 @@ y que se pueda encontrar en Google y los demás buscadores buscando «nomcolab»
   para Cloudflare es un subdominio (zona solo con Enterprise). La salida: **Cloudflare for SaaS** (gratis hasta
   100 nombres) sobre la zona `nomcolab.dpdns.org`, con el origen de respaldo `origen.nomcolab.dpdns.org` (ya
   creado) apuntando al mismo túnel. Los pasos del panel, el DNS de `nom.qd.je` (DigitalPlat solo delega:
-  dns.he.net con ALIAS) y la Raspberry están en `4-CODIGO/docs/DOMINIO-Y-BUSCADORES.md`.
+  deSEC con A y AAAA; dns.he.net no aceptó el correo) y la Raspberry están en `4-CODIGO/docs/DOMINIO-Y-BUSCADORES.md`.
 - **Dos nombres, una dirección principal:** sin redirección (cada nombre guarda aparte la sesión y lo de sin
   Internet en el navegador). `NOM_CANONICO` decide la dirección que ven los buscadores; `NOM_NUBE` sigue siendo
   `nomcolab.dpdns.org` para que los pases valgan en los APK ya instalados. `servidor-propio/pi/dominio-corto.sh`
@@ -1305,6 +1305,6 @@ y que se pueda encontrar en Google y los demás buscadores buscando «nomcolab»
   arrancar, IndexNow (`herramientas/buscadores/avisar.py`).
 - **Pruebas:** humo 34 de 34 (4 nuevas de buscadores), seguridad 318 de 318, ayuda 24 de 24; la portada se va al
   arrancar en Chromium y Firefox, en computadora y celular, sin errores.
-- **Falta (del dueño):** la cuenta de dns.he.net, Cloudflare for SaaS en el panel, `doas sh dominio-corto.sh` en la
+- **Falta (del dueño):** la cuenta de deSEC, Cloudflare for SaaS en el panel, `doas sh dominio-corto.sh` en la
   Pi, Search Console, Bing Webmaster y Yandex. El APK no se recompiló: la app sigue con `nomcolab.dpdns.org` y
   los cambios de la página entran en el siguiente.
