@@ -651,6 +651,14 @@
           } else if (e.tipo === "tabla") pintarTabla(o, bl, e.ref);
           else if (e.tipo === "nota") { o.innerHTML = `<sup>${numerosNotas().get(o.dataset.id) || "*"}</sup>`; o.title = bl && bl.texto ? "Nota: " + bl.texto : "Nota al pie (toca para escribirla)"; }
           else if (e.tipo === "ecuacion") { o.innerHTML = NOM.ecuaciones ? NOM.ecuaciones.html((bl && bl.tex) || "", !!(bl && bl.bloque)) : esc((bl && bl.tex) || ""); o.classList.toggle("en-bloque", !!(bl && bl.bloque)); o.title = ed.soloLectura ? "" : "Toca para editar la ecuación"; }
+          else if (e.tipo === "objeto" && e.g && NOM.graficaOffice && +e.w > 0 && +e.h > 0) {
+            // gráfico de Word: dibujado como Word, de su tamaño (no se edita aquí; al descargar sale el original)
+            let svg = "";
+            try { svg = NOM.graficaOffice.svg(e.g, +e.w, +e.h, { pt: 96 / 72, familia: (n) => (NOM.textoRico ? NOM.textoRico.cssFuente(n) : n), formato: NOM.formulas && NOM.formulas.formatoXL ? (v, f) => NOM.formulas.formatoXL(v, f).t : null }); } catch (er) { svg = ""; }
+            o.innerHTML = `<span class="wd-grafica" style="width:${+e.w}px;height:${+e.h}px">${svg}</span>`;
+            o.classList.add("con-grafica");
+            o.title = "Gráfico del archivo de Word. Aquí no se edita, pero al descargar en Word sale completo.";
+          }
           else if (e.tipo === "objeto") {
             // Lo que aquí no se dibuja (cuadro de texto, SmartArt, gráfico): su texto sí se lee.
             o.innerHTML = e.txt ? `<span class="wd-obj-caja"><b>${esc(e.que || "Objeto")}</b><span>${esc(e.txt)}</span></span>` : `<span>${esc(e.que || "Objeto")}</span>`;

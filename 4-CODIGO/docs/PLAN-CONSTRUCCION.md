@@ -647,10 +647,13 @@ imagen con `pruebas/office/comparar_real.py`).
 - [x] Arreglo: las imágenes de fondo de una diapositiva rompían el estilo en las miniaturas, el visor y la exportación.
 - [x] Arreglo (lo encontró `ediciones.py`): al editar una diapositiva con fondo del tema, la descarga agregaba una
       imagen y una relación sin usar; el fondo solo se arma si cambió.
-- [ ] Gráficas de Office con un solo dibujante para Excel, Word y PowerPoint (y en la hoja: imágenes y formas).
+- [x] Gráficas de Office con un solo dibujante para Excel, Word y PowerPoint (`js/graficas-office.js`).
+- [x] Excel: imágenes, formas, grupos, SmartArt, conectores, controles de formulario y notas en la hoja, en su ancla.
+- [x] PowerPoint: tablas con su estilo del archivo, celdas combinadas, rellenos, bordes y márgenes.
+- [ ] Gráficas nuevas de Excel (cascada, histograma, rectángulos, proyección solar, embudo, caja y bigotes) y 3D.
 - [ ] Word: secciones con otro tamaño u orientación, columnas, objetos flotantes, división automática de palabras.
 - [ ] Excel: tramas y degradados en celdas, bordes diagonales, texto girado, alineación vertical, filas de alto fijo.
-- [ ] PowerPoint: tablas con su estilo, SmartArt.
+- [ ] PowerPoint: SmartArt sin dibujo guardado. Word: estilos de tabla, numeración «Chapter %1», puntos guía del índice.
 - [ ] La vuelta: lo que exporta NOM-COLAB abierto en Office real (sin reparar y con el mismo aspecto).
 - [ ] Paridad en la app de Android (emulador y A55).
 

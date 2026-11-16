@@ -682,7 +682,8 @@ ${formas.join("\n")}
         if (t.e.tipo === "imagen") { ops.push({ id: "imp:b" + ref, bloque: ref, campos: { tipo: "imagen", enTexto: true, src: t.e.src, w: Math.min(t.e.w || 320, 624), h: t.e.h || 0, oe: t.e.oe || undefined }, t: 1, n: "importar" }); return { e: { tipo: "imagen", ref } }; }
         if (t.e.tipo === "tabla") { ops.push({ id: "imp:b" + ref, bloque: ref, campos: Object.assign({ tipo: "tabla", enTexto: true, filasTexto: t.e.filas, colsTexto: t.e.cols }, t.e.celdas), t: 1, n: "importar" }); return { e: { tipo: "tabla", ref } }; }
         if (t.e.tipo === "nota" || t.e.tipo === "ecuacion") { ops.push({ id: "imp:b" + ref, bloque: ref, campos: Object.assign({ enTexto: true }, t.e), t: 1, n: "importar" }); return { e: { tipo: t.e.tipo, ref } }; }
-        return { e: limpio({ tipo: t.e.tipo, oe: t.e.oe, que: t.e.que, txt: t.e.txt }) };
+        // (un gráfico de Word lleva además su modelo de Office y su tamaño, para dibujarlo como Word)
+        return { e: limpio({ tipo: t.e.tipo, oe: t.e.oe, que: t.e.que, txt: t.e.txt, g: t.e.g, w: t.e.w, h: t.e.h }) };
       });
       ps.push({ tramos, a: limpio(p.pa) });
     });

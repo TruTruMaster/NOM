@@ -469,7 +469,7 @@
       }
       return `<div class="libre-tabla"><table>${filas || "<tr><td>Tabla vacía</td></tr>"}</table></div>`;
     }
-    if (b.tipo === "grafica" && !b.hoja && D) return `<div class="libre-grafica">${D.graficaHtml(b)}</div>`;
+    if (b.tipo === "grafica" && !b.hoja && D) return `<div class="libre-grafica${b.office ? " office" : ""}">${D.graficaHtml(b)}</div>`;
     if (b.tipo === "icono") return `<svg class="libre-icono" viewBox="0 0 24 24" fill="none" stroke="${esc(b.color || "#2B2A33")}" stroke-width="${+b.grosor || 2}" stroke-linecap="round" stroke-linejoin="round" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${iconoSeguro(b)}</svg>`;
     if (b.tipo === "ecuacion") return `<div class="libre-ecuacion" style="${estiloTexto(b)}">${NOM.ecuaciones ? NOM.ecuaciones.html(b.tex || "", true) : esc(b.tex || "")}</div>`;
     return `<div class="libre-ajeno">${esc(b.tipo)}</div>`;
@@ -2512,7 +2512,7 @@
       // Varias animaciones del mismo bloque en el mismo paso (entrada y énfasis…) van juntas.
       const st = s && s.anim.length ? `animation-name:${s.anim.map((x) => `a-${x.tipo}-${x.efecto}`).join(",")};animation-duration:${s.anim.map((x) => x.dur + "ms").join(",")};animation-delay:${s.anim.map((x) => x.t + "ms").join(",")};animation-fill-mode:both;animation-timing-function:cubic-bezier(.2,.8,.2,1);` : "";
       // (el texto de PowerPoint no se recorta en el borde de su cuadro: PowerPoint lo deja salir)
-      return `<div class="bl${clasesBloque(b)}${s && s.anim.length ? " animando" : ""}" data-id="${esc(b.id)}" style="${estiloBloque(b)}overflow:${b.tipo === "forma" || b.ppt ? "visible" : "hidden"};${st}">${contenido(b)}</div>`;
+      return `<div class="bl${clasesBloque(b)}${s && s.anim.length ? " animando" : ""}" data-id="${esc(b.id)}" style="${estiloBloque(b)}overflow:${b.tipo === "forma" || b.ppt || b.office ? "visible" : "hidden"};${st}">${contenido(b)}</div>`;
     }).join("");
   }
 

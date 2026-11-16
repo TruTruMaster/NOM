@@ -526,8 +526,119 @@
         return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">${g}</svg>`;
       }
       const BOTON_FILTRO = `url('data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="0.5" y="0.5" width="14" height="14" fill="#FDFDFD" stroke="#ABABAB"/><path d="M4 6h7l-3.5 4z" fill="#404040"/></svg>')}')`;
+      const NOTA_XL = "linear-gradient(225deg, #E3170A 0 50%, transparent 50%)";
       const BOTON_FILTRADO = `url('data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="0.5" y="0.5" width="14" height="14" fill="#FDFDFD" stroke="#ABABAB"/><path d="M2.5 3.5h7l-2.6 3.2v3.6l-1.8 1v-4.6z" fill="#404040"/><path d="M10 9h3.5l-1.75 2.2z" fill="#404040"/></svg>')}')`;
       const urlSvg = (svg) => `url('data:image/svg+xml,${encodeURIComponent(svg).replace(/'/g, "%27").replace(/\(/g, "%28").replace(/\)/g, "%29")}')`;
+
+      // ------------------------------------------------------------ dibujos de Excel (imágenes, formas, gráficas)
+      /** Los valores vivos de un rango de una gráfica («Hoja1!$B$2:$B$7»), de esta hoja o de otra. */
+      function valoresRango(ref, ev) {
+        const i = String(ref || "").lastIndexOf("!");
+        if (i < 0) return null;
+        const hoja = ref.slice(0, i).replace(/^'|'$/g, "").replace(/''/g, "'"), rg = ref.slice(i + 1).replace(/\$/g, "");
+        const [a, b] = rg.split(":").map((q) => F().parseRef(q));
+        if (!a) return null;
+        const b2 = b || a, out = [], propia = !hoja || hoja === (t.nombre || "");
+        if ((b2.f - a.f + 1) * (b2.c - a.c + 1) > 5000) return null;
+        for (let f = a.f; f <= b2.f; f++) for (let c = a.c; c <= b2.c; c++) {
+          let v = propia ? ev.valor(c, f) : ev.calcular ? ev.calcular("=" + (/^[A-Za-z_][\w.]*$/.test(hoja) ? hoja : "'" + hoja.replace(/'/g, "''") + "'") + "!" + F().ref(c, f), c, f) : null;
+          if (v instanceof F().ErrorF) v = null;
+          out.push(v === "" ? null : v);
+        }
+        return out;
+      }
+      function pintarDibujos(ev) {
+        const viejo = rej.querySelector(".xl-dibujos");
+        if (viejo) viejo.remove();
+        const lista = Array.isArray(t.dib) ? t.dib : [];
+        const tabla = rej.querySelector("table");
+        if (!lista.length || !tabla) return;
+        // dónde empieza cada columna y cada fila, tal como se dibujaron (las ocultas miden 0)
+        const xCol = (c) => { const th = tabla.querySelector(`thead th[data-col="${c}"]`); if (th) return th.offsetLeft; const ult = tabla.querySelector("thead th[data-col]:last-child"); return ult ? ult.offsetLeft + ult.offsetWidth + (c - +ult.dataset.col - 1) * 64 : 0; };
+        const yFila = (f) => { const tr = tabla.querySelector(`tr[data-fila="${f}"]`); if (tr) return tr.offsetTop; const filas = [...tabla.querySelectorAll("tr[data-fila]")]; const sig = filas.find((x) => +x.dataset.fila > f); if (sig) return sig.offsetTop; const ult = filas[filas.length - 1]; return ult ? ult.offsetTop + ult.offsetHeight + (f - +ult.dataset.fila - 1) * 20 : 0; };
+        const caja = (a) => {
+          if (!a) return null;
+          if (a.abs) return { x: xCol(0) + a.abs.x, y: yFila(0) + a.abs.y, w: a.abs.w, h: a.abs.h };
+          const x = xCol(a.de.c) + a.de.dc, y = yFila(a.de.f) + a.de.df;
+          if (a.a) return { x, y, w: Math.max(1, xCol(a.a.c) + a.a.dc - x), h: Math.max(1, yFila(a.a.f) + a.a.df - y) };
+          return { x, y, w: a.w || 1, h: a.h || 1 };
+        };
+        const grupos = [];
+        const fam = (n) => (NOM.textoRico ? NOM.textoRico.cssFuente(n) : n);
+        const piezas = lista.map((d, i) => {
+          let r;
+          if (d.tipo === "grupo-ini") {
+            if (d.a && d.a.grupo != null) {
+              // grupo dentro de grupo: su caja en el espacio del de afuera, y su propio espacio para sus hijos
+              const g = grupos[d.a.grupo], c2 = d.a.caja;
+              grupos[i] = g && c2 ? Object.assign({ x: g.x + ((c2.x - g.chx) / g.cx) * g.w, y: g.y + ((c2.y - g.chy) / g.cy) * g.h, w: (c2.w / g.cx) * g.w, h: (c2.h / g.cy) * g.h }, d.sub, { giro: (d.sub.giro || 0) + (g.giro || 0) }) : null;
+              return "";
+            }
+            r = caja(d.a); grupos[i] = r && Object.assign({}, r, d.sub); return "";
+          }
+          let giroG = 0;
+          if (d.a && d.a.grupo != null) {
+            const g = grupos[d.a.grupo], c2 = d.a.caja;
+            if (!g || !c2) return "";
+            // (un SmartArt de Excel: sus formas en EMU a escala 1:1 desde la esquina del marco)
+            r = g.emu && !(g.cx > 0) ? { x: g.x + c2.x / 9525, y: g.y + c2.y / 9525, w: c2.w / 9525, h: c2.h / 9525 } : { x: g.x + ((c2.x - g.chx) / g.cx) * g.w, y: g.y + ((c2.y - g.chy) / g.cy) * g.h, w: (c2.w / g.cx) * g.w, h: (c2.h / g.cy) * g.h };
+            if (g.giro) {
+              // el centro del hijo gira con el grupo alrededor del centro del grupo
+              const a2 = (g.giro * Math.PI) / 180, gx = g.x + g.w / 2, gy = g.y + g.h / 2, cx = r.x + r.w / 2 - gx, cy = r.y + r.h / 2 - gy;
+              r.x = gx + cx * Math.cos(a2) - cy * Math.sin(a2) - r.w / 2; r.y = gy + cx * Math.sin(a2) + cy * Math.cos(a2) - r.h / 2;
+              giroG = g.giro;
+            }
+          } else r = caja(d.a);
+          if (!r) return "";
+          const giro = (+d.giro || 0) + giroG;
+          const tr = giro || d.vH || d.vV ? `transform:rotate(${giro}deg) scale(${d.vH ? -1 : 1},${d.vV ? -1 : 1});` : "";
+          const st = `left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px;${tr}`;
+          if (d.tipo === "imagen") {
+            const rc = d.recorte || [0, 0, 0, 0], kw = 1 / Math.max(0.01, 1 - rc[0] - rc[2]), kh = 1 / Math.max(0.01, 1 - rc[1] - rc[3]);
+            const bordeI = d.linea && d.linea.c ? `outline:${Math.max(0.5, (d.linea.w || 0.75) * (96 / 72))}px solid ${esc(d.linea.c)};outline-offset:-${Math.max(0.25, ((d.linea.w || 0.75) * (96 / 72)) / 2)}px;` : "";
+            return `<div class="xl-dib" style="${st}overflow:hidden;${bordeI}"><img src="${esc(d.src)}" alt="" style="position:absolute;left:${-rc[0] * kw * 100}%;top:${-rc[1] * kh * 100}%;width:${kw * 100}%;height:${kh * 100}%;max-width:none"></div>`;
+          }
+          if (d.tipo === "grafica" && NOM.graficaOffice) {
+            let s2 = "";
+            try { s2 = NOM.graficaOffice.svg(d.g, r.w, r.h, { pt: 96 / 72, valores: (ref) => valoresRango(ref, ev), formato: (v, f2) => (F().formatoXL ? F().formatoXL(v, f2).t : String(v)), familia: fam }); } catch (e) { s2 = ""; }
+            return `<div class="xl-dib" style="${st}">${s2}</div>`;
+          }
+          if (d.tipo === "grafica-ex") return `<div class="xl-dib xl-dib-vacio" style="${st}"></div>`;
+          if (d.tipo === "control") {
+            // controles de formulario de Excel con su estado (marcada, elegida, el texto de la lista)
+            const c = d.ctl || {}, tx = esc(d.texto || "");
+            if (c.tipo === "CheckBox" || c.tipo === "Radio") {
+              const marca = c.tipo === "CheckBox"
+                ? `<svg width="13" height="13" viewBox="0 0 13 13"><rect x="0.5" y="0.5" width="12" height="12" fill="#fff" stroke="#333"/>${c.marcado === 1 ? '<path d="M2.5 6.5l3 3 5-6" fill="none" stroke="#222" stroke-width="1.6"/>' : c.marcado === 2 ? '<rect x="3" y="3" width="7" height="7" fill="#777"/>' : ""}</svg>`
+                : `<svg width="13" height="13" viewBox="0 0 13 13"><circle cx="6.5" cy="6.5" r="5.8" fill="#fff" stroke="#333"/>${c.marcado === 1 ? '<circle cx="6.5" cy="6.5" r="2.8" fill="#222"/>' : ""}</svg>`;
+              return `<div class="xl-dib xl-ctl" style="${st}">${marca}<span>${tx}</span></div>`;
+            }
+            if (c.tipo === "Drop" || c.tipo === "List") {
+              let elegido = "";
+              const vals = c.rango ? valoresRango(c.rango.includes("!") ? c.rango : `${t.nombre || ""}!${c.rango}`, ev) : null;
+              if (vals && c.sel) elegido = vals[c.sel - 1] == null ? "" : String(vals[c.sel - 1]);
+              return `<div class="xl-dib xl-ctl xl-lista" style="${st}"><span>${esc(elegido)}</span><b aria-hidden="true"></b></div>`;
+            }
+            if (c.tipo === "Button") return `<div class="xl-dib xl-ctl xl-boton" style="${st}"><span>${tx}</span></div>`;
+            if (c.tipo === "GBox") return `<div class="xl-dib xl-ctl xl-grupo" style="${st}"><span>${tx}</span></div>`;
+            if (c.tipo === "Label") return `<div class="xl-dib xl-ctl" style="${st}"><span>${tx}</span></div>`;
+            return `<div class="xl-dib xl-ctl xl-boton" style="${st}"></div>`;
+          }
+          if (d.tipo === "forma" || d.tipo === "linea") {
+            const tz = NOM.geomOffice ? NOM.geomOffice.trazos(d.prst || "rect", Math.max(0.01, r.w), Math.max(0.01, r.h), d.av || null) : null;
+            const rt = NOM.geomOffice && d.texto ? NOM.geomOffice.rectTexto(d.prst || "rect", Math.max(0.01, r.w), Math.max(0.01, r.h), d.av || null) : { l: 0, t: 0, r: r.w, b: r.h };
+            const ins = Array.isArray(d.ins) ? d.ins : [9.6, 4.8, 9.6, 4.8], le = d.letra || {};
+            const efectos = (le.contorno ? `-webkit-text-stroke:${Math.max(0.5, le.contorno.w * (96 / 72) * 0.6)}px ${esc(le.contorno.c)};paint-order:stroke fill;` : "") + (le.sombra ? `text-shadow:${(Math.cos((le.sombra.ang * Math.PI) / 180) * le.sombra.d * 96 / 72).toFixed(1)}px ${(Math.sin((le.sombra.ang * Math.PI) / 180) * le.sombra.d * 96 / 72).toFixed(1)}px ${(le.sombra.b * 96 / 72).toFixed(1)}px ${esc(le.sombra.c)};` : "") + (le.f ? `font-family:${esc(fam(le.f))};` : "") + (le.i ? "font-style:italic;" : "");
+            const ln = d.linea && !d.linea.no ? d.linea : null, rel = d.relleno && d.relleno !== "none" ? d.relleno : null;
+            const trazos = (tz || [{ d: `M0,0H${r.w}V${r.h}H0Z`, relleno: "norm", contorno: true }]).map((z2) => `<path d="${z2.d}" fill="${z2.relleno === "none" || !rel || d.tipo === "linea" ? "none" : esc(rel)}" stroke="${ln && z2.contorno !== false ? esc(ln.c) : "none"}" stroke-width="${ln ? ln.w * (96 / 72) : 0}"${ln && ln.guion ? ` stroke-dasharray="${ln.w * 4} ${ln.w * 3}"` : ""}/>`).join("");
+            const caja2 = `left:${rt.l}px;top:${rt.t}px;width:${Math.max(1, rt.r - rt.l)}px;height:${Math.max(1, rt.b - rt.t)}px;padding:${ins[1]}px ${ins[2]}px ${ins[3]}px ${ins[0]}px;`;
+            const txt = d.texto ? `<div class="xl-dib-txt" style="${caja2}justify-content:${d.ancla === "ctr" ? "center" : d.ancla === "b" ? "flex-end" : "flex-start"};font-size:${le.tam || 11}pt;color:${esc(le.c || "#000")};${le.b ? "font-weight:700;" : ""}${efectos}${d.ajusta === false ? "white-space:pre;" : ""}">${d.texto.map((p2) => `<div style="text-align:${{ ctr: "center", r: "right", just: "justify" }[p2.al] || "left"}">${esc(p2.t) || "&nbsp;"}</div>`).join("")}</div>` : "";
+            return `<div class="xl-dib" style="${st}"><svg width="${r.w}" height="${r.h}" style="position:absolute;inset:0;overflow:visible">${trazos}</svg>${txt}</div>`;
+          }
+          return "";
+        }).join("");
+        tabla.insertAdjacentHTML("afterend", `<div class="xl-dibujos" aria-hidden="true" style="left:${tabla.offsetLeft}px;top:${tabla.offsetTop}px">${piezas}</div>`);
+      }
 
       // ------------------------------------------------------------ pintar
       /** Cómo se ve una celda: texto con su formato, estilos y clases. */
@@ -557,6 +668,7 @@
           }
         }
         // botón de filtro de Excel (tablas, filtros de la hoja y tablas dinámicas), a la derecha de la celda
+        if (xl() && t["nt:" + ref]) { capas.push(NOTA_XL); tams.push("6px 6px"); pos.push("right top"); }
         if (xl() && t["fb:" + ref]) { capas.unshift(t["fb:" + ref] === 2 ? BOTON_FILTRADO : BOTON_FILTRO); tams.unshift("15px 15px"); pos.unshift("right 1px center"); }
         if (capas.length) st.push(`background-image:${capas.join(",")};background-size:${tams.join(",")};background-position:${pos.join(",")};background-repeat:no-repeat`);
         if (color) st.push("color:" + color);
@@ -667,6 +779,7 @@
         }
         rej.innerHTML = h + "</tbody></table>";
         if (X) ajustarComoExcel();
+        if (X) pintarDibujos(ev);
         rej.append(asa);
         pintarBanda();
         aplicarFijas();

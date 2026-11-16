@@ -169,7 +169,33 @@ tramas de Office medidas en PowerPoint real); líneas y conectores con volteos, 
 | w09 informe | 58.9 → 77.3 % | 9 / 9 |
 | w10 raros | 16.0 → 18.1 % | 6 / 6 (división automática de palabras: falta) |
 
-**Lo que sigue (por impacto):** gráficas de Office (un solo dibujante para Excel, Word y PowerPoint: hoy la hoja
+### Tanda 2 (16 de noviembre de 2026, para la 0.15.1)
+
+**Gráficas de Office con un solo dibujante** (`js/graficas-office.js`): se lee el XML de la gráfica con su estilo
+(colores del tema, letras, ejes, leyenda, rótulos, disposición manual) y se dibuja con las reglas de Office: la
+escala automática del eje (el cero si el mínimo es menor que 5/6 del máximo, 5 % de aire, unidad de 1, 2 o 5 × 10ⁿ
+según el largo del eje: Office no amontona los rótulos), ancho y separación de las barras (`gapWidth`, `overlap`),
+apiladas y 100 %, líneas con marcadores, áreas, dispersión, pastel y anillo desde las 12 en punto, la leyenda al
+revés en barras horizontales. Medido contra las gráficas que exporta Excel: columnas y líneas 95 a 97 % de
+parecido. En **Excel** las gráficas se ven en su ancla con los valores vivos de la hoja; en **PowerPoint** con su
+estilo y los datos de la tabla del bloque (lo editado en la app se ve); en **Word**, en línea, de su tamaño.
+
+**Excel, dibujos de la hoja:** imágenes (recorte, borde, giro), formas con su geometría de Office y su texto en
+el rectángulo de texto (contorno y sombra del WordArt), grupos (también girados y anidados), SmartArt (su dibujo
+ya acomodado), conectores, controles de formulario con su estado (casilla, opción, botón, lista desplegable con
+lo elegido) y el triángulo rojo de las notas.
+
+**PowerPoint, tablas como PowerPoint:** anchos y altos, celdas combinadas, el estilo de la tabla del archivo
+(`ppt/tableStyles.xml`) por capas (toda la tabla, franjas, primera y última fila y columna, esquinas), relleno,
+bordes, márgenes y anclaje de cada celda, saltos de renglón dentro de la celda y textos como «7.0» tal cual.
+
+**Lo que sigue (por impacto):** gráficas nuevas de Excel (cascada, histograma, rectángulos…), gráficas 3D, Word:
+secciones de otro tamaño u orientación, columnas, objetos flotantes, estilos de tabla de Word, numeración
+«Chapter %1», puntos guía del índice y la división automática de palabras; Excel: tramas y degradados en celdas,
+bordes diagonales, texto girado y alineación vertical, filas de alto fijo que recortan; la vuelta en Office real y
+la paridad en la app de Android.
+
+**Lo que seguía antes de la tanda 2:** gráficas de Office (un solo dibujante para Excel, Word y PowerPoint: hoy la hoja
 no muestra las gráficas, imágenes ni formas del archivo y PowerPoint las dibuja con el estilo de NOM-COLAB);
 Word: secciones con otro tamaño u orientación, columnas, objetos flotantes (cuadros de texto, formas,
 imágenes) y la división automática de palabras; Excel: tramas y degradados en celdas, bordes diagonales, texto

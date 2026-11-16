@@ -140,6 +140,45 @@
     pie: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer",
     nucleo: "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" };
   const EMU = 9525;   // 1 px a 96 ppp
+  /** Color de DrawingML con los cambios de Office (tint y shade en RGB lineal; lumMod, lumOff, satMod y hueMod en HSL)
+      con los colores de un tema dado ({ dk1, lt1, accent1… } en hexadecimal). Lo usan las gráficas de Word. */
+  function colorConTema(fill, tema) {
+    const hijos2 = (n) => [...(n ? n.children : [])];
+    const c = fill && (/Clr$/.test(fill.localName || "") ? fill : fill.getElementsByTagNameNS("*", "srgbClr")[0] || fill.getElementsByTagNameNS("*", "schemeClr")[0] || fill.getElementsByTagNameNS("*", "sysClr")[0]);
+    if (!c) return null;
+    const mapa = Object.assign({ tx1: tema.dk1, bg1: tema.lt1, tx2: tema.dk2, bg2: tema.lt2 }, tema);
+    let hx = c.localName === "srgbClr" ? c.getAttribute("val") : c.localName === "schemeClr" ? mapa[c.getAttribute("val")] : c.localName === "sysClr" ? c.getAttribute("lastClr") : null;
+    if (!/^[0-9a-f]{6}$/i.test(hx || "")) return null;
+    hx = hx.toUpperCase();
+    for (const t of hijos2(c)) {
+      if (t.localName !== "shade" && t.localName !== "tint") continue;
+      const k = +t.getAttribute("val") / 100000, lin = [0, 2, 4].map((i) => Math.pow(parseInt(hx.slice(i, i + 2), 16) / 255, 2.3));
+      hx = lin.map((x) => (t.localName === "shade" ? x * k : 1 - (1 - x) * k)).map((x) => Math.round(Math.pow(Math.max(0, Math.min(1, x)), 1 / 2.3) * 255).toString(16).padStart(2, "0")).join("").toUpperCase();
+    }
+    const v = (k) => { const e = hijos2(c).find((x) => x.localName === k); return e ? +e.getAttribute("val") / 100000 : null; };
+    if (v("lumMod") == null && v("lumOff") == null && v("satMod") == null && v("hueMod") == null) return "#" + hx;
+    let [r, g, b] = [0, 2, 4].map((i) => parseInt(hx.slice(i, i + 2), 16) / 255);
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    let hh = 0, sa = 0, l = (mx + mn) / 2;
+    if (mx !== mn) { const d = mx - mn; sa = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn); hh = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; hh /= 6; }
+    if (v("hueMod") != null) hh = (hh * v("hueMod")) % 1;
+    if (v("satMod") != null) sa = Math.max(0, Math.min(1, sa * v("satMod")));
+    if (v("lumMod") != null) l *= v("lumMod");
+    if (v("lumOff") != null) l += v("lumOff");
+    l = Math.max(0, Math.min(1, l));
+    const q = l < 0.5 ? l * (1 + sa) : l + sa - l * sa, p2 = 2 * l - q;
+    const f = (t3) => { t3 = (t3 + 1) % 1; return t3 < 1 / 6 ? p2 + (q - p2) * 6 * t3 : t3 < 1 / 2 ? q : t3 < 2 / 3 ? p2 + (q - p2) * (2 / 3 - t3) * 6 : p2; };
+    return "#" + [f(hh + 1 / 3), f(hh), f(hh - 1 / 3)].map((x) => Math.round(x * 255).toString(16).padStart(2, "0")).join("").toUpperCase();
+  }
+  /** Los colores y las letras de un tema de Office (theme1.xml) para colorConTema y las gráficas. */
+  function temaDeXml(xml) {
+    const t = {}, f = {};
+    if (!xml) return { colores: t, fuentes: f };
+    const d = new DOMParser().parseFromString(xml, "application/xml"), cs = d.getElementsByTagNameNS("*", "clrScheme")[0];
+    [...(cs ? cs.children : [])].forEach((c) => { const s2 = c.getElementsByTagNameNS("*", "srgbClr")[0], y = c.getElementsByTagNameNS("*", "sysClr")[0], v = s2 ? s2.getAttribute("val") : y ? y.getAttribute("lastClr") : null; if (v && /^[0-9a-f]{6}$/i.test(v)) t[c.localName] = v.toUpperCase(); });
+    ["majorFont", "minorFont"].forEach((k, i) => { const n = d.getElementsByTagNameNS("*", k)[0], la = n && n.getElementsByTagNameNS("*", "latin")[0]; if (la && la.getAttribute("typeface")) f[i ? "menor" : "mayor"] = la.getAttribute("typeface"); });
+    return { colores: t, fuentes: f };
+  }
   // ---- HLS de Windows con enteros (HLSMAX = 240), como lo usa Excel para el tinte de los colores del tema
   const HLSMAX = 240;
   function rgbAHls(R, G, B) {
@@ -1424,6 +1463,26 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       }
       return t ? t.slice(0, 4000) : null;
     }
+    let temaWord = null;   // colores y letras del tema del documento (para dibujar sus gráficos)
+    /** El gráfico de un dibujo de Word (también dentro de mc:AlternateContent): su modelo de Office y su tamaño. */
+    async function graficaWord(c) {
+      if (!NOM.graficaOffice) return null;
+      const RR = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+      const ch = [...c.getElementsByTagNameNS("*", "chart")].find((q) => q.getAttributeNS(RR, "id") || q.getAttribute("r:id"));
+      const ridG = ch && (ch.getAttributeNS(RR, "id") || ch.getAttribute("r:id")), dG = ridG && rels[ridG];
+      const xc = dG ? await z.texto(rutaDe(dG)) : null;
+      if (!xc) return null;
+      // el tamaño: el «extent» del dibujo que contiene ese gráfico
+      let dib = ch; while (dib && dib.localName !== "inline" && dib.localName !== "anchor") dib = dib.parentNode;
+      const ext = dib && [...dib.children].find((q) => q.localName === "extent");
+      const w = ext ? Math.round(+ext.getAttribute("cx") / EMU) : 0, h = ext ? Math.round(+ext.getAttribute("cy") / EMU) : 0;
+      if (!w || !h) return null;
+      if (!temaWord) temaWord = temaDeXml(await z.texto("word/theme/theme1.xml"));
+      try {
+        const g = NOM.graficaOffice.leer(xc, { color: (n) => colorConTema(n, temaWord.colores), fuente: (n) => (/^\+mn-/.test(n) ? temaWord.fuentes.menor : /^\+mj-/.test(n) ? temaWord.fuentes.mayor : n) || "Calibri", acentos: [1, 2, 3, 4, 5, 6].map((k) => "#" + (temaWord.colores["accent" + k] || "4472C4")) });
+        return { g, w, h };
+      } catch (e) { return null; }
+    }
     async function runs(n, base, tramos, parrafo) {
       for (const r of hijos(n)) {
         const ln = r.localName;
@@ -1448,11 +1507,14 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
                 // Forma, cuadro de texto, gráfico o SmartArt: aquí se ve como una marca y al exportar sale el original.
                 const g = c.getElementsByTagNameNS("*", "graphicData")[0], uri = (g && g.getAttribute("uri")) || "";
                 const que = /chart/.test(uri) ? "Gráfico" : /diagram/.test(uri) ? "SmartArt" : c.getElementsByTagNameNS("*", "txbxContent")[0] ? "Cuadro de texto" : /picture/.test(uri) || img ? "Imagen" : "Forma";
-                tramos.push({ e: { tipo: "objeto", que, oe: ordinal(c), txt: (await textoObjeto(c)) || undefined }, a: {} }); aproximado = true;
+                // un gráfico se dibuja como Word (js/graficas-office.js), del tamaño que tiene en el documento
+                const gOf = /chart/.test(uri) ? await graficaWord(c) : null;
+                tramos.push({ e: Object.assign({ tipo: "objeto", que, oe: ordinal(c), txt: (await textoObjeto(c)) || undefined }, gOf || {}), a: {} }); aproximado = true;
               }
             } else if (cn === "AlternateContent" || cn === "object") {
               const que = cn === "object" ? "Objeto incrustado" : c.getElementsByTagNameNS("*", "txbxContent")[0] ? "Cuadro de texto" : /drawingml\/2006\/chart/.test(c.innerHTML || "") ? "Gráfico" : c.getElementsByTagNameNS("*", "relIds")[0] ? "SmartArt" : "Forma";
-              tramos.push({ e: { tipo: "objeto", que, oe: ordinal(c), txt: (await textoObjeto(c)) || undefined }, a: {} }); aproximado = true;
+              const gOf = que === "Gráfico" ? await graficaWord(c) : null;
+              tramos.push({ e: Object.assign({ tipo: "objeto", que, oe: ordinal(c), txt: (await textoObjeto(c)) || undefined }, gOf || {}), a: {} }); aproximado = true;
             } else if (cn === "footnoteReference") {
               const id = c.getAttributeNS(W, "id") || c.getAttribute("w:id");
               tramos.push({ e: { tipo: "nota", texto: notasPie[id] || "", oe: ordinal(c) }, a: {} });
@@ -2608,6 +2670,172 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         if (at(t2, "name")) estilosTablaLibro[at(t2, "name")] = e;
       });
     }
+    // ---- Dibujos de la hoja (versión 3): imágenes, formas, líneas y gráficas con su ancla de Excel (celda y desfase).
+    // Las gráficas se leen con su estilo para dibujarlas como Excel (js/graficas-office.js) con los valores vivos.
+    const temaDml = {}, fuentesDml = {};
+    {
+      const tt = z.texto("xl/theme/theme1.xml"), dt = tt ? P(tt) : null, cs = dt ? todos(dt, "clrScheme")[0] : null;
+      hijos(cs).forEach((c) => { const v = hijo(c, "srgbClr") ? at(hijo(c, "srgbClr"), "val") : hijo(c, "sysClr") ? at(hijo(c, "sysClr"), "lastClr") : null; if (v && /^[0-9a-f]{6}$/i.test(v)) temaDml[c.localName] = v.toUpperCase(); });
+      Object.assign(temaDml, { tx1: temaDml.dk1, bg1: temaDml.lt1, tx2: temaDml.dk2, bg2: temaDml.lt2 });
+      ["majorFont", "minorFont"].forEach((k, i) => { const f = dt && todos(dt, k)[0], l = f && hijo(f, "latin"); if (l && at(l, "typeface")) fuentesDml[i ? "menor" : "mayor"] = at(l, "typeface"); });
+    }
+    const PRST_DML = { black: "000000", white: "FFFFFF", red: "FF0000", green: "008000", blue: "0000FF", yellow: "FFFF00", gray: "808080", darkGray: "A9A9A9", lightGray: "D3D3D3", orange: "FFA500" };
+    /** Color de DrawingML (gráficas y formas de la hoja) con sus cambios: tint y shade en RGB lineal, lumMod,
+        lumOff, satMod y hueMod en HSL, como lo hace Office. */
+    function colorDml(fill) {
+      const c = fill && (fill.localName && /Clr$/.test(fill.localName) ? fill : todos(fill, "srgbClr")[0] || todos(fill, "schemeClr")[0] || todos(fill, "sysClr")[0] || todos(fill, "prstClr")[0]);
+      if (!c) return null;
+      let hx = c.localName === "srgbClr" ? at(c, "val") : c.localName === "schemeClr" ? temaDml[at(c, "val")] : c.localName === "sysClr" ? at(c, "lastClr") : PRST_DML[at(c, "val")];
+      if (!/^[0-9a-f]{6}$/i.test(hx || "")) return null;
+      hx = hx.toUpperCase();
+      for (const t2 of hijos(c)) {
+        if (t2.localName !== "shade" && t2.localName !== "tint") continue;
+        const k = +at(t2, "val") / 100000, lin = [0, 2, 4].map((i) => Math.pow(parseInt(hx.slice(i, i + 2), 16) / 255, 2.3));
+        hx = lin.map((x) => (t2.localName === "shade" ? x * k : 1 - (1 - x) * k)).map((x) => Math.round(Math.pow(Math.max(0, Math.min(1, x)), 1 / 2.3) * 255).toString(16).padStart(2, "0")).join("").toUpperCase();
+      }
+      const v = (k) => { const e = hijo(c, k); return e ? +at(e, "val") / 100000 : null; };
+      if (v("lumMod") == null && v("lumOff") == null && v("satMod") == null && v("hueMod") == null) return "#" + hx;
+      let [r, g, b] = [0, 2, 4].map((i) => parseInt(hx.slice(i, i + 2), 16) / 255);
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      let hh = 0, sa = 0, l = (mx + mn) / 2;
+      if (mx !== mn) { const d = mx - mn; sa = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn); hh = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; hh /= 6; }
+      if (v("hueMod") != null) hh = (hh * v("hueMod")) % 1;
+      if (v("satMod") != null) sa = Math.max(0, Math.min(1, sa * v("satMod")));
+      if (v("lumMod") != null) l *= v("lumMod");
+      if (v("lumOff") != null) l += v("lumOff");
+      l = Math.max(0, Math.min(1, l));
+      const q = l < 0.5 ? l * (1 + sa) : l + sa - l * sa, p2 = 2 * l - q;
+      const f = (t3) => { t3 = (t3 + 1) % 1; return t3 < 1 / 6 ? p2 + (q - p2) * 6 * t3 : t3 < 1 / 2 ? q : t3 < 2 / 3 ? p2 + (q - p2) * (2 / 3 - t3) * 6 : p2; };
+      return "#" + [f(hh + 1 / 3), f(hh), f(hh - 1 / 3)].map((x) => Math.round(x * 255).toString(16).padStart(2, "0")).join("").toUpperCase();
+    }
+    const fuenteDml = (n) => (n === "+mn-lt" || n === "+mn-ea" ? fuentesDml.menor || "Calibri" : n === "+mj-lt" || n === "+mj-ea" ? fuentesDml.mayor || "Calibri" : n);
+    const rutaRel = (desde, tg) => { const rt = String(tg || "").startsWith("/") ? tg.slice(1) : desde.replace(/[^/]+$/, "") + tg; return rt.split("/").reduce((a, x) => { if (x === "..") a.pop(); else if (x && x !== ".") a.push(x); return a; }, []).join("/"); };
+    const relsDeParte = (ruta) => { const t2 = z.texto(ruta.replace(/([^/]+)$/, "_rels/$1.rels")), o = {}; if (t2) todos(P(t2), "Relationship").forEach((r) => (o[at(r, "Id")] = { tipo: at(r, "Type") || "", ruta: at(r, "TargetMode") === "External" ? null : rutaRel(ruta, at(r, "Target")) })); return o; };
+    const MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", bmp: "image/bmp", svg: "image/svg+xml", webp: "image/webp" };
+    const dataUrlXl = (ruta) => {
+      const b = ruta && z.bytes(ruta), ext = String(ruta || "").split(".").pop().toLowerCase();
+      if (!b || !MIME[ext] || b.length > 8 * 1024 * 1024) return null;
+      let bin = ""; for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+      return `data:${MIME[ext]};base64,${btoa(bin)}`;
+    };
+    const rellenoDml = (spPr) => { if (!spPr) return null; if (hijo(spPr, "noFill")) return "none"; const sf = hijo(spPr, "solidFill") || hijo(spPr, "gradFill"); return sf ? colorDml(todos(sf, "gs")[0] || sf) : null; };
+    const lineaDml = (spPr, st) => {
+      const ln = spPr && hijo(spPr, "ln"), lnRef = st && hijo(st, "lnRef");
+      if (!ln) return lnRef && +at(lnRef, "idx") ? { w: 0.75, c: colorDml(lnRef) || "#000000" } : null;
+      if (hijo(ln, "noFill")) return { no: 1 };
+      const g = at(hijo(ln, "prstDash"), "val");
+      return { w: at(ln, "w") ? +at(ln, "w") / 12700 : 0.75, c: colorDml(hijo(ln, "solidFill")) || (lnRef ? colorDml(lnRef) : null) || "#000000", guion: g && g !== "solid" ? g : null, fin: at(hijo(ln, "tailEnd"), "type") || null, ini: at(hijo(ln, "headEnd"), "type") || null };
+    };
+    function dibujosDeHoja(ruta) {
+      const relsH = relsDeParte(ruta), out = [];
+      // controles de formulario de la hoja: shapeId → su tipo y su estado (ctrlProps)
+      const controles = {};
+      {
+        const xh = z.texto(ruta), dh = xh && xh.includes("<control") ? P(xh) : null;
+        todos(dh, "control").forEach((c) => {
+          const rid = c.getAttribute("r:id") || c.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id"), rel = rid && relsH[rid];
+          const xp = rel && rel.ruta ? z.texto(rel.ruta) : null, fp = xp ? P(xp).documentElement : null;
+          if (!fp || !at(c, "shapeId")) return;
+          controles[at(c, "shapeId")] = { tipo: at(fp, "objectType") || "Button", marcado: at(fp, "checked") === "Checked" ? 1 : at(fp, "checked") === "Mixed" ? 2 : 0,
+            sel: at(fp, "sel") != null ? +at(fp, "sel") : null, rango: at(fp, "fmlaRange") || null, enlace: at(fp, "fmlaLink") || null, valor: at(fp, "val") != null ? +at(fp, "val") : null, texto: at(c, "name") || "" };
+        });
+      }
+      Object.values(relsH).filter((r) => /\/drawing$/.test(r.tipo) && r.ruta).forEach((r) => {
+        const xd = z.texto(r.ruta);
+        if (!xd) return;
+        const relsD = relsDeParte(r.ruta);
+        const pos = (n) => (n ? { c: +(hijo(n, "col") || {}).textContent || 0, dc: (+(hijo(n, "colOff") || {}).textContent || 0) / 9525, f: +(hijo(n, "row") || {}).textContent || 0, df: (+(hijo(n, "rowOff") || {}).textContent || 0) / 9525 } : null);
+        const leerEl = (el, ancla, grupo) => {
+          if (!el) return;
+          const nm = el.localName;
+          if (nm === "AlternateContent") { const ch = hijo(el, "Choice") || hijo(el, "Fallback"); hijos(ch).forEach((x) => leerEl(x, ancla, grupo)); return; }
+          // posición dentro de un grupo: su xfrm en el espacio del grupo
+          const xf = todos(hijo(el, "spPr") || hijo(el, "grpSpPr") || hijo(el, "xfrm") || el, "xfrm")[0];
+          const o2 = xf && hijo(xf, "off"), e2 = xf && hijo(xf, "ext");
+          const a = grupo ? { grupo: grupo.idx, caja: o2 && e2 ? { x: +at(o2, "x"), y: +at(o2, "y"), w: +at(e2, "cx"), h: +at(e2, "cy") } : null } : ancla;
+          const giro = xf && at(xf, "rot") ? +at(xf, "rot") / 60000 : 0, vH = xf && at(xf, "flipH") === "1", vV = xf && at(xf, "flipV") === "1";
+          if (nm === "grpSp") {
+            const gx = todos(hijo(el, "grpSpPr"), "xfrm")[0], go = gx && hijo(gx, "off"), ge = gx && hijo(gx, "ext"), co = gx && hijo(gx, "chOff"), ce = gx && hijo(gx, "chExt");
+            if (!go || !ge || !co || !ce) return;
+            // el grupo ocupa su ancla; sus hijos van en su espacio (chOff, chExt)
+            const sub = { ancla: a, grupoEn: grupo, chx: +at(co, "x"), chy: +at(co, "y"), cx: +at(ce, "cx") || 1, cy: +at(ce, "cy") || 1, ex: +at(ge, "cx") || 1, ey: +at(ge, "cy") || 1 };
+            out.push({ tipo: "grupo-ini", a, sub: { chx: sub.chx, chy: sub.chy, cx: sub.cx, cy: sub.cy, giro: gx && at(gx, "rot") ? +at(gx, "rot") / 60000 : 0 } });
+            const gIdx = out.length - 1;
+            hijos(el).forEach((x) => { if (x.localName !== "nvGrpSpPr" && x.localName !== "grpSpPr") leerEl(x, null, { idx: gIdx }); });
+            return;
+          }
+          const base = { a: grupo ? { grupo: grupo.idx, caja: xf && o2 && e2 ? { x: +at(o2, "x"), y: +at(o2, "y"), w: +at(e2, "cx"), h: +at(e2, "cy") } : null } : a, giro: giro || undefined, vH: vH || undefined, vV: vV || undefined };
+          if (nm === "pic") {
+            const bl = todos(el, "blip")[0], rid = bl && (bl.getAttribute("r:embed") || bl.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "embed"));
+            const src = rid && relsD[rid] ? dataUrlXl(relsD[rid].ruta) : null;
+            if (!src) return;
+            const sr = todos(hijo(el, "blipFill"), "srcRect")[0];
+            const lnP = lineaDml(hijo(el, "spPr"));
+            out.push(Object.assign({ tipo: "imagen", src, recorte: sr ? ["l", "t", "r", "b"].map((k) => +(at(sr, k) || 0) / 100000) : undefined, linea: lnP && !lnP.no ? lnP : undefined }, base));
+            return;
+          }
+          if (nm === "graphicFrame") {
+            const ch = todos(el, "chart")[0], rid = ch && (ch.getAttribute("r:id") || ch.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id"));
+            const rel = rid && relsD[rid];
+            if (rel && /\/chart$/.test(rel.tipo) && NOM.graficaOffice) {
+              const xc = z.texto(rel.ruta);
+              if (xc) { try { out.push(Object.assign({ tipo: "grafica", g: NOM.graficaOffice.leer(xc, { color: colorDml, fuente: fuenteDml, acentos: ["accent1", "accent2", "accent3", "accent4", "accent5", "accent6"].map((k) => "#" + (temaDml[k] || "4472C4")) }) }, base)); } catch (e) { /* una gráfica rara no detiene la hoja */ } }
+              return;
+            }
+            // SmartArt: Excel guarda al lado el dibujo ya acomodado; sus formas van como un grupo del tamaño del marco
+            const relIds = todos(el, "relIds")[0];
+            if (relIds) {
+              const xfG = hijo(el, "xfrm"), eG = xfG && hijo(xfG, "ext");
+              const dsp = Object.values(relsD).find((q) => /diagramDrawing$/.test(q.tipo) && q.ruta);
+              const xdg = dsp && z.texto(dsp.ruta);
+              if (xdg && eG) {
+                // (Excel escribe 0 × 0 en el marco: el tamaño está en el ancla; las formas van en EMU desde la esquina del marco)
+                out.push({ tipo: "grupo-ini", a, sub: { chx: 0, chy: 0, cx: +at(eG, "cx") || 0, cy: +at(eG, "cy") || 0, giro: 0, emu: true } });
+                const gI = out.length - 1, arbolD = todos(P(xdg), "spTree")[0];
+                hijos(arbolD).forEach((x) => { if (x.localName === "sp" || x.localName === "grpSp") leerEl(x, null, { idx: gI }); });
+                return;
+              }
+            }
+            // gráficas nuevas de Excel (cascada, rectángulos, embudo…): un recuadro con su título por ahora
+            if (todos(el, "chart").length || /chartex/i.test(String(rel && rel.tipo))) out.push(Object.assign({ tipo: "grafica-ex" }, base));
+            return;
+          }
+          if (nm === "sp" || nm === "cxnSp") {
+            const spPr = hijo(el, "spPr"), prst = at(todos(spPr, "prstGeom")[0], "prst") || "rect", st = hijo(el, "style");
+            const tx = hijo(el, "txBody"), parrafos = tx ? hijos(tx, "p").map((p) => ({ t: todos(p, "t").map((x) => x.textContent).join(""), al: at(todos(p, "pPr")[0], "algn") || null })) : [];
+            const r0 = tx && todos(tx, "rPr")[0], dr = tx && todos(tx, "defRPr")[0], rr = r0 || dr;
+            const letra = rr ? { tam: at(rr, "sz") ? +at(rr, "sz") / 100 : 11, b: at(rr, "b") === "1", i: at(rr, "i") === "1", c: colorDml(hijo(rr, "solidFill")) || (st ? colorDml(hijo(st, "fontRef")) : null) || "#000000" } : { tam: 11, c: st ? colorDml(hijo(st, "fontRef")) || "#000000" : "#000000" };
+            if (rr) {
+              // WordArt: el contorno de la letra (su color, aunque sea un degradado) y su sombra; y su tipo de letra
+              const lnT = hijo(rr, "ln"); if (lnT && !hijo(lnT, "noFill")) { const cT = colorDml(hijo(lnT, "solidFill") || todos(lnT, "gs")[0]); if (cT) letra.contorno = { c: cT, w: at(lnT, "w") ? +at(lnT, "w") / 12700 : 0.75 }; }
+              const sh = todos(hijo(rr, "effectLst"), "outerShdw")[0]; if (sh) letra.sombra = { c: colorDml(sh) || "#000000", d: (+(at(sh, "dist") || 0)) / 12700, ang: (+(at(sh, "dir") || 0)) / 60000, b: (+(at(sh, "blurRad") || 0)) / 12700 };
+              const la = hijo(rr, "latin"); if (la && at(la, "typeface")) letra.f = fuenteDml(at(la, "typeface"));
+            }
+            const bp = tx && hijo(tx, "bodyPr");
+            const ins = bp ? ["lIns", "tIns", "rIns", "bIns"].map((k, i) => (at(bp, k) != null ? +at(bp, k) / 9525 : [9.6, 4.8, 9.6, 4.8][i])) : [9.6, 4.8, 9.6, 4.8];
+            // controles de formulario (casilla, lista, botón, opción…): Excel los dibuja él; aquí con su estado
+            const idSp = at(todos(el, "cNvPr")[0], "id"), ctl = idSp && controles[idSp];
+            if (ctl) { out.push(Object.assign({ tipo: "control", ctl, texto: todos(el, "t").map((x) => x.textContent).join("") || ctl.texto || "" }, base)); return; }
+            if (at(todos(el, "cNvPr")[0], "hidden") === "1") return;
+            out.push(Object.assign({ tipo: nm === "cxnSp" ? "linea" : "forma", prst, relleno: rellenoDml(spPr) || (st && +at(hijo(st, "fillRef"), "idx") ? colorDml(hijo(st, "fillRef")) : null), linea: lineaDml(spPr, st),
+              texto: parrafos.some((p) => p.t) ? parrafos : undefined, letra, ancla: bp ? at(bp, "anchor") || "t" : "t", ins, ajusta: !(bp && at(bp, "wrap") === "none"), av: (() => { const o = {}; todos(todos(spPr, "prstGeom")[0], "gd").forEach((g) => { const m = /^val\s+(-?\d+)/.exec(at(g, "fmla") || ""); if (m) o[at(g, "name")] = +m[1]; }); return Object.keys(o).length ? o : undefined; })() }, base));
+          }
+        };
+        // (los controles de formulario y otras cosas nuevas vienen dentro de «mc:AlternateContent»: se usa su Choice)
+        const anclas = [];
+        hijos(P(xd).documentElement).forEach((x) => { if (x.localName === "AlternateContent") { const ch = hijo(x, "Choice") || hijo(x, "Fallback"); hijos(ch).forEach((y) => anclas.push(y)); } else anclas.push(x); });
+        anclas.forEach((anc) => {
+          const tipoA = anc.localName;
+          if (!/Anchor$/.test(tipoA)) return;
+          const a = tipoA === "twoCellAnchor" ? { de: pos(hijo(anc, "from")), a: pos(hijo(anc, "to")) }
+            : tipoA === "oneCellAnchor" ? { de: pos(hijo(anc, "from")), w: +at(hijo(anc, "ext"), "cx") / 9525, h: +at(hijo(anc, "ext"), "cy") / 9525 }
+            : { abs: { x: +at(hijo(anc, "pos"), "x") / 9525, y: +at(hijo(anc, "pos"), "y") / 9525, w: +at(hijo(anc, "ext"), "cx") / 9525, h: +at(hijo(anc, "ext"), "cy") / 9525 } };
+          hijos(anc).forEach((el) => { if (["pic", "sp", "graphicFrame", "grpSp", "cxnSp", "AlternateContent"].includes(el.localName)) leerEl(el, a, null); });
+        });
+      });
+      return out.length ? out : null;
+    }
+
     // ---- Formato condicional de Excel (versión 3): las reglas tal cual (con sus fórmulas en español y relativas a
     // la primera celda de su rango); las pinta el modo Excel de la hoja. Las de Excel 2010 (barras con borde o lisas,
     // más juegos de íconos) van aparte en «extLst» y se juntan por su id.
@@ -3004,6 +3232,11 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         const af = hijo(doc.documentElement, "autoFilter"), [q1, q2] = String(at(af, "ref") || "").split(":").map((q) => F().parseRef(q));
         if (q1) botonesFiltro(af, q1.c, (q2 || q1).c, q1.f, campos);
       }
+      if (V >= 3) { const dib = dibujosDeHoja(ruta); if (dib) campos.dib = dib; }
+      if (V >= 3) Object.values(relsDeParte(ruta)).filter((q) => /\/comments$/.test(q.tipo) && q.ruta).forEach((q) => {
+        const xc = z.texto(q.ruta);
+        if (xc) todos(P(xc), "comment").forEach((cm) => { const ref = at(cm, "ref"); if (ref && F().parseRef(ref)) campos["nt:" + ref] = true; });
+      });
       if (V >= 3) { estilosDeTabla(nombre, campos); estilosDinamicas(ruta, campos); const cfx = formatoCondicional(doc, nombre); if (cfx) campos.cfx = cfx; }
       if (todos(doc, "drawing").length) aviso = aviso || "Las gráficas e imágenes del archivo no se ven aquí, pero se conservan: al descargarlo en Excel salen igual";
       campos.filas = Math.max(30, maxF + 5);
@@ -3888,6 +4121,8 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       fuentesTema.mayor = t.fuentes.mayor; fuentesTema.menor = t.fuentes.menor;
       relsTema = t.rels;
     }
+    const relEstTablas = Object.values(relsPres).find((q) => /\/tableStyles$/.test(q.tipo));
+    const xmlEstTablas = relEstTablas ? (await z.texto(relEstTablas.destino) || "").length ? P(await z.texto(relEstTablas.destino)) : null : null;
     const temaPres = await leerTema((Object.values(relsPres).find((q) => /\/theme$/.test(q.tipo)) || {}).destino || "ppt/theme/theme1.xml");
     usarTema(temaPres);
     /** Más claro o más oscuro, como lo pide el archivo (lumMod, lumOff, tint, shade: en milésimas de %).
@@ -4237,7 +4472,9 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       hs(txBody, "p").forEach((p) => {
         const pPr = h1(p, "pPr"), nivel = Math.min(9, (+(at(pPr, "lvl") || 0)) + 1);
         const o = { r: {} };
-        [defPres && nivelDe(defPres, nivel), est && nivelDe(est, nivel), phM && phM.lst && nivelDe(phM.lst, nivel), phD && phD.lst && nivelDe(phD.lst, nivel), nivelDe(h1(txBody, "lstStyle"), nivel), pPr].forEach((el) => leerPPr(el, o));
+        [defPres && nivelDe(defPres, nivel), est && nivelDe(est, nivel), phM && phM.lst && nivelDe(phM.lst, nivel), phD && phD.lst && nivelDe(phD.lst, nivel)].forEach((el) => leerPPr(el, o));
+        if (ctx.r0) Object.assign(o.r, ctx.r0);   // (texto de una celda: el color y la negrita del estilo de la tabla)
+        [nivelDe(h1(txBody, "lstStyle"), nivel), pPr].forEach((el) => leerPPr(el, o));
         // tramos
         const tramos = [];
         hs(p).forEach((r) => {
@@ -4378,6 +4615,23 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       let orden = 0;
       docCampos["os:" + pg] = ruta;   // de qué diapositiva del archivo viene esta página
       let agregar = (b) => { const id = "imp" + n + "_" + orden; bloques.push(Object.assign({ id, pagina: pg, orden: ++orden, z: orden, ox: oxActual }, b)); return id; };
+      // estilos de tabla del archivo, con los colores del tema de esta diapositiva
+      const estilosTablaPpt = {};
+      if (xmlEstTablas) {
+        const lnDe = (ln) => { if (!ln) return null; if (h1(ln, "noFill")) return "no"; const c = colorCss(h1(ln, "solidFill")); return c ? [Math.max(0.5, Math.round(((+(at(ln, "w") || 12700)) / 12700) * kPt * 100) / 100), c, null] : null; };
+        todos(xmlEstTablas, "tblStyle").forEach((ts) => {
+          const e = {};
+          hs(ts).forEach((parte) => {
+            const o = {}, tx = h1(parte, "tcTxStyle"), tcs = h1(parte, "tcStyle");
+            if (tx) { if (at(tx, "b") != null) o.b = at(tx, "b") === "on"; if (at(tx, "i") != null) o.i = at(tx, "i") === "on"; const c = hs(tx).find((x) => /Clr$/.test(x.localName)); if (c) { const w = document.createElementNS(c.namespaceURI, "a:solidFill"); w.appendChild(c.cloneNode(true)); o.color = colorCss(w); } }
+            const fi = tcs && h1(tcs, "fill"); if (fi) { const sf = h1(fi, "solidFill"); if (sf) o.fondo = colorCss(sf); else if (h1(fi, "noFill")) o.fondo = null; }
+            const tb = tcs && h1(tcs, "tcBdr");
+            if (tb) { const bd = {}; ["left", "right", "top", "bottom", "insideH", "insideV"].forEach((n) => { const x = h1(tb, n), v = x && lnDe(h1(x, "ln")); if (v) bd[n] = v; }); if (Object.keys(bd).length) o.bd = bd; }
+            e[parte.localName] = o;
+          });
+          if (at(ts, "styleId")) estilosTablaPpt[at(ts, "styleId")] = e;
+        });
+      }
       /**
        * SmartArt. Si el archivo trae al lado el dibujo ya acomodado (PowerPoint 2010 en adelante lo
        * guarda), se usan esas figuras con su lugar, su color y su texto. Si no, se arma con su lista
@@ -4467,6 +4721,59 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
           puntas: punta("headEnd") || punta("tailEnd") ? { ini: punta("headEnd"), fin: punta("tailEnd") } : undefined,
           x: r2((r.x / EMU) * kx), y: r2((r.y / EMU) * ky), w: r2(Math.max(0, (r.w / EMU) * kx)), h: r2(Math.max(0, (r.h / EMU) * ky)),
           rot: r.rot ? Math.round(r.rot / 60000) : undefined, volteoH: r.fh || undefined, volteoV: r.fv || undefined });
+      }
+      /** Una tabla de PowerPoint como la dibuja PowerPoint: anchos y altos, celdas combinadas, el estilo de la tabla
+          (ppt/tableStyles.xml) por capas —toda la tabla, franjas, primera y última fila y columna, esquinas—, y lo
+          propio de cada celda (relleno, bordes, márgenes, anclaje) encima. */
+      function tablaComoPpt(tbl, textoCelda) {
+        const tblPr = h1(tbl, "tblPr"), si = (a) => at(tblPr, a) === "1" || at(tblPr, a) === "true";
+        const fl = { fr: si("firstRow"), fc: si("firstCol"), lr: si("lastRow"), lc: si("lastCol"), br: si("bandRow"), bc: si("bandCol") };
+        const idEst = ((tblPr && h1(tblPr, "tableStyleId")) || {}).textContent || "";
+        const est = estilosTablaPpt[idEst.trim()] || null;
+        const anchos = hs(h1(tbl, "tblGrid"), "gridCol").map((g) => Math.round(((+at(g, "w") || 0) / EMU) * kx * 100) / 100);
+        const trs = hs(tbl, "tr"), nF = trs.length, nC = anchos.length;
+        const altos = trs.map((tr) => Math.round(((+at(tr, "h") || 0) / EMU) * ky * 100) / 100);
+        const borde = (ln) => { if (!ln) return null; if (h1(ln, "noFill")) return "no"; const c = colorCss(h1(ln, "solidFill")); return c ? [Math.max(0.5, Math.round(((+(at(ln, "w") || 12700)) / 12700) * kPt * 100) / 100), c, at(h1(ln, "prstDash"), "val") || null] : null; };
+        const celdas = {};
+        trs.forEach((tr, f) => hs(tr, "tc").forEach((tc, c) => {
+          const k = f + "," + c;
+          if (at(tc, "hMerge") === "1" || at(tc, "vMerge") === "1") { celdas[k] = { o: 1 }; return; }
+          const cs = Math.max(1, +(at(tc, "gridSpan") || 1)), rs = Math.max(1, +(at(tc, "rowSpan") || 1)), f2 = Math.min(nF - 1, f + rs - 1), c2 = Math.min(nC - 1, c + cs - 1);
+          // capas del estilo que tocan esta celda (de menor a mayor precedencia), con la región de cada una
+          const capas = [], pon = (n, r) => { if (est && est[n]) capas.push([est[n], r]); };
+          pon("wholeTbl", [0, 0, nF - 1, nC - 1]);
+          const f0 = fl.fr ? 1 : 0, fN = fl.lr ? nF - 2 : nF - 1, c0 = fl.fc ? 1 : 0, cN = fl.lc ? nC - 2 : nC - 1;
+          if (fl.br && f >= f0 && f <= fN) pon((f - f0) % 2 ? "band2H" : "band1H", [f, 0, f2, nC - 1]);
+          if (fl.bc && c >= c0 && c <= cN) pon((c - c0) % 2 ? "band2V" : "band1V", [0, c, nF - 1, c2]);
+          if (fl.lc && c2 === nC - 1) pon("lastCol", [0, nC - 1, nF - 1, nC - 1]);
+          if (fl.fc && c === 0) pon("firstCol", [0, 0, nF - 1, 0]);
+          if (fl.lr && f2 === nF - 1) pon("lastRow", [nF - 1, 0, nF - 1, nC - 1]);
+          if (fl.fr && f === 0) pon("firstRow", [0, 0, 0, nC - 1]);
+          if (fl.lr && fl.lc && f2 === nF - 1 && c2 === nC - 1) pon("seCell", [f, c, f2, c2]);
+          if (fl.lr && fl.fc && f2 === nF - 1 && c === 0) pon("swCell", [f, c, f2, c2]);
+          if (fl.fr && fl.lc && f === 0 && c2 === nC - 1) pon("neCell", [f, c, f2, c2]);
+          if (fl.fr && fl.fc && f === 0 && c === 0) pon("nwCell", [f, c, f2, c2]);
+          let fondo = null; const r0 = {}, bd = {};
+          for (const [e, [rf1, rc1, rf2, rc2]] of capas) {
+            if (e.fondo) fondo = e.fondo;
+            if (e.color) r0.color = e.color;
+            if (e.b != null) r0.b = e.b;
+            if (e.i != null) r0.i = e.i;
+            const b = e.bd || {};
+            const t = f === rf1 ? b.top : b.insideH, bo = f2 === rf2 ? b.bottom : b.insideH, l = c === rc1 ? b.left : b.insideV, ri = c2 === rc2 ? b.right : b.insideV;
+            if (t) bd.t = t; if (bo) bd.b = bo; if (l) bd.l = l; if (ri) bd.r = ri;
+          }
+          const tcPr = h1(tc, "tcPr");
+          if (tcPr) {
+            if (h1(tcPr, "solidFill")) fondo = colorCss(h1(tcPr, "solidFill")) || fondo;
+            else if (h1(tcPr, "noFill")) fondo = null;
+            [["lnT", "t"], ["lnB", "b"], ["lnL", "l"], ["lnR", "r"]].forEach(([n, k2]) => { const x = borde(h1(tcPr, n)); if (x) bd[k2] = x; });
+          }
+          const mar = [["marL", 91440], ["marT", 45720], ["marR", 91440], ["marB", 45720]].map(([n, d]) => Math.round((((tcPr && at(tcPr, n) != null ? +at(tcPr, n) : d) / EMU) * kx) * 100) / 100);
+          const tp = textoPpt(h1(tc, "txBody"), { tipoPh: null, maestro: mMae, r0 });
+          celdas[k] = { cs: cs > 1 ? cs : undefined, rs: rs > 1 ? rs : undefined, fondo: fondo || undefined, bd: Object.keys(bd).length ? bd : undefined, html: tp.html, t: textoCelda(tc), anc: (tcPr && at(tcPr, "anchor")) || undefined, mar };
+        }));
+        return { anchos, altos, celdas };
       }
       const LINEAS_PRST = /^(line|straightConnector1|bentConnector[2-5]|curvedConnector[2-5])$/;
       async function elemento(el, grupo) {
@@ -4558,8 +4865,12 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
           if (tbl) {
             const filas = hs(tbl, "tr"), celdas = {};
             let cols = 0;
-            filas.forEach((tr, f) => { const tcs = hs(tr, "tc"); cols = Math.max(cols, tcs.length); tcs.forEach((tc, c) => { const t = tc.textContent.trim(); if (t) celdas["c:" + F().ref(c, f)] = t; }); });
-            agregar(Object.assign({ tipo: "tabla", enDiapo: true, filas: filas.length, cols, encabezado: at(todos(tbl, "tblPr")[0], "firstRow") === "1" || undefined }, celdas, geo(r)));
+            // (cada párrafo de una celda en su renglón; un texto que parece número se queda como está: «7.0», no 7)
+            const textoCelda = (tc) => hs(h1(tc, "txBody"), "p").map((q) => todos(q, "t").map((x) => x.textContent).join("")).join("\n").trim();
+            filas.forEach((tr, f) => { const tcs = hs(tr, "tc"); cols = Math.max(cols, tcs.length); tcs.forEach((tc, c) => { const t = textoCelda(tc); if (t) celdas["c:" + F().ref(c, f)] = F().calcularLiteral(t) !== t || /^[=']/.test(t) ? "'" + t : t; }); });
+            let office;
+            try { office = tablaComoPpt(tbl, textoCelda); } catch (e) { office = undefined; }
+            agregar(Object.assign({ tipo: "tabla", enDiapo: true, filas: filas.length, cols, encabezado: at(todos(tbl, "tblPr")[0], "firstRow") === "1" || undefined, office }, celdas, geo(r)));
             return;
           }
           const ch = todos(el, "chart")[0], rel = ch && rels[rid(ch, "id")];
@@ -4577,7 +4888,14 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
                 todos(h1(sr, "val") || h1(sr, "yVal"), "pt").forEach((p) => { celdas["c:" + F().ref(j + 1, +at(p, "idx") + 1)] = (todos(p, "v")[0] || {}).textContent || ""; });
               });
               const titulo = todos(todos(cd, "title")[0], "t").map((x2) => x2.textContent).join("");
-              agregar(Object.assign({ tipo: "grafica", clase: tipoG, titulo: titulo || "", filas: Math.max(2, cats.length + 1), cols: sers.length + 1 }, celdas, geo(r)));
+              // y su estilo de Office (colores, letras, ejes, leyenda) para dibujarla como PowerPoint; los datos siguen
+              // en las celdas del bloque (se pueden editar en la app)
+              let office;
+              try {
+                if (NOM.graficaOffice) office = NOM.graficaOffice.leer(t, { color: (n) => hexDe(n), acentos: ["accent1", "accent2", "accent3", "accent4", "accent5", "accent6"].map((k) => "#" + (esquema[k] || "4472C4")),
+                  fuente: (n) => (/^\+mn-/.test(n) ? fuentesTema.menor : /^\+mj-/.test(n) ? fuentesTema.mayor : n) || "Calibri" });
+              } catch (e) { office = undefined; }
+              agregar(Object.assign({ tipo: "grafica", clase: tipoG, titulo: titulo || "", filas: Math.max(2, cats.length + 1), cols: sers.length + 1, office, ptOffice: office ? Math.round(kPt * 1000) / 1000 : undefined }, celdas, geo(r)));
               return;
             }
           }

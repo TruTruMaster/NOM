@@ -302,10 +302,47 @@
   function graficaHtml(b, autonomo) {
     const r = rangoUsado(b);
     const ev = NOM.formulas.evaluador((c, f) => b["c:" + ref(c, f)] || "");
+    // gráfica importada de Office: con su estilo de Office y los datos de sus celdas (lo editado en la app)
+    if (b.office && NOM.graficaOffice && Array.isArray(b.office.tipos)) {
+      try {
+        const filas = Math.max(2, +b.filas || 2), cols = Math.max(2, +b.cols || 2), val = (c, f) => { const v = ev.valor(c, f); return v === "" ? null : v; };
+        const datos = { cats: Array.from({ length: filas - 1 }, (_, f) => { const v = val(0, f + 1); return v == null ? "" : NOM.formulas.formatear(v); }),
+          series: Array.from({ length: cols - 1 }, (_, c) => ({ nombre: val(c + 1, 0), vals: Array.from({ length: filas - 1 }, (_, f) => val(c + 1, f + 1)) })) };
+        const fam = (n) => (NOM.textoRico ? NOM.textoRico.cssFuente(n) : n);
+        return NOM.graficaOffice.svg(b.office, Math.max(20, +b.w || 420), Math.max(20, +b.h || 260), { pt: +b.ptOffice || 1, datos, familia: fam, sinBorde: true, formato: NOM.formulas.formatoXL ? (v, f) => NOM.formulas.formatoXL(v, f).t : null });
+      } catch (e) { /* si algo falla, la gráfica de NOM-COLAB */ }
+    }
     return NOM.graficas.svg(r ? NOM.graficas.datos(ev, r) : null, b.clase || "barras", { titulo: b.titulo, ejeX: b.ejeX, ejeY: b.ejeY, colores: b.colores, ancho: Math.max(200, Math.round(b.w || 420)), alto: Math.max(140, Math.round(b.h || 240)), autonomo });
   }
   /** HTML de una tabla de la diapositiva (todas sus filas y columnas). */
+  /** Tabla importada de PowerPoint: con sus anchos, altos, celdas combinadas, rellenos, bordes y texto de PowerPoint.
+      Una celda que alguien editó en la app muestra lo nuevo con el formato de su celda. */
+  function tablaOfficeHtml(b) {
+    const o = b.office, nF = o.altos.length, nC = o.anchos.length, ancho = o.anchos.reduce((a, x) => a + x, 0);
+    const css = (x) => (Array.isArray(x) && /^(#[0-9A-Fa-f]{6}|rgba\(\d+,\d+,\d+,[\d.]+\))$/.test(x[1]) ? `${Math.max(0.5, +x[0] || 1)}px ${x[2] && x[2] !== "solid" ? "dashed" : "solid"} ${x[1]}` : x === "no" ? "none" : null);
+    let h = `<div class="libre-tabla diapo-tabla office"><table style="width:${ancho}px"><colgroup>${o.anchos.map((w) => `<col style="width:${+w || 0}px">`).join("")}</colgroup>`;
+    for (let f = 0; f < nF; f++) {
+      h += `<tr style="height:${+o.altos[f] || 0}px">`;
+      for (let c = 0; c < nC; c++) {
+        const x = o.celdas[f + "," + c];
+        if (!x || x.o) continue;
+        const crudo = String(b["c:" + ref(c, f)] == null ? "" : b["c:" + ref(c, f)]).replace(/^'/, "");
+        const igual = crudo.trim() === String(x.t || "").trim();
+        const cont = igual ? htmlRico(x.html) : esc(crudo).replace(/\n/g, "<br>");
+        const st = [];
+        if (x.fondo && /^(#[0-9A-Fa-f]{6}|rgba\(\d+,\d+,\d+,[\d.]+\))$/.test(x.fondo)) st.push("background:" + x.fondo);
+        const bd = x.bd || {};
+        [["t", "top"], ["r", "right"], ["b", "bottom"], ["l", "left"]].forEach(([k, n]) => { const v = css(bd[k]); if (v) st.push(`border-${n}:${v}`); });
+        const m = Array.isArray(x.mar) ? x.mar : [9.6, 4.8, 9.6, 4.8];
+        st.push(`padding:${+m[1] || 0}px ${+m[2] || 0}px ${+m[3] || 0}px ${+m[0] || 0}px`, `vertical-align:${{ ctr: "middle", b: "bottom" }[x.anc] || "top"}`);
+        h += `<td${x.cs ? ` colspan="${+x.cs}"` : ""}${x.rs ? ` rowspan="${+x.rs}"` : ""} style="${esc(st.join(";"))}">${cont}</td>`;
+      }
+      h += "</tr>";
+    }
+    return h + "</table></div>";
+  }
   function tablaHtml(b) {
+    if (b.office && Array.isArray(b.office.anchos) && Array.isArray(b.office.altos) && b.office.celdas) { try { return tablaOfficeHtml(b); } catch (e) { /* la tabla de NOM-COLAB */ } }
     const filas = +b.filas || 0, cols = +b.cols || 0;
     let mf = filas - 1, mc = cols - 1;
     if (!filas || !cols) { const r = rangoUsado(b); if (!r) return `<div class="libre-tabla"><table><tr><td>Tabla vacía (doble clic para escribir)</td></tr></table></div>`; mf = r.f2; mc = r.c2; }

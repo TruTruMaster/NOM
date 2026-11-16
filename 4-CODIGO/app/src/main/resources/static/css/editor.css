@@ -962,6 +962,9 @@
 .libre-imagen-marco .libre-imagen { border-radius: 0; }
 .libre-grafica { width: 100%; height: 100%; background: #fff; border-radius: 8px; overflow: hidden; }
 .libre-grafica .graf { width: 100%; height: 100%; }
+/* gráfica de Office: su propio fondo (o ninguno), sin la tarjeta blanca de NOM-COLAB */
+.libre-grafica.office { background: transparent; border-radius: 0; overflow: visible; }
+.libre-grafica.office > svg { display: block; overflow: visible; }
 .libre-grafica .graf .graf-titulo { fill: #2B2A33; } .libre-grafica .graf .graf-eje { fill: #6B6875; } .libre-grafica .graf .graf-ley { fill: #4A4854; } .libre-grafica .graf .graf-reja { stroke: #E7E5EE; } .libre-grafica .graf .graf-cero { stroke: #B7B4C2; }
 .libre-icono { width: 100%; height: 100%; display: block; }
 .libre-ecuacion { width: 100%; height: 100%; display: grid; place-items: center; font-size: 32px; color: var(--t-texto, #2B2A33); }
@@ -1218,7 +1221,31 @@
 .forma.ppt-forma { display: block; padding: 0; font-weight: 400; }
 .forma.ppt-forma .txt.ppt { position: absolute; z-index: 1; }
 .diapo .libre-texto.ppt { color: #000; font-family: inherit; }
-.bl:has(> .libre-texto.ppt) { overflow: visible !important; }
+.bl:has(> .libre-texto.ppt), .bl:has(> .libre-tabla.office), .bl:has(> .libre-grafica.office) { overflow: visible !important; }
 /* Líneas de Office: la caja puede medir 0 de alto o de ancho; se deja un margen para poder tocarla */
 .bl.linea-office { min-width: 6px; min-height: 6px; }
 .bl.linea-office .forma { padding: 0; }
+
+/* Dibujos de Excel (imágenes, formas y gráficas) encima de la cuadrícula, en su ancla */
+.rejilla-hoja .xl-dibujos { position: absolute; width: 0; height: 0; pointer-events: none; z-index: 3; }
+.rejilla-hoja .xl-dib { position: absolute; transform-origin: center; }
+.rejilla-hoja .xl-dib > svg { display: block; }
+.rejilla-hoja .xl-dib-vacio { background: #fff; border: 1px solid #D9D9D9; }
+.rejilla-hoja .xl-dib-txt { position: absolute; display: flex; flex-direction: column; box-sizing: border-box; overflow: visible; line-height: 1.2; white-space: pre-wrap; font-family: var(--xl-fuente); }
+/* Controles de formulario de Excel (casilla, opción, botón, lista desplegable) */
+.rejilla-hoja .xl-ctl { display: flex; align-items: center; gap: 4px; font: 8pt Tahoma, "NOM TA", sans-serif; color: #000; white-space: nowrap; overflow: hidden; box-sizing: border-box; }
+.rejilla-hoja .xl-ctl > svg { flex: none; }
+.rejilla-hoja .xl-boton { justify-content: center; background: linear-gradient(#FBFBFB, #E8E8E8); border: 1px solid #ADADAD; }
+.rejilla-hoja .xl-lista { background: #fff; border: 1px solid #7A7A7A; padding: 0 0 0 3px; }
+.rejilla-hoja .xl-lista > span { flex: 1; overflow: hidden; }
+.rejilla-hoja .xl-lista > b { flex: none; align-self: stretch; width: 17px; border-left: 1px solid #7A7A7A; background: #F0F0F0 url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%227%22 height=%224%22%3E%3Cpath d=%22M0 0h7L3.5 4z%22/%3E%3C/svg%3E') center no-repeat; }
+.rejilla-hoja .xl-grupo { align-items: flex-start; border: 1px solid #BFBFBF; }
+/* Tabla de PowerPoint importada: como PowerPoint (sin los colores ni el relleno de las tablas de NOM-COLAB) */
+.libre-tabla.office { background: transparent; border-radius: 0; overflow: visible; }
+.libre-tabla.office table { border-collapse: collapse; table-layout: fixed; font-size: 18px; line-height: 1.2; color: #000; }
+.libre-tabla.office td { border: 0; padding: 0; background: none; overflow: hidden; word-break: normal; overflow-wrap: break-word; white-space: pre-wrap; text-align: left; font-weight: 400; }
+.libre-tabla.office td > div { margin: 0; }
+/* Gráfico de un documento de Word: dibujado como Word, en línea con el texto */
+.wd-objeto.con-grafica[data-obj] > span.wd-grafica { display: inline-block; padding: 0; margin: 0; border: 0; border-radius: 0; background: none; vertical-align: bottom; line-height: 0; }
+.wd-objeto.con-grafica[data-obj] > span.wd-grafica > svg { display: block; }
+@media print { .wd-objeto.con-grafica[data-obj] { display: inline; } }
