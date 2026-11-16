@@ -1173,7 +1173,9 @@
       return v;
     }
 
-    return { valor: (c, f) => valorEn(actual, c, f), limpiar: () => { actual.cache.clear(); otras.clear(); } };
+    return { valor: (c, f) => valorEn(actual, c, f), limpiar: () => { actual.cache.clear(); otras.clear(); },
+      // una fórmula que no está en ninguna celda, como si estuviera en (c, f): la de una regla de formato condicional
+      calcular: (crudo, c, f) => { try { return calcular(crudo, actual, { c, f }); } catch (e) { return e instanceof ErrorF ? e : E("#VALOR!"); } } };
   }
 
   // ------------------------------------------------------------ mostrar valores

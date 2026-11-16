@@ -140,6 +140,35 @@
     pie: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer",
     nucleo: "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" };
   const EMU = 9525;   // 1 px a 96 ppp
+  // ---- HLS de Windows con enteros (HLSMAX = 240), como lo usa Excel para el tinte de los colores del tema
+  const HLSMAX = 240;
+  function rgbAHls(R, G, B) {
+    const cMax = Math.max(R, G, B), cMin = Math.min(R, G, B), L = Math.floor(((cMax + cMin) * HLSMAX + 255) / 510);
+    if (cMax === cMin) return [160, L, 0];
+    const S = L <= HLSMAX / 2 ? Math.floor(((cMax - cMin) * HLSMAX + Math.floor((cMax + cMin) / 2)) / (cMax + cMin)) : Math.floor(((cMax - cMin) * HLSMAX + Math.floor((510 - cMax - cMin) / 2)) / (510 - cMax - cMin));
+    const d = cMax - cMin, delta = (v) => Math.floor(((cMax - v) * 40 + Math.floor(d / 2)) / d);
+    let H = R === cMax ? delta(B) - delta(G) : G === cMax ? 80 + delta(R) - delta(B) : 160 + delta(G) - delta(R);
+    if (H < 0) H += HLSMAX;
+    if (H > HLSMAX) H -= HLSMAX;
+    return [H, L, S];
+  }
+  function tonoARgb(n1, n2, h) {
+    if (h < 0) h += HLSMAX;
+    if (h > HLSMAX) h -= HLSMAX;
+    if (h < 40) return n1 + Math.trunc(((n2 - n1) * h + 20) / 40);
+    if (h < 120) return n2;
+    if (h < 160) return n1 + Math.trunc(((n2 - n1) * (160 - h) + 20) / 40);
+    return n1;
+  }
+  function hlsARgb(H, L, S) {
+    if (!S) { const v = Math.floor((L * 255) / HLSMAX); return [v, v, v]; }
+    const m2 = L <= 120 ? Math.floor((L * (HLSMAX + S) + 120) / HLSMAX) : L + S - Math.floor((L * S + 120) / HLSMAX), m1 = 2 * L - m2;
+    return [H + 80, H, H - 80].map((h) => Math.floor((tonoARgb(m1, m2, h) * 255 + 120) / HLSMAX));
+  }
+  const INDEXADOS_XL = ("000000 FFFFFF FF0000 00FF00 0000FF FFFF00 FF00FF 00FFFF 000000 FFFFFF FF0000 00FF00 0000FF FFFF00 FF00FF 00FFFF " +
+    "800000 008000 000080 808000 800080 008080 C0C0C0 808080 9999FF 993366 FFFFCC CCFFFF 660066 FF8080 0066CC CCCCFF " +
+    "000080 FF00FF FFFF00 00FFFF 800080 800000 008080 0000FF 00CCFF CCFFFF CCFFCC FFFF99 99CCFF FF99CC CC99FF FFCC99 " +
+    "3366FF 33CCCC 99CC00 FFCC00 FF9900 FF6600 666699 969696 003366 339966 003300 333300 993300 993366 333399 333333 000000 FFFFFF").split(" ");
 
   // ------------------------------------------------------------ Word (.docx)
   const TWIP = 15;   // 1 px (96 ppp) = 15 twips
@@ -2301,12 +2330,16 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
 
   /** .xlsx a partir del archivo del que vino el documento: se cambia solo lo editado. */
   function xlsxConOrigen(doc, og) {
-    const O = NOM.origen, pq = paqueteDe(og), hojasBase = {}, hojasBase1 = {};
+    const O = NOM.origen, pq = paqueteDe(og), hojasBase = {};
     // Lo que se importó de cada hoja se vuelve a sacar del original: la diferencia es lo que editó la persona.
     // (con la misma versión del importador con que se importó: si no, un cambio de lectura parecería una edición)
-    modeloXlsx(og.zip, 2).hojas.forEach((h) => { hojasBase[h.campos.ox] = h.campos; });
-    let v1 = null;
-    const baseDe = (t, ox) => { if (+t.xlv >= 2) return hojasBase[ox]; if (!v1) { v1 = true; modeloXlsx(og.zip, 1).hojas.forEach((h) => { hojasBase1[h.campos.ox] = h.campos; }); } return hojasBase1[ox] || hojasBase[ox]; };
+    modeloXlsx(og.zip, VERSION_XL).hojas.forEach((h) => { hojasBase[h.campos.ox] = h.campos; });
+    const porVersion = { [VERSION_XL]: hojasBase };
+    const baseDe = (t, ox) => {
+      const v = Math.max(1, Math.min(VERSION_XL, +t.xlv || 1));
+      if (!porVersion[v]) { porVersion[v] = {}; modeloXlsx(og.zip, v).hojas.forEach((h) => { porVersion[v][h.campos.ox] = h.campos; }); }
+      return porVersion[v][ox] || hojasBase[ox];
+    };
     const tablas = F().hojasDe(doc);
     if (!tablas.length) throw new Error("Este documento no tiene ninguna tabla");
     const LIBRO = "xl/workbook.xml";
@@ -2452,8 +2485,12 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
    * importado con la versión anterior eso se verá como "la persona lo quitó". Al cambiar lo que se
    * lee hay que cuidar esos documentos (Word y PowerPoint no tienen el problema: guardan huellas).
    */
+  // Versiones del importador de Excel (lo que se guarda y lo que se exporta se compara con la misma versión):
+  // 1 la primera · 2 formato de números y medidas de Excel · 3 tinte exacto de Excel, colores indexados, bordes
+  // con su estilo y color, y los estilos de tabla (los que Excel trae de fábrica y los del libro).
+  const VERSION_XL = 3;
   function modeloXlsx(z, version) {
-    const V = version || 2;
+    const V = version || VERSION_XL;
     const P = (t) => new DOMParser().parseFromString(t, "application/xml");
     const libro = z.texto("xl/workbook.xml");
     if (!libro) throw new Error("El archivo no parece un libro de Excel (.xlsx)");
@@ -2479,22 +2516,39 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       hijos(cs).forEach((c) => { const v = hijo(c, "srgbClr") ? at(hijo(c, "srgbClr"), "val") : hijo(c, "sysClr") ? at(hijo(c, "sysClr"), "lastClr") : null; if (v && /^[0-9a-f]{6}$/i.test(v)) porNombre[c.localName] = v.toUpperCase(); });
       ["lt1", "dk1", "lt2", "dk2", "accent1", "accent2", "accent3", "accent4", "accent5", "accent6", "hlink", "folHlink"].forEach((k, i) => (temaXl[i] = porNombre[k] || null));
     }
+    // El tinte como lo calcula Excel (comprobado contra Excel real, igual en 37 de 37 colores): el color pasa a
+    // HLS de Windows con números enteros (HLSMAX = 240) y se cambia solo la luminosidad. Para aclarar, Excel parte
+    // de la luminosidad sin redondear; para oscurecer, de la redondeada; y trunca el resultado.
     const conTinte = (hex, tinte) => {
       if (!tinte) return hex;
-      return [0, 2, 4].map((i) => { const v = parseInt(hex.slice(i, i + 2), 16); return Math.max(0, Math.min(255, Math.round(tinte > 0 ? v + (255 - v) * tinte : v * (1 + tinte)))).toString(16).padStart(2, "0"); }).join("").toUpperCase();
+      if (V < 3) return [0, 2, 4].map((i) => { const v = parseInt(hex.slice(i, i + 2), 16); return Math.max(0, Math.min(255, Math.round(tinte > 0 ? v + (255 - v) * tinte : v * (1 + tinte)))).toString(16).padStart(2, "0"); }).join("").toUpperCase();
+      const [R, G, B] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)), [H, L, S] = rgbAHls(R, G, B);
+      // (los grises —blanco, negro— redondean: «Negro, más claro 50 %» es #808080 y «Blanco, más oscuro 15 %» #D9D9D9)
+      if (!S) { const L3 = Math.max(0, Math.min(HLSMAX, Math.round(tinte < 0 ? L * (1 + tinte) : L * (1 - tinte) + HLSMAX * tinte))), g = Math.floor((L3 * 255 + 120) / HLSMAX); return [g, g, g].map((v) => Math.max(0, Math.min(255, v)).toString(16).padStart(2, "0")).join("").toUpperCase(); }
+      const L2 = tinte < 0 ? Math.trunc(L * (1 + tinte)) : Math.trunc((((Math.max(R, G, B) + Math.min(R, G, B)) * HLSMAX) / 510) * (1 - tinte) + (HLSMAX - HLSMAX * (1 - tinte)));
+      return hlsARgb(H, Math.max(0, Math.min(HLSMAX, L2)), S).map((v) => Math.max(0, Math.min(255, v)).toString(16).padStart(2, "0")).join("").toUpperCase();
     };
+    // Los 64 colores «indexados» de Excel 97 (archivos viejos o hechos por otros programas), o los que el archivo cambió.
+    const indexados = INDEXADOS_XL.slice();
+    todos(todos(est, "indexedColors")[0], "rgbColor").forEach((c, i) => { const v = at(c, "rgb"); if (v && /^[0-9A-F]{8}$/i.test(v)) indexados[i] = v.slice(2).toUpperCase(); });
     const color = (n) => {
       const rgb = at(n, "rgb");
-      if (rgb && /^[0-9A-F]{8}$/i.test(rgb)) return "#" + rgb.slice(2).toUpperCase();
+      if (rgb && /^[0-9A-F]{8}$/i.test(rgb)) return "#" + (V >= 3 ? conTinte(rgb.slice(2).toUpperCase(), +(at(n, "tint") || 0)) : rgb.slice(2).toUpperCase());
       const th = at(n, "theme");
-      return th != null && temaXl[+th] ? "#" + conTinte(temaXl[+th], +(at(n, "tint") || 0)) : null;
+      if (th != null && temaXl[+th]) return "#" + conTinte(temaXl[+th], +(at(n, "tint") || 0));
+      const ix = at(n, "indexed");
+      return V >= 3 && ix != null && indexados[+ix] ? "#" + conTinte(indexados[+ix], +(at(n, "tint") || 0)) : null;
     };
     const fuentes = todos(hijo(est.documentElement, "fonts"), "font").map((f) => ({ nombre: at(hijo(f, "name"), "val") || null, b: !!hijo(f, "b") && at(hijo(f, "b"), "val") !== "0", i: !!hijo(f, "i") && at(hijo(f, "i"), "val") !== "0", u: !!hijo(f, "u") && at(hijo(f, "u"), "val") !== "none", k: hijo(f, "color") ? color(hijo(f, "color")) : null, sz: hijo(f, "sz") ? +at(hijo(f, "sz"), "val") : 11 }));
     const rellenos = todos(hijo(est.documentElement, "fills"), "fill").map((f) => { const p = hijo(f, "patternFill"); return p && at(p, "patternType") === "solid" && hijo(p, "fgColor") ? color(hijo(p, "fgColor")) : null; });
+    const bordesX = todos(hijo(est.documentElement, "borders"), "border").map((b) => [["top", "a"], ["bottom", "b"], ["left", "i"], ["right", "d"]].map(([l, k]) => {
+      const e = hijo(b, l), st = e && at(e, "style");
+      return st && st !== "none" ? `${k}:${st}:${color(hijo(e, "color")) || "#000000"}` : "";
+    }).filter(Boolean).join(";"));
     const bordes = todos(hijo(est.documentElement, "borders"), "border").map((b) => ["top", "bottom", "left", "right"].map((l, k) => (hijo(b, l) && at(hijo(b, l), "style") ? "abid"[k] : "")).join(""));
     const xfs = todos(hijo(est.documentElement, "cellXfs"), "xf").map((xf) => {
       const al = hijo(xf, "alignment");
-      return { num: +at(xf, "numFmtId") || 0, fuente: fuentes[+at(xf, "fontId") || 0] || {}, relleno: rellenos[+at(xf, "fillId") || 0] || null, borde: bordes[+at(xf, "borderId") || 0] || "", al: al ? { left: "izq", center: "centro", centerContinuous: "centro", right: "der" }[at(al, "horizontal")] || null : null, aj: al ? at(al, "wrapText") === "1" : false };
+      return { num: +at(xf, "numFmtId") || 0, fuente: fuentes[+at(xf, "fontId") || 0] || {}, relleno: rellenos[+at(xf, "fillId") || 0] || null, borde: bordes[+at(xf, "borderId") || 0] || "", bx: bordesX[+at(xf, "borderId") || 0] || "", al: al ? { left: "izq", center: "centro", centerContinuous: "centro", right: "der" }[at(al, "horizontal")] || null : null, aj: al ? at(al, "wrapText") === "1" : false };
     });
     const hojasXml = todos(P(libro), "sheet");
     // Tablas de Excel (ListObject) de todas las hojas: su nombre, su rango y sus columnas, para traducir las
@@ -2513,9 +2567,164 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         const a1 = F().parseRef(ref[0] || ""), a2 = F().parseRef(ref[1] || ref[0] || "");
         if (!a1 || !a2) return;
         const cols = todos(td, "tableColumn").map((c) => at(c, "name") || "");
-        const info = { hoja: at(h, "name") || "", c1: a1.c, f1: a1.f, c2: a2.c, f2: a2.f, enc: at(td, "headerRowCount") === "0" ? 0 : 1, tot: +(at(td, "totalsRowCount") || 0), cols };
+        const tsi = todos(td, "tableStyleInfo")[0], si = (a) => at(tsi, a) === "1" || at(tsi, a) === "true";
+        const info = { hoja: at(h, "name") || "", c1: a1.c, f1: a1.f, c2: a2.c, f2: a2.f, enc: at(td, "headerRowCount") === "0" ? 0 : 1, tot: +(at(td, "totalsRowCount") || 0), cols,
+          estilo: tsi ? at(tsi, "name") : null, rayasF: si("showRowStripes"), rayasC: si("showColumnStripes"), primeraC: si("showFirstColumn"), ultimaC: si("showLastColumn") };
         [at(td, "displayName"), at(td, "name")].filter(Boolean).forEach((n) => (tablasXl[n.toLowerCase()] = info));
       });
+    }
+    // ---- Estilos de tabla (versión 3): el formato que Excel pinta en una tabla (encabezado, franjas, primera y
+    // última columna, totales) con la precedencia de Excel. Lo propio de cada celda (su relleno, su color, sus
+    // bordes) gana; el estilo solo llena lo que la celda no dice.
+    const colorTabla = (x) => {
+      if (!x) return null;
+      if (x[0] === "#") return x.toUpperCase();
+      if (x[0] === "i") return indexados[+x.slice(1)] ? "#" + indexados[+x.slice(1)] : null;
+      const m = /^t(\d+)(?::(-?[\d.eE-]+))?$/.exec(x);
+      return m && temaXl[+m[1]] ? "#" + conTinte(temaXl[+m[1]], +(m[2] || 0)) : null;
+    };
+    // estilos propios del libro (los que alguien hizo en Excel): sus elementos usan los formatos «dxf» del libro
+    const estilosTablaLibro = {};
+    const dxfsL = todos(hijo(est.documentElement, "dxfs"), "dxf");
+    const formatoDxf = (d) => {
+        const o = {}, fu = d && hijo(d, "font"), pf = d && todos(d, "patternFill")[0], bo = d && hijo(d, "border");
+        if (fu) {
+          const b = hijo(fu, "b"), i = hijo(fu, "i"), u = hijo(fu, "u"), st = hijo(fu, "strike");
+          if (b) o.b = at(b, "val") === "0" ? 0 : 1;
+          if (i) o.i = at(i, "val") === "0" ? 0 : 1;
+          if (u && at(u, "val") !== "none") o.u = 1;
+          if (st && at(st, "val") !== "0") o.st = 1;
+          const k = color(hijo(fu, "color")); if (k) o.k = k;
+        }
+        if (pf && at(pf, "patternType") !== "none") { const f = color(hijo(pf, "bgColor")) || color(hijo(pf, "fgColor")); if (f) o.f = f; }
+        if (bo) { const bd = {}; [["left", "l"], ["right", "r"], ["top", "t"], ["bottom", "b"], ["horizontal", "h"], ["vertical", "v"]].forEach(([l, k]) => { const e = hijo(bo, l), st = e && at(e, "style"); if (st && st !== "none") bd[k] = [st, color(hijo(e, "color")) || "#000000"]; }); if (Object.keys(bd).length) o.bd = bd; }
+        return o;
+    };
+    if (V >= 3) {
+      const ts = hijo(est.documentElement, "tableStyles");
+      hijos(ts, "tableStyle").forEach((t2) => {
+        const e = {};
+        hijos(t2, "tableStyleElement").forEach((x) => { const f = formatoDxf(dxfsL[+at(x, "dxfId")]); if (+at(x, "size") > 1) f.s = +at(x, "size"); e[at(x, "type")] = f; });
+        if (at(t2, "name")) estilosTablaLibro[at(t2, "name")] = e;
+      });
+    }
+    // ---- Formato condicional de Excel (versión 3): las reglas tal cual (con sus fórmulas en español y relativas a
+    // la primera celda de su rango); las pinta el modo Excel de la hoja. Las de Excel 2010 (barras con borde o lisas,
+    // más juegos de íconos) van aparte en «extLst» y se juntan por su id.
+    function formatoCondicional(doc, hoja) {
+      const raiz = doc.documentElement, reglas = [], usados = new Set(), ext14 = {};
+      const X14 = (n) => n && /2009\/9\/main/.test(n.namespaceURI || "");
+      todos(raiz, "cfRule").forEach((r) => { if (X14(r) && at(r, "id")) ext14[at(r, "id")] = r; });
+      const cfvo = (n) => { const fx = todos(n, "f")[0]; return { t: at(n, "type") || "min", v: at(n, "val") != null ? at(n, "val") : fx ? fx.textContent : null, gte: at(n, "gte") !== "0" }; };
+      const formulaCf = (fx, r0) => {
+        let x = String(fx || "").trim().replace(/_xlfn\.|_xlws\./g, "");
+        const p0 = F().parseRef(String(r0 || "A1").split(":")[0].replace(/\$/g, "")) || { c: 0, f: 0 };
+        try { x = sinNombres(sinEstructuradas(x, hoja, p0.c, p0.f)); } catch (e) { /* tal cual */ }
+        return F().aEspanol("=" + x);
+      };
+      const leer = (x, r, d14) => {
+        const t = at(x, "type"), o = { r, t, p: +(at(x, "priority") || 0), s: at(x, "stopIfTrue") === "1" };
+        if (at(x, "dxfId") != null && dxfsL[+at(x, "dxfId")]) o.d = formatoDxf(dxfsL[+at(x, "dxfId")]);
+        if (at(x, "operator")) o.o = at(x, "operator");
+        if (at(x, "text") != null) o.tx = at(x, "text");
+        const fs = hijos(x, "formula").concat(hijos(x, "f")).map((n) => formulaCf(n.textContent, r[0]));
+        if (fs.length) o.fx = fs;
+        if (t === "top10") { o.rank = +(at(x, "rank") || 10); o.pct = at(x, "percent") === "1"; o.bottom = at(x, "bottom") === "1"; }
+        if (t === "aboveAverage") { o.above = at(x, "aboveAverage") !== "0"; o.eq = at(x, "equalAverage") === "1"; o.std = +(at(x, "stdDev") || 0); }
+        if (t === "timePeriod") o.tp = at(x, "timePeriod");
+        const cs = hijo(x, "colorScale");
+        if (cs) o.cs = { v: hijos(cs, "cfvo").map(cfvo), c: hijos(cs, "color").map((n) => color(n) || "#FFFFFF") };
+        const db = hijo(x, "dataBar") || (d14 && hijo(d14, "dataBar"));
+        if (db) {
+          o.db = { v: hijos(db, "cfvo").map(cfvo), c: color(hijo(db, "color") || hijo(db, "fillColor")) || "#638EC6", min: +(at(db, "minLength") || 10), max: +(at(db, "maxLength") || 90), grad: true, show: at(db, "showValue") !== "0" };
+          const e = d14 && hijo(d14, "dataBar");
+          if (e) {
+            if (at(e, "minLength") != null) o.db.min = +at(e, "minLength");
+            if (at(e, "maxLength") != null) o.db.max = +at(e, "maxLength");
+            o.db.grad = at(e, "gradient") !== "0";
+            if (at(e, "border") === "1") o.db.borde = color(hijo(e, "borderColor")) || o.db.c;
+            o.db.neg = at(e, "negativeBarColorSameAsPositive") === "1" ? o.db.c : color(hijo(e, "negativeFillColor")) || "#FF0000";
+            o.db.eje = at(e, "axisPosition") || "automatic";
+            o.db.ejeColor = color(hijo(e, "axisColor")) || "#000000";
+            if (at(e, "direction")) o.db.dir = at(e, "direction");
+            const v14 = hijos(e, "cfvo").map(cfvo); if (v14.length === 2) o.db.v = v14;
+          }
+        }
+        const is = hijo(x, "iconSet");
+        if (is) o.is = { set: at(is, "iconSet") || "3TrafficLights1", rev: at(is, "reverse") === "1", show: at(is, "showValue") !== "0", v: hijos(is, "cfvo").map(cfvo) };
+        return o;
+      };
+      hijos(raiz, "conditionalFormatting").forEach((cf) => {
+        const r = String(at(cf, "sqref") || "").split(/\s+/).filter(Boolean);
+        if (!r.length) return;
+        hijos(cf, "cfRule").forEach((x) => {
+          const id = todos(x, "id")[0], d14 = id ? ext14[id.textContent.trim()] : null;
+          if (d14) usados.add(d14);
+          reglas.push(leer(x, r, d14));
+        });
+      });
+      // reglas que solo están en las extensiones de Excel 2010 (íconos como estrellas, triángulos o cajas)
+      todos(raiz, "conditionalFormatting").filter(X14).forEach((cf) => {
+        const sq = todos(cf, "sqref")[0], r = String(sq ? sq.textContent : "").split(/\s+/).filter(Boolean);
+        if (!r.length) return;
+        hijos(cf, "cfRule").filter((x) => !usados.has(x)).forEach((x) => reglas.push(leer(x, r, x)));
+      });
+      return reglas.length ? reglas : null;
+    }
+    function estilosDeTabla(hoja, campos) {
+      const vistas = new Set();
+      for (const tb of Object.values(tablasXl)) {
+        if (tb.hoja !== hoja || vistas.has(tb) || !tb.estilo) continue;
+        vistas.add(tb);
+        const est2 = estilosTablaLibro[tb.estilo] || (NOM.ESTILOS_TABLA || {})[tb.estilo];
+        if (!est2) continue;
+        const { c1, c2, f1, f2 } = tb, fEnc = tb.enc ? f1 : -1, fTot = tb.tot ? f2 : -1, d1 = f1 + (tb.enc ? 1 : 0), d2 = f2 - (tb.tot ? 1 : 0);
+        // franjas: cada una mide «s» filas (o columnas); la primera y la segunda se alternan
+        const franja = (i, ini, n1, n2) => { const k = (i - ini) % (n1 + n2), a = i - k; return k < n1 ? [0, a, a + n1 - 1] : [1, a + n1, a + n1 + n2 - 1]; };
+        const s1F = (est2.firstRowStripe || {}).s || 1, s2F = (est2.secondRowStripe || {}).s || 1, s1C = (est2.firstColumnStripe || {}).s || 1, s2C = (est2.secondColumnStripe || {}).s || 1;
+        for (let f = f1; f <= f2; f++) for (let c = c1; c <= c2; c++) {
+          const capas = [], pon = (tipo, rc1, rf1, rc2, rf2) => { if (est2[tipo]) capas.push({ e: est2[tipo], rc1, rf1, rc2, rf2 }); };
+          pon("wholeTable", c1, f1, c2, f2);
+          const enDatos = f >= d1 && f <= d2;
+          if (enDatos && tb.rayasC) { const [n, a, b] = franja(c, c1, s1C, s2C); pon(n ? "secondColumnStripe" : "firstColumnStripe", a, d1, Math.min(b, c2), d2); }
+          if (enDatos && tb.rayasF) { const [n, a, b] = franja(f, d1, s1F, s2F); pon(n ? "secondRowStripe" : "firstRowStripe", c1, a, c2, Math.min(b, d2)); }
+          if (tb.ultimaC && c === c2) pon("lastColumn", c2, f1, c2, f2);
+          if (tb.primeraC && c === c1) pon("firstColumn", c1, f1, c1, f2);
+          if (f === fEnc) pon("headerRow", c1, f, c2, f);
+          if (f === fTot) pon("totalRow", c1, f, c2, f);
+          if (f === fEnc && c === c1) pon("firstHeaderCell", c, f, c, f);
+          if (f === fEnc && c === c2) pon("lastHeaderCell", c, f, c, f);
+          if (f === fTot && c === c1) pon("firstTotalCell", c, f, c, f);
+          if (f === fTot && c === c2) pon("lastTotalCell", c, f, c, f);
+          let relleno = null, tinta = null, negrita = false, cursiva = false;
+          const lados = {};
+          for (const x of capas) {
+            const e = x.e;
+            if (e.f) relleno = e.f;
+            if (e.k) tinta = e.k;
+            if (e.b) negrita = true;
+            if (e.i) cursiva = true;
+            if (e.bd) {
+              const bd = e.bd, ar = f === x.rf1 ? bd.t : bd.h, ab = f === x.rf2 ? bd.b : bd.h, iz = c === x.rc1 ? bd.l : bd.v, de = c === x.rc2 ? bd.r : bd.v;
+              if (ar) lados.a = ar;
+              if (ab) lados.b = ab;
+              if (iz) lados.i = iz;
+              if (de) lados.d = de;
+            }
+          }
+          const R = F().ref(c, f);
+          if (relleno && !campos["r:" + R]) { const x = colorTabla(relleno); if (x) campos["r:" + R] = x; }
+          if (tinta && !campos["k:" + R]) { const x = colorTabla(tinta); if (x && x !== "#000000") campos["k:" + R] = x; }
+          if (negrita && !campos["n:" + R]) campos["n:" + R] = true;
+          if (cursiva && !campos["i:" + R]) campos["i:" + R] = true;
+          if (Object.keys(lados).length) {
+            const propios = {};
+            String(campos["bx:" + R] || "").split(";").filter(Boolean).forEach((q) => (propios[q.split(":")[0]] = q));
+            for (const l in lados) if (!propios[l]) propios[l] = `${l}:${lados[l][0]}:${colorTabla(lados[l][1]) || "#000000"}`;
+            campos["bx:" + R] = Object.values(propios).join(";");
+          }
+        }
+      }
     }
     const hojaRef = (n) => (/^[A-Za-z_][A-Za-z0-9_.]*$/.test(n) ? n : "'" + n.replace(/'/g, "''") + "'");
     // Nombres definidos del libro (IVA = 0.16, Ventas = Datos!$A$1:$G$61…) y el orden de las hojas (referencias 3D)
@@ -2660,6 +2869,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
             if (s.fuente.nombre && s.fuente.nombre !== ((fuentes[0] || {}).nombre || "Calibri")) campos["tf:" + R] = s.fuente.nombre;
             if (s.relleno) campos["r:" + R] = s.relleno;
             if (s.borde) campos["bd:" + R] = s.borde.split("").sort().join("");
+            if (V >= 3 && s.bx) campos["bx:" + R] = s.bx;
             if (s.al) campos["al:" + R] = s.al;
             if (s.aj) campos["aj:" + R] = true;
           }
@@ -2692,6 +2902,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
           campos["dv:x" + k] = { rango, tipo: "numero", min: op === "lessThanOrEqual" ? "" : f1.textContent, max: op === "between" && f2 ? f2.textContent : op === "lessThanOrEqual" ? f1.textContent : "" };
         }
       });
+      if (V >= 3) { estilosDeTabla(nombre, campos); const cfx = formatoCondicional(doc, nombre); if (cfx) campos.cfx = cfx; }
       if (todos(doc, "drawing").length) aviso = aviso || "Las gráficas e imágenes del archivo no se ven aquí, pero se conservan: al descargarlo en Excel salen igual";
       campos.filas = Math.max(30, maxF + 5);
       campos.cols = Math.max(10, Math.min(MAX_C, maxC + 2));

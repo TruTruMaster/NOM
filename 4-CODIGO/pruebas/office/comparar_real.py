@@ -308,7 +308,7 @@ def medir_xlsx(nav, esp, archivo, carpeta, verdad, nombre):
         p.evaluate("(pid) => { const ed = NOM.editorActual; const b = document.querySelector(`.pestana-hoja[data-pag=\"${pid}\"]`); if (b) b.click(); }", pid)
         p.wait_for_timeout(900)
         m = p.evaluate(JS_CELDAS)
-        malas = []
+        malas, fondos_malos = [], []
         f_ocultas = {fi["f"] for fi in h.get("filas", []) if fi.get("oculta")}; c_ocultas = {co["c"] for co in h.get("columnas", []) if co.get("oculta")}
         for c in h.get("celdas", []):
             if c["f"] in f_ocultas or c["c"] in c_ocultas: continue   # Excel no las muestra
@@ -320,6 +320,7 @@ def medir_xlsx(nav, esp, archivo, carpeta, verdad, nombre):
             if c.get("fondo"):
                 tot_fondo += 1
                 if n and rgb_hex(n["fondo"]) == c["fondo"]: ok_fondo += 1
+                elif len(fondos_malos) < 40: fondos_malos.append({"celda": k, "excel": c["fondo"], "trama": c.get("trama"), "nom": (n or {}).get("fondo")})
         for col in h.get("columnas", [])[:30]:
             j = col["c"] - 1
             if j < len(m["cols"]) and not col.get("oculta"):
@@ -328,7 +329,9 @@ def medir_xlsx(nav, esp, archivo, carpeta, verdad, nombre):
         filas_ok = sum(1 for fi in h.get("filas", [])[:60] if not fi.get("oculta") and any(abs(x["h"] - fi["h"] * 96 / 72) <= 1.5 for x in m["filas"] if x["f"] == fi["f"]))
         filas_tot = sum(1 for fi in h.get("filas", [])[:60] if not fi.get("oculta") and any(x["f"] == fi["f"] for x in m["filas"]))
         tot_fil[0] += filas_tot; ok_fil[0] += filas_ok
-        hoja = {"nombre": h["nombre"], "texto_distinto": malas}
+        altos_malos = [{"fila": fi["f"], "excel": round(fi["h"] * 96 / 72, 1), "nom": [round(x["h"], 1) for x in m["filas"] if x["f"] == fi["f"]]} for fi in h.get("filas", [])[:60]
+                       if not fi.get("oculta") and any(x["f"] == fi["f"] for x in m["filas"]) and not any(abs(x["h"] - fi["h"] * 96 / 72) <= 1.5 for x in m["filas"] if x["f"] == fi["f"])]
+        hoja = {"nombre": h["nombre"], "texto_distinto": malas, "fondo_distinto": fondos_malos, "alto_distinto": altos_malos[:20]}
         # imagen: cuadrícula desde A1 en los dos
         of = REAL / "verdad" / f"{nombre}-h{verdad['hojas'].index(h) + 1}.png"
         if of.exists() and m.get("a1"):

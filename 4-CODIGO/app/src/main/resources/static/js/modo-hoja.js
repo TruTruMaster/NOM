@@ -324,13 +324,238 @@
         return false;
       }
 
+      // ------------------------------------------------------------ bordes de Excel (bx: «a:thin:#000000;d:medium:#156082»)
+      const BX_ANCHO = { hair: 1, thin: 1, dotted: 1, dashed: 1, dashDot: 1, dashDotDot: 1, medium: 2, mediumDashed: 2, mediumDashDot: 2, mediumDashDotDot: 2, slantDashDot: 2, thick: 3, double: 3 };
+      const BX_CSS = { hair: "dotted", dotted: "dotted", dashed: "dashed", dashDot: "dashed", dashDotDot: "dashed", mediumDashed: "dashed", mediumDashDot: "dashed", mediumDashDotDot: "dashed", slantDashDot: "dashed", double: "double" };
+      function ladosBx(ref) {
+        const x = t["bx:" + ref];
+        if (!x) return null;
+        const o = {};
+        String(x).split(";").forEach((q) => { const [l, e, k] = q.split(":"); if (l && BX_ANCHO[e] && /^#[0-9A-Fa-f]{6}$/.test(k || "")) o[l] = [e, k]; });
+        return o;
+      }
+      const pesoBx = (x) => (x ? BX_ANCHO[x[0]] * 10 + (x[0] === "double" ? 5 : 0) + (BX_CSS[x[0]] ? 0 : 1) : 0);
+      const mejorBx = (a, b) => (pesoBx(b) > pesoBx(a) ? b : a || b || null);
+      const cssBx1 = (x) => `1px ${x[0] === "double" ? "solid" : BX_CSS[x[0]] || "solid"} ${x[1]}`;
+
+      // ------------------------------------------------------------ formato condicional de Excel (cfx, modo Excel)
+      // Cada regla con la semántica de Excel: prioridad, «detener si es verdad», reglas de valor, texto, fórmula,
+      // repetidos, los primeros/últimos, sobre/bajo el promedio, escalas de color, barras de datos y juegos de íconos.
+      function prepararCfx(ev) {
+        const reglasX = Array.isArray(t.cfx) ? t.cfx.slice().sort((a, b) => (a.p || 0) - (b.p || 0)) : [];
+        if (!reglasX.length) return null;
+        const maxF = t.filas || 30, maxC = t.cols || 10;
+        const prep = reglasX.map((rg) => {
+          const rangos = (rg.r || []).map((x) => { const [a, b] = String(x).replace(/\$/g, "").split(":").map((q) => F().parseRef(q)); return a ? { c1: a.c, f1: a.f, c2: (b || a).c, f2: (b || a).f } : null; }).filter(Boolean);
+          const o = { rg, rangos, c0: rangos[0] ? rangos[0].c1 : 0, f0: rangos[0] ? rangos[0].f1 : 0, cache: new Map() };
+          const necesita = ["top10", "aboveAverage", "duplicateValues", "uniqueValues"].includes(rg.t) || rg.cs || rg.db || rg.is;
+          if (necesita) {
+            const nums = [], cuenta = new Map();
+            for (const r of rangos) for (let f = r.f1; f <= Math.min(r.f2, maxF - 1); f++) for (let c = r.c1; c <= Math.min(r.c2, maxC - 1); c++) {
+              const v = ev.valor(c, f);
+              if (v === "" || v == null) continue;
+              if (F().esNum(v) && typeof v !== "boolean") nums.push(+v);
+              const k = F().esNum(v) ? "n" + +v : "t" + String(v).toLowerCase();
+              cuenta.set(k, (cuenta.get(k) || 0) + 1);
+            }
+            nums.sort((a, b) => a - b);
+            o.nums = nums; o.cuenta = cuenta;
+            o.min = nums.length ? nums[0] : 0; o.max = nums.length ? nums[nums.length - 1] : 0;
+            o.prom = nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;
+            o.desv = nums.length ? Math.sqrt(nums.reduce((a, b) => a + (b - o.prom) ** 2, 0) / nums.length) : 0;
+          }
+          return o;
+        });
+        const percentil = (nums, p) => { if (!nums.length) return 0; const k = (nums.length - 1) * Math.max(0, Math.min(1, p)), i = Math.floor(k); return nums[i] + (nums[Math.min(i + 1, nums.length - 1)] - nums[i]) * (k - i); };
+        const enRango = (o, c, f) => o.rangos.some((r) => c >= r.c1 && c <= r.c2 && f >= r.f1 && f <= r.f2);
+        const formula = (o, k, c, f) => {
+          const clave = k + ":" + (c - o.c0) + ":" + (f - o.f0);
+          let fx = o.cache.get(clave);
+          if (fx == null) { fx = F().desplazar(o.rg.fx[k], c - o.c0, f - o.f0); o.cache.set(clave, fx); }
+          return ev.calcular ? ev.calcular(fx, c, f) : "";
+        };
+        const verdad = (x) => (typeof x === "boolean" ? x : F().esNum(x) ? +x !== 0 : false);
+        const umbral = (o, q, c, f) => {
+          const v = +q.v;
+          switch (q.t) {
+            case "min": case "autoMin": return q.t === "autoMin" ? Math.min(0, o.min) : o.min;
+            case "max": case "autoMax": return q.t === "autoMax" ? Math.max(0, o.max) : o.max;
+            case "num": return F().esNum(q.v) ? v : (() => { const x = ev.calcular ? ev.calcular(F().aEspanol("=" + q.v), c, f) : 0; return F().esNum(x) ? +x : 0; })();
+            case "percent": return o.min + ((o.max - o.min) * v) / 100;
+            case "percentile": return percentil(o.nums, v / 100);
+            case "formula": { const x = ev.calcular ? ev.calcular(F().aEspanol("=" + q.v), c, f) : 0; return F().esNum(x) ? +x : 0; }
+          }
+          return 0;
+        };
+        // (como Excel: el paso desde el color de inicio se trunca; medido contra Excel real)
+        const mezcla = (a, b, k) => "#" + [1, 3, 5].map((i) => { const x = parseInt(a.slice(i, i + 2), 16), y = parseInt(b.slice(i, i + 2), 16); return Math.max(0, Math.min(255, x + Math.trunc((y - x) * k))).toString(16).padStart(2, "0"); }).join("").toUpperCase();
+        return {
+          de(c, f) {
+            const r = {};
+            const v = ev.valor(c, f), vacia = v === "" || v == null, esN = !vacia && F().esNum(v) && typeof v !== "boolean";
+            for (const o of prep) {
+              const rg = o.rg;
+              if (!enRango(o, c, f)) continue;
+              let ok = false;
+              switch (rg.t) {
+                case "cellIs": {
+                  if (!rg.fx || v instanceof F().ErrorF) break;
+                  const a = formula(o, 0, c, f), b = rg.fx[1] ? formula(o, 1, c, f) : null;
+                  if (a instanceof F().ErrorF || b instanceof F().ErrorF) break;
+                  // como Excel: números < textos < VERDADERO/FALSO; una celda vacía vale 0 (o "" contra un texto)
+                  const tipo = (q) => (typeof q === "boolean" ? 2 : F().esNum(q) ? 0 : 1);
+                  const cmp = (p, q) => { const tp = tipo(p), tq = tipo(q); if (tp !== tq) return tp - tq; if (tp === 0) return +p - +q; if (tp === 2) return (p ? 1 : 0) - (q ? 1 : 0); const m = String(p).toLowerCase(), n = String(q).toLowerCase(); return m < n ? -1 : m > n ? 1 : 0; };
+                  const x = vacia ? (tipo(a) === 1 ? "" : 0) : v;
+                  const d1 = cmp(x, a), d2 = b == null ? null : cmp(x, b), menor = b == null ? 0 : cmp(a, b) <= 0;
+                  switch (rg.o) {
+                    case "lessThan": ok = d1 < 0; break;
+                    case "lessThanOrEqual": ok = d1 <= 0; break;
+                    case "greaterThan": ok = d1 > 0; break;
+                    case "greaterThanOrEqual": ok = d1 >= 0; break;
+                    case "equal": ok = d1 === 0; break;
+                    case "notEqual": ok = d1 !== 0; break;
+                    case "between": ok = d2 != null && (menor ? d1 >= 0 && d2 <= 0 : d2 >= 0 && d1 <= 0); break;
+                    case "notBetween": ok = d2 != null && !(menor ? d1 >= 0 && d2 <= 0 : d2 >= 0 && d1 <= 0); break;
+                  }
+                  break;
+                }
+                case "top10": {
+                  if (!esN || !o.nums.length) break;
+                  const n = Math.max(1, rg.pct ? Math.floor((o.nums.length * rg.rank) / 100) : rg.rank);
+                  const lista = rg.bottom ? o.nums : o.nums.slice().reverse(), u = lista[Math.min(n, lista.length) - 1];
+                  ok = rg.bottom ? +v <= u : +v >= u;
+                  break;
+                }
+                case "aboveAverage": {
+                  if (!esN || !o.nums.length) break;
+                  const lim = o.prom + (rg.std ? (rg.above ? 1 : -1) * rg.std * o.desv : 0);
+                  ok = rg.above ? (rg.eq ? +v >= lim : +v > lim) : (rg.eq ? +v <= lim : +v < lim);
+                  break;
+                }
+                case "duplicateValues": case "uniqueValues": {
+                  if (vacia) break;
+                  const k = F().esNum(v) ? "n" + +v : "t" + String(v).toLowerCase(), n = o.cuenta.get(k) || 0;
+                  ok = rg.t === "duplicateValues" ? n > 1 : n === 1;
+                  break;
+                }
+                case "colorScale": {
+                  if (!esN || !rg.cs || r.fondo) break;
+                  const us = rg.cs.v.map((q) => umbral(o, q, c, f)), cs = rg.cs.c;
+                  const x = +v;
+                  let col = cs[0];
+                  if (x <= us[0]) col = cs[0];
+                  else if (x >= us[us.length - 1]) col = cs[cs.length - 1];
+                  else for (let i = 0; i < us.length - 1; i++) if (x >= us[i] && x <= us[i + 1]) { col = mezcla(cs[i], cs[i + 1], us[i + 1] === us[i] ? 0 : (x - us[i]) / (us[i + 1] - us[i])); break; }
+                  if (/^#[0-9A-F]{6}$/i.test(col || "")) r.fondo = col;
+                  break;
+                }
+                case "dataBar": {
+                  if (!esN || !rg.db || r.barra) break;
+                  const [u1, u2] = rg.db.v.length === 2 ? rg.db.v.map((q) => umbral(o, q, c, f)) : [o.min, o.max];
+                  const lo = Math.min(u1, u2), hi = Math.max(u1, u2), x = Math.max(lo, Math.min(hi, +v));
+                  const conEje = rg.db.eje !== "none" && lo < 0 && hi > 0;
+                  const k = hi === lo ? 1 : (x - lo) / (hi - lo);
+                  r.barra = { conEje, eje: conEje ? -lo / (hi - lo) : 0, k, x, hi, lo, min: rg.db.min, max: rg.db.max, c: x < 0 ? rg.db.neg || rg.db.c : rg.db.c, grad: rg.db.grad, borde: rg.db.borde, ejeColor: rg.db.ejeColor };
+                  if (rg.db.show === false) r.ocultar = true;
+                  break;
+                }
+                case "iconSet": {
+                  if (!esN || !rg.is || r.icono) break;
+                  const us = rg.is.v.map((q) => umbral(o, q, c, f));
+                  let i = 0;
+                  for (let k = us.length - 1; k >= 1; k--) if (rg.is.v[k].gte === false ? +v > us[k] : +v >= us[k]) { i = k; break; }
+                  if (rg.is.rev) i = us.length - 1 - i;
+                  r.icono = { set: rg.is.set, i, n: us.length };
+                  if (rg.is.show === false) r.ocultar = true;
+                  break;
+                }
+                default:
+                  if (rg.fx) { const x = formula(o, 0, c, f); ok = verdad(x); }
+              }
+              if (ok && rg.d) {
+                const d = rg.d;
+                if (d.f && !r.fondo) r.fondo = d.f;
+                if (d.k && !r.color) r.color = d.k;
+                if (d.b != null && r.negrita == null) r.negrita = !!d.b;
+                if (d.i != null && r.cursiva == null) r.cursiva = !!d.i;
+                if (d.u && r.subrayado == null) r.subrayado = true;
+                if (d.st && r.tachado == null) r.tachado = true;
+              }
+              if (ok && rg.s) break;
+            }
+            return r;
+          },
+        };
+      }
+      // Íconos de Excel (juegos de íconos): dibujos simples con los colores de Excel, como SVG de 16 × 16.
+      const VERDE = "#00A651", AMARILLO = "#FFC000", ROJO = "#E0262B", GRIS = "#808080", NEGRO = "#1F1F1F";
+      function svgIcono(set, i, n) {
+        const flecha = (ang, col) => `<g transform="rotate(${ang} 8 8)"><path d="M8 2 L13.5 8 H10 V14 H6 V8 H2.5 Z" fill="${col}"/></g>`;
+        const circulo = (col, aro) => `<circle cx="8" cy="8" r="6.2" fill="${col}"${aro ? ' stroke="#3C3C3C" stroke-width="0.8"' : ""}/>`;
+        const bandera = (col) => `<path d="M4 2 V15" stroke="#3C3C3C" stroke-width="1.4"/><path d="M4.6 2.5 H13 L11 5.5 L13 8.5 H4.6 Z" fill="${col}"/>`;
+        const cuarto = (k) => `<circle cx="8" cy="8" r="6.2" fill="#FFFFFF" stroke="#3C3C3C" stroke-width="0.9"/>` + (k >= 4 ? `<circle cx="8" cy="8" r="6.2" fill="#3C3C3C"/>` : k > 0 ? `<path d="M8 8 V1.8 A6.2 6.2 0 ${k > 2 ? 1 : 0} 1 ${[0, 14.2, 8, 1.8][k]} ${[0, 8, 14.2, 8][k]} Z" fill="#3C3C3C"/>` : "");
+        const barras = (k, tot) => Array.from({ length: tot }, (_, j) => `<rect x="${2 + j * (12 / tot)}" y="${14 - (j + 1) * (12 / tot)}" width="${12 / tot - 1}" height="${(j + 1) * (12 / tot)}" fill="${j < k ? "#2E62B4" : "#C8C8C8"}"/>`).join("");
+        const simbolo = (k, aro) => { const col = [ROJO, AMARILLO, VERDE][k]; const dentro = k === 0 ? `<path d="M5.5 5.5 L10.5 10.5 M10.5 5.5 L5.5 10.5" stroke="${aro ? "#fff" : col}" stroke-width="2"/>` : k === 1 ? `<path d="M8 4 V9.5" stroke="${aro ? "#fff" : col}" stroke-width="2"/><circle cx="8" cy="12" r="1.1" fill="${aro ? "#fff" : col}"/>` : `<path d="M4.5 8.5 L7 11 L11.8 5.2" fill="none" stroke="${aro ? "#fff" : col}" stroke-width="2"/>`; return (aro ? `<circle cx="8" cy="8" r="6.6" fill="${col}"/>` : "") + dentro; };
+        const estrella = (k) => { const d = "M8 1.5 L9.9 5.9 L14.6 6.2 L11 9.3 L12.1 13.9 L8 11.4 L3.9 13.9 L5 9.3 L1.4 6.2 L6.1 5.9 Z"; return k === 2 ? `<path d="${d}" fill="${AMARILLO}" stroke="#B8860B" stroke-width="0.6"/>` : k === 1 ? `<defs><clipPath id="m"><rect x="0" y="0" width="8" height="16"/></clipPath></defs><path d="${d}" fill="#fff" stroke="#B8860B" stroke-width="0.6"/><path d="${d}" fill="${AMARILLO}" clip-path="url(#m)"/>` : `<path d="${d}" fill="#fff" stroke="#B8860B" stroke-width="0.6"/>`; };
+        const tri = (k) => (k === 2 ? `<path d="M8 3 L13.5 12 H2.5 Z" fill="${VERDE}"/>` : k === 0 ? `<path d="M8 13 L13.5 4 H2.5 Z" fill="${ROJO}"/>` : `<rect x="3" y="7" width="10" height="2.4" fill="${AMARILLO}"/>`);
+        const cajas = (k) => [[2, 2], [8.5, 2], [2, 8.5], [8.5, 8.5]].map(([x, y], j) => `<rect x="${x}" y="${y}" width="5.5" height="5.5" fill="${j < k ? "#2E62B4" : "#C8C8C8"}"/>`).join("");
+        let g = "";
+        const tono3 = [ROJO, AMARILLO, VERDE];
+        switch (set) {
+          case "3Arrows": g = flecha([180, 90, 0][i], tono3[i]); break;
+          case "3ArrowsGray": g = flecha([180, 90, 0][i], GRIS); break;
+          case "4Arrows": g = flecha([180, 135, 45, 0][i], [ROJO, AMARILLO, AMARILLO, VERDE][i]); break;
+          case "4ArrowsGray": g = flecha([180, 135, 45, 0][i], GRIS); break;
+          case "5Arrows": g = flecha([180, 135, 90, 45, 0][i], [ROJO, AMARILLO, AMARILLO, AMARILLO, VERDE][i]); break;
+          case "5ArrowsGray": g = flecha([180, 135, 90, 45, 0][i], GRIS); break;
+          case "3TrafficLights2": g = circulo(tono3[i], true); break;
+          case "4TrafficLights": g = circulo([NEGRO, ROJO, AMARILLO, VERDE][i], false); break;
+          case "4RedToBlack": g = circulo([NEGRO, GRIS, "#F4A3A3", ROJO][i], false); break;
+          case "3Signs": g = [`<path d="M8 1.5 L14.5 8 L8 14.5 L1.5 8 Z" fill="${ROJO}"/>`, `<path d="M8 2 L14.5 14 H1.5 Z" fill="${AMARILLO}"/>`, circulo(VERDE)][i]; break;
+          case "3Symbols": g = simbolo(i, true); break;
+          case "3Symbols2": g = simbolo(i, false); break;
+          case "3Flags": g = bandera(tono3[i]); break;
+          case "4Rating": g = barras(i + 1, 4); break;
+          case "5Rating": g = barras(i, 4); break;
+          case "5Quarters": g = cuarto(i); break;
+          case "3Stars": g = estrella(i); break;
+          case "3Triangles": g = tri(i); break;
+          case "5Boxes": g = cajas(i); break;
+          default: g = circulo(tono3[Math.min(2, i)], false);   // 3TrafficLights1
+        }
+        return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">${g}</svg>`;
+      }
+      const urlSvg = (svg) => `url('data:image/svg+xml,${encodeURIComponent(svg).replace(/'/g, "%27").replace(/\(/g, "%28").replace(/\)/g, "%29")}')`;
+
       // ------------------------------------------------------------ pintar
       /** Cómo se ve una celda: texto con su formato, estilos y clases. */
-      function aspecto(c, f, ev, conds) {
+      function aspecto(c, f, ev, conds, cfx) {
         const ref = F().ref(c, f), v = ev.valor(c, f), fmt = t["f:" + ref];
         const st = [];
         let color = t["k:" + ref] || "", fondo = t["r:" + ref] || "", negrita = !!t["n:" + ref];
         for (const rg of conds) if (dentro(rg.r, c, f) && cumple(rg, v)) { if (rg.color) color = rg.color; if (rg.fondo) fondo = rg.fondo; if (rg.negrita) negrita = true; break; }
+        // formato condicional de Excel: gana sobre el formato propio de la celda (como en Excel)
+        const cx = cfx ? cfx.de(c, f) : null;
+        if (cx) {
+          if (cx.fondo) fondo = cx.fondo;
+          if (cx.color) color = cx.color;
+          if (cx.negrita != null) negrita = cx.negrita;
+          if (cx.cursiva) st.push("font-style:italic");
+          if (cx.subrayado || cx.tachado) st.push("text-decoration-line:" + [cx.subrayado ? "underline" : "", cx.tachado ? "line-through" : ""].filter(Boolean).join(" "));
+          const capas = [], tams = [], pos = [];
+          if (cx.icono) { capas.push(urlSvg(svgIcono(cx.icono.set, cx.icono.i, cx.icono.n))); tams.push("16px 16px"); pos.push("2px 50%"); }
+          if (cx.barra) {
+            // barra de datos: de 2 px a la izquierda, con su largo entre el mínimo y el máximo de Excel (en % del ancho)
+            const b = cx.barra, lmin = (b.min || 0) / 100, lmax = (b.max == null ? 100 : b.max) / 100;
+            const largo = b.conEje ? Math.abs(b.x) / (b.hi - b.lo) : lmin + (lmax - lmin) * b.k;
+            const ini = b.conEje ? (b.x < 0 ? b.eje - largo : b.eje) : 0;
+            const col = /^#[0-9A-F]{6}$/i.test(b.c || "") ? b.c : "#638EC6";
+            capas.push(b.grad ? `linear-gradient(90deg, ${col}, ${col}22)` : `linear-gradient(${col}, ${col})`);
+            tams.push(`calc(${(largo * 100).toFixed(2)}% - 3px) calc(100% - 4px)`); pos.push(`calc(${(ini * 100).toFixed(2)}% + 2px) 2px`);
+            if (b.borde && /^#[0-9A-F]{6}$/i.test(b.borde)) { capas.push(`linear-gradient(${b.borde}, ${b.borde})`); tams.push(`calc(${(largo * 100).toFixed(2)}% - 1px) calc(100% - 2px)`); pos.push(`calc(${(ini * 100).toFixed(2)}% + 1px) 1px`); }
+          }
+          if (capas.length) st.push(`background-image:${capas.join(",")};background-size:${tams.join(",")};background-position:${pos.join(",")};background-repeat:no-repeat`);
+        }
         if (color) st.push("color:" + color);
         if (fondo) st.push("background-color:" + fondo);
         const al = t["al:" + ref];
@@ -341,7 +566,28 @@
         const tf = t["tf:" + ref];
         if (tf && NOM.textoRico) st.push("font-family:" + NOM.textoRico.cssFuente(tf));
         const bd = String(t["bd:" + ref] || "");
-        if (bd) {
+        if (xl()) {
+          // Bordes como Excel: cada lado con su estilo y su color. Cada celda pinta su derecha y su abajo (como la
+          // cuadrícula), con el más grueso entre el suyo y el de la vecina; un relleno tapa la cuadrícula.
+          const yo = ladosBx(ref), der = ladosBx(F().ref(c + 1, f)), ab = ladosBx(F().ref(c, f + 1));
+          if (yo || der || ab || fondo || t["r:" + F().ref(c + 1, f)] || t["r:" + F().ref(c, f + 1)]) {
+            const bR = mejorBx(yo && yo.d, der && der.i), bB = mejorBx(yo && yo.b, ab && ab.a);
+            const fR = fondo || t["r:" + F().ref(c + 1, f)], fB = fondo || t["r:" + F().ref(c, f + 1)];
+            // (la línea es de 1 px como la cuadrícula; lo que pasa de 1 px va como sombra: Excel no agranda la fila por un borde)
+            const sh = [], hueco = /^#[0-9A-Fa-f]{6}$/.test(fondo || "") ? fondo : "#FFFFFF";
+            const grueso = (x, h) => {
+              const w = BX_ANCHO[x[0]];
+              if (x[0] === "double") sh.push(h ? `inset -1px 0 0 ${hueco}, inset -2px 0 0 ${x[1]}` : `inset 0 -1px 0 ${hueco}, inset 0 -2px 0 ${x[1]}`);
+              else if (w > 1) sh.push(h ? `inset -${w - 1}px 0 0 ${x[1]}` : `inset 0 -${w - 1}px 0 ${x[1]}`);
+            };
+            if (bR) { st.push("border-right:" + cssBx1(bR)); grueso(bR, true); } else if (fR && /^#[0-9A-Fa-f]{6}$/.test(fR)) st.push("border-right-color:" + fR);
+            if (bB) { st.push("border-bottom:" + cssBx1(bB)); grueso(bB, false); } else if (fB && /^#[0-9A-Fa-f]{6}$/.test(fB)) st.push("border-bottom-color:" + fB);
+            if (yo && yo.i && c === 0) sh.push(`inset ${BX_ANCHO[yo.i[0]]}px 0 0 ${yo.i[1]}`);
+            if (yo && yo.a && f === 0) sh.push(`inset 0 ${BX_ANCHO[yo.a[0]]}px 0 ${yo.a[1]}`);
+            if (sh.length) st.push("box-shadow:" + sh.join(","));
+          }
+        }
+        if (bd && !(xl() && t["bx:" + ref])) {
           const sh = [];
           if (bd.includes("a")) sh.push("inset 0 1.5px 0 #1F1E24");
           if (bd.includes("b")) sh.push("inset 0 -1.5px 0 #1F1E24");
@@ -360,7 +606,7 @@
           else if (tlv) st.push("font-size:" + Math.round(tlv * 1.0476 * 2) / 2 + "pt");
           const esN = F().esNum(v) && !String(cr).startsWith("'") && fmt !== "@", esB = typeof v === "boolean", esE = v instanceof F().ErrorF;
           if (!al) st.push("text-align:" + (esN ? "right" : esB || esE ? "center" : "left"));
-          return { v, txt: r.t, relleno: r.relleno, gato: r.gato, st: st.join(";"), negrita, num: esN, err: esE, formula: cr.startsWith("=") ? cr : "", ajusta: !!t["aj:" + ref] };
+          return { v, txt: cx && cx.ocultar ? "" : r.t, relleno: r.relleno, gato: r.gato && !(cx && cx.ocultar), st: st.join(";"), negrita, num: esN, err: esE, formula: cr.startsWith("=") ? cr : "", ajusta: !!t["aj:" + ref] };
         }
         return { v, txt: F().aplicarFormato(v, fmt), st: st.join(";"), negrita, num: F().esNum(v), err: v instanceof F().ErrorF, formula: cr.startsWith("=") ? cr : "" };
       }
@@ -380,6 +626,7 @@
         const conds = reglas("cf");
         const listas = reglas("dv").filter((x) => x.tipo === "lista");
         const X = xl();
+        const cfx = X ? prepararCfx(ev) : null;
         // (en modo Excel la tabla mide justo la suma de sus columnas: si se estira, reparte el sobrante y ninguna mide lo de Excel)
         const anchoTotal = X ? 46 + Array.from({ length: cols }, (_, c) => ancho(c)).reduce((a, b) => a + b, 0) : 0;
         const estXl = X ? ` class="xl${X.rejilla ? "" : " sin-rejilla"}" style="width:${anchoTotal}px;--xl-fuente:${esc(NOM.textoRico ? NOM.textoRico.cssFuente(X.fuente) : X.fuente)};--xl-tam:${+X.tam || 11}pt"${X.rtl ? ' dir="rtl"' : ""}` : "";
@@ -392,7 +639,7 @@
           for (let c = 0; c < cols; c++) {
             const ref = F().ref(c, f);
             if (cubiertas.has(ref)) continue;
-            const a = aspecto(c, f, ev, conds), sp = spans.get(ref);
+            const a = aspecto(c, f, ev, conds, cfx), sp = spans.get(ref);
             const clases = [a.num ? "num" : "", a.err ? "err" : "",
               c === sel.c && f === sel.f ? "sel" : (dentro(r, c, f) ? "rango" : ""),
               resaltadas.has(ref) ? "cambiada" : "", comentadas.has(ref) ? "con-comentario" : "", halladas.has(ref) ? "hallada" : "",
@@ -1396,7 +1643,7 @@
           else if (tipo === "abajo" && f === r.f2) b = viejo + "b";
           else if (tipo === "arriba" && f === r.f1) b = viejo + "a";
           b = [...new Set(b.split(""))].sort().join("");
-          if (b !== viejo) campos["bd:" + ref] = b || null;
+          if (b !== viejo) { campos["bd:" + ref] = b || null; if (t["bx:" + ref]) campos["bx:" + ref] = null; }
         });
         doc().cambiar(t.id, campos);
       }
@@ -1831,10 +2078,10 @@
 
       /** Actualiza solo los valores visibles; no reconstruye la tabla (no estorba a quien escribe). */
       function actualizarValores() {
-        const ev = evaluar(), conds = reglas("cf");
+        const ev = evaluar(), conds = reglas("cf"), cfx = xl() ? prepararCfx(ev) : null;
         $$("td", rej).forEach((td) => {
           const c = +td.dataset.c, f = +td.dataset.f, ref = F().ref(c, f);
-          const a = aspecto(c, f, ev, conds);
+          const a = aspecto(c, f, ev, conds, cfx);
           if (td.textContent !== a.txt) td.textContent = a.txt;
           td.classList.toggle("num", a.num);
           td.classList.toggle("err", a.err);
