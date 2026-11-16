@@ -1239,7 +1239,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       [...ds.getElementsByTagNameNS(W, "style")].forEach((s) => {
         const nm = (val(hijo(s, "name")) || "").toLowerCase(), id = at(s, "styleId"), tipo = at(s, "type");
         estilos[id] = nm;
-        defEstilo[id] = { nombre: nm, tipo, base: val(hijo(s, "basedOn")), ppr: hijo(s, "pPr"), rpr: hijo(s, "rPr") };
+        defEstilo[id] = { nombre: nm, tipo, base: val(hijo(s, "basedOn")), ppr: hijo(s, "pPr"), rpr: hijo(s, "rPr"), nodo: tipo === "table" ? s : undefined };
         if (tipo === "paragraph" && ["1", "true"].includes(at(s, "default") || "") && idNormal == null) idNormal = id;
       });
     }
@@ -1256,8 +1256,8 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         });
       }
     }
-    // numeración: numId → abstract → formato por nivel
-    const formatoNum = {};
+    // numeración: numId → abstract → formato por nivel (y el texto de cada nivel: «%1.», «Capítulo %1», «%1.%2»)
+    const formatoNum = {}, textoNum = {};
     // 8.2 Notas al pie: id → texto.
     const notasPie = {};
     const notasTxt = await z.texto("word/footnotes.xml");
@@ -1271,12 +1271,13 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     const numTxt = await z.texto("word/numbering.xml");
     if (numTxt) {
       const d = P(numTxt), abs = {};
+      const absTxt = {};
       [...d.getElementsByTagNameNS(W, "abstractNum")].forEach((a) => {
         const id = a.getAttributeNS(W, "abstractNumId") || a.getAttribute("w:abstractNumId");
-        abs[id] = {};
-        hijos(a, "lvl").forEach((l) => (abs[id][l.getAttributeNS(W, "ilvl") || l.getAttribute("w:ilvl")] = val(hijo(l, "numFmt"))));
+        abs[id] = {}; absTxt[id] = {};
+        hijos(a, "lvl").forEach((l) => { const k = l.getAttributeNS(W, "ilvl") || l.getAttribute("w:ilvl"); abs[id][k] = val(hijo(l, "numFmt")); absTxt[id][k] = val(hijo(l, "lvlText")); });
       });
-      [...d.getElementsByTagNameNS(W, "num")].forEach((nn) => (formatoNum[nn.getAttributeNS(W, "numId") || nn.getAttribute("w:numId")] = abs[val(hijo(nn, "abstractNumId"))] || {}));
+      [...d.getElementsByTagNameNS(W, "num")].forEach((nn) => { const nid = nn.getAttributeNS(W, "numId") || nn.getAttribute("w:numId"), a = val(hijo(nn, "abstractNumId")); formatoNum[nid] = abs[a] || {}; textoNum[nid] = absTxt[a] || {}; });
     }
     const medios = {};
     async function imagenDe(rid) {
@@ -1483,6 +1484,80 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         return { g, w, h };
       } catch (e) { return null; }
     }
+    /** Las partes de un estilo de tabla de Word con su herencia (basedOn): rPr, tcPr y tblPr de cada tipo de región. */
+    function partesEstiloTabla(id, prof) {
+      const d = id != null ? defEstilo[id] : null;
+      if (!d || !d.nodo || (prof || 0) > 8) return {};
+      const out = Object.assign({}, d.base ? partesEstiloTabla(d.base, (prof || 0) + 1) : {});
+      const una = (n) => ({ rpr: hijo(n, "rPr"), tcpr: hijo(n, "tcPr"), tblpr: hijo(n, "tblPr"), ppr: hijo(n, "pPr") });
+      const todo = una(d.nodo);
+      out.wholeTable = Object.assign({}, out.wholeTable || {}, Object.fromEntries(Object.entries(todo).filter(([, v]) => v)));
+      hijos(d.nodo, "tblStylePr").forEach((x) => { const t = x.getAttributeNS(W, "type") || x.getAttribute("w:type"); out[t] = Object.assign({}, out[t] || {}, Object.fromEntries(Object.entries(una(x)).filter(([, v]) => v))); });
+      return out;
+    }
+    const lineaWord = (b) => {
+      if (!b) return null;
+      const v = b.getAttributeNS(W, "val") || b.getAttribute("w:val");
+      if (!v || v === "nil" || v === "none") return "no";
+      const sz = +(b.getAttributeNS(W, "sz") || b.getAttribute("w:sz") || 4) / 8, col = b.getAttributeNS(W, "color") || b.getAttribute("w:color");
+      return [{ double: "double", dotted: "dotted", dashed: "dashed", dashSmallGap: "dashed", dotDash: "dashed" }[v] || "solid", Math.max(0.5, Math.round(sz * (96 / 72) * 100) / 100), /^[0-9a-f]{6}$/i.test(col || "") ? "#" + col.toUpperCase() : "#000000"];
+    };
+    function estiloTablaWord(tbl, celdas, nF, nC) {
+      const tblPr = hijo(tbl, "tblPr"), idEst = val(hijo(tblPr, "tblStyle"));
+      const partes = partesEstiloTabla(idEst);
+      if (!Object.keys(partes).length) return;
+      // con estilo, las líneas son las del estilo (cada celda las lleva): sin las de NOM-COLAB por omisión
+      if (!hijo(tblPr, "tblBorders")) celdas.bordes = "ninguno";
+      const lk = hijo(tblPr, "tblLook"), si = (a, def) => { if (!lk) return def; const v = lk.getAttributeNS(W, a) || lk.getAttribute("w:" + a); if (v != null) return v === "1" || v === "true"; const hx = parseInt(val(lk) || "", 16); if (isNaN(hx)) return def; return !!(hx & { firstRow: 0x20, lastRow: 0x40, firstColumn: 0x80, lastColumn: 0x100, noHBand: 0x200, noVBand: 0x400 }[a]); };
+      const fl = { fr: si("firstRow", true), lr: si("lastRow", false), fc: si("firstColumn", true), lc: si("lastColumn", false), bh: !si("noHBand", false), bv: !si("noVBand", true) };
+      const tamBanda = (k) => Math.max(1, +(val(hijo(tblPr, k)) || val(hijo((partes.wholeTable || {}).tblpr || null, k)) || 1));
+      const bF = tamBanda("tblStyleRowBandSize"), bC = tamBanda("tblStyleColBandSize");
+      const cubierta = new Set();
+      Object.keys(celdas).filter((k) => k.startsWith("m:")).forEach((k) => { const tl = F().parseRef(k.slice(2)), [w2, h2] = String(celdas[k]).split("x").map(Number); for (let f = tl.f; f < tl.f + h2; f++) for (let c = tl.c; c < tl.c + w2; c++) if (f !== tl.f || c !== tl.c) cubierta.add(F().ref(c, f)); });
+      for (let f = 0; f < nF; f++) for (let c = 0; c < nC; c++) {
+        const R = F().ref(c, f);
+        if (cubierta.has(R)) continue;
+        const capas = [], pon = (t) => { if (partes[t]) capas.push([t, partes[t]]); };
+        pon("wholeTable");
+        const f0 = fl.fr ? 1 : 0, fN = fl.lr ? nF - 2 : nF - 1, c0 = fl.fc ? 1 : 0, cN = fl.lc ? nC - 2 : nC - 1;
+        if (fl.bv && c >= c0 && c <= cN) pon(Math.floor((c - c0) / bC) % 2 ? "band2Vert" : "band1Vert");
+        if (fl.bh && f >= f0 && f <= fN) pon(Math.floor((f - f0) / bF) % 2 ? "band2Horz" : "band1Horz");
+        if (fl.fc && c === 0) pon("firstCol");
+        if (fl.lc && c === nC - 1) pon("lastCol");
+        if (fl.fr && f === 0) pon("firstRow");
+        if (fl.lr && f === nF - 1) pon("lastRow");
+        if (fl.fr && fl.fc && f === 0 && c === 0) pon("nwCell");
+        if (fl.fr && fl.lc && f === 0 && c === nC - 1) pon("neCell");
+        if (fl.lr && fl.fc && f === nF - 1 && c === 0) pon("swCell");
+        if (fl.lr && fl.lc && f === nF - 1 && c === nC - 1) pon("seCell");
+        let fondo = null, negrita = null, cursiva = null, color = null;
+        const bd = {};
+        for (const [t, x] of capas) {
+          const shd = x.tcpr && hijo(x.tcpr, "shd"), fill = shd && (shd.getAttributeNS(W, "fill") || shd.getAttribute("w:fill"));
+          if (fill && /^[0-9a-f]{6}$/i.test(fill)) fondo = "#" + fill.toUpperCase();
+          if (x.rpr) { const b = hijo(x.rpr, "b"); if (b) negrita = val(b) !== "0" && val(b) !== "false"; const i = hijo(x.rpr, "i"); if (i) cursiva = val(i) !== "0" && val(i) !== "false"; const k = val(hijo(x.rpr, "color")); if (k && /^[0-9a-f]{6}$/i.test(k)) color = "#" + k.toUpperCase(); }
+          // bordes: los de la tabla (tblBorders: afuera y adentro) y los de la celda en esa región (tcBorders)
+          const tb2 = t === "wholeTable" && x.tblpr ? hijo(x.tblpr, "tblBorders") : null;
+          if (tb2) {
+            const lado = (n) => lineaWord(hijo(tb2, n));
+            const a = f === 0 ? lado("top") : lado("insideH"), ab = f === nF - 1 ? lado("bottom") : lado("insideH"), iz = c === 0 ? lado("left") || lado("start") : lado("insideV"), de = c === nC - 1 ? lado("right") || lado("end") : lado("insideV");
+            if (a) bd.a = a; if (ab) bd.b = ab; if (iz) bd.i = iz; if (de) bd.d = de;
+          }
+          const tcb = x.tcpr && hijo(x.tcpr, "tcBorders");
+          if (tcb) {
+            const lado = (n) => lineaWord(hijo(tcb, n));
+            const a = lado("top"), ab = lado("bottom"), iz = lado("left") || lado("start"), de = lado("right") || lado("end");
+            if (a) bd.a = a; if (ab) bd.b = ab; if (iz) bd.i = iz; if (de) bd.d = de;
+          }
+        }
+        if (fondo && !celdas["r:" + R] && fondo !== "#FFFFFF") celdas["r:" + R] = fondo;
+        if (negrita && celdas["n:" + R] == null && celdas["c:" + R]) celdas["n:" + R] = true;
+        if (cursiva && celdas["i:" + R] == null && celdas["c:" + R]) celdas["i:" + R] = true;
+        if (color && !celdas["k:" + R] && color !== "#000000") celdas["k:" + R] = color;
+        const txt = Object.entries(bd).filter(([, v]) => v).map(([l, v]) => (v === "no" ? `${l}:no` : `${l}:${v[0]}:${v[1]}:${v[2]}`)).join(";");
+        if (txt) celdas["bxw:" + R] = txt;
+      }
+    }
     async function runs(n, base, tramos, parrafo) {
       for (const r of hijos(n)) {
         const ln = r.localName;
@@ -1545,8 +1620,20 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       }
       if (c.num && c.num.id != null && c.num.id !== "0") {
         const lvl = +(c.num.lvl || 0), f = (formatoNum[c.num.id] || {})[lvl] || "bullet";
-        pa.lista = f === "bullet" || f === "none" ? "vinetas" : "numeros";
-        if (lvl) pa.nivel = Math.min(8, lvl);
+        // (un nivel con formato «none» no lleva marca: Word solo le da la sangría)
+        if (f !== "none") pa.lista = f === "bullet" ? "vinetas" : "numeros";
+        if (lvl && f !== "none") pa.nivel = Math.min(8, lvl);
+        if (pa.lista === "numeros") pa.numid = String(c.num.id);   // Word cuenta por lista (numId) aunque haya texto en medio
+        if (pa.lista === "numeros") {
+          // el número como lo escribe Word: un formato sencillo («1.», «a)», «I.») o su texto completo con los niveles
+          const txt = (textoNum[c.num.id] || {})[lvl], FM = { decimal: "1", lowerLetter: "a", upperLetter: "A", lowerRoman: "i", upperRoman: "I", decimalZero: "01" };
+          const m = txt != null ? new RegExp("^%" + (lvl + 1) + "([.)])$").exec(txt) : null;
+          if (m && FM[f] && FM[f] !== "01") { const nf = FM[f] + m[1]; if (nf !== "1.") pa.numfmt = nf; }
+          else if (txt != null && /%[1-9]/.test(txt)) {
+            pa.numtxt = txt;
+            pa.numfmts = Array.from({ length: lvl + 1 }, (_, k) => FM[(formatoNum[c.num.id] || {})[k]] || "1").join(",");
+          }
+        }
       } else if (/^list bullet|^lista con viñetas/.test(st)) pa.lista = "vinetas";
       else if (/^list number|^lista con números/.test(st)) pa.lista = "numeros";
       if (pa.lista) delete pa.estilo;
@@ -1664,6 +1751,9 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
           // anchos de columna (en % del ancho de la tabla) y si la tabla no lleva líneas
           const rejilla = hijos(hijo(c, "tblGrid"), "gridCol").map((gc) => +(at(gc, "w") || 0) || 0), totalRej = rejilla.reduce((a2, b2) => a2 + b2, 0);
           if (totalRej > 0 && rejilla.length === cols && cols <= 20 && new Set(rejilla).size > 1) rejilla.forEach((w2, k2) => { celdas["aw:" + F().colLetra(k2)] = Math.round((w2 / totalRej) * 10000) / 100; });
+          // Estilo de tabla de Word (Tabla con cuadrícula 4 – Énfasis 2…): por capas como Word —toda la tabla, franjas,
+          // primera y última fila y columna, esquinas— según lo que pide la tabla (tblLook). Lo propio de cada celda gana.
+          try { estiloTablaWord(c, celdas, filas.length, Math.min(20, cols)); } catch (e) { /* la tabla sin su estilo */ }
           const tb = hijo(hijo(c, "tblPr"), "tblBorders");
           const sinLineas = (b2) => !!b2 && ["top", "left", "bottom", "right", "insideH", "insideV"].every((l) => { const q = hijo(b2, l); return !q || ["nil", "none"].includes(val(q)); });
           if (tb ? sinLineas(tb) : !val(hijo(hijo(c, "tblPr"), "tblStyle")) && !c.getElementsByTagNameNS(W, "tcBorders").length) celdas.bordes = "ninguno";
@@ -4826,6 +4916,10 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
             if (!texto) return;
             const estilo = titulo ? (phInfo.tipo === "ctrTitle" ? "h1" : "h2") : /^Título \d/.test(nombreSp) ? "h1" : /^Encabezado \d/.test(nombreSp) ? "h2" : "p";
             const tp = textoPpt(txBody, ctxTexto);
+            // (un cuadro de texto puede tener relleno y contorno propios: se ven como en PowerPoint)
+            const lnT = spPr && h1(spPr, "ln");
+            if (relleno) tp.cuerpo.fondo = relleno;
+            if (lnT && !h1(lnT, "noFill")) { const cT = colorCss(h1(lnT, "solidFill")); if (cT) tp.cuerpo.borde = [Math.max(0.5, Math.round(((+(at(lnT, "w") || 9525)) / 12700) * kPt * 100) / 100), cT]; }
             agregar(Object.assign({ tipo: "texto", estilo, html: tp.html, ppt: tp.cuerpo }, geo(r)));
           } else {
             const ln = spPr && h1(spPr, "ln"), tinta = estSp ? hexDe(h1(estSp, "fontRef")) : null;

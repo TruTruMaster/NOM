@@ -107,6 +107,8 @@
   // estilo de viñeta o de número).
   const PAR = ["estilo", "alin", "lista", "nivel", "hecho", "sangria", "interlineado", "antes", "despues", "dueno",
     "sangiz", "sangder", "primera", "francesa", "inicio", "continuar", "vineta", "numfmt",
+    // numtxt / numfmts: el número como lo escribe Word («Capítulo %1», «%1.%2») y el formato de cada nivel
+    "numtxt", "numfmts", "numid",
     // ox: de qué párrafo del archivo de Word importado viene (origen.js); al partir un párrafo los dos lo conservan
     "ox",
     // De Word: interlineado exacto (pt), borde y fondo del párrafo, sentido del texto y marca de
@@ -242,6 +244,9 @@
       if (d.continuar === "true") r.continuar = true;
       if (d.vineta) r.vineta = d.vineta;
       if (d.numfmt) r.numfmt = d.numfmt;
+      if (d.numtxt) r.numtxt = d.numtxt;
+      if (d.numfmts) r.numfmts = d.numfmts;
+      if (d.numid) r.numid = d.numid;
       if (d.ox != null && d.ox !== "") r.ox = /^\d+$/.test(d.ox) ? +d.ox : d.ox;
       if (+d.lipt) r.lineaPt = +d.lipt;
       if (d.borde) r.borde = d.borde;
@@ -350,14 +355,22 @@
     // Numeración de listas: contador por nivel; se reinicia cuando la lista se interrumpe, salvo
     // que el párrafo diga "continuar". "inicio" fija el número de ese renglón (8.2).
     let cont = [], previo = [];
+    const porLista = {};   // listas de Word: cada numId lleva su cuenta, aunque haya texto en medio (como Word)
     ps.forEach((p) => {
       const pa = S().attrs(p.mark);
+      if (pa.lista === "numeros" && pa.numid) {
+        const cc = porLista[pa.numid] || (porLista[pa.numid] = []), nv = pa.nivel || 0;
+        cc.length = nv + 1;
+        cc[nv] = pa.inicio != null && pa.inicio !== "" && !isNaN(+pa.inicio) ? Math.max(0, +pa.inicio) : (cc[nv] || 0) + 1;
+        p.num = pa.numtxt ? numeroWord(pa.numtxt, pa.numfmts, cc) : numeral(cc[nv], nv, pa.numfmt);
+        return;
+      }
       if (pa.lista === "numeros") {
         if (!cont.length && pa.continuar && previo.length) cont = previo.slice();
         const nv = pa.nivel || 0;
         cont.length = nv + 1;
         cont[nv] = pa.inicio != null && pa.inicio !== "" && !isNaN(+pa.inicio) ? Math.max(0, +pa.inicio) : (cont[nv] || 0) + 1;
-        p.num = numeral(cont[nv], nv, pa.numfmt);
+        p.num = pa.numtxt ? numeroWord(pa.numtxt, pa.numfmts, cont) : numeral(cont[nv], nv, pa.numfmt);
       } else if (pa.lista !== "vinetas" && pa.lista !== "tareas") { if (cont.length) previo = cont.slice(); cont = []; }
     });
     return ps;
@@ -368,6 +381,14 @@
     let s = "", k = Math.max(1, Math.min(3999, n));
     for (const [v, l] of r) while (k >= v) { s += l; k -= v; }
     return s;
+  }
+  /** El número con el texto de Word: «Capítulo %1» → «Capítulo 3»; «%1.%2» → «2.4» (cada nivel con su formato). */
+  function numeroWord(txt, fmts, cont) {
+    const fs = String(fmts || "").split(",");
+    return String(txt).replace(/%([1-9])/g, (m, k) => {
+      const i = +k - 1, n = cont[i] || 1, f = fs[i] || "1";
+      return f === "a" ? letras(n) : f === "A" ? letras(n, true) : f === "i" ? romano(n) : f === "I" ? romano(n).toUpperCase() : String(n);
+    });
   }
   function numeral(n, nivel, fmt) {
     if (fmt) {
@@ -415,6 +436,14 @@
     if (pa.lista) {
       at += ` data-lista="${esc(pa.lista)}" data-nivel="${+pa.nivel || 0}"`;
       if (p.num) at += ` data-num="${p.num}"`;
+      // el número de Word va con la letra de su primer texto (color, tamaño, letra y negrita del título)
+      if (p.num && pa.numtxt) {
+        const x0 = vis.slice(p.ini, p.fin).find((x) => !x.e && x.c !== "\n"), a0 = x0 ? S().attrs(x0) : {};
+        if (a0.color && /^#[0-9A-Fa-f]{6}$/.test(a0.color)) st += `--num-c:${a0.color};`;
+        if (+a0.tam) st += `--num-t:${+a0.tam}pt;`;
+        if (a0.fuente) st += `--num-f:${cssFuente(a0.fuente)};`;
+        if (a0.b) st += "--num-b:700;";
+      }
       if (pa.lista === "tareas" && pa.hecho) at += ` data-hecho="true"`;
     }
     if (pa.alin) at += ` data-alin="${esc(pa.alin)}"`;
@@ -434,6 +463,9 @@
     if (pa.lista && pa.continuar) at += ` data-continuar="true"`;
     if (pa.lista && pa.vineta) at += ` data-vineta="${esc(pa.vineta)}"`;
     if (pa.lista && pa.numfmt) at += ` data-numfmt="${esc(pa.numfmt)}"`;
+    if (pa.lista && pa.numtxt) at += ` data-numtxt="${esc(pa.numtxt)}"`;
+    if (pa.lista && pa.numfmts) at += ` data-numfmts="${esc(pa.numfmts)}"`;
+    if (pa.lista && pa.numid) at += ` data-numid="${esc(pa.numid)}"`;
     if (pa.interlineado) { at += ` data-li="${+pa.interlineado}"`; st += `--li:${+pa.interlineado};`; }
     if (pa.antes != null) { at += ` data-antes="${+pa.antes}"`; st += `--antes:${+pa.antes}pt;`; }
     if (pa.despues != null) { at += ` data-desp="${+pa.despues}"`; st += `--desp:${+pa.despues}pt;`; }
@@ -1732,6 +1764,13 @@
             if (cubiertas.has(r)) continue;
             const sp = spans[r], st = [];
             if (b["r:" + r]) st.push("background-color:" + b["r:" + r]);
+            // bordes de la celda que pide el estilo de tabla de Word («a:solid:1.33:#4472C4;b:no…»)
+            if (b["bxw:" + r]) String(b["bxw:" + r]).split(";").forEach((q) => {
+              const [l, e2, w2, c2] = q.split(":"), lado = { a: "top", b: "bottom", i: "left", d: "right" }[l];
+              if (!lado) return;
+              if (e2 === "no") st.push(`border-${lado}:0`);
+              else if (/^(solid|double|dotted|dashed)$/.test(e2) && /^#[0-9A-F]{6}$/i.test(c2 || "")) st.push(`border-${lado}:${Math.max(0.5, Math.min(8, +w2 || 1))}px ${e2} ${c2}`);
+            });
             const ce = [];
             if (b["n:" + r]) ce.push("font-weight:bold");
             if (b["i:" + r]) ce.push("font-style:italic");

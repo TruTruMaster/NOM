@@ -431,6 +431,9 @@
     let s = `padding:${n(t)}px ${n(r)}px ${n(bb)}px ${n(l)}px;`;
     if (c.cols > 1) s += `column-count:${Math.min(16, Math.round(+c.cols))};column-gap:${n(c.espCol)}px;display:block;`;
     if (c.ajusta === false) s += "white-space:pre;";
+    // relleno y contorno propios del cuadro (el contorno va centrado en la orilla, como en PowerPoint)
+    if (c.fondo && /^(#[0-9A-Fa-f]{6}|rgba\(\d+,\d+,\d+,[\d.]+\))$/.test(c.fondo)) s += `background:${c.fondo};`;
+    if (Array.isArray(c.borde) && /^(#[0-9A-Fa-f]{6}|rgba\(\d+,\d+,\d+,[\d.]+\))$/.test(c.borde[1] || "")) { const w = Math.max(0.5, Math.min(20, +c.borde[0] || 1)); s += `outline:${w}px solid ${c.borde[1]};outline-offset:-${w / 2}px;`; }
     if (c.vert === "vert" || c.vert === "eaVert") s += "writing-mode:vertical-rl;";
     else if (c.vert === "vert270") s += "writing-mode:vertical-rl;transform:rotate(180deg);";
     return s + (extra || "");

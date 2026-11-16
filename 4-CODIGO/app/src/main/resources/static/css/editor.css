@@ -430,6 +430,10 @@
 .wd-cuerpo > [data-lista="vinetas"][data-nivel="1"]::before, .wd-cuerpo > [data-lista="vinetas"][data-nivel="4"]::before { content: "◦"; }
 .wd-cuerpo > [data-lista="vinetas"][data-nivel="2"]::before, .wd-cuerpo > [data-lista="vinetas"][data-nivel="5"]::before { content: "▪"; }
 .wd-cuerpo > [data-lista="numeros"]::before { content: attr(data-num); }
+/* número con el texto de Word («Capítulo 2», «2.1»): en el renglón, con la letra y el color del párrafo, como Word */
+.wd-cuerpo > [data-lista="numeros"][data-numtxt] { padding-left: calc(var(--n) * 18pt + var(--sang, 0) * 36pt); }
+.wd-cuerpo > [data-lista="numeros"][data-numtxt]::before { content: attr(data-num) "\00a0"; position: static; width: auto; display: inline; white-space: pre; font: inherit;
+  color: var(--num-c, inherit); font-size: var(--num-t, inherit); font-family: var(--num-f, inherit); font-weight: var(--num-b, inherit); }
 .wd-cuerpo > [data-lista="tareas"]::before { content: ""; width: 10pt; height: 10pt; top: .22em; border: 1.5px solid #555; border-radius: 3px; cursor: pointer; }
 .wd-cuerpo > [data-lista="tareas"][data-hecho="true"]::before { background: #2FA868 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / 80% no-repeat; border-color: #2FA868; }
 .wd-cuerpo > [data-hecho="true"] { color: #7a7a7a; text-decoration: line-through; }
