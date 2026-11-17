@@ -6,6 +6,7 @@ Se guardan aquí, sin CDN, para que todo funcione en una red sin Internet.
 | --- | --- | --- | --- | --- |
 | `qrcode.js` | Dibujar el código QR para unirse a un espacio | qrcode-generator 1.4.4 | Kazuhiko Arase | MIT (aviso en la cabecera del archivo) |
 | `jsQR.js` | Leer un código QR con la cámara cuando el navegador no tiene `BarcodeDetector` (se carga solo al escanear) | jsQR 1.4.0 | Cosmo Wolfe | Apache 2.0 (`LICENCIA-jsQR.txt`) |
+| `mediabunny.min.js` | Convertir video y audio a AV1 y Opus en el equipo antes de subirlos, y a MP4 para PowerPoint, con los codificadores del navegador (se carga solo al convertir) | Mediabunny 1.65.1 | Vanilagy y colaboradores | MPL 2.0 (`LICENCIA-mediabunny.txt`; el código fuente está en el paquete «mediabunny» de npm) |
 
 ## MIT (qrcode-generator)
 

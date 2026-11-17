@@ -1385,3 +1385,6 @@
 .ao-tray circle.fin { fill: var(--error); }
 /* al presentar, lo que tiene un vínculo o acción se ve tocable */
 .reproductor .bl.con-accion, .proyector .bl.con-accion { cursor: pointer; }
+/* avance de la conversión de video y audio (medios-convertir.js) */
+.mc-barra { height: 8px; border-radius: var(--r-pill); background: var(--sup-hundida); border: 1px solid var(--borde); overflow: hidden; }
+.mc-barra i { display: block; height: 100%; width: 0; background: var(--llama); transition: width var(--t-corto) linear; }
