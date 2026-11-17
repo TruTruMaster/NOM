@@ -173,7 +173,13 @@ Leer al empezar la siguiente sesión, junto con `RELEVO-17NOV-LISTA-OFFICE.md` (
    «empezar dibujando el fondo») con `porGrafica`; se exporta con `bldGraphic/bldChart` y se reconoce al importar
    (probado ida y vuelta en las dos rutas). Falta: crear «uno por uno» de SmartArt desde NOM (al exportar sin el
    original el SmartArt sale como figuras sueltas), gráficas 3D y las nuevas de Excel sin marcar, y la máscara de un
-   barrido por serie va por cada elemento, no por toda la serie. **Sigue:** sonidos de efectos y transiciones.
+   barrido por serie va por cada elemento, no por toda la serie. **Sonidos hechos (17-nov, noche):** el sonido de un
+   efecto (`p:audio` con `sndTgt`, en `childTnLst` o en `subTnLst` con `evt="begin|end"`) y el de una transición
+   (`snd`, en bucle si `loop`, y «detener el sonido anterior» con `sndFin`) suenan al presentar, sacados del original
+   (`urlSonido` en lienzo.js, por la relación de la diapositiva); se callan al salir. Probado con ms-rendimiento-tipico
+   (efecto) y lo-tdf148478 (transición). Al exportar sin el original se quitan (la relación no existe y PowerPoint
+   pediría reparar); con el original se conservan. Falta: elegir un sonido para un efecto o transición desde NOM (los
+   sonidos de fábrica de PowerPoint no vienen en el archivo) y el sonido de una acción (`a:snd` del vínculo).
    - **Video y audio de PowerPoint al presentar (hecho el 17-nov, tarde, en otra sesión; sin pruebas largas: el usuario
      estaba fuera de casa).** Al importar, la imagen de un `p:pic` con `a:videoFile`/`a:audioFile`/`p14:media` queda con
      `bloque.medio` = { tipo, ruta (la parte del .pptx), recorte {ini, fin} de `p14:trim`, fundido {ent, sal} de

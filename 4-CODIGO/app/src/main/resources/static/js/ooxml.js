@@ -4600,14 +4600,14 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
    * El p:timing de una página con la lista de animaciones de NOM (las de PowerPoint con su árbol; las propias de NOM con su
    * efecto de PowerPoint). spidDe(bloque) → número de la figura en el archivo; conTexto(bloque) → si lleva texto.
    */
-  function timingDe(doc, p, spidDe, conTexto) {
+  function timingDe(doc, p, spidDe, conTexto, sinSonidos) {
     const A = NOM.animOffice;
     if (!A) return "";
     const lista = doc.valor("_doc", "anim:" + p);
     if (!Array.isArray(lista) || !lista.length) return "";
     try {
       return A.timingXml(lista.filter((x) => x && (x.id || x.spid)), (bid) => (bid ? spidDe(bid) : null),
-        { preset: (x) => A.presetDe(x), medios: doc.valor("_doc", "animMedios:" + p) || [], bld: doc.valor("_doc", "animBld:" + p) || [], conTexto });
+        { preset: (x) => A.presetDe(x), medios: doc.valor("_doc", "animMedios:" + p) || [], bld: doc.valor("_doc", "animBld:" + p) || [], conTexto, sinSonidos });
     } catch (e) { return ""; }
   }
   function pptxArmar(doc, esDiagrama, og) {
@@ -4862,7 +4862,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       const tr = doc.valor("_doc", "trans:" + p), to = !esDiagrama && NOM.transOffice ? doc.valor("_doc", "transOffice:" + p) : null;
       const transicion = to ? NOM.transOffice.xml(to) : tr ? `<p:transition spd="med">${{ desvanecer: "<p:fade/>", deslizar: '<p:push dir="l"/>', empujar: '<p:push dir="u"/>', zoom: "<p:zoom/>" }[tr] || "<p:fade/>"}</p:transition>` : "";
       // Animaciones: el p:timing de PowerPoint con la lista de la diapositiva (cada bloque, con el número de su figura)
-      const timing = !esDiagrama ? timingDe(doc, p, (bid) => { const i = bs.findIndex((b) => b.id === bid); const m = i >= 0 && /<p:cNvPr id="(\d+)"/.exec(figurasL[i] || ""); return m ? m[1] : null; }, (bid) => { const b = bs.find((q) => q.id === bid); return !!(b && (b.tipo === "texto" || b.html || b.texto)); }) : "";
+      const timing = !esDiagrama ? timingDe(doc, p, (bid) => { const i = bs.findIndex((b) => b.id === bid); const m = i >= 0 && /<p:cNvPr id="(\d+)"/.exec(figurasL[i] || ""); return m ? m[1] : null; }, (bid) => { const b = bs.find((q) => q.id === bid); return !!(b && (b.tipo === "texto" || b.html || b.texto)); }, true) : "";
       const nota = !esDiagrama ? doc.valor("_doc", "nota:" + p) || "" : "";
       if (nota && !O) { notas.push({ diapo: n + 1, texto: nota }); rels.push({ id: "rIdNota", tipo: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide", destino: `../notesSlides/notesSlide${notas.length}.xml` }); }
       return { rels, bs, figurasL, fondo, transicion, nota: nota && !O ? notas.length : 0, xml: XML + `<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">

@@ -600,7 +600,7 @@
       te.b = Math.max(0, +x.retraso || 0);
       const it = hijo(ctn, "iterate");
       const iter = it ? { type: A(it).type || "el", atras: A(it).backwards === "1", pct: hijo(it, "tmPct") ? +A(hijo(it, "tmPct")).val / 100000 : null, abs: hijo(it, "tmAbs") ? +A(hijo(it, "tmAbs")).val * f : null } : null;
-      const bhs = [];
+      const bhs = [], sonidos = [];
       const chl = hijo(ctn, "childTnLst");
       (function rec(lst) {
         for (const n of hijosDe(lst)) {
@@ -609,6 +609,12 @@
           const cb = hijo(n, "cBhvr") || (hijo(n, "cMediaNode") ? hijo(hijo(n, "cMediaNode"), "cTn") : null);
           const ctnB = cb ? hijo(cb, "cTn") || cb : null;
           if (!ctnB) continue;
+          // el sonido del efecto (<p:audio><p:cMediaNode vol><p:tgtEl><p:sndTgt r:embed/>): suena al empezar
+          if (l === "audio") {
+            const cm = hijo(n, "cMediaNode"), te = cm && hijo(cm, "tgtEl"), st = te && hijo(te, "sndTgt");
+            if (st) sonidos.push({ t: tiempoDe(ctnB, f), rid: A(st)["r:embed"] || A(st).embed, nombre: A(st).name || "", vol: cm && A(cm).vol != null ? +A(cm).vol / 100000 : 1, orden: orden++ });
+            continue;
+          }
           // los comportamientos para el reproductor de Internet Explorer (rctx="IE") PowerPoint no los usa: repiten lo
           // mismo que los suyos (en «Transparencia» la opacidad quedaría al cuadrado)
           if (cb && A(cb).rctx === "IE") continue;
@@ -634,6 +640,13 @@
       // «después de la animación» (subTnLst): atenuar o esconder al terminar el efecto o al siguiente clic
       const desp = [];
       hijosDe(hijo(ctn, "subTnLst")).forEach((n) => {
+        // el sonido del efecto también puede ir aquí: <p:audio> con <p:cond evt="begin|end"><p:tn val="(el efecto)"/>
+        if (loc(n[0]) === "audio") {
+          const cm = hijo(n, "cMediaNode"), ct = cm && hijo(cm, "cTn"), te = cm && hijo(cm, "tgtEl"), st = te && hijo(te, "sndTgt");
+          const c0 = ct && hijo(ct, "stCondLst") && hijo(hijo(ct, "stCondLst"), "cond");
+          if (st) sonidos.push({ t: { b: c0 && A(c0).evt === "end" ? Infinity : 0 }, alFin: !!(c0 && A(c0).evt === "end"), rid: A(st)["r:embed"] || A(st).embed, nombre: A(st).name || "", vol: cm && A(cm).vol != null ? +A(cm).vol / 100000 : 1, orden: orden++ });
+          return;
+        }
         const cb = hijo(n, "cBhvr"), ctnB = cb && hijo(cb, "cTn");
         if (!ctnB) return;
         const st = hijo(ctnB, "stCondLst");
@@ -642,7 +655,7 @@
         desp.push({ l: loc(n[0]), n, t: { b: 0, d: 0.001, rep: 1, rev: false, acc: 0, dec: 0, spd: 1, fill: "hold", AD: 0.001 }, tgt: hijo(cb, "tgtEl"), attrs, aditivo: null, orden: orden++, rebote: 0,
           alFin: alFin || A(ctnB).masterRel === "sameClick", rel: A(ctnB).masterRel || "nextClick" });
       });
-      const ef = { x, t: te, bhs, iter, D, desp };
+      const ef = { x, t: te, bhs, iter, D, desp, sonidos };
       return ef;
     }
     /** Los grupos de la secuencia principal y de cada desencadenador, como los arma PowerPoint. */
@@ -942,6 +955,15 @@
                 if (k != null) activos.push({ bh, s: 1, u: null, ef, k: [ci, k, bh.orden] });
               });
             }
+            // los sonidos del efecto: una vez cada vez que empieza (no al saltar a un paso ni al medir)
+            if (ef.sonidos.length && !soloDest && !enFoto && ctx.alSonido) ef.sonidos.forEach((sn) => {
+              const t0 = ef.t.b + (sn.alFin ? (isFinite(ef.t.AD) ? ef.t.AD : Infinity) : sn.t.b);
+              if (ts < t0) return;
+              const k = "s" + sn.orden + "@" + Math.round(c.inicio + s.b + t0);
+              if (mediosHechos.has(k)) return;
+              mediosHechos.add(k);
+              if (!mediosCallados) ctx.alSonido(sn.rid, sn.vol, sn.nombre);
+            });
             const reps = ef.n || 1;
             for (let j = 0; j < reps; j++) {
               const jj = ef.iter && ef.iter.atras ? reps - 1 - j : j;
@@ -1395,6 +1417,10 @@
         return [n[0], a, H(n)];
       }
       if (l === "cTn") { const a = Object.assign({ id: String(++id) }, A(n)); a.id = String(id); if (a.presetClass != null) idEf = id; return [n[0], a, H(n)]; }
+      // sin el archivo original no hay a dónde apuntar el sonido de un efecto: se quita (si no, PowerPoint pide reparar)
+      const conSnd = (m) => loc(m[0]) === "audio" && hijo(hijo(hijo(m, "cMediaNode") || [], "tgtEl") || [], "sndTgt");
+      if (opc.sinSonidos && l === "audio" && conSnd(n)) return null;
+      if (opc.sinSonidos && l === "subTnLst" && hijosDe(n).every(conSnd)) return null;
       // «ocultar después de la animación» se refiere al número del efecto
       if (l === "tn" && A(n).val === "@ef") return [n[0], Object.assign({}, A(n), { val: String(idEf) }), H(n)];
       return null === n ? null : undefined;

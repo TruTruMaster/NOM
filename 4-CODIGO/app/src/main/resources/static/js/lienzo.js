@@ -2521,6 +2521,34 @@
    * El motor de animaciones de PowerPoint sobre una diapositiva ya pintada con htmlDiapositiva(doc, p) (todo a la
    * vista: el motor oculta lo que entra después). escala(): px de pantalla por px de la diapositiva.
    */
+  /**
+   * Un sonido de PowerPoint (el de un efecto, una transición o una acción) sacado del archivo original que guarda el
+   * documento: la relación rid de la diapositiva p apunta a su parte (ppt/media/audio1.wav). URL de blob o null.
+   */
+  const sonidosDoc = new WeakMap();
+  function urlSonido(doc, p, rid) {
+    if (!rid || !NOM.origen) return null;
+    let c = sonidosDoc.get(doc);
+    if (!c) { c = new Map(); sonidosDoc.set(doc, c); }
+    const k = p + "|" + rid;
+    if (c.has(k)) return c.get(k);
+    let u = null;
+    try {
+      const og = NOM.origen.leer(doc), ruta = doc.valor("_doc", "os:" + p);
+      if (og && og.zip && ruta) {
+        const i = ruta.lastIndexOf("/"), dir = ruta.slice(0, i), rels = og.zip.texto(dir + "/_rels/" + ruta.slice(i + 1) + ".rels") || "";
+        const m = new RegExp(`<Relationship\\b[^>]*\\bId="${rid.replace(/[^\w-]/g, "")}"[^>]*>`).exec(rels), t = m && /\bTarget="([^"]+)"/.exec(m[0]);
+        if (t) {
+          const partes = (t[1].startsWith("/") ? t[1].slice(1) : dir + "/" + t[1]).split("/"), r = [];
+          partes.forEach((x) => { if (x === "..") r.pop(); else if (x && x !== ".") r.push(x); });
+          const destino = r.join("/"), b = og.zip.bytes(destino);
+          if (b && b.length) u = URL.createObjectURL(new Blob([b], { type: NOM.mediosDiapo ? NOM.mediosDiapo.mimeDe(destino) : "audio/wav" }));
+        }
+      }
+    } catch (e) { u = null; }
+    c.set(k, u);
+    return u;
+  }
   function motorDiapositiva(el, doc, p, escala, opc) {
     if (!NOM.animOffice) return null;
     const bs = bloquesPresentables(doc, p);
@@ -2602,11 +2630,15 @@
       if (motor) motor.detener();
       // videos y audios de PowerPoint (antes del motor: sus comandos de reproducir, pausa… llegan por alMedio)
       if (medios) medios.montar(d, p, i);
-      motor = motorDiapositiva(d, doc, p, () => kActual, medios ? { alMedio: (bid, tipo, cmd) => medios.comando(bid, cmd) } : undefined);
+      motor = motorDiapositiva(d, doc, p, () => kActual, Object.assign({ alSonido: (rid, vol) => sonar(p, rid, vol) }, medios ? { alMedio: (bid, tipo, cmd) => medios.comando(bid, cmd) } : {}));
       total = motor ? motor.pasos : 0;
       paso = revelarTodo ? total : 0;
       if (motor) { if (revelarTodo) motor.irAPaso(total, true); else motor.preparar(); }
       const arrancar = () => { trActual = null; if (motor && !revelarTodo) motor.inicio(); programarAvance(p); };
+      // el sonido de la transición (o «detener el sonido anterior»), como PowerPoint
+      const trS = conTr ? transicionDe(p) : null;
+      if (trS && trS.sndFin) callarSonidos();
+      if (trS && trS.snd && trS.snd.rid) sonar(p, trS.snd.rid, 1, trS.snd.bucle);
       if (viejo) { trActual = NOM.transOffice.jugar(d, viejo, transicionDe(p), tamDoc(doc)); trActual.promesa.then(() => { if (pags()[i] === p) arrancar(); }); }
       else arrancar();
       $("[data-c]", rep).textContent = `${i + 1} / ${pags().length}`;
@@ -2632,6 +2664,19 @@
     }
     function retroceder() { if (i > 0) { i--; pintar(true, false); } }
     let vistaAntes = null;
+    // sonidos de PowerPoint que están sonando (efectos y transiciones)
+    const sonidos = new Set();
+    function sonar(p, rid, vol, bucle) {
+      const u = urlSonido(doc, p, rid);
+      if (!u) return;
+      const a = new Audio(u);
+      a.volume = Math.max(0, Math.min(1, vol == null ? 1 : vol));
+      a.loop = !!bucle;
+      sonidos.add(a);
+      a.onended = () => sonidos.delete(a);
+      a.play().catch(() => sonidos.delete(a));
+    }
+    function callarSonidos() { sonidos.forEach((a) => { try { a.pause(); } catch (e) { /* ya se fue */ } }); sonidos.clear(); }
     /** Lo que hace un vínculo o botón de acción al tocarlo. false: no hace nada (el clic sigue su camino). */
     function irAccion(a) {
       const ir = (k) => { if (k < 0 || k >= pags().length) return false; vistaAntes = i; i = k; pintar(); return true; };
@@ -2693,6 +2738,7 @@
     $("[data-herr]", rep).addEventListener("click", (e) => { const b = e.target.closest("[data-h]"); if (b) { e.stopPropagation(); usar(b.dataset.h); } });
 
     function salir() {
+      callarSonidos();
       if (motor) motor.detener();
       if (medios) medios.cerrar();
       if (trActual) trActual.saltar();
