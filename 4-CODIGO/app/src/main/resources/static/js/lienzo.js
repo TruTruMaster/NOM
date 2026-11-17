@@ -357,7 +357,7 @@
   NOM.geometria = { conector, rutaConector, svgConector };
   NOM.figuras = { iconoSeguro: (b) => iconoSeguro(b), ruta, svgFigura, estiloFigura, partesFigura, FIGURAS, FIGURAS_UML, FIGURAS_ER, FIGURAS_RED, PRESETS, COMPARTIMENTOS, compartimentos, esLinea, enNegrita };
   // Lo que usa la pantalla del proyector (proyector.js) para pintar diapositivas.
-  NOM.lienzoVista = { htmlDiapositiva: (...a) => htmlDiapositiva(...a), pasosDe: (...a) => pasosDe(...a), bloquesPresentables: (...a) => bloquesPresentables(...a), ANCHO, ALTO, tam: tamDoc,
+  NOM.lienzoVista = { motor: (...a) => motorDiapositiva(...a), htmlDiapositiva: (...a) => htmlDiapositiva(...a), pasosDe: (...a) => pasosDe(...a), bloquesPresentables: (...a) => bloquesPresentables(...a), ANCHO, ALTO, tam: tamDoc,
     estadoAnimaciones: (...a) => estadoAnimaciones(...a), contenido: (b) => contenido(b) };
 
   /** Lo único que se guarda del texto de un cuadro: texto, saltos de línea y enlaces http(s). */
@@ -2519,6 +2519,30 @@
     }).join("");
   }
 
+  /** Color de un nombre del tema de Office (accent1, tx1, hlink…): el del archivo importado o el del tema de NOM. */
+  function colorTemaOffice(doc, n) {
+    const es = doc.valor("_doc", "esquemaOffice");
+    if (es && es[n]) return "#" + String(es[n]).replace("#", "");
+    if (es) { const alias = { tx1: "dk1", bg1: "lt1", tx2: "dk2", bg2: "lt2" }[n]; if (alias && es[alias]) return "#" + es[alias]; }
+    const te = NOM.diapo && NOM.diapo.tema(doc), ac = te ? te.acentos : ["#4472C4", "#ED7D31", "#A5A5A5", "#FFC000"];
+    const fondo = te && te.fondo && te.fondo.color ? te.fondo.color : "#FFFFFF";
+    return { accent1: ac[0], accent2: ac[1], accent3: ac[2], accent4: ac[3], accent5: ac[0], accent6: ac[1], hlink: ac[0], folHlink: ac[3],
+      dk1: te ? te.texto : "#000000", tx1: te ? te.texto : "#000000", lt1: fondo, bg1: fondo, dk2: te ? te.titulo : "#44546A", tx2: te ? te.titulo : "#44546A", lt2: "#E7E6E6", bg2: "#E7E6E6" }[n] || null;
+  }
+  /**
+   * El motor de animaciones de PowerPoint sobre una diapositiva ya pintada con htmlDiapositiva(doc, p) (todo a la
+   * vista: el motor oculta lo que entra después). escala(): px de pantalla por px de la diapositiva.
+   */
+  function motorDiapositiva(el, doc, p, escala, opc) {
+    if (!NOM.animOffice) return null;
+    const bs = bloquesPresentables(doc, p);
+    const porId = new Map(bs.map((b) => [b.id, b]));
+    const lista = listaAnimaciones(doc, p, bs);
+    try {
+      return NOM.animOffice.reproductor(el, Object.assign({ lista, T: tamDoc(doc), bloque: (id) => porId.get(id), escala, colorTema: (n) => colorTemaOffice(doc, n), preset: (x) => NOM.animOffice.presetDe(x) }, opc || {}));
+    } catch (e) { console.warn("animaciones", e); return null; }
+  }
+
   // ------------------------------------------------------------ reproductor
   /**
    * Presenta en pantalla completa. opc.presentador: vista con notas, la siguiente diapositiva y el
@@ -2545,11 +2569,13 @@
     const d = $("[data-d]", rep), sig = $("[data-sig]", rep);
     const inicio = Date.now();
     const reloj = presentador ? setInterval(() => { const s2 = Math.floor((Date.now() - inicio) / 1000); $("[data-tiempo]", rep).textContent = `${Math.floor(s2 / 60)}:${String(s2 % 60).padStart(2, "0")}`; }, 1000) : null;
+    let kActual = 1, motor = null;
     function escalar(el, caja, p) {
       if (NOM.diapo) NOM.diapo.aplicar(el, doc, p);
       const T = tamDoc(doc);
       const r = caja ? caja.getBoundingClientRect() : { width: innerWidth, height: innerHeight, left: 0, top: 0 };
       const k = Math.min(r.width / T.w, r.height / T.h);
+      if (el === d) kActual = k;
       el.style.transform = `scale(${k})`;
       el.style.left = (r.width - T.w * k) / 2 + "px";
       el.style.top = (r.height - T.h * k) / 2 + "px";
@@ -2569,11 +2595,15 @@
     }
     function pintar(revelarTodo, conTransicion) {
       const p = pags()[i];
-      total = estadoAnimaciones(doc, p, 0).pasos;
-      paso = revelarTodo ? total : 0;
-      d.innerHTML = htmlDiapositiva(doc, p, paso, { final: !!revelarTodo });
+      // todo pintado; el motor de animaciones (el de PowerPoint) oculta lo que entra después y anima cada clic
+      d.innerHTML = htmlDiapositiva(doc, p, null);
       borrarMarcas(false);
       escala();
+      if (motor) motor.detener();
+      motor = motorDiapositiva(d, doc, p, () => kActual);
+      total = motor ? motor.pasos : 0;
+      paso = revelarTodo ? total : 0;
+      if (motor) { if (revelarTodo) motor.irAPaso(total, true); else motor.inicio(); }
       if (conTransicion !== false) transicion();
       $("[data-c]", rep).textContent = `${i + 1} / ${pags().length}`;
       if (presentador) {
@@ -2586,9 +2616,8 @@
       avisarProyector();
     }
     function avanzar() {
-      if (paso < total) {
+      if (motor && paso < total && motor.clic()) {
         paso++;
-        d.innerHTML = htmlDiapositiva(doc, pags()[i], paso);
         pintarMarcas();
         avisarProyector();
         return;
@@ -2642,6 +2671,7 @@
     $("[data-herr]", rep).addEventListener("click", (e) => { const b = e.target.closest("[data-h]"); if (b) { e.stopPropagation(); usar(b.dataset.h); } });
 
     function salir() {
+      if (motor) motor.detener();
       clearInterval(reloj);
       document.removeEventListener("keydown", tecla, true);
       removeEventListener("resize", escala);
@@ -2667,6 +2697,9 @@
       if (e.target.closest("[data-sig-btn]")) return avanzar();
       if (herramienta) return;
       if (presentador && !e.target.closest(".pv-actual")) return;
+      // una figura que desencadena animaciones (como en PowerPoint): el clic la anima en vez de avanzar
+      const fig = e.target.closest(".bl[data-id]");
+      if (fig && motor && motor.esDisparador(fig.dataset.id) && d.contains(fig)) { motor.disparar(fig.dataset.id); return; }
       (e.clientX < innerWidth / 3 ? retroceder : avanzar)();
     });
     // Deslizar con el dedo: a la izquierda avanza, a la derecha regresa (si no se está dibujando).

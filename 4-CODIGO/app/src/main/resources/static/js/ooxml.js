@@ -6166,6 +6166,23 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       const hijosArbol = hs(arbol);
       for (let i2 = 0; i2 < hijosArbol.length; i2++) { oxActual = i2; await elemento(hijosArbol[i2], null); }
       oxActual = null;
+      // Animaciones de PowerPoint (p:timing): cada efecto con su árbol tal cual, apuntando a los bloques de NOM
+      // (una figura agrupada son varios bloques con el mismo «ox»). Los colores del tema se resuelven aquí.
+      const tmEl = hs(sld.documentElement, "timing")[0];
+      if (tmEl && NOM.animOffice) {
+        const oxDe = new Map();
+        hijosArbol.forEach((h, k) => { const c = todos(h, "cNvPr")[0]; if (c && at(c, "id") != null && !oxDe.has(at(c, "id"))) oxDe.set(at(c, "id"), k); });
+        const idsDe = (spid) => { const k = oxDe.get(String(spid)); return k == null ? [] : bloques.filter((b) => b.pagina === pg && b.ox === k).map((b) => b.id); };
+        try {
+          const r = NOM.animOffice.leerTiming(tmEl, idsDe, (el) => colorDeElemento(el));
+          if (r) {
+            if (r.lista.length) docCampos["anim:" + pg] = r.lista;
+            if (r.medios.length) docCampos["animMedios:" + pg] = r.medios;
+            if (r.bld.length) docCampos["animBld:" + pg] = r.bld;
+          }
+        } catch (e) { /* una animación rara no detiene la importación: al exportar se conserva la original */ }
+      }
+      if (!docCampos.esquemaOffice && Object.keys(esquema).length) docCampos.esquemaOffice = Object.assign({}, esquema);
       // Fondo: el de la diapositiva, o el de su diseño, o el de su patrón (con los rellenos de fondo del tema)
       const relsDis0 = relDiseno ? await relsDe(relDiseno.destino) : {};
       const relMae0 = relDiseno ? Object.values(relsDis0).find((r) => /slideMaster$/.test(r.tipo)) : null;
