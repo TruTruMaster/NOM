@@ -1377,3 +1377,9 @@
   .ao-tiempo { order: 5; flex: 1 1 100%; width: auto !important; }
   .ao-campo > span, .ao-campo > legend { min-width: 100%; }
 }
+/* trayectorias del bloque elegido en el editor (como PowerPoint: punteadas, inicio verde y fin rojo) */
+.ao-tray { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; z-index: 5; }
+.ao-tray polyline { fill: none; stroke: var(--tinta-suave); stroke-width: 2; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; }
+.ao-tray circle { stroke: var(--sup); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.ao-tray circle.ini { fill: var(--ok); }
+.ao-tray circle.fin { fill: var(--error); }

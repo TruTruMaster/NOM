@@ -138,10 +138,12 @@ Leer al empezar la siguiente sesión, junto con `RELEVO-17NOV-LISTA-OFFICE.md` (
      `timingXml`): sin errores. **Falta** (cuando haya tiempo y PowerPoint): abrir en PowerPoint real un archivo con
      efectos armados en el panel (repetir, rebote, atenuar, ocultar, por párrafos, trayectoria propia) y pasar el validador
      de Microsoft; probar en el teléfono (barras con el dedo, trayectoria con el dedo, ruedita).
-   - Pendiente de esto: «Animar la forma adjunta» al ir por párrafos (a02 diap. 23: primer efecto con
-     `<p:spTgt><p:bg/></p:spTgt>` y `bldP build="p" animBg="1" autoUpdateAnimBg="0"`); copiar un efecto por párrafos
-     lo pega como un objeto (volver a partirlo en el bloque nuevo); dibujar las trayectorias en el editor (PowerPoint
-     las muestra punteadas sobre la diapositiva); sonidos de efectos. Datos que faltan en la biblioteca (necesitan
+   - También hecho: «Animar la forma adjunta» al ir por párrafos (primer efecto con `<p:spTgt><p:bg/></p:spTgt>`, `par: -1`,
+     `bldP build="p" animBg="1" autoUpdateAnimBg="0"`; se reconoce al importar), copiar un efecto por párrafos lo vuelve a
+     partir en el bloque nuevo, y las trayectorias del bloque elegido se dibujan en el editor (punteadas, inicio verde y
+     fin rojo, `.ao-tray`). Un efecto que anima un solo párrafo conserva su párrafo al editar sus opciones.
+   - Pendiente de esto: sonidos de efectos; mover o editar los puntos de una trayectoria en el editor (hoy se dibuja de
+     nuevo). Datos que faltan en la biblioteca (necesitan
      PowerPoint): las salidas solo traen su dirección de siempre y faltan direcciones de entrada (Desplazar 3 y 12,
      Barras diagonales 3, Dividir vertical hacia dentro, Rueda por radios, Arrastrar 4, Rotar vertical, Zoom desde el
      centro de la diapositiva); «Desplazar hacia fuera» se puede derivar de la entrada (el tav 0 con # de la entrada es

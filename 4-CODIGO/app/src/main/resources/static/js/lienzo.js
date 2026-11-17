@@ -2083,7 +2083,7 @@
       ed.lienzo.style.overflow = "hidden";
       // Las miniaturas se repintan como mucho cada 150 ms (al arrastrar no se repintan en cada cuadro).
       let pintarMinis = () => {};
-      const lienzo = crearLienzo(ed, $("[data-escena]", raiz), { acotado: true, alPintar: () => pintarMinis(), animar: () => (NOM.animPanel ? NOM.animPanel.acciones(this._ctxAnim) : []) });
+      const lienzo = crearLienzo(ed, $("[data-escena]", raiz), { acotado: true, alPintar: () => { pintarMinis(); pintarTrayectorias(); }, alSeleccionar: () => pintarTrayectorias(), animar: () => (NOM.animPanel ? NOM.animPanel.acciones(this._ctxAnim) : []) });
       this._lienzo = lienzo;
 
       pintarMinis = NOM.throttle(() => {
@@ -2224,6 +2224,27 @@
         bloqueEnEditor: (id) => $(`[data-escena] .bl[data-id="${CSS.escape(id)}"]`, raiz),
       };
       this._ctxAnim = ctxAnim;
+      /** 8.3 Las trayectorias del bloque elegido, punteadas sobre la diapositiva (verde donde empieza y rojo donde acaba). */
+      function pintarTrayectorias() {
+        try {
+          const esc0 = $("[data-escena]", raiz);
+          if (!esc0) return;
+          esc0.querySelectorAll(".ao-tray").forEach((e) => e.remove());
+          const id = lienzo.seleccion(), A = NOM.animOffice;
+          if (!id || !A) return;
+          const el = esc0.querySelector(`.bl[data-id="${CSS.escape(id)}"]`);
+          if (!el || !el.parentElement) return;
+          const cs = listaAnim().filter((x) => x.id === id).map((x) => A.caminoDe(x)).filter((c) => c && c.pts.length > 1);
+          if (!cs.length) return;
+          const T = tamDoc(doc()), cx = el.offsetLeft + el.offsetWidth / 2, cy = el.offsetTop + el.offsetHeight / 2;
+          const r = (v) => Math.round(v * 10) / 10;
+          const dib = cs.map((c) => {
+            const ps = c.pts.map(([x, y]) => [r(cx + x * T.w), r(cy + y * T.h)]), u = ps[ps.length - 1];
+            return `<polyline points="${ps.map((q) => q.join(",")).join(" ")}"/><circle class="ini" cx="${ps[0][0]}" cy="${ps[0][1]}" r="5"/><circle class="fin" cx="${u[0]}" cy="${u[1]}" r="5"/>`;
+          }).join("");
+          el.parentElement.insertAdjacentHTML("beforeend", `<svg class="ao-tray" width="${T.w}" height="${T.h}" aria-hidden="true">${dib}</svg>`);
+        } catch (e) { /* (todavía no hay lista: el lienzo se pinta antes de que exista) */ }
+      }
       function menuAnimacion(b) { if (NOM.animPanel) NOM.animPanel.menu(ctxAnim, b); }
       /** 8.3 Nueva diapositiva con un diseño (portada, título y contenido, dos columnas…). */
       function nuevaConDiseno(id) {

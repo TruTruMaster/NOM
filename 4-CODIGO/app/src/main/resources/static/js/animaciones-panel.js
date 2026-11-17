@@ -175,8 +175,9 @@
     let l = ctx.lista();
     const u = unidades(l).find((q) => idx >= q.desde && idx <= q.hasta);
     if (!u || !A) return;
-    let x = A.comoObjeto(l[u.desde]);
-    const parAntes = l[u.desde].grupoP ? { atras: !!l[u.desde].parAtras } : null;
+    // (un efecto por párrafos se edita como uno; uno que anima un solo párrafo se queda con su párrafo)
+    let x = l[u.desde].grupoP ? A.comoObjeto(l[u.desde]) : l[u.desde];
+    const parAntes = l[u.desde].grupoP ? { atras: !!l[u.desde].parAtras, fondo: l.slice(u.desde, u.hasta + 1).some((q) => q.par === -1) } : null;
     let op = A.opcionesDe(x) || {};
     // los instantáneos (Aparecer, Desaparecer…) no tienen duración, como en PowerPoint
     const instantaneo = (+(A.presetDe(x) || {}).d0 || 0) <= 1;
@@ -222,6 +223,7 @@
         <label class="ao-check"><input data-f="atras" type="checkbox" ${op.atras ? "checked" : ""}> Letras o palabras en orden inverso</label>
         <label class="ao-campo"><span>Agrupar texto</span><select data-f="agrupar"><option value="obj">Como un objeto</option><option value="p" ${parAntes ? "selected" : ""}>Por párrafos</option></select></label>
         <label class="ao-check"><input data-f="parAtras" type="checkbox" ${parAntes && parAntes.atras ? "checked" : ""}> Párrafos en orden inverso</label>
+        <label class="ao-check"><input data-f="parFondo" type="checkbox" ${parAntes && parAntes.fondo ? "checked" : ""}> Animar la forma adjunta (la figura antes que su texto)</label>
       </div>` : ""}
     </div>`);
     const pie = html(`<div style="display:contents"><span class="crece"></span><button class="btn" type="button" data-no>Cancelar</button><button class="btn primario" type="button" data-si>Guardar</button></div>`);
@@ -262,7 +264,7 @@
       if (radio && radio.value === "b" && val("disp", "")) y.disp = val("disp", ""); else delete y.disp;
       if (val("agrupar", "obj") === "p") {
         const ps = parrafosDe($(`.bl[data-id="${CSS.escape(x.id)}"]`, $("[data-prev]", cuerpo)));
-        if (ps.length > 1) return A.porParrafos(y, ps, !!val("parAtras", false));
+        if (ps.length > 1) return A.porParrafos(y, ps, !!val("parAtras", false), !!val("parFondo", false));
       }
       return [y];
     }
@@ -428,8 +430,8 @@
     const id = ctx.seleccion();
     const l = ctx.lista().filter((x) => x.id === id);
     if (!l.length) { aviso("Este bloque no tiene animaciones que copiar", { tipo: "aviso" }); return; }
-    // (de un efecto por párrafos se copia uno: en el otro bloque va como un objeto, igual que en PowerPoint si no tiene párrafos)
-    const unos = unidades(l).map((u) => l[u.desde]);
+    // (un efecto por párrafos se copia una vez, recordando que iba por párrafos: en el otro bloque se vuelve a partir)
+    const unos = unidades(l).map((u) => ({ x: l[u.desde], par: l[u.desde].grupoP ? { atras: !!l[u.desde].parAtras } : null }));
     NOM._animCopiada = unos;
     aviso(`Animación copiada (${unos.length} efecto${unos.length > 1 ? "s" : ""}). Elige otro bloque y toca «Pegar animación».`, { tipo: "ok", ms: 3000 });
   }
@@ -437,7 +439,11 @@
     const id = ctx.seleccion(), c = NOM._animCopiada;
     if (!id || !c || !c.length) return;
     const l = ctx.lista().filter((x) => x.id !== id);
-    c.forEach((x) => l.push(AO().paraBloque(x, id)));
+    const ps = parrafosDe(ctx.bloqueEnEditor(id));
+    c.forEach(({ x, par }) => {
+      const y = AO().paraBloque(x, id);
+      if (par && ps.length > 1) l.push(...AO().porParrafos(y, ps, par.atras)); else l.push(y);
+    });
     ctx.guardar(l);
     aviso(`Animación pegada en ${ctx.nombreBloque(id)}`, { tipo: "ok", ms: 1800 });
   }

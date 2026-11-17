@@ -1285,7 +1285,7 @@
       }
     });
     // un efecto por párrafo seguido (como lo escribe PowerPoint con «por párrafos»): se marcan como un grupo
-    const parDe = (x) => { let r = null; (function rec(m) { if (r != null || !Array.isArray(m)) return; if (loc(m[0]) === "pRg") r = +A(m).st; H(m).forEach(rec); })(x.ppt.c); return r; };
+    const parDe = (x) => { let r = null; (function rec(m) { if (r != null || !Array.isArray(m)) return; if (loc(m[0]) === "pRg") r = +A(m).st; else if (loc(m[0]) === "bg") r = -1; H(m).forEach(rec); })(x.ppt.c); return r; };
     let gP = null;
     lista.forEach((x, i) => {
       const k = x.id ? parDe(x) : null;
@@ -1294,7 +1294,7 @@
       if (gP && prev && prev.grupoP === gP && prev.id === x.id && prev.efecto === x.efecto && prev.disp === x.disp) { x.grupoP = gP; x.par = k; }
       else { gP = "i" + i; x.grupoP = gP; x.par = k; }
     });
-    lista.forEach((x) => { if (x.grupoP && lista.filter((y) => y.grupoP === x.grupoP).length < 2) { delete x.grupoP; } });
+    lista.forEach((x) => { if (x.grupoP && lista.filter((y) => y.grupoP === x.grupoP).length < 2) { delete x.grupoP; if (x.par === -1) delete x.par; } });
     const bl = hijo(raiz, "bldLst");
     const bld = bl ? hijosDe(bl).map((b) => { const m = copia(b); const bs = bloquesDe(A(b).spid) || []; if (bs.length) m[1] = Object.assign({}, A(m), { bid: bs[0] }); return m; }) : [];
     if (!lista.length && !medios.length) return null;
@@ -1436,7 +1436,7 @@
       if (yaB.has(k)) return;
       yaB.add(k);
       // por párrafos: build="p" (y rev="1" si van al revés), como PowerPoint
-      if (x.par != null) blds.push(`<p:bldP spid="${s2}" grpId="${g}" build="p"${x.parAtras ? ' rev="1"' : ""}/>`);
+      if (x.par != null) blds.push(`<p:bldP spid="${s2}" grpId="${g}" build="p"${x.parAtras ? ' rev="1"' : ""}${lista.some((y) => y.grupoP && y.grupoP === x.grupoP && y.par === -1) ? ' animBg="1" autoUpdateAnimBg="0"' : ""}/>`);
       else if (opc.conTexto && opc.conTexto(x.id)) blds.push(`<p:bldP spid="${s2}" grpId="${g}" animBg="1"/>`);
     });
     const tm = `<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>${cuerpo}</p:childTnLst></p:cTn></p:par></p:tnLst>${blds.length ? `<p:bldLst>${blds.join("")}</p:bldLst>` : ""}</p:timing>`;
@@ -1652,7 +1652,7 @@
   function paraBloque(x, id) {
     const y = copia(x);
     (function rec(m) { if (!Array.isArray(m)) return; if (loc(m[0]) === "spTgt" && (A(m).bid === x.id || A(m).bid === "@")) { m[1] = Object.assign({}, A(m), { bid: "@" }); delete m[1].spid; } H(m).forEach(rec); })(y.ppt ? y.ppt.c : null);
-    y.id = id; delete y.ids; delete y.spid; delete y.grupoP; delete y.par; delete y.marcador;
+    y.id = id; delete y.ids; delete y.spid; delete y.grupoP; delete y.par; delete y.parAtras; delete y.marcador;
     if (y.ppt) (function rec(m) { if (!Array.isArray(m)) return; if (loc(m[0]) === "spTgt") m[2] = H(m).filter((h) => !(Array.isArray(h) && loc(h[0]) === "txEl")); H(m).forEach(rec); })(y.ppt.c);
     return y;
   }
@@ -1660,16 +1660,17 @@
    * Por párrafos: un efecto por párrafo (como PowerPoint), cada uno con su txEl. indices: los párrafos con texto.
    * Devuelve la lista de efectos (el primero con el inicio del original; los demás, igual que él).
    */
-  function porParrafos(x, indices, atras) {
+  function porParrafos(x, indices, atras, conFondo) {
     const pp = presetDe(x);
     if (!pp || !pp.c || !indices.length) return [x];
     const g = "p" + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
-    const orden = atras ? indices.slice().reverse() : indices;
+    const orden = (conFondo ? [-1] : []).concat(atras ? indices.slice().reverse() : indices);
+    // (con «Animar la forma adjunta» el primero es la figura sin su texto: <p:spTgt><p:bg/></p:spTgt>, como PowerPoint)
     return orden.map((k) => {
       const c = copia(pp.c);
       (function rec(m) {
         if (!Array.isArray(m)) return;
-        if (loc(m[0]) === "spTgt" && (A(m).bid == null || A(m).bid === "@" || A(m).bid === x.id)) m[2] = [["p:txEl", {}, [["p:pRg", { st: String(k), end: String(k) }]]]];
+        if (loc(m[0]) === "spTgt" && (A(m).bid == null || A(m).bid === "@" || A(m).bid === x.id)) m[2] = k < 0 ? [["p:bg", {}]] : [["p:txEl", {}, [["p:pRg", { st: String(k), end: String(k) }]]]];
         H(m).forEach(rec);
       })(c);
       const y = Object.assign({}, x, { ppt: { c, d0: pp.d0 }, grupoP: g, par: k });
@@ -1682,7 +1683,7 @@
   function comoObjeto(x) {
     const y = Object.assign({}, x);
     delete y.grupoP; delete y.par; delete y.parAtras;
-    if (y.ppt) { y.ppt = copia(y.ppt); (function rec(m) { if (!Array.isArray(m)) return; if (loc(m[0]) === "spTgt") m[2] = H(m).filter((h) => !(Array.isArray(h) && loc(h[0]) === "txEl")); H(m).forEach(rec); })(y.ppt.c); }
+    if (y.ppt) { y.ppt = copia(y.ppt); (function rec(m) { if (!Array.isArray(m)) return; if (loc(m[0]) === "spTgt") m[2] = H(m).filter((h) => !(Array.isArray(h) && (loc(h[0]) === "txEl" || loc(h[0]) === "bg"))); H(m).forEach(rec); })(y.ppt.c); }
     return y;
   }
   /**
