@@ -1393,3 +1393,55 @@ exporta Excel de ella (ver la entrada 68).
 - «Formato detallado» del libro de gráficas: 93.2 → 95.1 %; las demás sin cambios. Falta medir PowerPoint y Word
   antes de publicar (comparten el dibujante).
 
+
+## 71. Matrices dinámicas, LET y LAMBDA; Word con secciones de otra hoja y columnas (16 de noviembre de 2026)
+- **Fórmulas:** matrices como valores (`{1,2;3,4}`), operaciones elemento por elemento, derrame (`#DESBORDAMIENTO!`,
+  también por celdas combinadas), `A1#`, `@`, `LET`, `LAMBDA` (con nombre del libro) y `ORDENAR`, `FILTRAR`,
+  `UNICOS`, `SECUENCIA`, `APILARV/H`, `TOMAR`, `EXCLUIR`, `DIVIDIRTEXTO`, `BYROW`, `MAP`, `REDUCE`, `SCAN`,
+  `MAKEARRAY`, `MMULT`. Importador de Excel versión 5. Contra Excel real: x02 100 % de 975 celdas y x09 (nuevo,
+  71 casos) 100 % de 928.
+- **Word:** cada sección con su tamaño, orientación, márgenes y columnas (con línea, equilibradas en un salto
+  continuo), a página impar o par, centrado vertical, número que reinicia, encabezado y pie por sección. w04 de
+  38.4 a 86.5 % de renglones como Word. Formas con degradado, trama, imagen, transparencia, puntas y efectos; grupos.
+
+## 72. SmartArt sin dibujo y la vuelta en Office real (16 de noviembre de 2026)
+- `js/smartart.js` acomoda un SmartArt que no trae su dibujo con el diseño de Office (compuesto, línea, serpiente,
+  ciclo, jerarquía, pirámide…). Contra PowerPoint: 82.6 a 89.5 %.
+- `vuelta_office.py` + `windows/abrir_office.py`: lo exportado se abre en Office real con sus avisos; 379 archivos
+  abrieron sin avisos ni reparar y los 3 dañados a propósito sí se detectaron.
+
+## 73. Word: lo que flota en su lugar, espacio entre párrafos y páginas como Word (16 y 17 de noviembre de 2026)
+- Imágenes, formas, cuadros de texto, grupos y gráficos anclados en el lugar que dice Word y el texto alrededor
+  (cuadrado, estrecho y a través siguiendo el contorno, arriba y abajo).
+- Espacio entre párrafos: el mayor entre el de después y el de antes (medido en Word), espacio contextual,
+  automático de 14 pt. Salto de página anterior, conservar con el siguiente, líneas juntas, viudas y huérfanas,
+  letra capital.
+- Contra Word real: w12 (nuevo) 53.4 → 77.8 % de renglones idénticos y 21 páginas como Word; w06 77 → 84.5 %.
+
+## 74. Contraseñas y protección de Office (17 de noviembre de 2026)
+- `js/cifrado-office.js` (sin bibliotecas): abre y guarda archivos de Office con contraseña (cifrado «Agile» de
+  Office 2010 en adelante y «Standard» de Office 2007). Comprobado con Office real en los dos sentidos y con
+  msoffcrypto-tool; vectores de prueba oficiales 274 de 274.
+- Protección como en Office: restringir edición de Word, marcar como final, contraseña para modificar, proteger
+  hoja (celdas bloqueadas, fórmulas ocultas, permisos) y libro de Excel. Los hashes coinciden con los de Office y
+  Office respeta lo protegido desde NOM.
+
+## 75. Se llama NOM y revisión de seguridad, privacidad y documentación (17 de noviembre de 2026)
+- El proyecto se llama **NOM** en la app, la página, la ayuda, lo legal y la documentación. La dirección principal
+  es www.nom.qd.je; la app trata los nombres de la nube como uno solo (un QR con el de antes no la saca de su sesión).
+- De una revisión externa: lo de tus datos por un canal privado, qué puede ver Cloudflare, dónde guarda Azure,
+  `security.txt` con la dirección principal, la huella del certificado y el SHA-256 de cada APK publicados,
+  contradicciones de la ayuda corregidas, alto contraste y «reducir movimiento» del sistema respetados, `CAMBIOS.md`
+  y LEEME al día.
+
+## 76. Tablas de Word como Word (17 de noviembre de 2026)
+- Las tablas se parten entre hojas como Word (por filas o por renglones dentro de la fila, con control de viudas),
+  con las filas de encabezado repetidas, el corte recortado y con su borde; filas con su alto exacto o mínimo,
+  márgenes de celda e interlineado de Word, ancho, alineación y sangría de la tabla, bordes propios de tabla y
+  celda con diagonales, alineación vertical y texto girado.
+- Celdas con imágenes, listas, tablas adentro o letra mezclada se ven como en Word. Al descargar, una tabla editada
+  sale de la original con solo las celdas que cambiaron (sin tocar, idéntica byte por byte); Word la abre sin
+  avisos y el validador de Microsoft no encuentra errores nuevos.
+- Contra Word real: w05 de 9 a 8 páginas (como Word), renglones en su página 17.1 → 85.7 %, imagen 91.8 → 93.8 %;
+  w09 de 10 a 9 páginas (como Word). Once de los doce documentos de Word con las mismas páginas que Word.
+- Falta: tabla flotante con el texto alrededor.
