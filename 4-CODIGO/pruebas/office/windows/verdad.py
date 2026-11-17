@@ -128,6 +128,26 @@ def verdad_word(ruta, nombre):
                 datos["pdf"] = os.path.basename(pdf); break
             except Exception as e:
                 datos["error_pdf"] = str(getattr(e, "excepinfo", None) or e)[:300]; time.sleep(1)
+        # lo que flota: su ajuste, su página y su lugar EN LA HOJA (después del PDF: para saberlo se cambia su
+        # «relativo a» por la hoja, y Word recalcula Left y Top dejándolo donde estaba; el archivo no se guarda)
+        formas = []
+        try:
+            for k in range(1, min(d.Shapes.Count, 400) + 1):
+                sh = d.Shapes(k)
+                f = {"nombre": sh.Name, "tipo": sh.Type, "w": sh.Width, "h": sh.Height}
+                for k2, fn in [("ajuste", lambda: sh.WrapFormat.Type), ("lado", lambda: sh.WrapFormat.Side), ("pagina", lambda: sh.Anchor.Information(3)),
+                               ("relh", lambda: sh.RelativeHorizontalPosition), ("relv", lambda: sh.RelativeVerticalPosition), ("left", lambda: sh.Left), ("top", lambda: sh.Top),
+                               ("dist", lambda: [sh.WrapFormat.DistanceTop, sh.WrapFormat.DistanceBottom, sh.WrapFormat.DistanceLeft, sh.WrapFormat.DistanceRight])]:
+                    try: f[k2] = fn()
+                    except Exception: pass
+                formas.append(f)
+            for k, f in enumerate(formas, 1):
+                try:
+                    sh = d.Shapes(k); sh.RelativeHorizontalPosition = 1; sh.RelativeVerticalPosition = 1
+                    f["x_hoja"], f["y_hoja"] = sh.Left, sh.Top
+                except Exception: pass
+        except Exception as e: datos["error_formas"] = str(e)[:200]
+        datos["formas"] = formas
         d.Close(0)
     finally:
         ev.set()

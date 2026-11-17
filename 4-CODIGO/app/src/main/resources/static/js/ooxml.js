@@ -1011,6 +1011,17 @@
       let ppr = "";
       if (ESTILO_WORD[pa.estilo]) ppr += `<w:pStyle w:val="${ESTILO_WORD[pa.estilo]}"/>`;
       else if (pa.lista) ppr += '<w:pStyle w:val="ListParagraph"/>';
+      // entre páginas (orden del esquema: keepNext, keepLines, pageBreakBefore, widowControl); los títulos ya van
+      // con el siguiente por su estilo
+      const conSig = pa.conSig == null || pa.conSig === "" ? null : !!+pa.conSig;
+      if (conSig === true && !/^h[123]$/.test(pa.estilo || "")) ppr += "<w:keepNext/>";
+      else if (conSig === false && /^h[123]$/.test(pa.estilo || "")) ppr += '<w:keepNext w:val="0"/>';
+      if (pa.juntas) ppr += "<w:keepLines/>";
+      if (pa.saltoAntes) ppr += "<w:pageBreakBefore/>";
+      // letra capital: el marco de Word (dropCap) con sus renglones y su distancia al texto
+      const cap = /^(drop|margin)\|(\d+)\|([\d.]+)$/.exec(pa.capital || "");
+      if (cap) ppr += `<w:framePr w:dropCap="${cap[1]}" w:lines="${cap[2]}" w:hSpace="${Math.round(+cap[3] * 20)}" w:wrap="around" w:vAnchor="text" w:hAnchor="${cap[1] === "margin" ? "page" : "text"}"/>`;
+      if (pa.viudas != null && pa.viudas !== "" && !+pa.viudas) ppr += '<w:widowControl w:val="0"/>';
       if (U && U.numId && (pa.lista === "vinetas" || pa.lista === "numeros")) {
         // sigue la lista del archivo original (misma numeración que sus vecinos)
         ppr += `<w:numPr><w:ilvl w:val="${pa.nivel || 0}"/><w:numId w:val="${U.numId}"/></w:numPr>`;
@@ -1431,10 +1442,20 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       const sp = hijo(ppr, "spacing");
       if (sp) {
         const g = (k) => { const v = at(sp, k); return v == null || v === "" || isNaN(+v) ? null : +v; };
+        const auto = (k) => /^(1|true|on)$/.test(at(sp, k) || "");
         if (g("before") != null) r.antes = g("before");
         if (g("after") != null) r.desp = g("after");
+        // espacio automático (como en HTML): Word deja 14 pt
+        if (auto("beforeAutospacing")) r.antes = 280;
+        if (auto("afterAutospacing")) r.desp = 280;
         if (g("line") != null) { r.linea = g("line"); r.regla = at(sp, "lineRule") || "auto"; }
       }
+      // cómo se reparte entre páginas: con el siguiente, líneas juntas, salto de página antes y control de viudas
+      const kn = hijo(ppr, "keepNext"), kl = hijo(ppr, "keepLines"), pbb = hijo(ppr, "pageBreakBefore"), wc = hijo(ppr, "widowControl");
+      if (kn) r.kn = activo(kn);
+      if (kl) r.kl = activo(kl);
+      if (pbb) r.pbb = activo(pbb);
+      if (wc) r.wc = activo(wc);
       const bd = hijo(ppr, "pBdr");
       if (bd) r.bdr = bd;
       const shd = hijo(ppr, "shd");
@@ -1711,7 +1732,59 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     function lugarDe(c, w, h) {
       const fl = comoFlota(c, w, h), anc = c.getElementsByTagNameNS("*", "anchor")[0];
       const rh = anc ? Math.max(0, Math.min(9000, Math.round((+(anc.getAttribute("relativeHeight") || 251658240) - 251658240) / 1024))) : 0;
-      return anc ? { libre: true, x: fl.libre ? fl.x : xDeFlota(c, w), y: fl.libre ? fl.y : yDeFlota(c), detras: fl.detras || anc.getAttribute("behindDoc") === "1" || undefined, franja: fl.ajuste === "bloque" || undefined, z: rh || undefined } : {};
+      return anc ? { libre: true, x: fl.libre ? fl.x : xDeFlota(c, w), y: fl.libre ? fl.y : yDeFlota(c), detras: fl.detras || anc.getAttribute("behindDoc") === "1" || undefined, franja: fl.ajuste === "bloque" || undefined, z: rh || undefined, fl: fl.fl } : {};
+    }
+    /**
+     * Cómo pone Word un dibujo anclado, tal cual (lo usa la página para ponerlo en su hoja y apartar el texto):
+     *   h, v: [de qué se mide, alineación o distancia en px] — horizontal: page, margin, column, character, leftMargin,
+     *         rightMargin, insideMargin, outsideMargin; vertical: page, margin, paragraph, line, topMargin, bottomMargin…
+     *         (la distancia también puede ser {pct} del ancho o alto de lo que se mide)
+     *   a: ajuste del texto (cuadrado, estrecho, traves, arriba = arriba y abajo, nada = delante o detrás del texto)
+     *   l: de qué lado va el texto (ambos, izq = solo a la izquierda, der = solo a la derecha, mayor = del más ancho)
+     *   d: distancias al texto [arriba, abajo, izquierda, derecha]; ee: lo que sobresalen los efectos [izq, arriba, der, abajo]
+     *   p: contorno para el ajuste estrecho o a través (puntos de 0 a 1 sobre el dibujo); t: detrás del texto
+     */
+    /** positionH o positionV de un ancla: directo o dentro de mc:AlternateContent (Word 2010 escribe la posición en
+        porcentaje en el Choice «wp14» y en EMU en el Fallback; aquí se entienden las dos, así que va el Choice). */
+    function posicionDe(anc, nm) {
+      for (const x of anc.children) {
+        if (x.localName === nm) return x;
+        if (x.localName === "AlternateContent") {
+          const ch = [...x.children].find((q) => q.localName === "Choice"), fb = [...x.children].find((q) => q.localName === "Fallback");
+          for (const r of [ch, fb]) { const e = r && [...r.children].find((q) => q.localName === nm); if (e) return e; }
+        }
+      }
+      return null;
+    }
+    function flotaDe(anc) {
+      const hijo2 = (n, nm) => [...(n ? n.children : [])].find((x) => x.localName === nm);
+      const r2 = (x) => Math.round(x * 100) / 100;
+      const pos = (nm, pctNm) => {
+        const e = posicionDe(anc, nm);
+        if (!e) return null;
+        const o = hijo2(e, "posOffset"), a = hijo2(e, "align"), pc = hijo2(e, pctNm);
+        return [e.getAttribute("relativeFrom") || "", a ? a.textContent.trim() : pc ? { pct: +pc.textContent / 100000 } : o ? r2(+o.textContent / EMU) : 0];
+      };
+      const sp = anc.getAttribute("simplePos") === "1" ? hijo2(anc, "simplePos") : null;
+      const wrap = [...anc.children].find((x) => /^wrap/.test(x.localName));
+      const fl = {
+        h: sp ? ["page", r2(+(sp.getAttribute("x") || 0) / EMU)] : pos("positionH", "pctPosHOffset") || ["column", 0],
+        v: sp ? ["page", r2(+(sp.getAttribute("y") || 0) / EMU)] : pos("positionV", "pctPosVOffset") || ["paragraph", 0],
+        a: { wrapSquare: "cuadrado", wrapTight: "estrecho", wrapThrough: "traves", wrapTopAndBottom: "arriba", wrapNone: "nada" }[wrap ? wrap.localName : "wrapNone"] || "nada",
+      };
+      const lado = wrap && wrap.getAttribute("wrapText");
+      if (lado && lado !== "bothSides") fl.l = { left: "izq", right: "der", largest: "mayor" }[lado] || undefined;
+      const d = ["distT", "distB", "distL", "distR"].map((k) => r2(+(anc.getAttribute(k) || 0) / EMU));
+      if (d.some((x) => x)) fl.d = d;
+      const ee = hijo2(anc, "effectExtent");
+      if (ee) { const v = ["l", "t", "r", "b"].map((k) => r2(+(ee.getAttribute(k) || 0) / EMU)); if (v.some((x) => x)) fl.ee = v; }
+      const poli = wrap && hijo2(wrap, "wrapPolygon");
+      if (poli && (fl.a === "estrecho" || fl.a === "traves")) {
+        const pts = [...poli.children].filter((x) => x.localName === "start" || x.localName === "lineTo").map((x) => [Math.round((+x.getAttribute("x") / 21600) * 10000) / 10000, Math.round((+x.getAttribute("y") / 21600) * 10000) / 10000]);
+        if (pts.length >= 3) fl.p = pts;
+      }
+      if (anc.getAttribute("behindDoc") === "1") fl.t = true;
+      return fl;
     }
     /** Una forma o un cuadro de texto de Word (wps:wsp), en su lugar (desde el párrafo y la columna). Si Word la rodea
         arriba y abajo, su franja se aparta del texto. */
@@ -1754,7 +1827,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       if (!anc) return {};
       const hijo2 = (n, nm) => [...(n ? n.children : [])].find((x) => x.localName === nm);
       const wrap = [...anc.children].find((x) => /^wrap/.test(x.localName));
-      const pos = (nm) => { const e = hijo2(anc, nm); if (!e) return null; const o = hijo2(e, "posOffset"), a = hijo2(e, "align"); return { rel: e.getAttribute("relativeFrom") || "", off: o ? Math.round(+o.textContent / EMU) : null, al: a ? a.textContent.trim() : null }; };
+      const pos = (nm) => { const e = posicionDe(anc, nm); if (!e) return null; const o = hijo2(e, "posOffset"), a = hijo2(e, "align"); return { rel: e.getAttribute("relativeFrom") || "", off: o ? Math.round(+o.textContent / EMU) : null, al: a ? a.textContent.trim() : null }; };
       const ph = pos("positionH"), pv = pos("positionV");
       // ancho del texto (columna) y márgenes de la página (de la primera sección; en px a 96 ppp)
       // (la primera sección: la de la lista si ya se leyó; si no, la primera «sectPr» del documento)
@@ -1776,10 +1849,12 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       if (soloPosicion) return { x: Math.round(x), y: Math.round(y) };
       // (qué va encima de qué: Word lo guarda en relativeHeight, de 1024 en 1024 desde 251658240)
       const z = Math.max(0, Math.min(9000, Math.round((+(anc.getAttribute("relativeHeight") || 251658240) - 251658240) / 1024))) || undefined;
-      if (tipo === "wrapNone") return { libre: true, x: Math.round(x), y: Math.round(y), detras: anc.getAttribute("behindDoc") === "1" || undefined, z };
-      if (tipo === "wrapTopAndBottom") return { ajuste: "bloque", alin: x + w / 2 < col * 0.4 ? (x > 4 ? undefined : "izq") : x + w / 2 > col * 0.6 ? "der" : "centro", dx: x > 4 && x + w / 2 < col * 0.4 ? Math.round(x) : undefined };
+      // (y cómo lo pone Word, completo: con esto la página lo coloca en su hoja y aparta el texto como Word)
+      const fl = flotaDe(anc);
+      if (tipo === "wrapNone") return { libre: true, x: Math.round(x), y: Math.round(y), detras: anc.getAttribute("behindDoc") === "1" || undefined, z, fl };
+      if (tipo === "wrapTopAndBottom") return { ajuste: "bloque", alin: x + w / 2 < col * 0.4 ? (x > 4 ? undefined : "izq") : x + w / 2 > col * 0.6 ? "der" : "centro", dx: x > 4 && x + w / 2 < col * 0.4 ? Math.round(x) : undefined, z, fl };
       // cuadrado, estrecho o transparente: el texto la rodea por el lado libre
-      return { ajuste: x + w / 2 > col / 2 ? "der" : "izq" };
+      return { ajuste: x + w / 2 > col / 2 ? "der" : "izq", z, fl };
     }
     /** El gráfico de un dibujo de Word (también dentro de mc:AlternateContent): su modelo de Office y su tamaño. */
     async function graficaWord(c) {
@@ -1886,7 +1961,9 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
             else if (cn === "tab") tramos.push({ x: "\t", a });
             else if (cn === "br" || cn === "cr") {
               const tipo = c.getAttributeNS(W, "type") || c.getAttribute("w:type");
-              if (tipo === "page") parrafo.salto = true; else if (tipo === "column") parrafo.saltoCol = true; else tramos.push({ x: "\u2028", a });
+              // (salto de p\u00e1gina o de columna: d\u00f3nde va dentro del p\u00e1rrafo, para partirlo ah\u00ed como Word)
+              if (tipo === "page" || tipo === "column") { if (tipo === "page") parrafo.salto = true; else parrafo.saltoCol = true; (parrafo.cortes = parrafo.cortes || []).push({ k: tramos.length, t: tipo === "page" ? "salto" : "saltocol" }); }
+              else tramos.push({ x: "\u2028", a });
             } else if (cn === "drawing" || cn === "pict") {
               // (una forma con relleno de imagen o un grupo con una foto también traen «blip»: solo es imagen si el dibujo lo es)
               const gd0 = c.getElementsByTagNameNS("*", "graphicData")[0], uri0 = (gd0 && gd0.getAttribute("uri")) || "";
@@ -1905,12 +1982,14 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
                 // una forma o un cuadro de texto, con su geometría de Office, su relleno, su contorno y su texto;
                 // un grupo o un lienzo, con todas sus piezas en su lugar
                 const gOf = /chart/.test(uri) ? await graficaWord(c) : null;
+                if (gOf) Object.assign(gOf, lugarDe(c, gOf.w, gOf.h));   // (un gráfico anclado va en su lugar de la hoja)
                 const fOf = !gOf && /wordprocessingShape/.test(uri) ? await formaWord(c, w, h) : !gOf && /wordprocessingGroup|wordprocessingCanvas/.test(uri) ? await grupoWord(c, w, h) : null;
                 tramos.push({ e: Object.assign({ tipo: "objeto", que, oe: ordinal(c), txt: (await textoObjeto(c)) || undefined }, gOf || {}, fOf || {}), a: {} }); aproximado = true;
               }
             } else if (cn === "AlternateContent" || cn === "object") {
               const que = cn === "object" ? "Objeto incrustado" : c.getElementsByTagNameNS("*", "txbxContent")[0] ? "Cuadro de texto" : /drawingml\/2006\/chart/.test(c.innerHTML || "") ? "Gráfico" : c.getElementsByTagNameNS("*", "relIds")[0] ? "SmartArt" : "Forma";
               const gOf = que === "Gráfico" ? await graficaWord(c) : null;
+              if (gOf) Object.assign(gOf, lugarDe(c, gOf.w, gOf.h));
               // una forma o un cuadro de texto de Word 2010 en adelante: su dibujo va en el Choice (el Fallback es VML)
               const dibAC = !gOf && cn === "AlternateContent" ? c.getElementsByTagNameNS("*", "drawing")[0] : null;
               const extAC = dibAC && dibAC.getElementsByTagNameNS("*", "extent")[0];
@@ -1977,11 +2056,23 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       if (li != null) { if (Math.abs(li - liBase) > 0.0005 && !(formato.interlineado == null && liDeWord(li))) pa.interlineado = li; }
       else if (c.linea && c.regla === "exact") pa.lineaPt = Math.round(c.linea / 2) / 10;
       else if (c.linea && c.regla === "atLeast" && c.linea / 20 > (letra.tam || formato.tam || 11) * 1.3) pa.lineaPt = Math.round(c.linea / 2) / 10;
-      // espacio antes y después: solo se anota si no es el que aquí ya tiene ese tipo de párrafo
-      const junto = c.junto && pa.lista, antes = junto ? 0 : Math.round((c.antes || 0) / 2) / 10, desp = junto ? 0 : Math.round((c.desp || 0) / 2) / 10;
+      // espacio antes y después: solo se anota si no es el que aquí ya tiene ese tipo de párrafo. El «sin espacio entre
+      // párrafos del mismo estilo» (contextualSpacing) depende de los vecinos: se resuelve al final (espaciosContextuales)
+      const antes = Math.round((c.antes || 0) / 2) / 10, desp = Math.round((c.desp || 0) / 2) / 10;
       const om = pa.lista ? [0, 2] : pa.estilo ? { h1: [12, 0], h2: [2, 0], h3: [2, 0], titulo: [0, 4], cita: [10, 8] }[pa.estilo] : [0, 8];
+      Object.defineProperty(pa, "_esp", { value: { antes, desp, om, st: idSt, ctx: !!c.junto }, enumerable: false, configurable: true });
       if (!om || antes !== om[0]) pa.antes = antes;
       if (!om || desp !== om[1]) pa.despues = desp;
+      // entre páginas: salto antes, con el siguiente (los títulos ya lo llevan aquí), líneas juntas y viudas
+      if (c.pbb) pa.saltoAntes = true;
+      // letra capital (marco de Word con dropCap): «drop» (dentro del texto) o «margin» (en el margen), cuántos renglones
+      // abarca y la distancia al texto (pt). El párrafo siguiente la rodea.
+      const fp = hijo(ppr, "framePr"), dc = fp ? at(fp, "dropCap") : null;
+      if (dc === "drop" || dc === "margin") pa.capital = `${dc}|${Math.max(1, Math.min(10, +(at(fp, "lines") || 3) || 3))}|${Math.round(((+(at(fp, "hSpace") || 0) || 0) / 20) * 10) / 10}`;
+      const kn0 = /^h[123]$/.test(pa.estilo || "");
+      if (!!c.kn !== kn0) pa.conSig = c.kn ? 1 : 0;
+      if (c.kl) pa.juntas = true;
+      if (c.wc === false) pa.viudas = 0;
       if (c.bdr) pa.borde = bordeDe(c.bdr);
       if (c.shd) pa.sombra = c.shd;
       if (c.rtl) pa.dir = "rtl";
@@ -2040,17 +2131,39 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         if (c.localName === "p") {
           const ppr = hijo(c, "pPr"), ap = attrsParrafo(ppr), pa = ap.pa, tramos = [], info = {};
           pa.ox = ox;
+          // (la hoja de la primera sección va en el primer párrafo del documento aunque esté dentro de un control de
+          // contenido, como una portada: si no, la sección empezaba más abajo y en hoja nueva)
+          if (sxPendiente != null && (unidad == null || sxK === 0)) { pa.sx = sxPendiente; paSx.push([pa, sxK]); sxPendiente = null; }
           if (unidad == null) {
             if (secPendiente != null) { pa.sec = secPendiente; secPendiente = null; }
-            if (sxPendiente != null) { pa.sx = sxPendiente; paSx.push([pa, sxK]); sxPendiente = null; }
             if (hijo(ppr, "sectPr") && secciones[nSec + 1]) { secPendiente = marcaSeccion(secciones[nSec + 1], secciones[nSec]); if (conSecciones) { sxPendiente = sxDe(secciones[nSec + 1]); sxK = nSec + 1; } nSec++; }
           }
           await runs(c, ap.letra, tramos, info);
-          if (info.salto && tramos.length) { parrafos.push({ pa, tramos }); parrafos.push({ pa: { ox }, tramos: [{ e: { tipo: "salto" } }] }); }
-          else if (info.salto) parrafos.push({ pa: { ox }, tramos: [{ e: { tipo: "salto" } }] });
-          // (salto de columna de Word: lo que sigue va arriba de la columna siguiente)
-          else if (info.saltoCol && tramos.length) { parrafos.push({ pa, tramos }); parrafos.push({ pa: { ox }, tramos: [{ e: { tipo: "saltocol" } }] }); }
-          else if (info.saltoCol) parrafos.push({ pa: { ox }, tramos: [{ e: { tipo: "saltocol" } }] });
+          if (info.cortes && info.cortes.length) {
+            // Saltos de página o de columna dentro del párrafo: el texto se parte donde va cada salto (antes del texto,
+            // en medio o al final). El espacio de antes es del primer pedazo y el de después, del último (como Word:
+            // un salto al principio deja el espacio de antes en la hoja anterior y el texto empieza arriba de la nueva).
+            const conTexto = (ts) => ts.some((t) => t.e || (t.x && t.x.replace(/[\u2028\s]/g, "")));
+            let desde = 0, primero = true;
+            const pedazos = [];
+            for (const ct of info.cortes) { pedazos.push({ ts: tramos.slice(desde, ct.k) }, { salto: ct.t }); desde = ct.k; }
+            pedazos.push({ ts: tramos.slice(desde) });
+            const conTx = pedazos.map((q) => q.ts && conTexto(q.ts));
+            const ultimo = conTx.lastIndexOf(true);
+            pedazos.forEach((q, j) => {
+              // (si el párrafo solo trae saltos, el primero se queda con su formato y con el inicio de sección)
+              if (q.salto) { parrafos.push({ pa: ultimo < 0 && primero ? pa : { ox }, tramos: [{ e: { tipo: q.salto } }] }); if (ultimo < 0) primero = false; return; }
+              if (!conTx[j]) return;
+              const p2 = Object.assign({}, pa);
+              if (!primero) { if (p2.antes != null || pa._esp) p2.antes = 0; delete p2.saltoAntes; delete p2.sec; delete p2.sx; }
+              if (j !== ultimo) p2.despues = 0;
+              if (pa._esp) Object.defineProperty(p2, "_esp", { value: Object.assign({}, pa._esp, primero ? {} : { antes: 0 }, j !== ultimo ? { desp: 0 } : {}), enumerable: false, configurable: true });
+              if (primero && pa.sx) { const k = paSx.findIndex((x) => x[0] === pa); if (k >= 0) paSx[k][0] = p2; }
+              parrafos.push({ pa: p2, tramos: q.ts });
+              primero = false;
+            });
+            // (un párrafo que solo trae el salto: el salto y nada más)
+          }
           else parrafos.push({ pa, tramos });
         } else if (c.localName === "tbl") {
           const filas = hijos(c, "tr"), celdas = {};
@@ -2113,6 +2226,20 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       }
     }
     await bloque(cuerpo);
+    // «Sin espacio entre párrafos del mismo estilo» (contextualSpacing) de Word: el párrafo que lo pide no deja su espacio
+    // de antes si el de arriba es de su mismo estilo, ni el de después si el de abajo lo es (medido en Word real).
+    for (let i = 0; i < parrafos.length; i++) {
+      const pa = parrafos[i].pa, e = pa && pa._esp;
+      if (!e) continue;
+      const ant = i > 0 && parrafos[i - 1].pa && parrafos[i - 1].pa._esp, sig = i + 1 < parrafos.length && parrafos[i + 1].pa && parrafos[i + 1].pa._esp;
+      let a = e.antes, d = e.desp;
+      if (e.ctx && ant && ant.st === e.st) a = 0;
+      if (e.ctx && sig && sig.st === e.st) d = 0;
+      if (a !== e.antes || d !== e.desp) {
+        if (!e.om || a !== e.om[0]) pa.antes = a; else delete pa.antes;
+        if (!e.om || d !== e.om[1]) pa.despues = d; else delete pa.despues;
+      }
+    }
     // Página: la de la PRIMERA sección, que es la hoja con la que empieza el documento (la sección
     // del final del cuerpo es la última, y puede ser otra hoja).
     const sec0 = secciones[0] || null, sect = sec0 ? sec0.sect : null;
@@ -5227,7 +5354,75 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
         const m = /dataModelExt[^>]*relId="([^"]+)"/.exec(datos), relDib = m ? rels[m[1]] : null;
         const dib = relDib ? await z.texto(relDib.destino) : null;
         let hechas = 0;
-        if (dib) {
+        if (dib && typeof document !== "undefined") {
+          // Cada figura del dibujo guardado pasa por el mismo camino que las formas de la diapositiva (geometría de Office
+          // con sus ajustes, formas libres, degradados, contornos, texto con su herencia), en su lugar dentro del marco.
+          const fx = anchoOrig ? r.w / anchoOrig : 1, fy = altoOrig ? r.h / altoOrig : 1;
+          const grupoSA = { tx: (v) => r.x + v * fx, ty: (v) => r.y + v * fy, s: (v) => v * fx, sy: (v) => v * fy };
+          // El color del texto como lo pinta PowerPoint: el de la etiqueta de estilo de cada figura (su punto de presentación
+          // en los datos, por modelId) en los colores del SmartArt (txFillClrLst), no el fontRef del dibujo guardado
+          // (que a veces dice blanco sobre un nodo blanco).
+          const etiquetas = {};
+          todos(P(datos), "pt").forEach((q) => { const ps = h1(q, "prSet"); if (ps && at(ps, "presStyleLbl")) etiquetas[at(q, "modelId")] = { lbl: at(ps, "presStyleLbl"), i: +(at(ps, "presStyleIdx") || 0), n: +(at(ps, "presStyleCnt") || 1) }; });
+          const relCol = rels[rid(dg, "cs")], tCol = relCol ? await z.texto(relCol.destino) : null, xCol = tCol ? P(tCol) : null;
+          const tintaDe = (mid) => {
+            const e = etiquetas[mid];
+            if (!e || !xCol) return null;
+            const sl = todos(xCol, "styleLbl").find((s) => at(s, "name") === e.lbl), lst = sl && h1(sl, "txFillClrLst"), cs = lst ? hs(lst) : [];
+            if (!cs.length) return null;
+            const k = at(lst, "meth") === "span" && cs.length > 1 ? Math.round((e.i / Math.max(1, e.n - 1)) * (cs.length - 1)) : e.i % cs.length;
+            return cs[Math.min(k, cs.length - 1)];
+          };
+          const A = "http://schemas.openxmlformats.org/drawingml/2006/main";
+          const conColor = (txBody, tc) => {
+            // cada corrida sin color propio lleva el de su etiqueta (y la marca de fin de párrafo)
+            for (const rp of [...todos(txBody, "rPr"), ...todos(txBody, "endParaRPr"), ...todos(txBody, "defRPr")]) {
+              if (hs(rp).some((x) => /^(solidFill|gradFill|noFill|pattFill|blipFill)$/.test(x.localName))) continue;
+              const sf = rp.ownerDocument.createElementNS(A, "a:solidFill");
+              sf.appendChild(tc.cloneNode(true));
+              const ln0 = hs(rp).find((x) => x.localName === "ln");
+              rp.insertBefore(sf, ln0 ? ln0.nextSibling : rp.firstChild);
+            }
+            for (const run of todos(txBody, "r")) if (!h1(run, "rPr")) { const rp = run.ownerDocument.createElementNS(A, "a:rPr"); run.insertBefore(rp, run.firstChild); const sf = rp.ownerDocument.createElementNS(A, "a:solidFill"); sf.appendChild(tc.cloneNode(true)); rp.appendChild(sf); }
+          };
+          for (const sp of todos(P(dib), "sp")) {
+            const spPr = h1(sp, "spPr"), xf = spPr && h1(spPr, "xfrm"), o = xf && h1(xf, "off"), e = xf && h1(xf, "ext");
+            if (!o || !e || (!+at(e, "cx") && !+at(e, "cy"))) continue;
+            // (si los colores del SmartArt no dicen el del texto, PowerPoint usa el del estilo de la figura: su fontRef)
+            const fRef = todos(h1(sp, "style"), "fontRef")[0];
+            const tc = tintaDe(at(sp, "modelId")) || (fRef ? hs(fRef)[0] || null : null);
+            const txb = h1(sp, "txBody"), conTexto = !!(txb && txb.textContent.trim());
+            const txX = h1(sp, "txXfrm");
+            // la figura (sin su texto si el texto va en su propio rectángulo)
+            const fig = sp.cloneNode(true);
+            if (conTexto && txX) { const t = h1(fig, "txBody"); if (t) t.parentNode.removeChild(t); }
+            else if (conTexto && tc) conColor(h1(fig, "txBody"), tc);
+            await elemento(fig, grupoSA);
+            hechas++;
+            if (conTexto && txX) {
+              // el texto, derecho, en el rectángulo que PowerPoint le guardó (txXfrm), sin relleno ni contorno
+              const t = sp.cloneNode(true), sp2 = h1(t, "spPr");
+              for (const x of [...hs(sp2)]) sp2.removeChild(x);
+              const xo = h1(txX, "off"), xe = h1(txX, "ext"), D = t.ownerDocument;
+              const nx = D.createElementNS(A, "a:xfrm"), no = D.createElementNS(A, "a:off"), ne = D.createElementNS(A, "a:ext");
+              no.setAttribute("x", at(xo, "x") || "0"); no.setAttribute("y", at(xo, "y") || "0");
+              ne.setAttribute("cx", at(xe, "cx") || "0"); ne.setAttribute("cy", at(xe, "cy") || "0");
+              // (sin giro propio, el texto gira con su figura, como en PowerPoint)
+              const giroTx = at(txX, "rot") || at(xf, "rot");
+              if (giroTx && +giroTx) nx.setAttribute("rot", giroTx);
+              nx.appendChild(no); nx.appendChild(ne); sp2.appendChild(nx);
+              const pg = D.createElementNS(A, "a:prstGeom"); pg.setAttribute("prst", "rect"); pg.appendChild(D.createElementNS(A, "a:avLst")); sp2.appendChild(pg);
+              sp2.appendChild(D.createElementNS(A, "a:noFill"));
+              const ln = D.createElementNS(A, "a:ln"); ln.appendChild(D.createElementNS(A, "a:noFill")); sp2.appendChild(ln);
+              const st = h1(t, "style"); if (st) st.parentNode.removeChild(st);
+              const tb = h1(t, "txBody");
+              if (tc && tb) conColor(tb, tc);
+              await elemento(t, grupoSA);
+            }
+          }
+          if (hechas) return true;
+        }
+        if (dib && typeof document === "undefined") {
           const fx = anchoOrig ? r.w / anchoOrig : 1, fy = altoOrig ? r.h / altoOrig : 1;
           todos(P(dib), "sp").forEach((sp) => {
             const spPr = h1(sp, "spPr"), xf = spPr && h1(spPr, "xfrm"), o = xf && h1(xf, "off"), e = xf && h1(xf, "ext");

@@ -115,7 +115,11 @@
     // inicio de sección ("p|2 columnas": hoja nueva; "c|…": en la misma hoja).
     "lineaPt", "borde", "sombra", "dir", "sec",
     // sx: la hoja de la sección de Word que empieza en este párrafo (tamaño, márgenes, columnas…), en JSON
-    "sx"];
+    "sx",
+    // entre páginas, como Word: salto de página antes, con el siguiente (1/0), líneas juntas y control de viudas (0 = sin)
+    "saltoAntes", "conSig", "juntas", "viudas",
+    // letra capital de Word: "drop|3|4" (dentro del texto o "margin", renglones que abarca, distancia al texto en pt)
+    "capital"];
   const VINETAS = ["•", "◦", "▪", "–", "➢", "✓", "★", "♦"];
   const NUMFMTS = [["1.", "1. 2. 3."], ["1)", "1) 2) 3)"], ["a.", "a. b. c."], ["a)", "a) b) c)"], ["A.", "A. B. C."], ["I.", "I. II. III."], ["i.", "i. ii. iii."]];
   /** Quién mira el documento (para los párrafos con dueño): lo llena montar(). */
@@ -256,6 +260,11 @@
       if (d.dir === "rtl") r.dir = "rtl";
       if (d.sec != null && d.sec !== "") r.sec = d.sec;
       if (d.sx) r.sx = d.sx;
+      if (d.saltoAntes === "1") r.saltoAntes = true;
+      if (d.conSig === "1" || d.conSig === "0") r.conSig = +d.conSig;
+      if (d.juntas === "1") r.juntas = true;
+      if (d.viudas === "0") r.viudas = 0;
+      if (d.capital) r.capital = d.capital;
       return r;
     }
     // HTML ajeno (pegado de Word, Google Docs, la web…)
@@ -480,6 +489,11 @@
     if (pa.dir === "rtl") at += ` dir="rtl" data-dir="rtl"`;
     if (pa.sec != null && pa.sec !== "") { const t = String(pa.sec).slice(2); at += ` data-sec="${esc(pa.sec)}"${t ? ` data-sec-t="${esc("Sección: " + t)}"` : ""}`; }
     if (pa.sx) at += ` data-sx="${esc(pa.sx)}"`;
+    if (pa.saltoAntes) at += ` data-salto-antes="1"`;
+    if (pa.conSig != null && pa.conSig !== "") at += ` data-con-sig="${+pa.conSig ? 1 : 0}"`;
+    if (pa.juntas) at += ` data-juntas="1"`;
+    if (pa.viudas != null && !+pa.viudas) at += ` data-viudas="0"`;
+    if (/^(drop|margin)\|\d+\|[\d.]+$/.test(pa.capital || "")) at += ` data-capital="${esc(pa.capital)}"`;
     if (st) at += ` style="${st}"`;
     let h = "";
     let i = p.ini;
@@ -639,6 +653,7 @@
           if (!el || cache.get(p.k) !== h || !el.isConnected) {
             const nuevo = crearEl(h);
             if (el && el.dataset.empuje) { nuevo.style.marginTop = el.style.marginTop; nuevo.dataset.empuje = el.dataset.empuje; }
+            if (el) heredarFlotantes(el, nuevo);
             if (el && el.isConnected) el.replaceWith(nuevo);
             el = nuevo;
             elems.set(p.k, el);
@@ -650,6 +665,8 @@
         }
         while (cuerpo.children.length > ps.length) cuerpo.lastElementChild.remove();
         for (const k of [...elems.keys()]) if (!vivos.has(k)) { elems.delete(k); cache.delete(k); }
+        ajustarEspacios();
+        if (cuerpo.querySelector(":scope > [data-capital]")) pintarCapitales();
         $$(".wd-indice[data-obj]", cuerpo).forEach(pintarIndice);
         tomarRegistros();
         pintando = false;
@@ -658,6 +675,39 @@
         pintarEsquema();
         revisarNombres();
         if (resaltado || marcasComentario.length) programarMarcas();
+      }
+      /**
+       * Espacio entre párrafos como Word: entre dos párrafos queda el MAYOR entre el espacio de después del de arriba y
+       * el de antes del de abajo, no la suma (medido en Word real: 6 después y 12 antes dejan 12; 18 y 10 dejan 18). La
+       * hoja es flex (los márgenes se suman): cada párrafo resta de su espacio de antes el de después del de arriba
+       * (--mprev, en editor.css) y así queda el mayor. La paginación lee los márgenes ya ajustados.
+       */
+      function ajustarEspacios() {
+        const kids = cuerpo.children, n = kids.length, mb = new Array(n);
+        for (let i = 0; i < n; i++) mb[i] = parseFloat(getComputedStyle(kids[i]).marginBottom) || 0;
+        for (let i = 0; i < n; i++) ponerMprev(kids[i], i ? mb[i - 1] : 0);
+      }
+      function ponerMprev(el, v) {
+        const nv = v > 0.01 ? v.toFixed(2) + "px" : "";
+        if (el.style.getPropertyValue("--mprev") === nv) return;
+        if (nv) el.style.setProperty("--mprev", nv); else el.style.removeProperty("--mprev");
+      }
+      /** Lo mismo para un solo párrafo que se volvió a pintar (y el de abajo, que depende de él). */
+      function ajustarEspacioDe(el) {
+        if (!el || el.parentNode !== cuerpo) return;
+        const ant = el.previousElementSibling, sig = el.nextElementSibling;
+        ponerMprev(el, ant ? parseFloat(getComputedStyle(ant).marginBottom) || 0 : 0);
+        if (sig) ponerMprev(sig, parseFloat(getComputedStyle(el).marginBottom) || 0);
+      }
+      /** Un párrafo que se vuelve a pintar conserva lo que le puso la paginación por lo que flota (los flotantes que
+          apartan su texto y el lugar de sus objetos), hasta que se pagina otra vez: así el texto no brinca al escribir. */
+      function heredarFlotantes(viejo, nuevo) {
+        const ex = viejo.querySelectorAll(":scope > .wd-excl");
+        if (ex.length && !nuevo.querySelector(":scope > .wd-excl")) nuevo.prepend(...[...ex].map((x) => x.cloneNode(false)));
+        for (const o of viejo.querySelectorAll(":scope > [data-obj].flota-w")) {
+          const n = nuevo.querySelector(`:scope > [data-obj][data-id="${CSS.escape(o.dataset.id)}"]`);
+          if (n) { n.style.left = o.style.left; n.style.top = o.style.top; }
+        }
       }
       let tMarcas = null;
       function programarMarcas() { clearTimeout(tMarcas); tMarcas = setTimeout(() => { if (resaltado) aplicarResaltado(); pintarComentarios(); }, 80); }
@@ -676,6 +726,16 @@
             const pie = bl && bl.pie ? `<span class="wd-img-pie"><b>Figura ${numeroFigura(o.dataset.id)}.</b> ${esc(bl.pie)}</span>` : "";
             o.innerHTML = `<span class="wd-img-caja"><img src="${esc(src)}" alt="${esc((bl && bl.alt) || "")}" draggable="false" style="width:${+w}px"></span>${pie}${ed.soloLectura ? "" : '<span class="wd-tirador" data-tirador title="Arrastra para cambiar el tamaño"></span>'}`;
             if (bl && (bl.recorte || +bl.rot)) acomodarImagen($(".wd-img-caja", o), +w, bl.recorte, +bl.rot || 0);
+            if (bl && bl.fl && +bl.w > 0) {
+              // anclada como en Word: su lugar en la hoja y el texto apartado se calculan al paginar (ver «lo que flota»)
+              const img = $("img", o);
+              if (img && +bl.h > 0) { img.style.height = +bl.h + "px"; img.style.objectFit = "fill"; }
+              o.className = "wd-obj wd-imagen libre flota-w" + (bl.fl.t ? " detras" : "") + (o.dataset.id === imgSel ? " sel" : "");
+              o.style.zIndex = !bl.fl.t && +bl.z ? String(2 + +bl.z) : "";
+              if (!o.style.left) { o.style.left = (+bl.x || 0) + "px"; o.style.top = (+bl.y || 0) + "px"; }
+              o.title = ed.soloLectura ? "" : "Arrastra para moverla a cualquier lugar";
+              return;
+            }
             o.classList.toggle("flota-izq", !!(bl && bl.ajuste === "izq" && !bl.libre));
             o.classList.toggle("flota-der", !!(bl && bl.ajuste === "der" && !bl.libre));
             // Word: «arriba y abajo» (en su propio renglón, con su alineación) y «detrás del texto»
@@ -702,6 +762,10 @@
             try { svg = NOM.graficaOffice.svg(e.g, +e.w, +e.h, { pt: 96 / 72, familia: (n) => (NOM.textoRico ? NOM.textoRico.cssFuente(n) : n), formato: NOM.formulas && NOM.formulas.formatoXL ? (v, f) => NOM.formulas.formatoXL(v, f).t : null }); } catch (er) { svg = ""; }
             o.innerHTML = `<span class="wd-grafica" style="width:${+e.w}px;height:${+e.h}px">${svg}</span>`;
             o.classList.add("con-grafica");
+            // (un gráfico anclado: en su lugar de la hoja, como las formas)
+            o.classList.toggle("flota-w", !!e.fl);
+            o.classList.toggle("libre", !!e.fl);
+            o.classList.toggle("detras", !!(e.fl && e.fl.t));
             o.title = "Gráfico del archivo de Word. Aquí no se edita, pero al descargar en Word sale completo.";
           }
           else if (e.tipo === "objeto" && (e.forma || e.grupo) && NOM.geomOffice && NOM.geomOffice.htmlDibujo && +e.w > 0) {
@@ -711,10 +775,13 @@
             const familia = (n) => (NOM.textoRico ? NOM.textoRico.cssFuente(n) : n);
             o.innerHTML = `<span class="wd-forma" style="width:${w}px;height:${h}px;${NOM.geomOffice.transformDe(e.forma || e.grupo)}">${NOM.geomOffice.htmlDibujo(e, w, h, familia)}</span>`;
             o.classList.add("con-forma");
-            o.classList.toggle("libre", !!e.libre);
-            o.classList.toggle("detras", !!(e.libre && e.detras));
-            o.style.left = e.libre ? (+e.x || 0) + "px" : "";
-            o.style.top = e.libre ? (+e.y || 0) + "px" : "";
+            o.classList.toggle("libre", !!e.libre || !!e.fl);
+            o.classList.toggle("flota-w", !!e.fl);
+            o.classList.toggle("detras", !!((e.libre || e.fl) && (e.fl ? e.fl.t : e.detras)));
+            if (!e.fl || !o.style.left) {
+              o.style.left = e.libre ? (+e.x || 0) + "px" : "";
+              o.style.top = e.libre ? (+e.y || 0) + "px" : "";
+            }
             o.style.zIndex = e.libre && !e.detras && +e.z ? String(2 + +e.z) : "";
             o.title = e.grupo ? "Grupo de formas del archivo de Word. Aquí no se edita, pero al descargar en Word sale completo." : "Forma del archivo de Word. Aquí no se edita, pero al descargar en Word sale completa.";
           }
@@ -726,7 +793,8 @@
           }
           else if (e.tipo === "salto") o.innerHTML = `<span>Salto de página</span>`;
           else if (e.tipo === "saltocol") o.innerHTML = `<span>Salto de columna</span>`;
-          if (e.tipo === "objeto" && (e.forma || e.grupo) && e.libre && e.franja && o.parentElement) franjas.add(o.parentElement);
+          // (con «fl» la franja la aparta la paginación, como Word; esto queda para lo importado antes)
+          if (e.tipo === "objeto" && (e.forma || e.grupo) && e.libre && e.franja && !e.fl && o.parentElement) franjas.add(o.parentElement);
           else if (e.tipo === "linea") o.innerHTML = `<hr>`;
           else if (e.tipo === "indice") pintarIndice(o);
         });
@@ -895,7 +963,8 @@
         const it = sec().item(id), ref = it && it.e && it.e.ref;
         if (!ref) return;
         if (modo === "libre") { ajusteImagen(id, true); return; }
-        doc().cambiar(ref, { ajuste: modo === "linea" ? null : modo, libre: null, x: null, y: null }, { origen: "comando" });
+        // (elegir un ajuste aquí deja el de Word: la imagen sigue las reglas de esta app)
+        doc().cambiar(ref, { ajuste: modo === "linea" ? null : modo, libre: null, x: null, y: null, fl: null }, { origen: "comando" });
         programarPaginar();
       }
 
@@ -1203,35 +1272,45 @@
         for (const h of hojas(el)) if (nodo.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_PRECEDING) n += largoHoja(h);
         return n;
       }
-      function crearCorte(alto) {
+      function crearCorte(alto, ancho) {
         const c = document.createElement("span");
         c.className = "wd-corte";
         c.contentEditable = "false";
         c.setAttribute("aria-hidden", "true");
         c.style.height = alto;
+        // (junto a lo que flota el renglón es más angosto: el corte mide lo que queda, si no bajaría hasta pasar el flotante)
+        if (ancho) c.style.width = ancho;
         return c;
       }
-      function ponerCorte(t, off, alto) {
+      /** Lo que mide el renglón donde va un corte, si el párrafo tiene texto apartado por lo que flota (si no, todo). */
+      function anchoCorte(el, linea, er, z) {
+        if (!el.querySelector(":scope > .wd-excl")) return null;
+        const cs = getComputedStyle(el), der = el.clientWidth - (parseFloat(cs.paddingRight) || 0);
+        const x = (linea.x - er.left) / (z || 1);
+        return Math.max(1, der - x - 1).toFixed(1) + "px";
+      }
+      function ponerCorte(t, off, alto, ancho) {
         let resto = off;
         for (const h of hojas(t)) {
           const L = largoHoja(h);
           if (h.nodeType === 3 && resto < L) {
             const i16 = cps(h.nodeValue).slice(0, resto).join("").length;
             const dos = i16 > 0 ? h.splitText(i16) : h;
-            dos.parentNode.insertBefore(crearCorte(alto), dos);
+            dos.parentNode.insertBefore(crearCorte(alto, ancho), dos);
             return;
           }
-          if (h.nodeType === 1 && resto === 0) { h.parentNode.insertBefore(crearCorte(alto), h); return; }
+          if (h.nodeType === 1 && resto === 0) { h.parentNode.insertBefore(crearCorte(alto, ancho), h); return; }
           resto -= L;
         }
       }
       function canonizar(el, p) {
         const h = htmlParrafo(visPintado, p);
         cache.set(p.k, h);
-        const cortes = $$(".wd-corte", el).map((c) => ({ off: offsetEnParrafo(el, c), alto: c.style.height }));
+        const cortes = $$(".wd-corte", el).map((c) => ({ off: offsetEnParrafo(el, c), alto: c.style.height, ancho: c.style.width || null }));
         el.normalize();
         const t = crearEl(h);
-        cortes.forEach((c) => ponerCorte(t, c.off, c.alto));
+        cortes.forEach((c) => ponerCorte(t, c.off, c.alto, c.ancho));
+        heredarFlotantes(el, t);
         if (iguales(el, t) || (el.tagName === t.tagName && mismosHijos(el, t) && el.getAttribute("data-k") === p.k)) { tomarRegistros(); return; }
         const sel = leerSel();
         pintando = true;
@@ -1239,6 +1318,8 @@
         el.replaceWith(t);
         elems.set(p.k, t);
         llenarObjetos(t);
+        ajustarEspacioDe(t);
+        if (t.dataset.capital || (t.previousElementSibling && t.previousElementSibling.dataset.capital)) pintarCapitales();
         idxEl.set(t, indiceHijo(t));
         tomarRegistros();
         pintando = false;
@@ -2054,8 +2135,10 @@
       function arrastrarImagen(e, o) {
         const id = o.dataset.id, it = sec().item(id), ref = it && it.e && it.e.ref;
         if (!ref) return;
-        const bl = doc().bloque(ref) || {}, libre = !!bl.libre;
-        const x0 = e.clientX, y0 = e.clientY, bx = +bl.x || 0, by = +bl.y || 0, r0 = o.getBoundingClientRect();
+        // (una imagen anclada de Word se mueve libre desde donde la puso la paginación)
+        const bl = doc().bloque(ref) || {}, libre = !!bl.libre || !!bl.fl;
+        const x0 = e.clientX, y0 = e.clientY, r0 = o.getBoundingClientRect();
+        const bx = bl.fl ? parseFloat(o.style.left) || 0 : +bl.x || 0, by = bl.fl ? parseFloat(o.style.top) || 0 : +bl.y || 0;
         let activo = false, fantasma = null, marca = null, destino = null;
         const mover = (ev) => {
           if (ev.pointerId !== e.pointerId) return;
@@ -2092,7 +2175,13 @@
           if (marca) marca.remove();
           if (!activo) return;
           if (ev.type === "pointercancel") { if (libre) { o.style.left = bx + "px"; o.style.top = by + "px"; } return; }
-          if (libre) { doc().cambiar(ref, { x: parseInt(o.style.left, 10), y: parseInt(o.style.top, 10) }, { origen: "comando" }); programarPaginar(); return; }
+          if (libre) {
+            const x = parseInt(o.style.left, 10), y = parseInt(o.style.top, 10), fl = doc().valor(ref, "fl");
+            // anclada de Word: queda desde su columna y su párrafo (como cuando se mueve en Word), con su mismo ajuste
+            if (fl) doc().cambiar(ref, { fl: Object.assign({}, fl, { h: ["column", x], v: ["paragraph", y] }) }, { origen: "comando" });
+            else doc().cambiar(ref, { x, y }, { origen: "comando" });
+            programarPaginar(); return;
+          }
           if (destino != null) moverImagen(id, destino);
         };
         addEventListener("pointermove", mover); addEventListener("pointerup", soltar); addEventListener("pointercancel", soltar);
@@ -2513,6 +2602,7 @@
         cuerpo.classList.remove("con-secciones");
         quitarContinuaciones();
         $$(".wd-corte", cuerpo).forEach((x) => { const p = x.parentNode; x.remove(); if (p) p.normalize(); });
+        quitarApartes(null);
         cuerpo.style.minHeight = "";
       }
       // ------------------------------------------------------------ secciones de Word: cada una con su hoja
@@ -2597,6 +2687,8 @@
         hoja.style.setProperty("--ms", secs[0].g.m[0] + "px"); hoja.style.setProperty("--mi", "0px");
         const capa = capaContinuaciones();
         const pags = [];
+        // (lo que flota: la hoja k de esta paginación, ya con su lugar)
+        if (flot) flot.hojas = (k) => { const q = pags[k]; return q ? { x: q.x0, y: q.top, w: q.g.w, h: q.g.h, m: { s: q.g.m[0], i: q.g.m[1], iz: q.g.m[2], d: q.g.m[3] }, n: k + 1 } : null; };
         let fondo = 0, num = 1, fmt = null;
         const nuevaHoja = (g) => { const p = { top: fondo, g, x0: (Wmax - g.w) / 2, num, fmt, regiones: [], notas: [], primero: null, bajo: null }; pags.push(p); fondo += g.h + GAP; num++; return p; };
         const medidores = new Map();
@@ -2748,11 +2840,24 @@
               let y = arriba, primero = true;
               while (r.i < hasta) {
                 const el = kids[r.i];
+                // «salto de página anterior» (Word): a una hoja nueva, si no es lo primero de esta
+                if (!primero && el.dataset.saltoAntes === "1") { r.lleno = true; break; }
                 ponerX(el, p, cols[0]);
                 empujar(el, y + (!primero || conEspacio ? mt(el) : 0) - el.offsetTop);
+                // lo que flota (Word): sus objetos en esta hoja y el texto apartado
+                if (flot) flotarEnHoja(el, pags.indexOf(p));
                 const top = el.offsetTop, h = el.offsetHeight;
                 const notasEl = $$(".wd-nota[data-obj]", el), med = medidorDe(p.g), altoNotas = notasEl.reduce((sm, o) => sm + med(o.dataset.id), 0);
                 const tope = fondoHoja(p) - (altoNotas ? altoNotas + (p.notas.length ? 0 : 14) : 0);
+                // «conservar con el siguiente»: si el principio del que sigue no cabe, este baja con él
+                if (!primero && r.i + 1 < hasta && conSiguiente(el)) {
+                  let j = r.i, alto = 0;
+                  while (j + 1 < hasta && conSiguiente(kids[j])) { alto += kids[j].offsetHeight + mb(kids[j]) + mt(kids[j + 1]); j++; }
+                  if (j > r.i) {
+                    alto += parteMinima(kids[j], kids[j].offsetHeight);
+                    if (top + alto > tope + 1 && alto <= fondoHoja(p) - (p.top + g.m[0])) { r.lleno = true; break; }
+                  }
+                }
                 if (top + h > tope + 1 && !(primero && top <= arriba + 1 && h > tope - arriba)) {
                   // ¿se parte entre esta hoja y las siguientes?
                   const pAnt = p;
@@ -2810,16 +2915,17 @@
        * `siguiente()` ({ destino, abajo }). Deja al menos dos líneas en cada hoja, como Word. true si lo partió.
        */
       function partirEntreHojas(el, top, abajo, siguiente) {
-        if (el.querySelector(".wd-obj.bloque, .wd-imagen.libre, .wd-imagen.flota-izq, .wd-imagen.flota-der") || !el.firstChild) return false;
+        if (el.querySelector(".wd-obj.bloque, .wd-imagen.libre:not(.flota-w), .wd-imagen.flota-izq, .wd-imagen.flota-der") || !el.firstChild || el.dataset.juntas === "1") return false;
+        const m = minLineas(el);
         let partido = false, lim = abajo, desde = top;
         for (let vuelta = 0; vuelta < 40; vuelta++) {
           const lineas = lineasDe(el);
-          if (lineas.length < 4) return partido;
+          if (lineas.length < 2 * m) return partido;
           let k = lineas.findIndex((l) => top + l.b > lim + 1);
           if (k < 0) return partido;
           const enHoja = (hasta) => lineas.filter((l, j) => j < hasta && top + l.t >= desde - 1).length;
-          if (k > 0 && lineas.length - k < 2 && enHoja(k) >= 3) k = lineas.length - 2;   // sin línea viuda
-          if (enHoja(k) < 2 || lineas.length - k < 2) return partido;                     // sin línea huérfana
+          if (k > 0 && lineas.length - k < m && enHoja(k) >= m + 1) k = lineas.length - m;   // sin línea viuda
+          if (enHoja(k) < m || lineas.length - k < m) return partido;                     // sin línea huérfana
           const er = el.getBoundingClientRect(), z = er.height / (el.offsetHeight || 1) || 1;
           const punto = inicioDeLinea(el, er.top + lineas[k].t * z);
           if (!punto) return partido;
@@ -2827,14 +2933,29 @@
           if (alto <= 0) return partido;
           const rg = document.createRange();
           rg.setStart(punto.node, punto.off);
-          rg.insertNode(crearCorte(alto + "px"));
+          rg.insertNode(crearCorte(alto + "px", anchoCorte(el, lineas[k], er, z)));
           partido = true; lim = sig.abajo; desde = sig.destino;
         }
         return partido;
       }
       /** Con secciones: las hojas (cada una de su tamaño, centradas), su encabezado y pie, sus notas y la línea entre columnas. */
       function paginarConSecciones(secs, t0) {
-        const pags = paginarSecciones(secs);
+        let pags = paginarSecciones(secs);
+        if (hayFlotantes()) {
+          // lo que flota (Word): otra pasada con la hoja de cada ancla ya sabida (ver paginar)
+          const hojasDe = (ps) => (k) => { const q = ps[k]; return q ? { x: q.x0, y: q.top, w: q.g.w, h: q.g.h, m: { s: q.g.m[0], i: q.g.m[1], iz: q.g.m[2], d: q.g.m[3] }, n: k + 1 } : null; };
+          const pagDe = (ps) => (el) => { const y = el.offsetTop; const k = ps.findIndex((q) => y < q.top + q.g.h + GAP / 2); return k < 0 ? ps.length - 1 : k; };
+          let prev = prediccionFlotantes(pagDe(pags), hojasDe(pags));
+          for (let vuelta = 0; vuelta < 3; vuelta++) {
+            quitarPaginacion();
+            flot = { prev, ok: new Map(), hojas: () => null };
+            let ok;
+            try { pags = paginarSecciones(secs); } finally { ok = flot.ok; flot = null; }
+            const igual = [...ok].every(([id, x]) => { const p0 = prev.get(id); return p0 && p0.k === x.k && Math.abs(p0.r.y - x.r.y) < 2; });
+            prev = ok;
+            if (igual) break;
+          }
+        }
         tomarRegistros();
         numPaginas = Math.max(1, pags.length);
         const ultima = pags[pags.length - 1];
@@ -2860,6 +2981,8 @@
           const ep = g.ep, encT = ep ? ep.e : e.enc, encA = ep ? ep.ea || "izq" : e.encAl, pieT = ep ? ep.p : e.pie, pieA = ep ? ep.pa || "izq" : e.pieAl;
           h += `<div class="wd-pagina" style="top:${q.top}px;left:${q.x0}px;width:${g.w}px;height:${g.h}px;--ms:${g.m[0]}px;--mi:${g.m[1]}px;--miz:${g.m[2]}px;--md:${g.m[3]}px;${estiloEP}">${vacia ? "" : fila("enc", encT, encA, q) + fila("pie", pieT, pieA, q)}${bloqueNotas}${lineas}${e.marca ? `<div class="wd-marca-agua">${esc(e.marca)}</div>` : ""}</div>`;
         });
+        // (la letra capital, con su párrafo ya en su hoja)
+        if (cuerpo.querySelector(":scope > [data-capital]")) { pintarCapitales(); tomarRegistros(); }
         pintarNotasFinales();
         if (capaPaginas.innerHTML !== h) capaPaginas.innerHTML = h;
         pintarEstado();
@@ -2889,6 +3012,7 @@
         if (secs.length) return paginarConSecciones(secs, t0);
         if (paginasSec) { paginasSec = null; restaurarHoja(); }
         if (vista !== "paginas") {
+          if (hayFlotantes()) flotarSinPaginas();
           pintarNotasFinales();
           capaPaginas.innerHTML = "";
           numPaginas = Math.max(1, Math.ceil(cuerpo.offsetHeight / pg.h));
@@ -2905,6 +3029,22 @@
         let r = NOM.paginarExacto ? { exacta: false } : calcularPaginas(pg, true), modo = "calculada";
         const fallo = r.fallo || null;
         if (!r.exacta) { quitarPaginacion(); r = calcularPaginas(pg, false); modo = "exacta"; }
+        if (hayFlotantes()) {
+          // Lo que flota (Word): con la hoja de cada ancla ya sabida, se pagina otra vez párrafo por párrafo, cada objeto en
+          // su lugar y el texto apartado. Si un ancla cae en otra hoja que la prevista, una vuelta más.
+          const hojas = (k) => (k >= 0 ? { x: 0, y: k * paso, w: pg.w, h: pg.h, m: pg.m, n: k + 1 } : null);
+          let prev = prediccionFlotantes((el) => Math.max(0, Math.floor(el.offsetTop / paso)), hojas);
+          for (let vuelta = 0; vuelta < 3; vuelta++) {
+            quitarPaginacion();
+            flot = { prev, ok: new Map(), hojas };
+            let ok;
+            try { r = calcularPaginas(pg, false); } finally { ok = flot.ok; flot = null; }
+            modo = "exacta (con lo que flota)";
+            const igual = [...ok].every(([id, x]) => { const p0 = prev.get(id); return p0 && p0.k === x.k && Math.abs(p0.r.y - x.r.y) < 2; });
+            prev = ok;
+            if (igual) break;
+          }
+        }
         const { notasPag, forzar } = r;
         tomarRegistros();
         const fin = cuerpo.offsetHeight;
@@ -2936,6 +3076,8 @@
           const bloqueNotas = notas.length ? `<div class="wd-notas" style="left:${pg.m.iz}px;right:${pg.m.d}px;bottom:${pg.m.i}px">${notas.map((x) => `<div class="wd-nota-pie"><sup>${x.n}</sup> ${esc(x.texto)}</div>`).join("")}</div>` : "";
           h += `<div class="wd-pagina${bp && bp.hoja ? " con-borde" : ""}" style="top:${i * paso}px;${estiloEP}${bp && bp.hoja ? `;--bpe:${pg.m.s - dentroBorde >= 20 ? dentroBorde : 0}px;--bpp:${pg.m.i - dentroBorde >= 20 ? dentroBorde : 0}px` : ""}">${cajaBorde}${vacia ? "" : fila("enc", e.enc, e.encAl, i + 1, logo) + fila("pie", e.pie, e.pieAl, i + 1)}${bloqueNotas}${e.marca ? `<div class="wd-marca-agua">${esc(e.marca)}</div>` : ""}</div>`;
         }
+        // (la letra capital, con su párrafo ya en su hoja)
+        if (cuerpo.querySelector(":scope > [data-capital]")) { pintarCapitales(); tomarRegistros(); }
         pintarNotasFinales();
         if (capaPaginas.innerHTML !== h) capaPaginas.innerHTML = h;
         pintarEstado();
@@ -2952,6 +3094,293 @@
        * escribe al final; luego comprueba que cada párrafo quedó donde se calculó (`exacta: false` si no).
        * Sin `calcular`, escribe y vuelve a medir en cada párrafo (la forma anterior: lenta, exacta).
        */
+      // ------------------------------------------------------------ lo que flota (Word)
+      /*
+       * Imágenes, formas, cuadros de texto y grupos anclados de Word (con su «fl», ver ooxml.js flotaDe): cada uno va en
+       * la hoja de su párrafo, en el lugar que dice Word (desde la hoja, el margen, la columna, el párrafo, el renglón o
+       * el carácter, con su alineación o su distancia), y aparta el texto como Word: cuadrado, estrecho y a través (de un
+       * lado; el estrecho y el a través siguiendo su contorno), arriba y abajo (nada a los lados) o nada (delante o
+       * detrás del texto). El texto se aparta con flotantes invisibles (.wd-excl) al inicio de cada párrafo que toca la
+       * franja del dibujo, cada uno a su altura: así lo rodean también los párrafos de abajo y, si se mide desde la hoja,
+       * los de arriba de su ancla. Se calcula al paginar (la hoja de cada ancla se sabe hasta entonces).
+       * Medido contra Word real con pruebas/office (w06, w11 y w12-flotantes).
+       */
+      let flot = null;   // mientras se pagina: { prev: Map(id → {k, r}), ok: Map(id → {k, r}), hojas: fn(k) → hoja }
+      /** Los objetos de un párrafo que Word ancla (con fl): [{ o, id, fl, w, h }]. */
+      function flotantesDe(el) {
+        const out = [];
+        for (const o of el.querySelectorAll(":scope > [data-obj]")) {
+          const it = sec().item(o.dataset.id);
+          if (!it || !it.e) continue;
+          const e = it.e, bl = e.ref ? doc().bloque(e.ref) : null, d = bl || e;
+          if (!d || !d.fl || !(+d.w > 0)) continue;
+          out.push({ o, id: o.dataset.id, fl: d.fl, w: +d.w, h: +d.h > 0 ? +d.h : +d.w });
+        }
+        return out;
+      }
+      const hayFlotantes = () => !!cuerpo.querySelector("[data-obj].flota-w");
+      const zoomCuerpo = () => { const h = cuerpo.offsetHeight; return h ? cuerpo.getBoundingClientRect().height / h || 1 : 1; };
+      /** El renglón donde está el ancla de un objeto: { t, h } (arriba y alto) y xc (dónde va el carácter), en px del cuerpo. */
+      function lineaDelAncla(el, o) {
+        let n = null, antes = true;
+        const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        for (let t = w.nextNode(); t; t = w.nextNode()) {
+          if (!t.length || (t.parentElement && t.parentElement.closest("[data-obj], .wd-corte, .wd-excl"))) continue;
+          if (o.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_PRECEDING) { n = t; antes = true; }
+          else { if (!n) { n = t; antes = false; } break; }
+        }
+        if (!n) return { t: el.offsetTop, h: 0, xc: el.offsetLeft };
+        const r = document.createRange();
+        if (antes) { r.setStart(n, n.length - 1); r.setEnd(n, n.length); } else { r.setStart(n, 0); r.setEnd(n, 1); }
+        const b = r.getBoundingClientRect(), cb = cuerpo.getBoundingClientRect(), z = zoomCuerpo();
+        return { t: (b.top - cb.top) / z, h: b.height / z, xc: ((antes ? b.right : b.left) - cb.left) / z };
+      }
+      /** Dónde queda un objeto anclado (Word) en su hoja: { x, y, w, h } en px del cuerpo. */
+      function rectFlotante(f, el, hoja) {
+        const { fl, w, h } = f, m = hoja.m, par = hoja.n % 2 === 0;
+        const necesitaLinea = fl.h[0] === "character" || fl.v[0] === "line";
+        const ln = necesitaLinea ? lineaDelAncla(el, f.o) : null;
+        const refH = (rel) => {
+          switch (rel) {
+            case "page": return [hoja.x, hoja.w];
+            case "leftMargin": return [hoja.x, m.iz];
+            case "rightMargin": return [hoja.x + hoja.w - m.d, m.d];
+            case "insideMargin": return par ? [hoja.x + hoja.w - m.d, m.d] : [hoja.x, m.iz];
+            case "outsideMargin": return par ? [hoja.x, m.iz] : [hoja.x + hoja.w - m.d, m.d];
+            case "character": return [ln ? ln.xc : el.offsetLeft, 0];
+            case "column": return [el.offsetLeft, el.offsetWidth];
+            default: return [hoja.x + m.iz, hoja.w - m.iz - m.d];   // margin
+          }
+        };
+        const refV = (rel) => {
+          switch (rel) {
+            case "page": return [hoja.y, hoja.h];
+            case "topMargin": case "insideMargin": return [hoja.y, m.s];
+            case "bottomMargin": case "outsideMargin": return [hoja.y + hoja.h - m.i, m.i];
+            case "paragraph": return [el.offsetTop, 0];
+            case "line": return ln ? [ln.t, ln.h] : [el.offsetTop, 0];
+            default: return [hoja.y + m.s, hoja.h - m.s - m.i];   // margin
+          }
+        };
+        const pos = (v, [r0, rw], tam) => {
+          if (typeof v === "string") {
+            if (v === "left" || v === "top") return r0;
+            if (v === "right" || v === "bottom") return r0 + rw - tam;
+            if (v === "center") return r0 + (rw - tam) / 2;
+            if (v === "inside") return par ? r0 + rw - tam : r0;
+            if (v === "outside") return par ? r0 : r0 + rw - tam;
+            return r0;
+          }
+          if (v && typeof v === "object" && v.pct != null) return r0 + +v.pct * rw;
+          return r0 + (+v || 0);
+        };
+        return { x: pos(fl.h[1], refH(fl.h[0]), w), y: pos(fl.v[1], refV(fl.v[0]), h), w, h };
+      }
+      /** La franja de la que se aparta el texto (con sus distancias) y de qué lado va el texto; null si no aparta nada. */
+      function franjaDe(f, r, el) {
+        const fl = f.fl;
+        if (!fl.a || fl.a === "nada") return null;
+        const [dt, db, dl, dr] = fl.d || [0, 0, 0, 0], ee = fl.ee || [0, 0, 0, 0];
+        const ajuste = { x0: r.x - ee[0] - dl, y0: r.y - ee[1] - dt, x1: r.x + r.w + ee[2] + dr, y1: r.y + r.h + ee[3] + db, a: fl.a };
+        if (fl.a === "arriba") return Object.assign(ajuste, { flota: "izq", x1: Infinity });
+        // estrecho y a través: arriba y abajo Word no deja distancia (solo a los lados)
+        if (fl.a !== "cuadrado") { ajuste.y0 = r.y - ee[1]; ajuste.y1 = r.y + r.h + ee[3]; }
+        // de qué lado va el texto: el que pide Word; con «a los dos lados», el más ancho (aquí el texto va de un solo lado)
+        const c0 = el.offsetLeft, c1 = el.offsetLeft + el.offsetWidth, izqL = ajuste.x0 - c0, derL = c1 - ajuste.x1;
+        let texto = fl.l === "izq" ? "izq" : fl.l === "der" ? "der" : izqL > derL ? "izq" : "der";
+        if (texto === "izq" && izqL < 6 && derL >= 6) texto = "der";
+        if (texto === "der" && derL < 6 && izqL >= 6) texto = "izq";
+        ajuste.flota = texto === "der" ? "izq" : "der";   // (el flotante invisible va del otro lado del texto)
+        // contorno (estrecho y a través): en px del cuerpo, ya con la distancia al texto de su lado
+        if ((fl.a === "estrecho" || fl.a === "traves") && Array.isArray(fl.p) && fl.p.length >= 3) {
+          const sx = ajuste.flota === "izq" ? dr + ee[2] : -(dl + ee[0]);
+          ajuste.poli = fl.p.map(([u, v]) => [r.x + u * r.w + sx, r.y + v * r.h]);
+        }
+        return ajuste;
+      }
+      /** Quita los flotantes invisibles de un párrafo (o de todos). */
+      function quitarApartes(el) { (el ? el.querySelectorAll(":scope > .wd-excl:not(.wd-cap)") : cuerpo.querySelectorAll(":scope > * > .wd-excl:not(.wd-cap)")).forEach((x) => x.remove()); }
+      /**
+       * Letra capital de Word (marco con dropCap): el párrafo de la letra no ocupa alto y la letra queda junto a los
+       * primeros renglones del párrafo siguiente, que la rodea (un flotante invisible .wd-cap de su ancho más la distancia,
+       * del alto de esos renglones); su renglón base coincide con el del último de ellos, como Word. «En el margen»: la
+       * letra va a la izquierda del texto, sin apartarlo.
+       */
+      function pintarCapitales() {
+        for (const p of cuerpo.querySelectorAll(":scope > [data-capital]")) {
+          const [tipo, n0, hs0] = String(p.dataset.capital).split("|"), n = Math.max(1, +n0 || 3), hs = (+hs0 || 0) * (96 / 72);
+          const q = p.nextElementSibling;
+          p.style.transform = "";
+          const r = document.createRange();
+          r.selectNodeContents(p);
+          const z = zoomCuerpo(), pr = p.getBoundingClientRect(), lr = r.getBoundingClientRect();
+          const ancho = lr.width / z;
+          let f = q ? q.querySelector(":scope > .wd-cap") : null;
+          if (!q || q.dataset.capital) continue;
+          const lh = parseFloat(getComputedStyle(q).lineHeight) || 20;
+          if (tipo === "drop") {
+            if (!f) { f = exclusion("izq", 0, 0); f.classList.add("wd-cap"); q.prepend(f); }
+            f.style.width = (ancho + hs).toFixed(2) + "px";
+            f.style.height = (n * lh - 0.5).toFixed(2) + "px";
+          } else if (f) f.remove();
+          // el renglón base de la letra en el del renglón n del párrafo (el renglón base ≈ abajo menos 0.21 de la letra)
+          const ls = lineasDe(q), ln = ls[Math.min(n, ls.length) - 1];
+          if (!ln) continue;
+          const tq = parseFloat(getComputedStyle(q).fontSize) || 16, tp = parseFloat(getComputedStyle(p).fontSize) || 64;
+          const baseQ = q.offsetTop + ln.b - 0.21 * tq, baseP = p.offsetTop + (lr.bottom - pr.top) / z - 0.21 * tp;
+          const dx = tipo === "margin" ? -(ancho + hs) : 0;
+          p.style.transform = `translate(${dx.toFixed(2)}px, ${(baseQ - baseP).toFixed(2)}px)`;
+        }
+      }
+      function exclusion(lado, ancho, alto, poli) {
+        const s = document.createElement("span");
+        s.className = "wd-excl";
+        s.contentEditable = "false";
+        s.setAttribute("aria-hidden", "true");
+        s.style.cssText = `float:${lado === "izq" ? "left" : "right"};clear:${lado === "izq" ? "left" : "right"};width:${Math.max(0, ancho).toFixed(2)}px;height:${Math.max(0, alto).toFixed(2)}px${poli ? ";shape-outside:" + poli : ""}`;
+        return s;
+      }
+      /** Dónde termina el texto de un párrafo (su último renglón), en px del cuerpo. */
+      function bajoTexto(el) { const ls = lineasDe(el); return el.offsetTop + (ls.length ? ls[ls.length - 1].b : el.offsetHeight); }
+      /**
+       * Aparta el texto del párrafo de las franjas `fs` (de lo que flota en su hoja). Cada lado lleva su fila de
+       * flotantes invisibles: uno de ancho cero que baja hasta donde empieza la franja y el que aparta el texto, hasta
+       * donde termina (o hasta el último renglón del párrafo: el resto de la franja lo apartan los párrafos de abajo).
+       * Devuelve cuánto cambió el alto del párrafo.
+       */
+      function apartarTexto(el, fs) {
+        const h0 = el.offsetHeight;
+        quitarApartes(el);
+        if (!fs || !fs.length) return el.offsetHeight - h0;
+        const cs = getComputedStyle(el);
+        const top = el.offsetTop + (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.paddingTop) || 0);
+        const ci = el.offsetLeft + (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.paddingLeft) || 0);
+        const cd = el.offsetLeft + el.offsetWidth - (parseFloat(cs.borderRightWidth) || 0) - (parseFloat(cs.paddingRight) || 0);
+        let bajo = bajoTexto(el);
+        for (let vuelta = 0; vuelta < 4; vuelta++) {
+          const usar = fs.filter((f) => f.y1 > top + 0.5 && f.y0 < bajo - 0.5);
+          quitarApartes(el);
+          if (!usar.length) break;
+          const nuevos = [];
+          for (const lado of ["izq", "der"]) {
+            let y = top;
+            for (const f of usar.filter((q) => q.flota === lado).sort((a, b) => a.y0 - b.y0)) {
+              const y0 = Math.max(f.y0, y), y1 = f.y1;
+              if (y1 <= y0 + 0.01) continue;
+              const ancho = Math.min(cd - ci, lado === "izq" ? f.x1 - ci : cd - f.x0);
+              if (ancho <= 0.5) continue;
+              if (y0 > y + 0.01) nuevos.push(exclusion(lado, 0, y0 - y));
+              // contorno: relativo a la caja del flotante (que empieza en y0, en el borde del texto)
+              const x0Caja = lado === "izq" ? ci : cd - ancho;
+              const poli = f.poli ? `polygon(${f.poli.map(([px, py]) => `${(px - x0Caja).toFixed(1)}px ${(py - y0).toFixed(1)}px`).join(", ")})` : null;
+              nuevos.push(exclusion(lado, ancho, y1 - y0, poli));
+              y = y1;
+            }
+          }
+          if (!nuevos.length) break;
+          el.prepend(...nuevos);
+          const b2 = bajoTexto(el);
+          // si el texto creció hasta otra franja, se vuelve a acomodar con ella
+          const otra = fs.some((f) => !usar.includes(f) && f.y1 > top + 0.5 && f.y0 < b2 - 0.5);
+          bajo = b2;
+          if (!otra) break;
+        }
+        // lo que sobra de cada franja abajo del último renglón no es de este párrafo (si no, lo haría más alto)
+        const fin = bajoTexto(el);
+        const cuerpoTop = (x) => x.offsetTop;
+        for (const x of [...el.querySelectorAll(":scope > .wd-excl")]) {
+          if (!parseFloat(x.style.width)) continue;
+          const y0 = el.offsetTop + cuerpoTop(x), alto = parseFloat(x.style.height);
+          if (y0 + alto > fin + 0.5) {
+            const nuevo = fin - y0;
+            if (nuevo <= 0.5) { const prev = x.previousElementSibling; x.remove(); if (prev && prev.classList.contains("wd-excl") && !parseFloat(prev.style.width)) prev.remove(); }
+            else x.style.height = nuevo.toFixed(2) + "px";
+          }
+        }
+        return el.offsetHeight - h0;
+      }
+      /** Coloca los objetos que flotan de un párrafo en su lugar de la hoja y devuelve sus franjas ({ id, k, ...franja }). */
+      function colocarFlotantes(el, k, hoja) {
+        const out = [];
+        for (const f of flotantesDe(el)) {
+          const r = rectFlotante(f, el, hoja);
+          f.o.style.left = (r.x - el.offsetLeft).toFixed(2) + "px";
+          f.o.style.top = (r.y - el.offsetTop).toFixed(2) + "px";
+          const fr = franjaDe(f, r, el);
+          if (flot) flot.ok.set(f.id, { k, r, fr });
+          if (fr) out.push(Object.assign({ id: f.id, k }, fr));
+        }
+        return out;
+      }
+      /** Las franjas que tocan la hoja k: las ya colocadas en esta paginación y, de las anclas que faltan, lo que se
+          calculó en la pasada anterior. */
+      function franjasDeHoja(k) {
+        if (!flot) return [];
+        const out = [];
+        for (const [id, x] of flot.ok) if (x.k === k && x.fr) out.push(Object.assign({ id, k }, x.fr));
+        for (const [id, x] of flot.prev) if (!flot.ok.has(id) && x.k === k && x.fr) out.push(Object.assign({ id, k }, x.fr));
+        return out;
+      }
+      /** El párrafo en la hoja k: coloca lo que flota en él y aparta su texto. Devuelve el cambio de alto. */
+      function flotarEnHoja(el, k) {
+        if (!flot) return 0;
+        const hoja = flot.hojas(k);
+        if (!hoja) return 0;
+        colocarFlotantes(el, k, hoja);
+        return apartarTexto(el, franjasDeHoja(k));
+      }
+      /** Dónde quedan los objetos que flotan con la paginación de ahora (para la pasada que aparta el texto). */
+      function prediccionFlotantes(pagDe, hojas) {
+        const m = new Map();
+        for (const el of cuerpo.children) {
+          if (!el.querySelector(":scope > [data-obj].flota-w")) continue;
+          const k = pagDe(el), hoja = hojas(k);
+          if (!hoja) continue;
+          for (const f of flotantesDe(el)) { const r = rectFlotante(f, el, hoja); m.set(f.id, { k, r, fr: franjaDe(f, r, el) }); }
+        }
+        return m;
+      }
+      /** Sin hojas (vista continua): cada objeto en su lugar desde su párrafo (lo que se mide desde la hoja o el margen,
+          arriba de su párrafo) y el texto de su párrafo y de los de abajo, apartado. */
+      function flotarSinPaginas() {
+        const cs = getComputedStyle(cuerpo), W = cuerpo.offsetWidth;
+        const m = { s: 0, i: 0, iz: parseFloat(cs.paddingLeft) || 0, d: parseFloat(cs.paddingRight) || 0 };
+        quitarApartes(null);
+        const activas = [];
+        for (const el of cuerpo.children) {
+          for (const f of el.querySelector(":scope > [data-obj].flota-w") ? flotantesDe(el) : []) {
+            if (f.fl.v[0] !== "paragraph" && f.fl.v[0] !== "line") f.fl = Object.assign({}, f.fl, { v: ["paragraph", 0] });
+            const r = rectFlotante(f, el, { x: 0, y: el.offsetTop, w: W, h: 1e5, m, n: 1 });
+            f.o.style.left = (r.x - el.offsetLeft).toFixed(2) + "px";
+            f.o.style.top = (r.y - el.offsetTop).toFixed(2) + "px";
+            const fr = franjaDe(f, r, el);
+            if (fr) activas.push(fr);
+          }
+          const top = el.offsetTop, toca = activas.filter((f) => f.y1 > top + 0.5);
+          if (toca.length) apartarTexto(el, toca);
+        }
+        tomarRegistros();
+      }
+      /** Word: los títulos van con el párrafo siguiente (salvo que el archivo diga otra cosa); cualquier párrafo puede pedirlo. */
+      function conSiguiente(el) { const v = el.dataset.conSig; return v != null ? v === "1" : /^H[123]$/.test(el.tagName); }
+      /** Líneas mínimas que deja un párrafo partido en cada hoja: 2 con «control de líneas viudas» (Word lo trae puesto). */
+      const minLineas = (el) => (el.dataset.viudas === "0" ? 1 : 2);
+      /** Lo que tiene que caber de un párrafo arriba de su hoja para quedarse ahí: sus primeras líneas si se puede partir,
+          completo si no (líneas juntas, objetos, o tan corto que partirlo dejaría una línea sola). */
+      function parteMinima(el, h) {
+        if (el.dataset.juntas === "1" || el.querySelector(".wd-obj.bloque, .wd-imagen.libre, .wd-imagen.flota-izq, .wd-imagen.flota-der, .wd-excl")) return h;
+        const m = minLineas(el), ls = lineasDe(el);
+        return ls.length < 2 * m ? h : ls[m - 1].b;
+      }
+      /** ¿Caben en la hoja este párrafo, los que siguen «con el siguiente» y el principio del primero que no? */
+      function cabeConSiguiente(kids, i, top, tops, altos, corr, abajo, util) {
+        let j = i;
+        while (j + 1 < kids.length && conSiguiente(kids[j])) j++;
+        if (j === i) return true;
+        const fin = tops[j] + corr + parteMinima(kids[j], altos[j]);
+        // (si todo junto no cabe ni en una hoja vacía, Word lo deja donde está)
+        return fin <= abajo + 1 || fin - top > util;
+      }
       function calcularPaginas(pg, calcular) {
         const kids = cuerpo.children, n = kids.length;
         const H = pg.h, paso = H + GAP, util = H - pg.m.s - pg.m.i;
@@ -2965,8 +3394,11 @@
         const empujes = [], partes = [], esperado = calcular ? new Array(n) : null;
         let corr = 0, forzar = null, pagEscrita = -1;   // pagEscrita: última hoja que ya tiene algo escrito
         for (let i = 0; i < n; i++) {
-          const el = kids[i], top = tops[i] + corr, h = altos[i];
+          const el = kids[i], top = tops[i] + corr;
+          let h = altos[i];
           const pi = Math.floor(top / paso), arriba = pi * paso + pg.m.s;
+          // lo que flota (Word): sus objetos en su lugar de esta hoja y el texto apartado (cambia el alto del párrafo)
+          if (!calcular && flot) { const dh = flotarEnHoja(el, pi); h += dh; corr += dh; }
           const notasEl = $$(".wd-nota[data-obj]", el);
           const altoNotasEl = notasEl.reduce((s, o) => s + medidor(o.dataset.id), 0);
           const abajo = pi * paso + H - pg.m.i - reservado(pi) - (altoNotasEl ? altoNotasEl + (reservado(pi) ? 0 : 14) : 0);
@@ -2976,8 +3408,13 @@
           if (forzar == null && i > 0 && (el.dataset.sec || "")[0] === "p" && top > arriba + 1) {
             if (pagEscrita >= pi) forzar = (pi + 1) * paso + pg.m.s;
           }
+          // «Salto de página anterior» (Word): empieza arriba de una hoja nueva si no está ya ahí
+          if (forzar == null && i > 0 && el.dataset.saltoAntes === "1" && top > arriba + 1) forzar = (pi + 1) * paso + pg.m.s;
           if (forzar != null && top < forzar) destino = forzar;
           else if (top < arriba - 1) destino = arriba;
+          // «Conservar con el siguiente» (los títulos, como en Word): si el principio del que sigue no cabe en esta hoja,
+          // este baja con él
+          else if (top > arriba + 1 && i + 1 < n && conSiguiente(el) && !cabeConSiguiente(kids, i, top, tops, altos, corr, abajo, util)) destino = (pi + 1) * paso + pg.m.s;
           else if (top + h > abajo + 1) {
             // Un párrafo que no cabe se parte (si deja al menos 2 líneas en cada página); si no, pasa completo.
             partido = partirParrafo(el, top, paso, H, pg, reservado, notasEl, medidor, calcular);
@@ -2993,6 +3430,8 @@
             else { el.style.marginTop = base + d + "px"; el.dataset.empuje = d; }
             corr += d;
             topFinal = destino;
+            // (en la hoja nueva, lo que flota se vuelve a acomodar)
+            if (!calcular && flot) corr += flotarEnHoja(el, Math.floor(topFinal / paso));
           }
           if (calcular) esperado[i] = topFinal;
           // Cada nota va en la página donde quedó su número.
@@ -3056,13 +3495,18 @@
        * Sin `calcular`, se mete cada corte y se vuelve a medir (la forma anterior).
        */
       function partirParrafo(el, top, paso, H, pg, reservado, notasEl, medidor, calcular) {
-        if (vista !== "paginas" || el.querySelector(".wd-obj.bloque, .wd-imagen.libre, .wd-imagen.flota-izq, .wd-imagen.flota-der") || !el.firstChild) return null;
+        // (un párrafo que ancla algo que flota como en Word sí se parte, como en Word: el objeto se queda en su hoja)
+        if (vista !== "paginas" || el.querySelector(".wd-obj.bloque, .wd-imagen.libre:not(.flota-w), .wd-imagen.flota-izq, .wd-imagen.flota-der") || !el.firstChild) return null;
+        // «Conservar líneas juntas» (Word): el párrafo no se parte, pasa completo a la hoja siguiente
+        if (el.dataset.juntas === "1") return null;
+        // con «control de líneas viudas» (lo normal en Word) quedan al menos 2 líneas en cada hoja; sin él, 1
+        const m = minLineas(el);
         const res = { crece: 0, puntos: [], bajaNota: null };
         const fin = () => (res.crece ? res : null);
         if (!calcular) {
           for (let vuelta = 0; vuelta < 40; vuelta++) {
             const lineas = lineasDe(el);
-            if (lineas.length < 4) return fin();
+            if (lineas.length < 2 * m) return fin();
             { const er0 = el.getBoundingClientRect(), z0 = er0.height / (el.offsetHeight || 1) || 1;
               notasEl.forEach((o) => { o._linea = lineaDeNota(o, lineas, er0, z0); }); }
             let k = -1, pag = -1;
@@ -3074,9 +3518,9 @@
             }
             if (k < 0) return res;
             const antes = lineas.filter((l, j) => j < k && Math.floor((top + l.t) / paso) === pag).length;
-            if (k > 0 && lineas.length - k < 2 && antes >= 3) k = lineas.length - 2;   // sin línea viuda
+            if (k > 0 && lineas.length - k < m && antes >= m + 1) k = lineas.length - m;   // sin línea viuda
             const enPagina = lineas.filter((l, j) => j < k && Math.floor((top + l.t) / paso) === pag).length;
-            if (enPagina < 2 || lineas.length - k < 2) return fin();                   // sin línea huérfana
+            if (enPagina < m || lineas.length - k < m) return fin();                   // sin línea huérfana
             const destino = (pag + 1) * paso + pg.m.s, alto = destino - (top + lineas[k].t);
             if (alto <= 0) return fin();
             const er = el.getBoundingClientRect(), z = er.height / (el.offsetHeight || 1) || 1;
@@ -3085,13 +3529,13 @@
             const antesAlto = el.offsetHeight;
             const rg = document.createRange();
             rg.setStart(punto.node, punto.off);
-            rg.insertNode(crearCorte(alto + "px"));
+            rg.insertNode(crearCorte(alto + "px", anchoCorte(el, lineas[k], er, z)));
             res.crece += Math.max(0, el.offsetHeight - antesAlto);
           }
           return res;
         }
         const lineas = lineasDe(el);
-        if (lineas.length < 4) return null;
+        if (lineas.length < 2 * m) return null;
         const er = el.getBoundingClientRect(), z = er.height / (el.offsetHeight || 1) || 1;
         const lineaNota = new Map();
         notasEl.forEach((o) => { lineaNota.set(o, lineaDeNota(o, lineas, er, z)); });
@@ -3109,9 +3553,9 @@
           }
           if (k < 0) return res;
           const antes = lineas.filter((l, j) => j < k && Math.floor(y(j) / paso) === pag).length;
-          if (k > 0 && lineas.length - k < 2 && antes >= 3) k = lineas.length - 2;   // sin línea viuda
+          if (k > 0 && lineas.length - k < m && antes >= m + 1) k = lineas.length - m;   // sin línea viuda
           const enPagina = lineas.filter((l, j) => j < k && Math.floor(y(j) / paso) === pag).length;
-          if (enPagina < 2 || lineas.length - k < 2) return fin();                   // sin línea huérfana
+          if (enPagina < m || lineas.length - k < m) return fin();                   // sin línea huérfana
           const ultimo = res.puntos[res.puntos.length - 1];
           if (ultimo && k <= ultimo.k) return fin();   // una línea más alta que la hoja: no se parte más
           const destino = (pag + 1) * paso + pg.m.s, alto = destino - y(k);
@@ -3163,7 +3607,11 @@
         // span), el pedazo de ese span en el mismo renglón (antes contaba como una línea que no cabe y se
         // volvía a cortar hasta 40 veces: hojas en blanco).
         const cortes = $$(".wd-corte", el).map((c) => c.getBoundingClientRect());
-        const rects = [...r.getClientRects()].filter((x) => x.width > 0.5 && x.height > 0.5 && !cortes.some((c) => x.top >= c.top - 1 && x.bottom <= c.bottom + 1));
+        // (ni los flotantes invisibles que apartan el texto ni lo que flota fuera de los renglones —con el texto de sus
+        // cuadros— son renglones del párrafo)
+        const fuera = el.querySelector(".wd-excl, [data-obj].libre") ? [...el.querySelectorAll(":scope > .wd-excl, :scope > [data-obj].libre")].map((c) => c.getBoundingClientRect()) : [];
+        const dentro = (x, c) => x.left >= c.left - 0.6 && x.right <= c.right + 0.6 && x.top >= c.top - 0.6 && x.bottom <= c.bottom + 0.6;
+        const rects = [...r.getClientRects()].filter((x) => x.width > 0.5 && x.height > 0.5 && !cortes.some((c) => x.top >= c.top - 1 && x.bottom <= c.bottom + 1) && !fuera.some((c) => dentro(x, c)));
         rects.sort((a, b) => a.top - b.top || a.left - b.left);
         const l = [];
         for (const x of rects) {

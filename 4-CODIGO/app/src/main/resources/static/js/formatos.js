@@ -681,14 +681,14 @@ ${formas.join("\n")}
         const ref = "impw" + (i++).toString(36);
         if (t.e.tipo === "imagen") {
           // (con cómo flota en Word: libre en su lugar, a un lado del texto o en su propio renglón)
-          const fl = {}; ["ajuste", "libre", "x", "y", "detras", "alin", "dx", "z"].forEach((k) => { if (t.e[k] != null) fl[k] = t.e[k]; });
+          const fl = {}; ["ajuste", "libre", "x", "y", "detras", "alin", "dx", "z", "fl"].forEach((k) => { if (t.e[k] != null) fl[k] = t.e[k]; });
           ops.push({ id: "imp:b" + ref, bloque: ref, campos: Object.assign({ tipo: "imagen", enTexto: true, src: t.e.src, w: Math.min(t.e.w || 320, 624), h: t.e.h || 0, oe: t.e.oe || undefined }, fl), t: 1, n: "importar" });
           return { e: { tipo: "imagen", ref } };
         }
         if (t.e.tipo === "tabla") { ops.push({ id: "imp:b" + ref, bloque: ref, campos: Object.assign({ tipo: "tabla", enTexto: true, filasTexto: t.e.filas, colsTexto: t.e.cols }, t.e.celdas), t: 1, n: "importar" }); return { e: { tipo: "tabla", ref } }; }
         if (t.e.tipo === "nota" || t.e.tipo === "ecuacion") { ops.push({ id: "imp:b" + ref, bloque: ref, campos: Object.assign({ enTexto: true }, t.e), t: 1, n: "importar" }); return { e: { tipo: t.e.tipo, ref } }; }
         // (un gráfico de Word lleva además su modelo de Office y su tamaño, para dibujarlo como Word)
-        return { e: limpio({ tipo: t.e.tipo, oe: t.e.oe, que: t.e.que, txt: t.e.txt, g: t.e.g, w: t.e.w, h: t.e.h, forma: t.e.forma, grupo: t.e.grupo, libre: t.e.libre, x: t.e.x, y: t.e.y, detras: t.e.detras, franja: t.e.franja, z: t.e.z }) };
+        return { e: limpio({ tipo: t.e.tipo, oe: t.e.oe, que: t.e.que, txt: t.e.txt, g: t.e.g, w: t.e.w, h: t.e.h, forma: t.e.forma, grupo: t.e.grupo, libre: t.e.libre, x: t.e.x, y: t.e.y, detras: t.e.detras, franja: t.e.franja, z: t.e.z, fl: t.e.fl }) };
       });
       ps.push({ tramos, a: limpio(p.pa) });
     });

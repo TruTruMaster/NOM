@@ -1138,6 +1138,140 @@ def w11(w):
     return D.guardar()
 
 
+# ---------------------------------------------------------------- w12: lo que flota y el espacio entre párrafos
+def w12(w):
+    """Cómo acomoda Word el texto alrededor de lo que flota (cada ajuste, cada «relativo a», alineaciones,
+    distancias, dos objetos en los mismos renglones) y cómo junta el espacio de antes y de después."""
+    D = Doc(w, "w12-flotantes"); b = D.b; d = D.d; cm = D.cm
+    def par(txt, antes=None, despues=None, **f):
+        p = D.p(txt)
+        if antes is not None: p.Format.SpaceBefore = antes
+        if despues is not None: p.Format.SpaceAfter = despues
+        for k, v in f.items(): setattr(p.Format, k, v)
+        return p
+    def pagina_nueva(titulo):
+        h = D.p(titulo, -2); h.Format.PageBreakBefore = True
+        return h
+    D.p("Lo que flota y el espacio entre párrafos", -63)
+    # --- espacio entre párrafos: ¿se suman el de después y el de antes, o queda el mayor?
+    D.p("Espacio entre párrafos", -2)
+    for k, (a, dd) in enumerate([(None, (12, 6)), (None, (18, 10)), (None, (6, 20)), (None, (0, 0)), (None, (14, 14)), (None, (24, 2))]):
+        with b.paso(f"después {dd[0]} y antes {dd[1]}"):
+            par(f"Párrafo con {dd[0]} pt después. " + texto(k, 1), antes=0, despues=dd[0])
+            par(f"Párrafo con {dd[1]} pt antes. " + texto(k + 1, 1), antes=dd[1], despues=0)
+    with b.paso("espacio contextual en los dos"):
+        for k in range(3): par(f"Contextual {k + 1} (antes 6, después 12, sin espacio entre párrafos del mismo estilo). " + texto(k + 2, 1), antes=6, despues=12, NoSpaceBetweenParagraphsOfSameStyle=True)
+    with b.paso("espacio contextual solo en el primero"):
+        par("Contextual solo aquí (antes 6, después 12). " + texto(5, 1), antes=6, despues=12, NoSpaceBetweenParagraphsOfSameStyle=True)
+        par("Este no es contextual (antes 10, después 4). " + texto(6, 1), antes=10, despues=4)
+    with b.paso("espacio contextual solo en el segundo"):
+        par("Este no es contextual (antes 4, después 16). " + texto(7, 1), antes=4, despues=16)
+        par("Contextual solo aquí (antes 9, después 8). " + texto(8, 1), antes=9, despues=8, NoSpaceBetweenParagraphsOfSameStyle=True)
+    with b.paso("espacio automático (como en HTML)"):
+        par("Espacio automático antes y después. " + texto(1, 1), SpaceBeforeAuto=True, SpaceAfterAuto=True)
+        par("Párrafo normal después del automático. " + texto(2, 1))
+    with b.paso("tabla entre párrafos con espacio"):
+        par("Párrafo con 12 pt después, y luego una tabla. " + texto(3, 1), antes=0, despues=12)
+        t = d.Tables.Add(D.fin(D.p("")), 2, 3); t.Borders.Enable = True
+        for i in range(1, 3):
+            for j in range(1, 4): t.Cell(i, j).Range.Text = f"Celda {i},{j}"
+        par("Párrafo con 12 pt antes, después de la tabla. " + texto(4, 1), antes=12, despues=8)
+    with b.paso("espacio antes después de un salto de página manual"):
+        p = par("Después de un salto de página manual, con 24 pt antes. " + texto(5, 2), antes=24, despues=8)
+        rg = d.Range(p.Range.Start, p.Range.Start); rg.InsertBreak(7)
+        par("Y el siguiente con 30 pt antes. " + texto(6, 1), antes=30, despues=8)
+    with b.paso("espacio antes con salto de página antes del párrafo"):
+        p = par("Con «salto de página anterior» y 24 pt antes. " + texto(7, 2), antes=24, despues=8); p.Format.PageBreakBefore = True
+    # --- lo que flota: una página por caso
+    def foto(nombre_img, ancla, w_, h_):
+        return d.Shapes.AddPicture(os.path.join(IMG, nombre_img), False, True, 0, 0, cm(w_), cm(h_), ancla.Range)
+    def colocar(sh, tipo, relh, left, relv, top, lado=0, dist=None):
+        sh.WrapFormat.Type = tipo
+        sh.RelativeHorizontalPosition = relh; sh.RelativeVerticalPosition = relv
+        sh.Left = left; sh.Top = top
+        if tipo in (0, 1, 2): sh.WrapFormat.Side = lado
+        if dist is not None:
+            sh.WrapFormat.DistanceTop, sh.WrapFormat.DistanceBottom, sh.WrapFormat.DistanceLeft, sh.WrapFormat.DistanceRight = dist
+    CEN, IZQ, DER, ARR, ABA = -999995, -999998, -999996, -999999, -999997
+    with b.paso("cuadrado a la izquierda sobre varios párrafos"):
+        pagina_nueva("Cuadrado a la izquierda, sobre tres párrafos")
+        a = D.p(texto(0, 3))
+        colocar(foto("foto3-vertical.jpg", a, 4.5, 9), 0, 2, 0, 2, cm(0.4))
+        for k in range(4): D.p(texto(k + 1, 2))
+    with b.paso("cuadrado a la derecha, fijo a la página, arriba de su ancla"):
+        pagina_nueva("Cuadrado a la derecha, fijo a la página, arriba de su ancla")
+        D.p(texto(2, 3)); D.p(texto(3, 3))
+        a = D.p("Este párrafo es el ancla de la imagen de arriba. " + texto(4, 2))
+        colocar(foto("foto1.jpg", a, 6, 4), 0, 0, DER, 1, cm(5))
+        for k in range(3): D.p(texto(k + 5, 2))
+    for k, (nombre, lado) in enumerate([("a los dos lados", 0), ("del lado más ancho", 3), ("solo a la izquierda", 1), ("solo a la derecha", 2)]):
+        with b.paso("cuadrado al centro, texto " + nombre):
+            pagina_nueva("Imagen al centro, texto " + nombre)
+            a = D.p(texto(k, 3))
+            colocar(foto("foto2.jpg", a, 4.2, 4.2), 0, 0, cm(5.5 + k * 0.6), 2, cm(0.8), lado=lado)
+            for j in range(3): D.p(texto(k + j + 2, 2))
+    with b.paso("estrecho alrededor de un círculo"):
+        pagina_nueva("Estrecho alrededor de un círculo")
+        a = D.p(texto(1, 3))
+        c = d.Shapes.AddShape(9, 0, 0, cm(5.5), cm(5.5), a.Range); c.Fill.ForeColor.RGB = rgb(0, 112, 192); c.Line.Visible = False
+        colocar(c, 1, 0, IZQ, 2, cm(0.3))
+        for j in range(3): D.p(texto(j + 4, 2))
+    with b.paso("a través de una estrella"):
+        pagina_nueva("A través de una estrella")
+        a = D.p(texto(2, 3))
+        s = d.Shapes.AddShape(92, 0, 0, cm(6), cm(6), a.Range); s.Fill.ForeColor.RGB = rgb(255, 192, 0); s.Line.Visible = False
+        colocar(s, 2, 0, DER, 2, cm(0.3))
+        for j in range(3): D.p(texto(j + 5, 2))
+    with b.paso("arriba y abajo con distancias, a media altura del párrafo"):
+        pagina_nueva("Arriba y abajo con distancias, a media altura del párrafo")
+        a = D.p(texto(3, 4))
+        colocar(foto("foto1.jpg", a, 7, 3.5), 4, 0, CEN, 2, cm(1.2), dist=(12, 18, 0, 0))
+        for j in range(3): D.p(texto(j + 6, 2))
+    with b.paso("cuadrado con distancias grandes"):
+        pagina_nueva("Cuadrado con distancias grandes al texto")
+        a = D.p(texto(4, 3))
+        colocar(foto("foto2.jpg", a, 4, 4), 0, 0, IZQ, 2, cm(0.5), dist=(24, 24, 24, 24))
+        for j in range(3): D.p(texto(j + 7, 2))
+    with b.paso("centrado en la página"):
+        pagina_nueva("Centrado en la hoja (horizontal y vertical)")
+        for j in range(3): D.p(texto(j, 3))
+        a = D.p(texto(3, 2))
+        colocar(foto("foto1.jpg", a, 5, 3.5), 0, 1, CEN, 0, CEN)
+        for j in range(2): D.p(texto(j + 4, 2))
+    with b.paso("abajo de la página"):
+        pagina_nueva("Abajo de la página y arriba del margen inferior")
+        a = D.p(texto(5, 3))
+        colocar(foto("foto2.jpg", a, 3.5, 3.5), 0, 0, DER, 0, ABA)
+        b2 = D.p(texto(6, 3))
+        colocar(foto("foto1.jpg", b2, 5, 2.5), 0, 0, IZQ, 1, cm(13))
+        for j in range(4): D.p(texto(j + 7, 2))
+    with b.paso("relativo al renglón y al carácter"):
+        pagina_nueva("Relativo al renglón y al carácter")
+        a = D.p(texto(6, 2))
+        colocar(foto("foto2.jpg", a, 3, 3), 0, 3, cm(1), 3, cm(0.3))
+        for j in range(4): D.p(texto(j + 8, 2))
+    with b.paso("dos flotantes en los mismos renglones"):
+        pagina_nueva("Dos imágenes en los mismos renglones")
+        a = D.p(texto(7, 4))
+        colocar(foto("foto1.jpg", a, 4, 3), 0, 0, IZQ, 2, cm(0.5))
+        colocar(foto("foto2.jpg", a, 3.5, 3.5), 0, 0, DER, 2, cm(1.5))
+        for j in range(3): D.p(texto(j + 1, 2))
+    with b.paso("cuadro de texto con ajuste cuadrado"):
+        pagina_nueva("Cuadro de texto con ajuste cuadrado")
+        a = D.p(texto(8, 3))
+        tb = d.Shapes.AddTextbox(1, 0, 0, cm(6), cm(3.2), a.Range)
+        tb.TextFrame.TextRange.Text = "Cuadro de texto a la derecha con ajuste cuadrado: el texto lo rodea por la izquierda."
+        tb.Fill.ForeColor.RGB = rgb(255, 242, 204); tb.Line.ForeColor.RGB = rgb(191, 143, 0)
+        colocar(tb, 0, 0, DER, 2, cm(0.6))
+        for j in range(3): D.p(texto(j + 2, 2))
+    with b.paso("en el margen izquierdo"):
+        pagina_nueva("En el margen izquierdo y fuera del texto")
+        a = D.p(texto(0, 3))
+        colocar(foto("logo.png", a, 2, 2), 0, 4, CEN, 2, cm(0.2))
+        for j in range(3): D.p(texto(j + 3, 2))
+    return D.guardar()
+
+
 if __name__ == "__main__":
     pythoncom.CoInitialize()
     hacer = {k: v for k, v in globals().items() if k[:1] == "w" and k[1:].isdigit()}
