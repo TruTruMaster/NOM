@@ -74,8 +74,9 @@ Leer al empezar la siguiente sesión, junto con `RELEVO-17NOV-LISTA-OFFICE.md` (
   letras y palabras 94–97 %. Flojos: «Destello en negrita por letra» (84 %), «Volar por párrafo al revés» (85 %).
 - La vuelta (`animaciones_vuelta.py`): importar, cambiar duración y retraso de todo, exportar y volver a importar: los
   efectos y transiciones de a01, a02, a03 y p08 salen iguales (±1 ms de redondeo); el validador de Microsoft: **0 errores**
-  en los 8 archivos. Pendiente al cerrar: abrir `v01-nom.pptx` (el catálogo cambiado en NOM) en PowerPoint de verdad y
-  hacerle video para compararlo con NOM (ver sección 4).
+  en los 8 archivos. **Comprobado en PowerPoint de verdad:** `v01-nom.pptx` (el catálogo con los 195 efectos reescritos por
+  NOM, cada duración ×1.5 y +100 ms) abre sin avisos ni reparar (195 diapositivas, 2535 formas) y su video de PowerPoint
+  contra NOM reproduciendo el mismo archivo: **98.3 % medio, 159 de 195 ≥ 98 %** (lo más bajo, efectos de texto 88–93 %).
 
 ### Transiciones (`js/transiciones-office.js`)
 - Las 149 variantes de Office 2024 se importan (`transOffice:<página>`: tipo, atributos, duración `p14:dur`, `advTm`,
@@ -106,9 +107,8 @@ Leer al empezar la siguiente sesión, junto con `RELEVO-17NOV-LISTA-OFFICE.md` (
 
 ## 4. Lo que sigue (en este orden)
 
-1. Terminar la prueba de la vuelta en PowerPoint real: `v01-nom.pptx` está en `nomoffice\archivos\` y en
-   `nomoffice\entrada\vuelta_anim\` (abrir_office.py se lanzó; revisar `resultado.json` ahí) → `animaciones_office.py video
-   v01-nom` → `animaciones_real.py v01-nom.pptx` (copiar `a01-animaciones.json` como `v01-nom.json`).
+1. (Hecho: la vuelta en PowerPoint real, ver arriba. Ojo: por SSH a Windows no escribir `2>nul` en un comando de
+   bash: se vuelve `/dev/null` y cmd se cuelga; usar `office_real.ssh(...)` desde Python.)
 2. **Crear y editar animaciones como en PowerPoint** (hoy el menú de NOM solo ofrece sus 17 efectos): galería con los 262
    (Entrada/Énfasis/Salida/Trayectorias, categorías Básico/Sutil/Moderado/Llamativo), opciones de efecto (dirección,
    secuencia: como un objeto, todo a la vez, por párrafo; texto por letra o palabra con % de retraso), intervalos (inicio,
