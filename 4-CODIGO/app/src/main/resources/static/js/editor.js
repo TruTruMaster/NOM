@@ -679,13 +679,26 @@
 
     // ------------------------------------------------------------ exportar (CU-29)
     function exportar() {
-      const cuerpo = html(`<div class="lista">${NOM.formatos.paraTipo(tipo).map((f) => `<button class="lista-item" data-f="${f.id}" style="text-align:left;width:100%">${ico(f.icono)}<span class="crece"><b>${esc(f.nombre)}</b><small>${esc(f.desc)}</small></span>${ico("chevron-right")}</button>`).join("")}</div>`);
+      const OFFICE = ["docx", "xlsx", "pptx"];
+      const formatos = NOM.formatos.paraTipo(tipo), conOffice = formatos.some((f) => OFFICE.includes(f.id));
+      // (Word, Excel y PowerPoint se pueden descargar con contraseña para abrir, como en Office: «Proteger con contraseña»)
+      const cuerpo = html(`<div class="col"><div class="lista">${formatos.map((f) => `<button class="lista-item" data-f="${f.id}" style="text-align:left;width:100%">${ico(f.icono)}<span class="crece"><b>${esc(f.nombre)}</b><small>${esc(f.desc)}</small></span>${ico("chevron-right")}</button>`).join("")}</div>
+        ${conOffice ? `<details class="exp-contrasena"><summary>${ico("lock", "ico-s")} Proteger con contraseña (Word, Excel y PowerPoint)</summary>
+          <p class="suave chico">Quien lo abra en Office o aquí tendrá que escribirla. Si la olvidas, no hay forma de recuperar el archivo.</p>
+          <div class="campo"><label for="exp-c1">Contraseña</label><div class="entrada"><input id="exp-c1" type="password" data-c1 autocomplete="new-password" maxlength="255"></div></div>
+          <div class="campo"><label for="exp-c2">Escríbela otra vez</label><div class="entrada"><input id="exp-c2" type="password" data-c2 autocomplete="new-password" maxlength="255"></div></div></details>` : ""}</div>`);
       const h = hoja({ titulo: "Exportar", icono: "download", cuerpo });
       $$("[data-f]", cuerpo).forEach((b) => (b.onclick = () => {
         try {
-          const av = NOM.formatos.exportar(doc, b.dataset.f, nombre.value || "documento", ed.pagina, tipo);
+          let opc;
+          const c1 = $("[data-c1]", cuerpo), c2 = $("[data-c2]", cuerpo);
+          if (OFFICE.includes(b.dataset.f) && c1 && c1.value) {
+            if (c1.value !== c2.value) { aviso("Las dos contraseñas no son iguales", { tipo: "error" }); c2.focus(); return; }
+            opc = { contrasena: c1.value };
+          }
+          const av = NOM.formatos.exportar(doc, b.dataset.f, nombre.value || "documento", ed.pagina, tipo, opc);
           h.cerrar(true);
-          aviso(av || "Archivo exportado", { tipo: av ? "aviso" : "ok", ms: av ? 5000 : 3000 });
+          aviso(av || (opc ? "Archivo descargado con contraseña" : "Archivo exportado"), { tipo: av ? "aviso" : "ok", ms: av ? 5000 : 3000 });
         } catch (e) { aviso(e.message, { tipo: "error" }); }
       }));
     }

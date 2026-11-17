@@ -511,13 +511,14 @@ ${formas.join("\n")}
   }
 
   /** Devuelve un aviso si algo se aproximó (CU-29 3a), o lanza si no hay qué exportar. */
-  function exportar(doc, formato, nombre, pagina, opcTipo) {
+  function exportar(doc, formato, nombre, pagina, opcTipo, opc) {
     const base = limpioNombre(nombre);
     switch (formato) {
       case "nom": descargarBytes(base + ".nom", "application/octet-stream", aNomBytes(doc)); return null;
-      case "docx": descargarBytes(base + ".docx", MIME.docx, NOM.ooxml.docx(doc)); return hayLibres(doc, ["conector"]) ? "Las flechas no se incluyen en Word" : null;
-      case "xlsx": descargarBytes(base + ".xlsx", MIME.xlsx, NOM.ooxml.xlsx(doc)); return null;
-      case "pptx": descargarBytes(base + ".pptx", MIME.pptx, NOM.ooxml.pptx(doc, (doc.valor("_doc", "modo") || "") === "DIAGRAMA" || opcTipo === "DIAGRAMA")); return null;
+      // (con opc.contrasena, el archivo sale protegido con contraseña como lo hace Office: hay que escribirla para abrirlo)
+      case "docx": descargarBytes(base + ".docx", MIME.docx, conContrasena(NOM.ooxml.docx(doc), opc)); return hayLibres(doc, ["conector"]) ? "Las flechas no se incluyen en Word" : null;
+      case "xlsx": descargarBytes(base + ".xlsx", MIME.xlsx, conContrasena(NOM.ooxml.xlsx(doc), opc)); return null;
+      case "pptx": descargarBytes(base + ".pptx", MIME.pptx, conContrasena(NOM.ooxml.pptx(doc, (doc.valor("_doc", "modo") || "") === "DIAGRAMA" || opcTipo === "DIAGRAMA"), opc)); return null;
       case "png": {
         const s = aSvg(doc, pagina);
         if (!s) throw new Error("Esta página no tiene figuras para exportar");
@@ -593,7 +594,53 @@ ${formas.join("\n")}
     return NOM.DocCRDT.partir(r);
   }
 
-  async function importar(archivo) {
+  // ------------------------------------------------------------ archivos de Office con contraseña (js/cifrado-office.js)
+  /** Pide la contraseña de un archivo de Office cifrado (se puede reintentar) y devuelve el .zip de adentro. La
+      contraseña no se guarda en ningún lado: solo sirve para abrirlo en este equipo. */
+  function pedirContrasena(nombreArchivo, probar) {
+    return new Promise((ok, mal) => {
+      const cuerpo = NOM.html(`<form class="col" autocomplete="off"><p class="suave">«${NOM.esc(nombreArchivo)}» está protegido con contraseña en Office. Escríbela para abrirlo; no se guarda en ningún lado.</p>
+        <div class="campo"><label for="contr-office">Contraseña</label><div class="entrada"><input id="contr-office" type="password" data-c autocomplete="current-password" maxlength="255"></div></div>
+        <p class="chico" data-err role="alert" style="color:var(--peligro, #B42318)" hidden></p></form>`);
+      const pie = NOM.html(`<div style="display:contents"><span class="crece"></span><button class="btn" type="button" data-no>Cancelar</button><button class="btn primario" type="button" data-si>Abrir</button></div>`);
+      let hecho = false;
+      const h = NOM.hoja({ titulo: "Archivo con contraseña", icono: "lock", cuerpo, pie, alCerrar: () => { if (!hecho) { hecho = true; mal(new Error("Se necesita la contraseña para abrir este archivo")); } } });
+      const input = cuerpo.querySelector("[data-c]"), err = cuerpo.querySelector("[data-err]"), si = pie.querySelector("[data-si]");
+      const intentar = () => {
+        const c = input.value;
+        if (!c) { input.focus(); return; }
+        si.disabled = true; si.textContent = "Abriendo…"; err.hidden = true;
+        // (las 100 000 vueltas de la clave tardan un momento: primero se pinta «Abriendo…»)
+        setTimeout(() => {
+          let zip = null;
+          try { zip = probar(c); } catch (e) { err.textContent = e.message; err.hidden = false; si.disabled = false; si.textContent = "Abrir"; return; }
+          if (!zip) { err.textContent = "Esa contraseña no es la del archivo."; err.hidden = false; si.disabled = false; si.textContent = "Abrir"; input.select(); return; }
+          hecho = true; h.cerrar(); ok(zip);
+        }, 40);
+      };
+      si.onclick = intentar;
+      pie.querySelector("[data-no]").onclick = () => h.cerrar();
+      cuerpo.onsubmit = (e) => { e.preventDefault(); intentar(); };   // (el cuerpo es el formulario)
+      setTimeout(() => input.focus(), 60);
+    });
+  }
+  /** Si el archivo de Office viene con contraseña, lo abre (con la de `opc.contrasena` o pidiéndola). */
+  async function abrirSiCifrado(archivo, opc) {
+    const C = NOM.cifradoOffice;
+    if (!C) return archivo;
+    const u = new Uint8Array(await archivo.arrayBuffer());
+    if (!C.cifrado(u)) return archivo;
+    let zip;
+    if (opc && opc.contrasena != null) { zip = C.descifrar(u, opc.contrasena); if (!zip) throw new Error("Esa contraseña no es la del archivo"); }
+    else zip = await pedirContrasena(archivo.name, (c) => C.descifrar(u, c));
+    const f = new File([zip], archivo.name, { type: archivo.type });
+    f.conContrasena = true;
+    return f;
+  }
+  /** Lo que se descarga para Office, con contraseña si se pidió (Agile, como Office 365). */
+  const conContrasena = (bytes, opc) => (opc && opc.contrasena && NOM.cifradoOffice ? NOM.cifradoOffice.cifrar(bytes, opc.contrasena) : bytes);
+
+  async function importar(archivo, opc) {
     const nombre = archivo.name.replace(/\.[^.]+$/, "");
     const ext = (archivo.name.match(/\.[^.]+$/) || [""])[0].toLowerCase();
     if (VIEJOS[ext]) {
@@ -601,9 +648,13 @@ ${formas.join("\n")}
       throw new Error(`Los archivos ${ext} (${que}) todavía no se abren aquí. Ábrelo en ${prog}, LibreOffice o Google Drive y guárdalo como ${nuevo}: ese sí se importa completo.`);
     }
     if (!IMPORTABLES.includes(ext)) throw new Error(`Formato no soportado. Puedes importar: ${IMPORTABLES.join(", ")}`);
-    if (ext === ".docx") return importarDocx(archivo, nombre);
-    if (ext === ".xlsx") return importarXlsx(archivo, nombre);
-    if (ext === ".pptx") return importarPptx(archivo, nombre);
+    if (ext === ".docx" || ext === ".xlsx" || ext === ".pptx") {
+      // (un archivo de Office con contraseña: se abre con ella y después se importa como cualquier otro)
+      archivo = await abrirSiCifrado(archivo, opc);
+      const r = ext === ".docx" ? await importarDocx(archivo, nombre) : ext === ".xlsx" ? await importarXlsx(archivo, nombre) : await importarPptx(archivo, nombre);
+      if (archivo.conContrasena) r.aviso = (r.aviso ? r.aviso + " " : "") + "El archivo tenía contraseña de Office: al descargarlo puedes ponerle una otra vez.";
+      return r;
+    }
     if (ext === ".nom") {
       // Versión 3: binario comprimido. (La 2 era JSON y se lee más abajo.)
       if (archivo.size > 60 * 1024 * 1024) throw new Error("El archivo pesa más de 60 MB");

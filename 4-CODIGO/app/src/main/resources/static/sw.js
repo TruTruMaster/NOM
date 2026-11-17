@@ -18,7 +18,7 @@ const BASE = [
   ...["a", "ad", "an", "ca", "cal", "ar", "ti"].flatMap((f) => ["regular", "negrita", "cursiva", "negrita-cursiva"].map((e) => `fonts/office/nom-${f}-${e}.woff2`)),
   "img/icono.svg", "img/icono-192.png", "img/icono-512.png", "img/icono-maskable-512.png",
   "js/nucleo.js", "js/rueda.js", "js/cripto.js", "js/boveda.js", "js/e2e.js", "js/api.js", "js/secuencia.js", "js/crdt.js", "js/local.js",
-  "js/formulas.js", "js/graficas.js", "js/ecuaciones.js", "js/plantillas.js", "js/compresion.js", "js/origen.js", "js/formatos.js", "js/ooxml.js", "js/vista-cuentas.js", "js/vista-espacios.js",
+  "js/formulas.js", "js/graficas.js", "js/ecuaciones.js", "js/plantillas.js", "js/compresion.js", "js/origen.js", "js/formatos.js", "js/ooxml.js", "js/cifrado-office.js", "js/vista-cuentas.js", "js/vista-espacios.js",
   "js/vista-dispositivo.js", "js/editor.js", "js/modo-texto.js", "js/modo-hoja.js", "js/estilos-tabla-datos.js", "js/graficas-office.js", "js/geometrias-datos.js", "js/geometrias.js", "js/smartart.js", "js/diapositivas.js", "js/iconos.js", "js/lienzo.js", "js/diagramas.js", "js/vista-ver.js", "js/citas.js", "js/datos.js", "js/experiencia.js",
   "js/anfitrion.js", "js/app.js", "js/vendor/qrcode.js", "js/qr.js", "js/acceso.js", "js/union.js", "js/cola.js", "js/ramas.js", "js/chat.js", "js/recibo.js",
   "js/comentarios.js",
