@@ -164,8 +164,16 @@ Leer al empezar la siguiente sesión, junto con `RELEVO-17NOV-LISTA-OFFICE.md` (
    Cuadro «Acción al hacer clic» en el menú Animación, la ruedita (Animación › Vínculo) y la paleta. Probado ida y vuelta
    (importar lo exportado) con los tres tipos. Arreglo de paso: en la ruta con origen, las relaciones externas nuevas
    salían sin `TargetMode="External"`. Falta: vínculos dentro del texto (a:rPr/hlinkClick), «al pasar el mouse»
-   (hlinkMouseOver), abrir otro archivo o programa, y sonidos de acción. **Sigue de este punto:** compilación de gráficas y
-   SmartArt por serie/categoría/nivel, sonidos de efectos y transiciones.
+   (hlinkMouseOver), abrir otro archivo o programa, y sonidos de acción. **Compilación de gráficas y SmartArt hecha (17-nov,
+   noche):** SmartArt: cada figura importada guarda su `modelId` en `bloque.dgm` y el motor anima solo las figuras de
+   `<p:graphicEl><a:dgm id/>` (probado con lo-tdf104792: tras el primer clic se ve el primer nodo y el segundo no).
+   Gráficas: `graficas-office.js` marca cada barra, línea, punto, rebanada, rótulo, barra de error y tendencia con
+   `data-s`/`data-c`; el motor anima el fondo (gridLegend), una serie, una categoría o un punto (`a:chart`); el cuadro
+   de opciones tiene la pestaña «Gráfica» (agrupar por serie, categoría, elemento de la serie o de la categoría y
+   «empezar dibujando el fondo») con `porGrafica`; se exporta con `bldGraphic/bldChart` y se reconoce al importar
+   (probado ida y vuelta en las dos rutas). Falta: crear «uno por uno» de SmartArt desde NOM (al exportar sin el
+   original el SmartArt sale como figuras sueltas), gráficas 3D y las nuevas de Excel sin marcar, y la máscara de un
+   barrido por serie va por cada elemento, no por toda la serie. **Sigue:** sonidos de efectos y transiciones.
    - **Video y audio de PowerPoint al presentar (hecho el 17-nov, tarde, en otra sesión; sin pruebas largas: el usuario
      estaba fuera de casa).** Al importar, la imagen de un `p:pic` con `a:videoFile`/`a:audioFile`/`p14:media` queda con
      `bloque.medio` = { tipo, ruta (la parte del .pptx), recorte {ini, fin} de `p14:trim`, fundido {ent, sal} de

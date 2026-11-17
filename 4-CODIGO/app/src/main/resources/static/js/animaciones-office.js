@@ -462,6 +462,38 @@
       if (!els.length) return null;
       const tx = hijo(sp, "txEl"), bg = hijo(sp, "bg");
       let clave = "b:" + bid, tipo = "bloque", sub = null;
+      // una parte de un SmartArt (<p:graphicEl><a:dgm id/>): solo las figuras de ese punto
+      const ge = hijo(sp, "graphicEl"), dg = ge && hijo(ge, "dgm");
+      if (dg && ctx.bloque) {
+        const id = A(dg).id, todos = Array.isArray(x.ids) && x.ids.length ? x.ids : [bid];
+        const suyos = todos.filter((i) => (ctx.bloque(i) || {}).dgm === id).map((i) => porBloque.get(i)).filter(Boolean);
+        if (suyos.length) { els.length = 0; els.push(...suyos); clave = "d:" + bid + ":" + id; }
+      }
+      // una parte de una gráfica (<p:graphicEl><a:chart seriesIdx categoryIdx bldStep/>): el fondo con ejes y leyenda,
+      // una serie, una categoría o un punto (graficas-office.js marca cada dibujo con data-s y data-c)
+      const gc = ge && hijo(ge, "chart");
+      if (gc) {
+        const svg = els[0].querySelector("svg");
+        const si = +A(gc).seriesIdx, ci = +A(gc).categoryIdx, paso = A(gc).bldStep || "";
+        if (svg) {
+          const todos = [...svg.querySelectorAll("*")].filter((e) => e.parentNode === svg || !e.closest("[data-s]") || e.hasAttribute("data-s"));
+          let partes;
+          if (paso === "gridLegend" || (si === -3 && ci === -3)) partes = [...svg.children].filter((e) => !e.hasAttribute("data-s") && e.localName !== "defs");
+          else partes = todos.filter((e) => e.hasAttribute("data-s") && (si < 0 || +e.getAttribute("data-s") === si) && (ci < 0 || (e.hasAttribute("data-c") ? +e.getAttribute("data-c") === ci : paso !== "category" && paso !== "ptInCategory" && paso !== "ptInSeries")));
+          partes = partes.filter((e) => e.localName !== "defs");
+          if (partes.length) {
+            const k = k0(), rb = els[0].getBoundingClientRect();
+            const cajas = partes.map((e) => e.getBoundingClientRect()).filter((r) => r.width || r.height);
+            const x0 = Math.min(...cajas.map((r) => r.left)), y0 = Math.min(...cajas.map((r) => r.top)), x1 = Math.max(...cajas.map((r) => r.right)), y1 = Math.max(...cajas.map((r) => r.bottom));
+            const cl = `ch:${bid}:${paso}:${si}:${ci}`;
+            if (destinos.has(cl)) return destinos.get(cl);
+            const d = { clave: cl, tipo: "grafica", bid, els: partes, sub: null, iter: null, dentro: true, blq: els[0],
+              caja: cajas.length ? { x: els[0].offsetLeft + (x0 - rb.left) / k, y: els[0].offsetTop + (y0 - rb.top) / k, w: (x1 - x0) / k, h: (y1 - y0) / k } : cajaBloques(els) };
+            destinos.set(cl, d);
+            return d;
+          }
+        }
+      }
       if (bg) { clave = "g:" + bid; tipo = "fondo"; }
       if (tx) {
         const pr = hijo(tx, "pRg"), cr = hijo(tx, "charRg");
@@ -1028,7 +1060,7 @@
           // la máscara está en la caja del destino (en un grupo, la del grupo): se acomoda en la del elemento
           if (cl.mascaras.length) st += cssMascara(cl.mascaras, caja.x - el.offsetLeft, caja.y - el.offsetTop, caja.w, caja.h);
         } else {
-          st += `transform-origin:50% 50%;transform:${tr || "none"};`;
+          st += `transform-origin:50% 50%;transform:${tr || "none"};` + (d.tipo === "grafica" ? "transform-box:fill-box;" : "");
           if (cl.mascaras.length) st += cssMascara(cl.mascaras, 0, 0, d.tipo === "fondo" ? w : caja.w, d.tipo === "fondo" ? h : caja.h);
           if (d.tipo === "parrafo") st += "position:relative;";
         }
@@ -1305,6 +1337,18 @@
       if (gP && prev && prev.grupoP === gP && prev.id === x.id && prev.efecto === x.efecto && prev.disp === x.disp) { x.grupoP = gP; x.par = k; }
       else { gP = "i" + i; x.grupoP = gP; x.par = k; }
     });
+    // las partes de una gráfica seguidas (a:chart con su bldStep) también son un grupo
+    let gG = null;
+    lista.forEach((x, i) => {
+      let paso = null;
+      if (x.id && x.ppt) (function rec(m) { if (paso || !Array.isArray(m)) return; if (loc(m[0]) === "chart" && A(m).bldStep) paso = A(m).bldStep; H(m).forEach(rec); })(x.ppt.c);
+      const prev = lista[i - 1];
+      if (!paso) { gG = null; return; }
+      const modo = { series: "series", category: "category", ptInSeries: "ptInSeries", ptInCategory: "ptInCategory" }[paso] || null;
+      if (gG && prev && prev.grupoP === gG && prev.id === x.id && prev.efecto === x.efecto && prev.disp === x.disp) { x.grupoP = gG; if (modo) prev.graf = prev.graf || modo; x.graf = modo || prev.graf; }
+      else { gG = "gi" + i; x.grupoP = gG; x.graf = modo; if (paso === "gridLegend") x.grafFondo = true; }
+    });
+    lista.forEach((x) => { if (x.grupoP && x.graf !== undefined) { const gr = lista.filter((y) => y.grupoP === x.grupoP); const m = gr.map((y) => y.graf).find(Boolean); gr.forEach((y) => { y.graf = m || "series"; y.grafFondo = gr.some((q) => q.grafFondo); }); } });
     lista.forEach((x) => { if (x.grupoP && lista.filter((y) => y.grupoP === x.grupoP).length < 2) { delete x.grupoP; if (x.par === -1) delete x.par; } });
     const bl = hijo(raiz, "bldLst");
     const bld = bl ? hijosDe(bl).map((b) => { const m = copia(b); const bs = bloquesDe(A(b).spid) || []; if (bs.length) m[1] = Object.assign({}, A(m), { bid: bs[0] }); return m; }) : [];
@@ -1447,7 +1491,8 @@
       if (yaB.has(k)) return;
       yaB.add(k);
       // por párrafos: build="p" (y rev="1" si van al revés), como PowerPoint
-      if (x.par != null) blds.push(`<p:bldP spid="${s2}" grpId="${g}" build="p"${x.parAtras ? ' rev="1"' : ""}${lista.some((y) => y.grupoP && y.grupoP === x.grupoP && y.par === -1) ? ' animBg="1" autoUpdateAnimBg="0"' : ""}/>`);
+      if (x.graf) blds.push(`<p:bldGraphic spid="${s2}" grpId="${g}"><p:bldSub><a:bldChart bld="${{ series: "series", category: "category", ptInSeries: "seriesEl", ptInCategory: "categoryEl" }[x.graf] || "series"}"${x.grafFondo ? "" : ' animBg="0"'}/></p:bldSub></p:bldGraphic>`);
+      else if (x.par != null) blds.push(`<p:bldP spid="${s2}" grpId="${g}" build="p"${x.parAtras ? ' rev="1"' : ""}${lista.some((y) => y.grupoP && y.grupoP === x.grupoP && y.par === -1) ? ' animBg="1" autoUpdateAnimBg="0"' : ""}/>`);
       else if (opc.conTexto && opc.conTexto(x.id)) blds.push(`<p:bldP spid="${s2}" grpId="${g}" animBg="1"/>`);
     });
     const tm = `<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>${cuerpo}</p:childTnLst></p:cTn></p:par></p:tnLst>${blds.length ? `<p:bldLst>${blds.join("")}</p:bldLst>` : ""}</p:timing>`;
@@ -1690,11 +1735,41 @@
       return y;
     });
   }
+  /**
+   * Una gráfica por partes, como «Agrupar gráfica» de PowerPoint: modo "series" | "category" | "ptInSeries" |
+   * "ptInCategory", con nS series y nC categorías; conFondo: primero el fondo con ejes y leyenda (gridLegend).
+   * Cada parte es un efecto con <p:graphicEl><a:chart seriesIdx categoryIdx bldStep/></p:graphicEl>.
+   */
+  function porGrafica(x, modo, nS, nC, conFondo) {
+    const pp = presetDe(x);
+    if (!pp || !pp.c) return [x];
+    const partes = [];
+    if (conFondo) partes.push([-3, -3, "gridLegend"]);
+    if (modo === "series") for (let i = 0; i < nS; i++) partes.push([i, -4, "series"]);
+    else if (modo === "category") for (let j = 0; j < nC; j++) partes.push([-4, j, "category"]);
+    else if (modo === "ptInSeries") for (let i = 0; i < nS; i++) for (let j = 0; j < nC; j++) partes.push([i, j, "ptInSeries"]);
+    else if (modo === "ptInCategory") for (let j = 0; j < nC; j++) for (let i = 0; i < nS; i++) partes.push([i, j, "ptInCategory"]);
+    else return [x];
+    const g = "g" + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
+    return partes.map(([si, ci, paso]) => {
+      const c = copia(pp.c);
+      (function rec(m) {
+        if (!Array.isArray(m)) return;
+        if (loc(m[0]) === "spTgt" && (A(m).bid == null || A(m).bid === "@" || A(m).bid === x.id)) m[2] = [["p:graphicEl", {}, [["a:chart", { seriesIdx: String(si), categoryIdx: String(ci), bldStep: paso }]]]];
+        H(m).forEach(rec);
+      })(c);
+      const y = Object.assign({}, x, { ppt: { c, d0: pp.d0 }, grupoP: g, graf: modo, grafFondo: !!conFondo });
+      delete y.par; delete y.parAtras;
+      if (!/^ppt:/.test(y.efecto || "")) y.efecto = "ppt:" + clavePreset(x);
+      return y;
+    });
+  }
   /** Juntar un efecto por párrafos en uno solo (como un objeto). */
   function comoObjeto(x) {
     const y = Object.assign({}, x);
-    delete y.grupoP; delete y.par; delete y.parAtras;
-    if (y.ppt) { y.ppt = copia(y.ppt); (function rec(m) { if (!Array.isArray(m)) return; if (loc(m[0]) === "spTgt") m[2] = H(m).filter((h) => !(Array.isArray(h) && (loc(h[0]) === "txEl" || loc(h[0]) === "bg"))); H(m).forEach(rec); })(y.ppt.c); }
+    delete y.grupoP; delete y.par; delete y.parAtras; delete y.grafFondo;
+    if (y.ppt) { y.ppt = copia(y.ppt); (function rec(m) { if (!Array.isArray(m)) return; if (loc(m[0]) === "spTgt") m[2] = H(m).filter((h) => !(Array.isArray(h) && (loc(h[0]) === "txEl" || loc(h[0]) === "bg" || loc(h[0]) === "graphicEl"))); H(m).forEach(rec); })(y.ppt.c); }
+    delete y.graf;
     return y;
   }
   /**
@@ -1716,5 +1791,5 @@
     return d ? leerCamino(d) : null;
   }
 
-  NOM.animOffice = { rebote, reproductor, presetDe, clavePreset, nombreEfecto, LEGADO, opcionesDe, conOpciones, variantes, cambiarEfecto, nuevoEfecto, paraBloque, porParrafos, comoObjeto, trayectoriaPropia, caminoDe, parrafosDe, contTexto, leerTiming, timingXml, deDom, aXml, formula, valorNum, mascara, leerCamino, puntoCamino, tiempoDe, local, activa, acelera, duracionNatural, escalarTiempos, colorNodo, loc, A, H, hijo, hijosDe, copia };
+  NOM.animOffice = { rebote, reproductor, presetDe, clavePreset, nombreEfecto, LEGADO, opcionesDe, conOpciones, variantes, cambiarEfecto, nuevoEfecto, paraBloque, porParrafos, porGrafica, comoObjeto, trayectoriaPropia, caminoDe, parrafosDe, contTexto, leerTiming, timingXml, deDom, aXml, formula, valorNum, mascara, leerCamino, puntoCamino, tiempoDe, local, activa, acelera, duracionNatural, escalarTiempos, colorNodo, loc, A, H, hijo, hijosDe, copia };
 })();

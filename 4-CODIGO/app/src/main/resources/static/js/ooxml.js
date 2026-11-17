@@ -5964,6 +5964,9 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
             const tc = tintaDe(at(sp, "modelId")) || (fRef ? hs(fRef)[0] || null : null);
             const txb = h1(sp, "txBody"), conTexto = !!(txb && txb.textContent.trim());
             const txX = h1(sp, "txXfrm");
+            // (cada figura recuerda su punto del SmartArt: las animaciones «uno por uno» o «por nivel» lo señalan con
+            // <p:graphicEl><a:dgm id="modelId"/>)
+            const k0 = bloques.length, mid = at(sp, "modelId");
             // la figura (sin su texto si el texto va en su propio rectángulo)
             const fig = sp.cloneNode(true);
             if (conTexto && txX) { const t = h1(fig, "txBody"); if (t) t.parentNode.removeChild(t); }
@@ -5990,6 +5993,7 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
               if (tc && tb) conColor(tb, tc);
               await elemento(t, grupoSA);
             }
+            if (mid) for (let k = k0; k < bloques.length; k++) bloques[k].dgm = mid;
           }
           if (hechas) return true;
         }

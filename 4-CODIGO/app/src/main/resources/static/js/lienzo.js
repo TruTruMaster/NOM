@@ -2218,6 +2218,7 @@
         lista: listaAnim, guardar: (l) => guardarAnim(l), nombreBloque,
         bloques: () => bloquesPresentables(doc(), ed.pagina).map((b) => ({ id: b.id, nombre: nombreBloque(b.id) })),
         tieneTexto: (id) => { const b = doc().bloque(id) || {}; return !!(b.tipo === "texto" || b.html || b.texto); },
+        esGrafica: (id) => (doc().bloque(id) || {}).tipo === "grafica",
         T: () => tamDoc(doc()), estiloDiapo: () => (NOM.diapo ? NOM.diapo.estiloDiapo(doc(), ed.pagina) : ""),
         htmlDiapo: () => htmlDiapositiva(doc(), ed.pagina, null),
         motor: (el, lista, escala) => motorDiapositiva(el, doc(), ed.pagina, escala, { lista }),

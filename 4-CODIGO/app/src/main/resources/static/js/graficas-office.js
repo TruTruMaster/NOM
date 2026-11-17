@@ -262,6 +262,12 @@
     const pt = opc.pt || 1, fam = (f) => (opc.familia ? opc.familia(f || m.letra.f || "Calibri") : `'${(f || m.letra.f || "Calibri").replace(/'/g, "")}', sans-serif`);
     const L = (l, def) => Object.assign({ tam: 10, c: "#595959", b: false, f: null }, m.letra || {}, def || {}, l || {});
     const partes = [];
+    // Lo que se dibuja de una serie o de un punto lleva data-s (serie) y data-c (categoría): así las animaciones de
+    // PowerPoint «por serie», «por categoría» o «por elemento» (<p:graphicEl><a:chart/>) encuentran sus partes.
+    let marca = "";
+    const meter = partes.push.bind(partes);
+    partes.push = (...xs) => meter(...xs.map((x) => (marca && typeof x === "string" ? x.replace(/^<([a-zA-Z]+)/, "<$1" + marca) : x)));
+    const marcar = (si, ci) => { marca = si == null ? "" : ` data-s="${si}"` + (ci == null ? "" : ` data-c="${ci}"`); };
     // (peso y estilo siempre escritos: la gráfica no hereda la negrita del lugar donde se pinta)
     const t = (x, y, s, l, anc, extra) => partes.push(`<text x="${n2(x)}" y="${n2(y)}" font-family="${esc(fam(l.f))}" font-size="${n2(l.tam * pt)}" fill="${esc(l.c || "#595959")}" font-weight="${l.b ? 700 : 400}" font-style="${l.i ? "italic" : "normal"}" text-anchor="${anc || "start"}"${extra || ""}>${esc(l.cap === "all" ? String(s).toUpperCase() : s)}</text>`);
     // un degradado de Office como degradado de SVG (en la caja de cada figura, como «rotWithShape»)
@@ -499,6 +505,7 @@
             const fill = (s.puntos || []).find((q) => q.idx === i && q.relleno) ? s.puntos.find((q) => q.idx === i).relleno : g.varia && ss.length === 1 ? colorSerie(i) : col;
             const r = horizontal ? { x: Math.min(desde, hasta), y: c, w: Math.abs(hasta - desde), h: bw } : { x: c, y: Math.min(desde, hasta), w: bw, h: Math.abs(hasta - desde) };
             const propio = (s.puntos || []).some((q) => q.idx === i && q.relleno);
+            marcar(k0 + j, i);
             partes.push(`<rect x="${n2(r.x)}" y="${n2(r.y)}" width="${n2(r.w)}" height="${n2(r.h)}" fill="${pintaS && !propio ? pintaS : esc(fill)}"${opacS}${ln ? attrsTrazo(ln) : ""}/>`);
             if (!centros.has(s)) centros.set(s, []);
             centros.get(s)[i] = horizontal ? null : r.x + r.w / 2;
@@ -516,6 +523,7 @@
             }
           });
         });
+        marcar(null);
       } else if (g.tipo === "linea" || g.tipo === "area" || g.tipo === "radar") {
         const acum = new Array(nC).fill(0), tot = cats.map((_, i) => ss.reduce((a, x) => a + Math.abs(x.v[i] || 0), 0) || 1);
         const capas = [];
@@ -527,8 +535,9 @@
           capas.push({ s, col, pts, j });
         });
         if (g.tipo === "area") {
-          capas.slice().reverse().forEach(({ s, col, pts }, jj) => {
+          capas.slice().reverse().forEach(({ s, col, pts, j }, jj) => {
             const ok = pts.filter(Boolean); if (!ok.length) return;
+            marcar(k0 + j);
             const base = aV(Math.max(escAct.a, 0));
             const d = `M${n2(ok[0][0])},${n2(base)} ` + ok.map((p) => `L${n2(p[0])},${n2(p[1])}`).join(" ") + ` L${n2(ok[ok.length - 1][0])},${n2(base)} Z`;
             const fill = s.relleno && s.relleno !== "none" ? s.relleno : col;
@@ -536,34 +545,38 @@
           });
         } else {
           capas.forEach(({ s, col, pts, j }) => {
+            marcar(k0 + j);
             const ln = trazo(s.linea, { c: col, w: 2.25 });
             let d = "", abierto = false;
             pts.forEach((p, i) => { if (!p) { abierto = false; return; } d += `${abierto ? "L" : "M"}${n2(p[0])},${n2(p[1])} `; abierto = true; });
             if (ln && d) partes.push(`<path d="${d.trim()}" fill="none"${attrsTrazo(ln)} stroke-linejoin="round" stroke-linecap="round"/>`);
             const mk = s.marcador, sim = mk ? mk.simbolo : g.marcadores ? "auto" : "none";
-            if (sim && sim !== "none") pts.forEach((p) => { if (!p) return; const r = ((mk && mk.tam) || 5) * pt * 0.5; const f = (mk && mk.relleno && mk.relleno !== "none") ? mk.relleno : col; partes.push(sim === "square" ? `<rect x="${n2(p[0] - r)}" y="${n2(p[1] - r)}" width="${n2(2 * r)}" height="${n2(2 * r)}" fill="${esc(f)}"/>` : sim === "diamond" ? `<path d="M${n2(p[0])},${n2(p[1] - r * 1.3)} L${n2(p[0] + r * 1.3)},${n2(p[1])} L${n2(p[0])},${n2(p[1] + r * 1.3)} L${n2(p[0] - r * 1.3)},${n2(p[1])} Z" fill="${esc(f)}"/>` : sim === "triangle" ? `<path d="M${n2(p[0])},${n2(p[1] - r * 1.2)} L${n2(p[0] + r * 1.2)},${n2(p[1] + r)} L${n2(p[0] - r * 1.2)},${n2(p[1] + r)} Z" fill="${esc(f)}"/>` : `<circle cx="${n2(p[0])}" cy="${n2(p[1])}" r="${n2(r)}" fill="${esc(f)}"/>`); });
+            if (sim && sim !== "none") pts.forEach((p, i) => { if (!p) return; marcar(k0 + j, i); const r = ((mk && mk.tam) || 5) * pt * 0.5; const f = (mk && mk.relleno && mk.relleno !== "none") ? mk.relleno : col; partes.push(sim === "square" ? `<rect x="${n2(p[0] - r)}" y="${n2(p[1] - r)}" width="${n2(2 * r)}" height="${n2(2 * r)}" fill="${esc(f)}"/>` : sim === "diamond" ? `<path d="M${n2(p[0])},${n2(p[1] - r * 1.3)} L${n2(p[0] + r * 1.3)},${n2(p[1])} L${n2(p[0])},${n2(p[1] + r * 1.3)} L${n2(p[0] - r * 1.3)},${n2(p[1])} Z" fill="${esc(f)}"/>` : sim === "triangle" ? `<path d="M${n2(p[0])},${n2(p[1] - r * 1.2)} L${n2(p[0] + r * 1.2)},${n2(p[1] + r)} L${n2(p[0] - r * 1.2)},${n2(p[1] + r)} Z" fill="${esc(f)}"/>` : `<circle cx="${n2(p[0])}" cy="${n2(p[1])}" r="${n2(r)}" fill="${esc(f)}"/>`); });
             const ro = s.rotulos || g.rotulos;
-            if (ro && ro.val) { const lr = L(ro.letra, { tam: 9 }); pts.forEach((p, i) => { if (p) t(p[0], p[1] - 6 * pt, numero(s.vals.v[i], ro.fmt || s.vals.fmt, opc), lr, "middle"); }); }
+            if (ro && ro.val) { const lr = L(ro.letra, { tam: 9 }); pts.forEach((p, i) => { marcar(k0 + j, i); if (p) t(p[0], p[1] - 6 * pt, numero(s.vals.v[i], ro.fmt || s.vals.fmt, opc), lr, "middle"); }); }
           });
         }
       } else if (g.tipo === "dispersion") {
         ss.forEach(({ s, v }, j) => {
+          marcar(k0 + j);
           const xs = (opc.valores && s.cats.f ? opc.valores(s.cats.f) || s.cats.v : s.cats.v).map((x) => (x == null || !isFinite(+x) ? null : +x));
           const col = (s.marcador && s.marcador.relleno && s.marcador.relleno !== "none" ? s.marcador.relleno : null) || (s.linea && s.linea.c) || colorSerie(k0 + j);
           const pts = v.map((y, i) => (y == null || xs[i] == null ? null : [aX(xs[i]), aV(y)]));
           const conLinea = /line|smooth/i.test(g.estiloDisp) && !(s.linea && s.linea.no);
           if (conLinea) { const ok = pts.filter(Boolean); if (ok.length > 1) partes.push(`<path d="${ok.map((p, k) => `${k ? "L" : "M"}${n2(p[0])},${n2(p[1])}`).join(" ")}" fill="none"${attrsTrazo(trazo(s.linea, { c: col, w: 2.25 }))}/>`); }
           const sim = s.marcador ? s.marcador.simbolo : "auto";
-          if (sim !== "none") pts.forEach((p) => { if (p) partes.push(`<circle cx="${n2(p[0])}" cy="${n2(p[1])}" r="${n2(((s.marcador && s.marcador.tam) || 5) * pt * 0.5)}" fill="${esc(col)}"/>`); });
+          if (sim !== "none") pts.forEach((p, i) => { marcar(k0 + j, i); if (p) partes.push(`<circle cx="${n2(p[0])}" cy="${n2(p[1])}" r="${n2(((s.marcador && s.marcador.tam) || 5) * pt * 0.5)}" fill="${esc(col)}"/>`); });
         });
       }
     });
+    marcar(null);
     // ---- barras de error y líneas de tendencia, encima de las series
     m.tipos.forEach((g) => {
       if (horizontal || !(g.tipo === "barra" || g.tipo === "linea" || g.tipo === "area")) return;
       escAct = enSec(g) ? esc2 : esc_;
       g.series.forEach((s) => {
         const v = datos(s), c = centros.get(s) || [], k = series.findIndex((x) => x.s === s);
+        marcar(k);
         const eb = s.error;
         if (eb) {
           // valor fijo, porcentaje, desviación estándar (Excel la centra en la media) o error estándar
@@ -599,6 +612,7 @@
         });
       });
     });
+    marcar(null);
     escAct = esc_;
     // eje de categorías: su línea y sus rótulos
     const lineaC = trazo(ejeC.linea, { c: "#D9D9D9", w: 0.75 });
@@ -759,8 +773,9 @@
       const exMax = Math.max(se.explota || 0, ...(se.puntos || []).map((q) => q.explota || 0)) / 100;
       const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2, r = Math.max(1, Math.min(x2 - x1, y2 - y1) / 2 / (1 + exMax)), ri = g.tipo === "anillo" ? (r * Math.max(10, Math.min(90, g.agujero))) / 100 : 0;
       let ang = ((g.giro || 0) - 90) * (Math.PI / 180);
-      const lnS = trazo(se.linea, { c: "#FFFFFF", w: 0.75 });
+      const lnS = trazo(se.linea, { c: "#FFFFFF", w: 0.75 }), kS = series.findIndex((q) => q.s === se);
       v.forEach((x, i) => {
+        marcar(kS, i);
         const a = (x / tot) * Math.PI * 2, b = ang + a, grande = a > Math.PI ? 1 : 0;
         const ex = ((se.puntos || []).find((q) => q.idx === i) || {}).explota || se.explota || 0, dx = (Math.cos(ang + a / 2) * r * ex) / 100, dy = (Math.sin(ang + a / 2) * r * ex) / 100;
         const p = (rr, t2) => [cx + dx + rr * Math.cos(t2), cy + dy + rr * Math.sin(t2)];
@@ -778,6 +793,7 @@
         }
         ang = b;
       });
+      marcar(null);
     }
   }
 

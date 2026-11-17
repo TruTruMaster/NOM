@@ -185,7 +185,8 @@
     const vars = A.variantes(x);
     const k0 = A.clavePreset(x) || "";
     const bloques = ctx.bloques();
-    const conTexto = ctx.tieneTexto(x.id);
+    const conTexto = ctx.tieneTexto(x.id), esGraf = !!(ctx.esGrafica && ctx.esGrafica(x.id));
+    const grafAntes = l[u.desde].graf ? { modo: l[u.desde].graf, fondo: !!l[u.desde].grafFondo } : null;
     const colorHex = (c) => (/^#[0-9a-f]{6}$/i.test(c || "") ? c : "#C8C8C8");
     const desp = !op.despues ? "" : op.despues.color ? "color" : op.despues;
     const cuerpo = html(`<div class="col ao-opc">
@@ -193,7 +194,7 @@
       <div class="fila" style="align-items:center;gap:8px">${marca(x.tipo)}<b class="crece recorta" data-nombre>${esc(nombreDe(x))}</b>
         <button type="button" class="btn chico" data-cambiar>${ico("replace", "ico-s")} Cambiar efecto</button>
         <button type="button" class="btn chico" data-ver>${ico("play", "ico-s")} Vista previa</button></div>
-      <div class="segmentado lleno" role="tablist"><button type="button" data-tab="efecto" aria-pressed="true">Efecto</button><button type="button" data-tab="tiempo" aria-pressed="false">Intervalos</button>${conTexto ? `<button type="button" data-tab="texto" aria-pressed="false">Texto</button>` : ""}</div>
+      <div class="segmentado lleno" role="tablist"><button type="button" data-tab="efecto" aria-pressed="true">Efecto</button><button type="button" data-tab="tiempo" aria-pressed="false">Intervalos</button>${conTexto ? `<button type="button" data-tab="texto" aria-pressed="false">Texto</button>` : ""}${esGraf ? `<button type="button" data-tab="grafica" aria-pressed="false">Gráfica</button>` : ""}</div>
       <div class="ao-tab" data-pan="efecto">
         ${vars.length > 1 ? `<label class="ao-campo"><span>Dirección</span><select data-f="dir">${vars.map((v) => `<option value="${esc(v.clave)}" ${v.clave === k0 ? "selected" : ""}>${esc(v.dir)}</option>`).join("")}</select></label>` : ""}
         ${op.giro != null ? `<label class="ao-campo"><span>Cantidad (grados)</span><input data-f="giro" type="number" step="15" value="${Math.abs(op.giro)}"><select data-f="giroSentido"><option value="1" ${op.giro >= 0 ? "selected" : ""}>A la derecha</option><option value="-1" ${op.giro < 0 ? "selected" : ""}>A la izquierda</option></select></label>` : ""}
@@ -224,6 +225,10 @@
         <label class="ao-campo"><span>Agrupar texto</span><select data-f="agrupar"><option value="obj">Como un objeto</option><option value="p" ${parAntes ? "selected" : ""}>Por párrafos</option></select></label>
         <label class="ao-check"><input data-f="parAtras" type="checkbox" ${parAntes && parAntes.atras ? "checked" : ""}> Párrafos en orden inverso</label>
         <label class="ao-check"><input data-f="parFondo" type="checkbox" ${parAntes && parAntes.fondo ? "checked" : ""}> Animar la forma adjunta (la figura antes que su texto)</label>
+      </div>` : ""}
+      ${esGraf ? `<div class="ao-tab" data-pan="grafica" hidden>
+        <label class="ao-campo"><span>Agrupar gráfica</span><select data-f="graf"><option value="">Como un objeto</option>${[["series", "Por serie"], ["category", "Por categoría"], ["ptInSeries", "Por elemento de la serie"], ["ptInCategory", "Por elemento de la categoría"]].map(([v, t]) => `<option value="${v}" ${grafAntes && grafAntes.modo === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+        <label class="ao-check"><input data-f="grafFondo" type="checkbox" ${!grafAntes || grafAntes.fondo ? "checked" : ""}> Empezar la animación dibujando el fondo de la gráfica</label>
       </div>` : ""}
     </div>`);
     const pie = html(`<div style="display:contents"><span class="crece"></span><button class="btn" type="button" data-no>Cancelar</button><button class="btn primario" type="button" data-si>Guardar</button></div>`);
@@ -262,6 +267,13 @@
       y = Object.assign({}, y, { inicio: val("inicio", "clic"), retraso: Math.round((parseFloat(val("retraso", "0")) || 0) * 1000), dur });
       const radio = $('input[name="ao-disp"]:checked', cuerpo);
       if (radio && radio.value === "b" && val("disp", "")) y.disp = val("disp", ""); else delete y.disp;
+      if (val("graf", "")) {
+        // cuántas series y categorías tiene, contadas en la gráfica pintada (data-s y data-c de graficas-office.js)
+        const sv = $(`.bl[data-id="${CSS.escape(x.id)}"] svg`, $("[data-prev]", cuerpo));
+        const nS = sv ? new Set([...sv.querySelectorAll("[data-s]")].map((e) => e.getAttribute("data-s"))).size : 0;
+        const nC = sv ? new Set([...sv.querySelectorAll("[data-c]")].map((e) => e.getAttribute("data-c"))).size : 0;
+        if (nS) return A.porGrafica(y, val("graf", ""), nS, Math.max(1, nC), !!val("grafFondo", true));
+      }
       if (val("agrupar", "obj") === "p") {
         const ps = parrafosDe($(`.bl[data-id="${CSS.escape(x.id)}"]`, $("[data-prev]", cuerpo)));
         if (ps.length > 1) return A.porParrafos(y, ps, !!val("parAtras", false), !!val("parFondo", false));
@@ -340,7 +352,7 @@
         const n = un.hasta - un.desde + 1;
         const fin = l.slice(un.desde, un.hasta + 1).reduce((m, _, j) => Math.max(m, ts[un.desde + j].t + ts[un.desde + j].d), 0);
         return `${cab}<div class="ao-fila" role="listitem" data-u="${k}" aria-selected="${un.desde === elegida}">
-          ${num}${marca(x.tipo)}<div class="ao-txt crece"><b class="recorta">${esc(ctx.nombreBloque(x.id))}</b><span class="suave chico recorta">${esc(nombreDe(x))}${n > 1 ? ` · por párrafos (${n})` : ""} · ${esc((INICIOS.find((q) => q[0] === (x.inicio || "clic")) || INICIOS[0])[1].toLowerCase())}</span></div>
+          ${num}${marca(x.tipo)}<div class="ao-txt crece"><b class="recorta">${esc(ctx.nombreBloque(x.id))}</b><span class="suave chico recorta">${esc(nombreDe(x))}${n > 1 ? ` · ${x.graf ? { series: "por serie", category: "por categoría", ptInSeries: "por elemento de la serie", ptInCategory: "por elemento de la categoría" }[x.graf] || "por partes" : "por párrafos"} (${n})` : ""} · ${esc((INICIOS.find((q) => q[0] === (x.inicio || "clic")) || INICIOS[0])[1].toLowerCase())}</span></div>
           <div class="ao-tiempo" style="width:${ancho}px"><div class="ao-barra ao-${esc(x.tipo)}${t.inf ? " inf" : ""}" data-barra style="left:${Math.round(t.t * pxMs)}px;width:${Math.max(6, Math.round((t.inf ? 2000 : fin - t.t) * pxMs))}px" title="${seg(t.t)} s a ${t.inf ? "…" : seg(fin) + " s"}"><i data-borde aria-hidden="true"></i></div></div>
           <div class="ao-acc"><button type="button" class="icono-btn chico" data-mover="-1" aria-label="Subir" ${k === 0 ? "disabled" : ""}>${ico("arrow-up", "ico-s")}</button><button type="button" class="icono-btn chico" data-mover="1" aria-label="Bajar" ${k === us.length - 1 ? "disabled" : ""}>${ico("arrow-down", "ico-s")}</button><button type="button" class="icono-btn chico" data-opc aria-label="Opciones del efecto">${ico("sliders-horizontal", "ico-s")}</button><button type="button" class="icono-btn chico" data-quitar aria-label="Quitar">${ico("trash-2", "ico-s")}</button></div></div>`;
       });
