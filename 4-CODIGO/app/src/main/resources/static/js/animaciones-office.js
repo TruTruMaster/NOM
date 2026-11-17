@@ -218,13 +218,14 @@
     return ad / t.spd;
   }
   /** Tiempo simple de un nodo dado el tiempo simple de su padre: null si no ha empezado o ya se quitó. */
-  function local(t, tp) {
+  function local(t, tp, inclusivo) {
     if (tp == null) return null;
     let ta = (tp - t.b) * t.spd;
     if (ta < 0) return null;
     const AD = t.AD * t.spd;
     let fin = false;
-    if (ta >= AD) { if (t.fill === "remove" && !(t.hastaClic && !isFinite(AD))) return null; ta = AD; fin = true; }
+    // (inclusivo: justo al terminar todavía cuenta, aunque se quite: así lo ve lo que empieza en ese instante)
+    if (ta >= AD) { if (t.fill === "remove" && !(t.hastaClic && !isFinite(AD)) && !(inclusivo && ta - AD < 0.5)) return null; ta = AD; fin = true; }
     const D = t.d;
     if (!(D > 0)) return 0;
     if (!isFinite(D)) return ta;
@@ -508,14 +509,21 @@
           const s = nd.nodeValue;
           const trozos = [];
           if (tipo === "wd") { const re = /\S+\s*/g; let m; while ((m = re.exec(s))) trozos.push([m.index, m.index + m[0].length]); }
-          else for (let i = 0; i < s.length; i++) { if (s[i] === "\n") continue; trozos.push([i, i + (/[\uD800-\uDBFF]/.test(s[i]) ? 2 : 1)]); if (/[\uD800-\uDBFF]/.test(s[i])) i++; }
+          // (PowerPoint no cuenta los espacios como letras: la letra después de un espacio no espera un turno)
+          else for (let i = 0; i < s.length; i++) { if (/\s/.test(s[i])) continue; trozos.push([i, i + (/[\uD800-\uDBFF]/.test(s[i]) ? 2 : 1)]); if (/[\uD800-\uDBFF]/.test(s[i])) i++; }
           const cs = getComputedStyle(nd.parentElement);
+          // la caja de cada letra según PowerPoint (medido con a05-letras: Arial, Calibri y Times de 18 a 72 pt, interlineado
+          // de 1 a 2): el centro a 0.6 del alto del renglón desde arriba y el alto 2.02 × tamaño + 5.2 pt, sea cual sea la letra
+          const fs = parseFloat(cs.fontSize) || 16;
+          let lh = parseFloat(cs.lineHeight); if (!isFinite(lh)) lh = fs * 1.2;
           for (const [a, b] of trozos) {
             rango.setStart(nd, a); rango.setEnd(nd, b);
             const rs = [...rango.getClientRects()].filter((r) => r.width > 0 || r.height > 0);
             if (!rs.length) continue;
             const r = rs[0];
-            us.push({ nodo: nd, a, b, txt: s.slice(a, b), cs, caja: { x: bl.offsetLeft + (r.left - r0.left) / k, y: bl.offsetTop + (r.top - r0.top) / k, w: r.width / k, h: r.height / k } });
+            const pos = { x: bl.offsetLeft + (r.left - r0.left) / k, y: bl.offsetTop + (r.top - r0.top) / k, w: r.width / k, h: r.height / k };
+            const arribaRenglon = pos.y + pos.h / 2 - lh / 2, cy = arribaRenglon + 0.6 * lh, hp = 2.02 * fs + 5.2;
+            us.push({ nodo: nd, a, b, txt: s.slice(a, b), cs, pos, caja: { x: pos.x, y: cy - hp / 2, w: pos.w, h: hp } });
           }
         }
       }
@@ -540,7 +548,7 @@
       us.forEach((u) => {
         const c = u.cs, el = document.createElement("span");
         el.textContent = u.txt.replace(/\s+$/, (m) => m);
-        el.style.cssText = `left:${n2(u.caja.x - bl.offsetLeft)}px;top:${n2(u.caja.y - bl.offsetTop)}px;height:${n2(u.caja.h)}px;line-height:${n2(u.caja.h)}px;font:${c.fontStyle} ${c.fontWeight} ${c.fontSize} ${c.fontFamily};color:${c.color};letter-spacing:${c.letterSpacing};text-decoration:${c.textDecorationLine} ${c.textDecorationColor};text-shadow:${c.textShadow};font-kerning:${c.fontKerning};-webkit-text-stroke:${c.webkitTextStroke || "0"};`;
+        el.style.cssText = `left:${n2(u.pos.x - bl.offsetLeft)}px;top:${n2(u.pos.y - bl.offsetTop)}px;height:${n2(u.pos.h)}px;line-height:${n2(u.pos.h)}px;transform-origin:${n2(u.caja.x + u.caja.w / 2 - u.pos.x)}px ${n2(u.caja.y + u.caja.h / 2 - u.pos.y)}px;font:${c.fontStyle} ${c.fontWeight} ${c.fontSize} ${c.fontFamily};color:${c.color};letter-spacing:${c.letterSpacing};text-decoration:${c.textDecorationLine} ${c.textDecorationColor};text-shadow:${c.textShadow};font-kerning:${c.fontKerning};-webkit-text-stroke:${c.webkitTextStroke || "0"};`;
         capa.append(el);
         u.el = el;
         u.color = c.color;
@@ -569,6 +577,9 @@
           const cb = hijo(n, "cBhvr") || (hijo(n, "cMediaNode") ? hijo(hijo(n, "cMediaNode"), "cTn") : null);
           const ctnB = cb ? hijo(cb, "cTn") || cb : null;
           if (!ctnB) continue;
+          // los comportamientos para el reproductor de Internet Explorer (rctx="IE") PowerPoint no los usa: repiten lo
+          // mismo que los suyos (en «Transparencia» la opacidad quedaría al cuadrado)
+          if (cb && A(cb).rctx === "IE") continue;
           const tb = tiempoDe(ctnB, f);
           if (tb.d == null) tb.d = 0.001;
           tb.AD = activa(tb);
@@ -578,6 +589,12 @@
           bhs.push({ l, n, t: tb, tgt, attrs, aditivo: A(cb).additive || null, orden: orden++, rebote: rb > 0 ? rb : 0 });
         }
       })(chl);
+      // PowerPoint aplica el inicio y fin suaves (y el filtro de tiempo) del efecto a cada comportamiento por separado,
+      // no al efecto entero como SMIL (medido en «Silbido»: así coincide al medio píxel)
+      if (te.acc || te.dec || te.tf) {
+        bhs.forEach((b) => { if (!b.t.acc && !b.t.dec) { b.t.acc = te.acc; b.t.dec = te.dec; } if (!b.t.tf && te.tf) b.t.tf = te.tf; });
+        te.acc = 0; te.dec = 0; te.tf = null;
+      }
       // duración simple del efecto: lo más largo de sus comportamientos
       let D = 0;
       bhs.forEach((b) => { D = Math.max(D, b.t.b + b.t.AD); });
@@ -657,22 +674,25 @@
         sx: 1, sy: 1, mx: 0, my: 0, skx: 0, sky: 0, color: null, fill: null, stroke: null, fillOn: null, strokeOn: null, fw: null, fs: null, td: null, fsz: 1, filtros: [] };
     }
     const estados = new Map();
+    function nuevoEstado(d, u) {
+      const c = u == null ? d.caja : d.unidades[u].caja;
+      const v = visibleIni.has(d.clave) ? visibleIni.get(d.clave) : true;
+      const e = Object.assign(base(d), { x: (c.x + c.w / 2) / T.w, y: (c.y + c.h / 2) / T.h, w: c.w / T.w, h: c.h / T.h, vis: v });
+      e.b0 = { ppt_x: e.x, ppt_y: e.y, ppt_w: e.w, ppt_h: e.h, ppt_r: 0, ppt_c: 0 };
+      e.d = d; e.u = u;
+      return e;
+    }
     function estadoDe(d, u) {
       const k = u == null ? d.clave : d.clave + "#" + u;
       let e = estados.get(k);
-      if (!e) {
-        const c = u == null ? d.caja : d.unidades[u].caja;
-        const v = visibleIni.has(d.clave) ? visibleIni.get(d.clave) : true;
-        e = Object.assign(base(d), { x: (c.x + c.w / 2) / T.w, y: (c.y + c.h / 2) / T.h, w: c.w / T.w, h: c.h / T.h, vis: v });
-        e.b0 = { ppt_x: e.x, ppt_y: e.y, ppt_w: e.w, ppt_h: e.h, ppt_r: 0, ppt_c: 0 };
-        e.d = d; e.u = u;
-        estados.set(k, e);
-      }
+      if (!e) { e = nuevoEstado(d, u); estados.set(k, e); }
       return e;
     }
     function aplicarBh(bh, s, u, e, ef) {
       const n = bh.n, a = A(n);
-      const vars = { $: 0, base: e.b0, act: { ppt_x: e.x, ppt_y: e.y, ppt_w: e.w, ppt_h: e.h, ppt_r: e.r } };
+      // «ppt_x» (sin #) es el valor al EMPEZAR este comportamiento: lo que dejaron los que empezaron antes (no los que
+      // empiezan con él). En «Voltear» el ancho se vuelve negativo y el corrimiento «ppt_w*0.5» debe usar el de antes.
+      const vars = { $: 0, base: e.b0, act: e.foto || { ppt_x: e.x, ppt_y: e.y, ppt_w: e.w, ppt_h: e.h, ppt_r: e.r } };
       const prop = bh.attrs[0] || "";
       const pon = (p, v) => {
         switch (p) {
@@ -821,7 +841,8 @@
       if (!bl) return "#000000";
       if (prop === "color") { const t = contTexto(bl); return t ? aHex(getComputedStyle(t.querySelector("span, b, i, u") || t).color) : "#000000"; }
       const p = bl.querySelector(".forma-svg path:not([fill='none'])");
-      if (prop === "fill") return p ? aHex(p.getAttribute("fill")) : aHex(getComputedStyle(contTexto(bl) || bl).backgroundColor);
+      // sin relleno, PowerPoint parte del color de relleno de la figura aunque no se vea: el blanco del tema (bg1)
+      if (prop === "fill") { if (p) return aHex(p.getAttribute("fill")); const bgc = getComputedStyle(contTexto(bl) || bl).backgroundColor; return /rgba\(.*,\s*0\)$|transparent/.test(bgc) ? (ctx.colorTema && ctx.colorTema("bg1")) || "#FFFFFF" : aHex(bgc); }
       const q = bl.querySelector(".forma-svg path:not([stroke='none'])");
       return q ? aHex(q.getAttribute("stroke")) : "#000000";
     }
@@ -844,11 +865,12 @@
     }
 
     /** Recorre los grupos que ya empezaron y aplica, en orden de inicio, lo que esté activo en el tiempo ahora. */
-    function evaluar() {
-      estados.clear();
+    /** Lo que está activo en el instante T del reloj: cada comportamiento con su avance y su momento de inicio. */
+    function activosEn(T, inclusivo, soloDest) {
       const activos = [];
       corriendo.forEach((c, ci) => {
-        const tg = reloj - c.inicio;
+        const tg = T - c.inicio;
+        if (tg < 0) return;
         c.g.subs.forEach((s) => {
           const ts = tg - s.b;
           if (ts < 0) return;
@@ -857,11 +879,11 @@
             for (let j = 0; j < reps; j++) {
               const jj = ef.iter && ef.iter.atras ? reps - 1 - j : j;
               const tEf = Object.assign({}, ef.t, { b: ef.t.b + j * (ef.delta || 0), AD: activa(ef.t) });
-              const ue = local(tEf, ts);
+              const ue = local(tEf, ts, inclusivo);
               if (ue == null) continue;
               ef.bhs.forEach((bh) => {
-                if (!bh.dest) return;
-                const ub = local(bh.t, ue);
+                if (!bh.dest || (soloDest && bh.dest !== soloDest)) return;
+                const ub = local(bh.t, ue, inclusivo);
                 if (ub == null) return;
                 let s2 = bh.t.d > 0 && isFinite(bh.t.d) ? ub / bh.t.d : ub > 0 || bh.t.d === 0 ? 1 : 0;
                 s2 = Math.max(0, Math.min(1, s2));
@@ -873,10 +895,39 @@
         });
       });
       activos.sort((p, q) => p.k[1] - q.k[1] || p.k[0] - q.k[0] || p.k[2] - q.k[2]);
-      for (const ac of activos) {
+      return activos;
+    }
+    /**
+     * «ppt_x» (sin #) en una fórmula es el valor al EMPEZAR ese comportamiento: lo que dejaron, en ese instante, los
+     * que empezaron antes (aunque terminen justo ahí). Se calcula una vez por destino y momento de inicio.
+     */
+    const fotos = new Map();
+    function fotoDe(d, u, Tb, prof) {
+      const clave = d.clave + "#" + (u == null ? "" : u) + "@" + Math.round(Tb * 10);
+      if (fotos.has(clave)) return fotos.get(clave);
+      const e = nuevoEstado(d, u);
+      if ((prof || 0) < 12) {
+        for (const ac of activosEn(Tb, true, d)) {
+          if (ac.k[1] >= Tb - 1e-6) continue;
+          if ((ac.u == null ? null : ac.u) !== (u == null ? null : u) && d.unidades) continue;
+          e.foto = fotoDe(d, u, ac.k[1], (prof || 0) + 1);
+          aplicarBh(ac.bh, ac.s, u, e, ac.ef);
+        }
+      }
+      const f = { ppt_x: e.x, ppt_y: e.y, ppt_w: e.w, ppt_h: e.h, ppt_r: e.r };
+      fotos.set(clave, f);
+      return f;
+    }
+    /** Recorre los grupos que ya empezaron y aplica, en orden de inicio, lo que esté activo en el tiempo ahora. */
+    function evaluar() {
+      estados.clear();
+      for (const ac of activosEn(reloj, false, null)) {
         const d = ac.bh.dest;
-        if (d.unidades && ac.u != null) { if (d.unidades[ac.u]) aplicarBh(ac.bh, ac.s, ac.u, estadoDe(d, ac.u), ac.ef); }
-        else aplicarBh(ac.bh, ac.s, null, estadoDe(d, null), ac.ef);
+        const u = d.unidades && ac.u != null ? ac.u : null;
+        const e = d.unidades && ac.u != null ? (d.unidades[ac.u] ? estadoDe(d, ac.u) : null) : estadoDe(d, null);
+        if (!e) continue;
+        e.foto = fotoDe(d, u, ac.k[1]);
+        aplicarBh(ac.bh, ac.s, u, e, ac.ef);
       }
       pintar();
     }
@@ -887,10 +938,11 @@
       destinos.forEach((d) => {
         const e = estados.get(d.clave) || estadoDe(d, null);
         pintarEl(d, e, d.els, d.caja);
-        if (d.unidades) d.unidades.forEach((u, i) => {
-          const eu = estados.get(d.clave + "#" + i) || estadoDe(d, i);
-          pintarUnidad(u, eu);
-        });
+        if (d.unidades) {
+          const eus = d.unidades.map((u, i) => estados.get(d.clave + "#" + i) || estadoDe(d, i));
+          if (eus.some((eu) => eu.fsz !== 1) || d.conTamano) acomodarUnidades(d, eus);
+          d.unidades.forEach((u, i) => pintarUnidad(u, eus[i]));
+        }
       });
     }
     function transformaDe(e, c, giroBase) {
@@ -968,8 +1020,9 @@
             const objR = rell.length ? rell : e.fill && e.fillOn ? [svg.querySelector("path")].filter(Boolean) : [];
             objR.forEach((p) => { p.style.fill = e.fill || ""; });
             traz.forEach((p) => { p.style.stroke = e.stroke || ""; });
-          } else if (bl && txt && (e.fill || e.stroke)) {
-            txt.style.backgroundColor = e.fill || "";
+          } else if (bl && txt) {
+            if (txt.dataset.aoFondo == null) txt.dataset.aoFondo = txt.style.backgroundColor || "";
+            txt.style.backgroundColor = e.fillOn === false ? "transparent" : e.fill || txt.dataset.aoFondo;
           }
         }
       });
@@ -979,6 +1032,34 @@
       return `-webkit-mask-image:${l};mask-image:${l};-webkit-mask-repeat:${rep};mask-repeat:${rep};-webkit-mask-size:${tam};mask-size:${tam};-webkit-mask-position:${pos};mask-position:${pos};` + (ms.length > 1 ? "-webkit-mask-composite:source-in;mask-composite:intersect;" : "");
     }
     const quitarProps = (s) => String(s || "").replace(/(^|;)\s*(visibility|opacity|transform|transform-origin|clip-path|-webkit-mask-[a-z]+|mask-[a-z]+|filter)\s*:[^;]*/g, "$1").replace(/;;+/g, ";").replace(/^;/, "") + (s && !/;\s*$/.test(s) ? ";" : "");
+    /**
+     * Letras que cambian de tamaño: en PowerPoint el texto se vuelve a acomodar (en «Aumentar con color» la palabra pasa al
+     * siguiente renglón). Se cambia el tamaño de la letra original (oculta) y se vuelve a medir dónde quedó cada una.
+     */
+    function acomodarUnidades(d, eus) {
+      const bl = d.blq, k = k0();
+      d.conTamano = eus.some((eu) => eu.fsz !== 1);
+      d.unidades.forEach((u, i) => {
+        if (u.fs0 == null) u.fs0 = parseFloat(u.cs.fontSize) || 16;
+        const fs = u.fs0 * eus[i].fsz;
+        u.orig.style.fontSize = Math.abs(eus[i].fsz - 1) < 1e-4 ? "" : n2(fs) + "px";
+        u.el.style.fontSize = n2(fs) + "px";
+      });
+      const giro = bl.style.transform; bl.style.transform = "none";
+      const r0 = bl.getBoundingClientRect();
+      d.unidades.forEach((u) => {
+        const r = u.orig.getBoundingClientRect();
+        u.pos = { x: bl.offsetLeft + (r.left - r0.left) / k, y: bl.offsetTop + (r.top - r0.top) / k, w: r.width / k, h: r.height / k };
+        const cs2 = getComputedStyle(u.orig), fs2 = parseFloat(cs2.fontSize) || 16; let lh2 = parseFloat(cs2.lineHeight); if (!isFinite(lh2)) lh2 = fs2 * 1.2;
+        const cy2 = u.pos.y + u.pos.h / 2 - lh2 / 2 + 0.6 * lh2, hp2 = 2.02 * fs2 + 5.2;
+        u.caja = { x: u.pos.x, y: cy2 - hp2 / 2, w: u.pos.w, h: hp2 };
+        u.el.style.left = n2(u.pos.x - bl.offsetLeft) + "px"; u.el.style.top = n2(u.pos.y - bl.offsetTop) + "px";
+        u.el.style.height = n2(u.pos.h) + "px"; u.el.style.lineHeight = n2(u.pos.h) + "px";
+        u.el.style.transformOrigin = `${n2(u.caja.x + u.caja.w / 2 - u.pos.x)}px ${n2(u.caja.y + u.caja.h / 2 - u.pos.y)}px`;
+        u.el.dataset.aoBase = u.el.getAttribute("style").replace(/(^|;)\s*(visibility|opacity|transform|transform-origin|-webkit-mask-[a-z]+|mask-[a-z]+|color|font-weight|font-style|text-decoration-line)\s*:[^;]*/g, "$1");
+      });
+      bl.style.transform = giro;
+    }
     function pintarUnidad(u, e) {
       const el = u.el;
       const c = u.caja;
@@ -986,14 +1067,14 @@
       const cl = clipDe(e, c.w, c.h);
       const op = e.op * cl.op;
       if (op < 0.999) st += `opacity:${Math.round(op * 1000) / 1000};`;
-      const tr = transformaDe(e, c, 0);
-      st += `transform:${tr || "none"};`;
-      if (cl.mascaras.length) st += cssMascara(cl.mascaras, 0, 0, c.w, c.h);
+      const tr = transformaDe(e, c, 0), ps = u.pos || c;
+      // la copia está donde se ve la letra (pos); se transforma y se recorta en la caja de PowerPoint (c)
+      st += `transform-origin:${n2(c.x + c.w / 2 - ps.x)}px ${n2(c.y + c.h / 2 - ps.y)}px;transform:${tr || "none"};`;
+      if (cl.mascaras.length) st += cssMascara(cl.mascaras, c.x - ps.x, c.y - ps.y, c.w, c.h);
       if (e.color) st += `color:${e.color};`;
       if (e.fw) st += `font-weight:${e.fw};`;
       if (e.fs) st += `font-style:${e.fs};`;
       if (e.td) st += `text-decoration-line:${e.td};`;
-      if (e.fsz !== 1) st += `transform:${(tr || "") + ` scale(${e.fsz})`};`;
       if (ultimo.get(el) === st) return;
       ultimo.set(el, st);
       if (!el.dataset.aoBase) el.dataset.aoBase = el.getAttribute("style") || "";
@@ -1014,7 +1095,7 @@
     }
     const hayInfinito = (c) => !isFinite(c.g.d) || c.g.subs.some((s) => s.efs.some((ef) => !isFinite(activa(ef.t))));
     function arrancar() { if (raf) return; relojBase = reloj; t0Real = performance.now(); raf = requestAnimationFrame(bucle); }
-    function empezar(g) { corriendo.push({ g, inicio: reloj }); }
+    function empezar(g) { corriendo.push({ g, inicio: reloj }); fotos.clear(); }
     /** Termina de golpe lo que esté corriendo (PowerPoint «busca» el final al hacer clic antes de que acabe). */
     function alFinal() {
       let fin = reloj;
@@ -1029,6 +1110,10 @@
         if (todosGrupos.principal[0] && todosGrupos.principal[0].auto) { empezar(todosGrupos.principal[0]); siguiente = 1; arrancar(); }
         else { siguiente = 0; evaluar(); }
       },
+      /** El estado de antes de empezar (lo que entra después, oculto), sin arrancar nada: para la transición. */
+      preparar() { if (raf) { cancelAnimationFrame(raf); raf = 0; } corriendo.length = 0; reloj = 0; siguiente = 0; fotos.clear(); evaluar(); },
+      /** ¿Quedan clics de la secuencia principal? */
+      quedan: () => siguiente < todosGrupos.principal.length,
       /** Un clic: lo que siga de la secuencia principal. false si ya no queda nada (pasar a la siguiente diapositiva). */
       clic() {
         if (raf) { cancelAnimationFrame(raf); raf = 0; reloj = relojBase + (performance.now() - t0Real); }
@@ -1042,7 +1127,7 @@
       /** Sin animar: todo lo de los primeros k clics ya hecho (final: también el último a su final). */
       irAPaso(k, final) {
         if (raf) { cancelAnimationFrame(raf); raf = 0; }
-        corriendo.length = 0; reloj = 0; siguiente = 0;
+        corriendo.length = 0; reloj = 0; siguiente = 0; fotos.clear();
         const gs = todosGrupos.principal;
         let hechos = 0;
         while (siguiente < gs.length && (gs[siguiente].auto || hechos < k)) {
@@ -1068,7 +1153,7 @@
       /** Para medir: el grupo k (de la secuencia principal, contando el automático) en el instante t (ms desde que empezó). */
       cuadro(k, t) {
         if (raf) { cancelAnimationFrame(raf); raf = 0; }
-        corriendo.length = 0; reloj = 0; siguiente = 0;
+        corriendo.length = 0; reloj = 0; siguiente = 0; fotos.clear();
         const gs = todosGrupos.principal;
         for (let i = 0; i < k && i < gs.length; i++) { empezar(gs[i]); alFinal(); }
         if (gs[k]) { empezar(gs[k]); reloj += t; }

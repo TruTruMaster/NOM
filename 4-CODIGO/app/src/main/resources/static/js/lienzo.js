@@ -2588,13 +2588,23 @@
       if (!codigo) return;
       NOM.api.put(`/api/documentos/${ed.id}/proyeccion`, { pagina: pags()[i], paso }).catch(() => {});
     }, 120);
-    function transicion() {
-      const t = doc.valor("_doc", "trans:" + pags()[i]);
-      d.classList.remove("trans-desvanecer", "trans-deslizar", "trans-empujar", "trans-zoom");
-      if (t) { void d.offsetWidth; d.classList.add("trans-" + t); }
+    // transición de PowerPoint (o la de NOM de antes, con su equivalente) y avance automático
+    let trActual = null, avanceAuto = 0;
+    const transicionDe = (p) => (NOM.transOffice ? doc.valor("_doc", "transOffice:" + p) || NOM.transOffice.deLegado(doc.valor("_doc", "trans:" + p)) : null);
+    function programarAvance(p) {
+      clearTimeout(avanceAuto);
+      const tr = transicionDe(p);
+      if (!tr || tr.advTm == null) return;
+      // «Después de: n s» empieza a contar al terminar la transición; con animaciones al hacer clic espera a que se hagan
+      const intentar = () => { if (motor && (motor.corriendo() || motor.quedan())) { avanceAuto = setTimeout(intentar, 250); return; } avanzar(); };
+      avanceAuto = setTimeout(intentar, Math.max(0, +tr.advTm || 0));
     }
     function pintar(revelarTodo, conTransicion) {
       const p = pags()[i];
+      const conTr = conTransicion !== false && !revelarTodo && NOM.transOffice && transicionDe(p);
+      const viejo = conTr && d.firstChild ? { html: d.innerHTML, fondo: d.style.background } : null;
+      if (trActual) { trActual.saltar(); trActual = null; }
+      clearTimeout(avanceAuto);
       // todo pintado; el motor de animaciones (el de PowerPoint) oculta lo que entra después y anima cada clic
       d.innerHTML = htmlDiapositiva(doc, p, null);
       borrarMarcas(false);
@@ -2603,8 +2613,10 @@
       motor = motorDiapositiva(d, doc, p, () => kActual);
       total = motor ? motor.pasos : 0;
       paso = revelarTodo ? total : 0;
-      if (motor) { if (revelarTodo) motor.irAPaso(total, true); else motor.inicio(); }
-      if (conTransicion !== false) transicion();
+      if (motor) { if (revelarTodo) motor.irAPaso(total, true); else motor.preparar(); }
+      const arrancar = () => { trActual = null; if (motor && !revelarTodo) motor.inicio(); programarAvance(p); };
+      if (viejo) { trActual = NOM.transOffice.jugar(d, viejo, transicionDe(p), tamDoc(doc)); trActual.promesa.then(() => { if (pags()[i] === p) arrancar(); }); }
+      else arrancar();
       $("[data-c]", rep).textContent = `${i + 1} / ${pags().length}`;
       if (presentador) {
         const n = pags()[i + 1];
@@ -2616,6 +2628,8 @@
       avisarProyector();
     }
     function avanzar() {
+      // un clic durante la transición la termina (como en PowerPoint)
+      if (trActual) { trActual.saltar(); return; }
       if (motor && paso < total && motor.clic()) {
         paso++;
         pintarMarcas();
@@ -2672,6 +2686,8 @@
 
     function salir() {
       if (motor) motor.detener();
+      if (trActual) trActual.saltar();
+      clearTimeout(avanceAuto);
       clearInterval(reloj);
       document.removeEventListener("keydown", tecla, true);
       removeEventListener("resize", escala);

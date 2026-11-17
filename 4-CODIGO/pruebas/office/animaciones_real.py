@@ -116,7 +116,8 @@ async ([i, k]) => {
   const imgs = [...d.querySelectorAll('img')]; await Promise.all(imgs.map((im) => im.complete ? 0 : new Promise((r) => { im.onload = im.onerror = r; })));
   window.__motor = NOM.lienzoVista.motor(d, doc, p, () => k);
   const lista = doc.valor('_doc', 'anim:' + p) || [];
-  return { pasos: window.__motor ? window.__motor.pasos : -1, dur: window.__motor ? window.__motor.duraciones() : [], efectos: lista.length, trans: doc.valor('_doc', 'trans:' + p) || null };
+  const conTexto = [...d.querySelectorAll('.libre-texto, .txt')].some((e) => (e.textContent || '').trim().length > 1);
+  return { pasos: window.__motor ? window.__motor.pasos : -1, dur: window.__motor ? window.__motor.duraciones() : [], efectos: lista.length, trans: doc.valor('_doc', 'trans:' + p) || null, conTexto };
 }
 """
 
@@ -177,7 +178,10 @@ def main():
                 b = np.asarray(im)
                 ref = fr.get(f)
                 if ref is None: continue
-                v = parecido_np(ref, b, azar=bool(__import__("re").search(r"Dissolve|RandomBars|Disolver|Barras", str(x.get("efecto") or ""))))
+                # los efectos al azar (disolver, barras) PowerPoint los dibuja distinto cada vez, y en el texto pesa el
+                # dibujo de cada letra (no la animación): esos se comparan suavizados
+                azar = bool(__import__("re").search(r"Dissolve|RandomBars|Disolver|Barras", str(x.get("efecto") or ""))) or bool(x.get("texto")) or bool(info_d.get("conTexto"))
+                v = parecido_np(ref, b, azar=azar)
                 vals.append(v)
                 if v < 92: lado(ref, b, sal / f"d{x['diapo']:03d}-c{j:02d}-{v:.0f}.png", f"{x.get('efecto') or x.get('transicion')} t={t:.0f} ms")
             d = {"diapo": x["diapo"], "efecto": x.get("efecto") or x.get("transicion"), "salida": x.get("salida"), "parecido": round(sum(vals) / max(1, len(vals)), 1),

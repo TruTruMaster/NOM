@@ -323,6 +323,31 @@ def aceleracion():
     P.guardar()
 
 
+def letras():
+    """Volar y zoom por letra en textos de distinto tamaño, letra e interlineado: para medir la caja que usa PowerPoint
+    para cada letra (ppt_x, ppt_y, ppt_w, ppt_h)."""
+    P = Pres("a05-letras")
+    casos = []
+    for fuente in ("Arial", "Calibri", "Times New Roman"):
+        for tam in (18, 36, 54, 72):
+            casos.append((fuente, tam, 1.0, "Hxg"))
+    casos += [("Arial", 36, 1.5, "Hxg"), ("Arial", 36, 2.0, "Hxg"), ("Arial", 36, 1.0, "Hxg\rHxg")]
+    for efecto, ef in (("vuela", K.msoAnimEffectFly), ("zoom", K.msoAnimEffectZoom)):
+        for fuente, tam, inter, txt in casos:
+            sl = P.diapo()
+            s = sl.Shapes.AddTextbox(1, 200, 150, 560, 200)
+            tr = s.TextFrame2.TextRange; tr.Text = txt.replace("\\r", "\r"); tr.Font.Size = tam; tr.Font.Name = fuente
+            tr.Font.Fill.ForeColor.RGB = rgb(0, 0, 0); tr.ParagraphFormat.Alignment = 1
+            if inter != 1.0: tr.ParagraphFormat.SpaceWithin = inter
+            q = sl.TimeLine.MainSequence
+            e = q.AddEffect(s, ef, 0, 3)
+            e = q.ConvertToTextUnitEffect(e, 1)
+            dur = duracion_total(sl) + 0.6
+            sl.SlideShowTransition.AdvanceOnTime = -1; sl.SlideShowTransition.AdvanceTime = round(dur + 1.0, 2)
+            P.lista.append({"_sl": sl, "diapo": sl.SlideIndex, "efecto": f"{efecto} {fuente} {tam} {inter} {len(txt.split(chr(92)))}r", "fuente": fuente, "tam": tam, "inter": inter, "texto": True, "dur_total": dur})
+    P.guardar()
+
+
 def transiciones():
     c = json.load(open(os.path.join(ARCHIVOS, "a00-constantes.json"), encoding="utf8"))
     tr = sorted([(k, v) for k, v in c.items() if k.startswith("ppEffect") and k not in ("ppEffectMixed",)], key=lambda kv: kv[1])
@@ -368,4 +393,4 @@ def video(nombre, alto="720", cuadros="30"):
 
 if __name__ == "__main__":
     a = sys.argv[1:]
-    {"constantes": constantes, "catalogo": catalogo, "aceleracion": aceleracion, "opciones": opciones, "transiciones": transiciones, "video": video}[a[0]](*a[1:])
+    {"constantes": constantes, "catalogo": catalogo, "aceleracion": aceleracion, "letras": letras, "opciones": opciones, "transiciones": transiciones, "video": video}[a[0]](*a[1:])

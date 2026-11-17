@@ -6225,6 +6225,8 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       // Transición y notas del orador
       const tr = todos(sld, "transition")[0];
       if (tr) { const c = hs(tr)[0]; if (c) docCampos["trans:" + pg] = { fade: "desvanecer", push: "deslizar", zoom: "zoom", wipe: "deslizar", cover: "deslizar", dissolve: "desvanecer" }[c.localName] || "desvanecer"; }
+      // la transición de PowerPoint tal cual (las 149 de Office 2024, con su duración, dirección y avance automático)
+      if (NOM.transOffice) { try { const to = NOM.transOffice.leer(sld); if (to) docCampos["transOffice:" + pg] = to; } catch (e) { /* se queda la de antes */ } }
       const relNotas = Object.values(rels).find((r) => /notesSlide$/.test(r.tipo));
       if (relNotas) {
         const t = await z.texto(relNotas.destino);
