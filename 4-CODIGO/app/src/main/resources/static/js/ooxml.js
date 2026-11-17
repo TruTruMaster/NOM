@@ -4596,6 +4596,20 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     const r = podar(raiz);
     return r == null ? "" : r;
   }
+  /**
+   * El p:timing de una página con la lista de animaciones de NOM (las de PowerPoint con su árbol; las propias de NOM con su
+   * efecto de PowerPoint). spidDe(bloque) → número de la figura en el archivo; conTexto(bloque) → si lleva texto.
+   */
+  function timingDe(doc, p, spidDe, conTexto) {
+    const A = NOM.animOffice;
+    if (!A) return "";
+    const lista = doc.valor("_doc", "anim:" + p);
+    if (!Array.isArray(lista) || !lista.length) return "";
+    try {
+      return A.timingXml(lista.filter((x) => x && (x.id || x.spid)), (bid) => (bid ? spidDe(bid) : null),
+        { preset: (x) => A.presetDe(x), medios: doc.valor("_doc", "animMedios:" + p) || [], bld: doc.valor("_doc", "animBld:" + p) || [], conTexto });
+    } catch (e) { return ""; }
+  }
   function pptxArmar(doc, esDiagrama, og) {
     let PRE = "", heredar = false;
     const medios = [], graficas = [], notas = [];
@@ -4824,12 +4838,14 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         if (relleno) fondo = `<p:bg><p:bgPr>${relleno}<a:effectLst/></p:bgPr></p:bg>`;
       }
       // Transición y notas del orador.
-      const tr = doc.valor("_doc", "trans:" + p);
-      const transicion = tr ? `<p:transition spd="med">${{ desvanecer: "<p:fade/>", deslizar: '<p:push dir="l"/>', empujar: '<p:push dir="u"/>', zoom: "<p:zoom/>" }[tr] || "<p:fade/>"}</p:transition>` : "";
+      const tr = doc.valor("_doc", "trans:" + p), to = !esDiagrama && NOM.transOffice ? doc.valor("_doc", "transOffice:" + p) : null;
+      const transicion = to ? NOM.transOffice.xml(to) : tr ? `<p:transition spd="med">${{ desvanecer: "<p:fade/>", deslizar: '<p:push dir="l"/>', empujar: '<p:push dir="u"/>', zoom: "<p:zoom/>" }[tr] || "<p:fade/>"}</p:transition>` : "";
+      // Animaciones: el p:timing de PowerPoint con la lista de la diapositiva (cada bloque, con el número de su figura)
+      const timing = !esDiagrama ? timingDe(doc, p, (bid) => { const i = bs.findIndex((b) => b.id === bid); const m = i >= 0 && /<p:cNvPr id="(\d+)"/.exec(figurasL[i] || ""); return m ? m[1] : null; }, (bid) => { const b = bs.find((q) => q.id === bid); return !!(b && (b.tipo === "texto" || b.html || b.texto)); }) : "";
       const nota = !esDiagrama ? doc.valor("_doc", "nota:" + p) || "" : "";
       if (nota && !O) { notas.push({ diapo: n + 1, texto: nota }); rels.push({ id: "rIdNota", tipo: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide", destino: `../notesSlides/notesSlide${notas.length}.xml` }); }
       return { rels, bs, figurasL, fondo, transicion, nota: nota && !O ? notas.length : 0, xml: XML + `<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
-<p:cSld>${fondo}<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>${figuras}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>${transicion}</p:sld>` };
+<p:cSld>${fondo}<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>${figuras}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>${transicion}${timing}</p:sld>`, timing };
     };
     const diapos = og ? [{}] : paginas.map((p, n) => armar(p, n, null));
     if (!diapos.length) throw new Error("No hay nada que exportar");
@@ -4937,9 +4953,9 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         usadas.add(ruta0);
         planes.push({ ruta: ruta0 });
         const orden = doc.deLaPagina(p).slice().sort((a, b) => (a.z || 0) - (b.z || 0)), ids = orden.map((b) => b.id);
-        const cF = cambio("fondo:" + p), cT = cambio("trans:" + p), cN = cambio("nota:" + p);
+        const cF = cambio("fondo:" + p), cT = cambio("trans:" + p) || cambio("transOffice:" + p), cN = cambio("nota:" + p), cA = cambio("anim:" + p);
         const mismas = ids.length === hp.ids.length && ids.every((id, i) => id === hp.ids[i]) && ids.every(igualB);
-        if (mismas && !cF && !cT && !cN) return;   // intacta: ni se toca
+        if (mismas && !cF && !cT && !cN && !cA) return;   // intacta: ni se toca
         const xs = pq.texto(ruta0), raiz = O.hijosXml(xs).find((h) => O.local(h.n) === "sld");
         if (!raiz || raiz.n !== "p:sld") throw new Error("diapositiva con otro prefijo");
         const cSld = O.hijoXml(xs, "cSld", raiz.ci, raiz.cf), arbol = cSld && O.hijoXml(xs, "spTree", cSld.ci, cSld.cf);
@@ -5020,6 +5036,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         const r = armar(p, n, Object.assign({ idBase: maxId + 1, sinFondo: !cF,
           genera: (b) => !mismas && (b.ox == null || !hp.e[b.ox] || !us[b.ox] || /^(nuevo|texto)/.test(modo(b.ox))),
           hereda: (b) => (b.ox != null && hp.e[b.ox] && us[b.ox] && /^texto/.test(modo(b.ox)) ? fmts[b.ox] || {} : false) }, esc));
+        let arbolSalida = xs.slice(arbol.ci, arbol.cf);
         if (!mismas) {
           const figDe = new Map(r.bs.map((b, i) => [b.id, r.figurasL[i]])), enBs = new Set(r.bs.map((b) => b.ox).filter((k) => k != null));
           const sale = [], puestos = new Set();
@@ -5046,10 +5063,11 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
           });
           sueltas(us.length);
           const arbolNuevo = sale.join("");
+          arbolSalida = arbolNuevo;
           ps2.push([arbol.ci, arbol.cf, arbolNuevo]);
           // Las animaciones apuntan a figuras por número. Como cada figura conserva el suyo, se quedan;
           // solo se quitan los efectos de las figuras (o párrafos) que ya no están.
-          const tm = O.hijoXml(xs, "timing", raiz.ci, raiz.cf);
+          const tm = cA ? null : O.hijoXml(xs, "timing", raiz.ci, raiz.cf);
           if (tm) {
             const donde = new Map(), re = /<p:cNvPr\b[^>]*?\sid="(\d+)"/g;
             let mm;
@@ -5066,11 +5084,30 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         }
         r.rels.filter((q) => q.tipo !== T.diseno).forEach((q) => { if (!mismas || cF) pq.agregaRel(ruta0, q.id, q.tipo, q.destino); });
         if (cF) { const bg = O.hijoXml(xs, "bg", cSld.ci, cSld.cf); ps2.push(bg ? [bg.i, bg.f, r.fondo] : [cSld.ci, cSld.ci, r.fondo]); }
+        const hsS = O.hijosXml(xs, raiz.ci, raiz.cf);
+        const trEl = hsS.find((h) => O.local(h.n) === "transition") || hsS.find((h) => O.local(h.n) === "AlternateContent" && /<p:transition\b/.test(xs.slice(h.i, h.f)));
+        // animaciones cambiadas en NOM: el p:timing se escribe otra vez con la lista (cada figura con el número que tiene ahora)
+        let timingNuevo = null;
+        if (cA) {
+          const enSalida = new Set(); (arbolSalida.match(/<p:cNvPr\b[^>]*?\sid="(\d+)"/g) || []).forEach((m) => enSalida.add(/\sid="(\d+)"/.exec(m)[1]));
+          const original = new Map();
+          (doc.valor("_doc", "anim:" + p) || []).forEach((x) => { (function rec(m) { if (!Array.isArray(m)) return; if (/spTgt$/.test(m[0]) && m[1] && m[1].bid && m[1].spid) original.set(m[1].bid, m[1].spid); (m[2] || []).forEach(rec); })(x && x.ppt ? x.ppt.c : null); });
+          const porId = new Map(orden.map((b) => [b.id, b])), figDe2 = new Map(r.bs.map((b, i) => [b.id, r.figurasL[i]]));
+          const spidDe = (bid) => {
+            const o = original.get(bid); if (o && enSalida.has(String(o))) return o;
+            const b = porId.get(bid);
+            if (b && b.ox != null && us[b.ox]) { const m = /<p:cNvPr\b[^>]*?\sid="(\d+)"/.exec(xs.slice(us[b.ox].i, us[b.ox].f)); if (m && enSalida.has(m[1])) return m[1]; }
+            const m2 = /<p:cNvPr id="(\d+)"/.exec(figDe2.get(bid) || ""); return m2 && enSalida.has(m2[1]) ? m2[1] : null;
+          };
+          timingNuevo = timingDe(doc, p, spidDe, (bid) => { const b = porId.get(bid); return !!(b && (b.tipo === "texto" || b.html || b.texto)); });
+          const tmV = hsS.find((h) => O.local(h.n) === "timing");
+          if (tmV) ps2.push([tmV.i, tmV.f, timingNuevo]);
+          else if (timingNuevo) { const ref = trEl || hsS.find((h) => O.local(h.n) === "clrMapOvr"), pos = ref ? ref.f : cSld.f; if (!cT || !trEl) ps2.push([pos, pos, timingNuevo]); else timingNuevo = "+" + timingNuevo; }
+        }
         if (cT) {
-          const hsS = O.hijosXml(xs, raiz.ci, raiz.cf);
-          const tr = hsS.find((h) => O.local(h.n) === "transition") || hsS.find((h) => O.local(h.n) === "AlternateContent" && /<p:transition\b/.test(xs.slice(h.i, h.f)));
-          if (tr) ps2.push([tr.i, tr.f, r.transicion]);
-          else { const cm = hsS.find((h) => O.local(h.n) === "clrMapOvr"), pos = cm ? cm.f : cSld.f; ps2.push([pos, pos, r.transicion]); }
+          const tras = typeof timingNuevo === "string" && timingNuevo[0] === "+" ? timingNuevo.slice(1) : "";
+          if (trEl) ps2.push([trEl.i, trEl.f, r.transicion + tras]);
+          else { const cm = hsS.find((h) => O.local(h.n) === "clrMapOvr"), pos = cm ? cm.f : cSld.f; ps2.push([pos, pos, r.transicion + tras]); }
         }
         pq.pon(ruta0, aplicarPiezas(xs, ps2));
         if (cN) ponNota(ruta0, doc.valor("_doc", "nota:" + p) || "");

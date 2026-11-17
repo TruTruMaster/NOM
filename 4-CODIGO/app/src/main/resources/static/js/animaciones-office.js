@@ -1300,7 +1300,7 @@
         a.spid = String(sp); delete a.bid; usados.add(a.spid);
         return [n[0], a, H(n)];
       }
-      if (l === "cTn") { const a = Object.assign({}, A(n)); a.id = String(++id); return [n[0], a, H(n)]; }
+      if (l === "cTn") { const a = Object.assign({ id: String(++id) }, A(n)); a.id = String(id); return [n[0], a, H(n)]; }
       return null === n ? null : undefined;
     };
     const cambiaTodo = (falta) => { const f = cambia(falta); return (n) => { const r = f(n); return r === undefined ? n : r; }; };
@@ -1402,7 +1402,8 @@
   function escalarTiempos(n, f) {
     (function rec(m) {
       if (!Array.isArray(m)) return;
-      if (loc(m[0]) === "cTn") { const a = m[1] = Object.assign({}, A(m)); if (a.dur && a.dur !== "indefinite") a.dur = String(Math.max(1, Math.round(+a.dur * f))); if (a.repeatDur && a.repeatDur !== "indefinite") a.repeatDur = String(Math.round(+a.repeatDur * f)); }
+      // (los «set» de 1 ms se quedan de 1 ms: son un instante, no una duración)
+      if (loc(m[0]) === "cTn") { const a = m[1] = Object.assign({}, A(m)); if (a.dur && a.dur !== "indefinite" && +a.dur > 1) a.dur = String(Math.max(1, Math.round(+a.dur * f))); if (a.repeatDur && a.repeatDur !== "indefinite") a.repeatDur = String(Math.round(+a.repeatDur * f)); }
       if (loc(m[0]) === "cond" && A(m).delay && A(m).delay !== "indefinite") m[1] = Object.assign({}, A(m), { delay: String(Math.round(+A(m).delay * f)) });
       if (loc(m[0]) === "tmAbs") m[1] = Object.assign({}, A(m), { val: String(Math.round(+A(m).val * f)) });
       H(m).forEach(rec);

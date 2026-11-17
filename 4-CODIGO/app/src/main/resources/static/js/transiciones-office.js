@@ -523,5 +523,41 @@
     return `rgb(${x.map((v, i) => Math.round(v + (y[i] - v) * q)).join(",")})`;
   }
 
-  NOM.transOffice = { leer, jugar, deLegado, nombre, NOMBRES, mascaraCampo };
+  // ================================================================== escribir
+  const P14 = "http://schemas.microsoft.com/office/powerpoint/2010/main", P15 = "http://schemas.microsoft.com/office/powerpoint/2012/main", P159 = "http://schemas.microsoft.com/office/powerpoint/2015/09/main";
+  const BASE = new Set(["blinds", "checker", "circle", "comb", "cover", "cut", "diamond", "dissolve", "fade", "newsflash", "plus", "pull", "push", "random", "randomBar", "split", "strips", "wedge", "wheel", "wipe", "zoom"]);
+  const escA = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+  /**
+   * La transición como la escribe PowerPoint 2016: las de 2010 en adelante (p14, p15, p159) van en mc:AlternateContent con
+   * una de respaldo (desvanecer) para los programas que no las conocen, y la duración exacta en p14:dur.
+   */
+  function xml(tr) {
+    if (!tr) return "";
+    if (tr.t === "corte0") {
+      // sin efecto, pero con avance automático o sin avance con clic: la transición vacía lo guarda
+      if (tr.advTm == null && !tr.sinClic) return "";
+      return `<p:transition${tr.spd ? ` spd="${escA(tr.spd)}"` : ""}${tr.advTm != null ? ` advTm="${Math.round(+tr.advTm)}"` : ""}${tr.sinClic ? ' advClick="0"' : ""}/>`;
+    }
+    const a = tr.a || {};
+    const ats = Object.keys(a).filter((k) => a[k] != null && a[k] !== "").map((k) => ` ${k}="${escA(a[k])}"`).join("");
+    let ef, pre = "p", req = null;
+    if (tr.t.startsWith("prst:")) { ef = `<p15:prstTrans prst="${escA(tr.t.slice(5))}"${ats.replace(/ prst="[^"]*"/, "")}/>`; req = "p15"; }
+    else if (tr.t === "morph") { ef = `<p159:morph${ats}/>`; req = "p159"; }
+    else if (BASE.has(tr.t)) ef = `<p:${tr.t}${ats}/>`;
+    else { ef = `<p14:${tr.t}${ats}/>`; req = "p14"; pre = "p14"; }
+    void pre;
+    const dur = Math.max(0, Math.round(+tr.dur || 0));
+    const spd = dur <= 500 ? "fast" : dur <= 750 ? "med" : "slow";
+    const avance = (tr.advTm != null ? ` advTm="${Math.round(+tr.advTm)}"` : "") + (tr.sinClic ? ' advClick="0"' : "");
+    const respaldo = `<p:transition spd="${spd}"${avance}>${BASE.has(tr.t) ? ef : "<p:fade/>"}</p:transition>`;
+    const conDur = dur && dur !== { fast: 500, med: 750, slow: 1000 }[spd];
+    if (!req && !conDur) return respaldo;
+    const ns = req === "p15" ? ` xmlns:p15="${P15}"` : req === "p159" ? ` xmlns:p159="${P159}"` : "";
+    const durA = dur ? ` xmlns:p14="${P14}" p14:dur="${dur}"` : "";
+    const requiere = req || "p14";
+    const nsReq = requiere === "p14" ? ` xmlns:p14="${P14}"` : ns;
+    return `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice${nsReq} Requires="${requiere}"><p:transition spd="${spd}"${requiere === "p14" ? "" : durA}${requiere === "p14" && dur ? ` p14:dur="${dur}"` : ""}${avance}>${ef}</p:transition></mc:Choice><mc:Fallback>${respaldo}</mc:Fallback></mc:AlternateContent>`;
+  }
+
+  NOM.transOffice = { leer, jugar, deLegado, nombre, NOMBRES, mascaraCampo, xml };
 })();
