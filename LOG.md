@@ -1446,7 +1446,30 @@ exporta Excel de ella (ver la entrada 68).
   w09 de 10 a 9 páginas (como Word). Once de los doce documentos de Word con las mismas páginas que Word.
 - Falta: tabla flotante con el texto alrededor.
 
-## 77. Videos y audios de PowerPoint en la presentación (17 de noviembre de 2026)
+## 77. Animaciones y transiciones como PowerPoint (17 de noviembre de 2026)
+- Las animaciones de un .pptx se reproducen con un motor que lee el árbol de tiempos de PowerPoint tal cual (los 262
+  efectos de PowerPoint 2024, por letra y palabra, repetir, rebobinar, suaves, rebote, desencadenadores). Contra los
+  videos de PowerPoint real: 97.0 % de parecido medio en 195 efectos. Lo que escribe NOM se abre en PowerPoint sin
+  avisos y se ve igual (98.3 %); el validador de Microsoft no encuentra errores.
+- Las 149 transiciones de Office 2024 se importan, se reproducen (las 2D con el borde medido de PowerPoint; las 3D y
+  en piezas, aproximadas) y se exportan como PowerPoint, con su avance automático.
+- Crear y editar como en PowerPoint: galería con los efectos por Entrada, Énfasis, Salida y Trayectorias, opciones
+  del efecto y de los intervalos, después de la animación (atenuar u ocultar), por párrafos con la forma adjunta,
+  panel de animación con barras de tiempo que se arrastran, copiar animación, trayectorias dibujadas a mano y
+  mostradas en el editor, y panel de transiciones con sus 151 variantes. En la ruedita y en la paleta.
+- Arreglo: las diapositivas con «rebote al final» se importaban sin animaciones (PowerPoint guarda su p:timing dentro
+  de mc:AlternateContent); ahora se leen y se escriben igual que PowerPoint.
+- Falta: abrir en PowerPoint real lo armado con los paneles, probar en el teléfono, calibrar las transiciones contra
+  sus videos, Transformar (morph) por palabra y letra, y las direcciones que faltan en la biblioteca.
+
+## 78. Vínculos y botones de acción en las presentaciones (17 de noviembre de 2026)
+- Una figura puede ir a otra diapositiva, a la siguiente, anterior, primera o última, volver, terminar la
+  presentación o abrir una página web al tocarla al presentar. Se importan del .pptx y se escriben como PowerPoint,
+  también sobre el archivo original sin quitar los vínculos que NOM no entiende. Probado de ida y vuelta.
+- Arreglo: al descargar sobre el original, las relaciones externas nuevas salían sin marcarse como externas.
+- Falta: vínculos dentro del texto, «al pasar el puntero» y sonidos de acción.
+
+## 79. Videos y audios de PowerPoint en la presentación (17 de noviembre de 2026)
 - Los videos y audios de un .pptx se reproducen al presentar como en PowerPoint: solos o al tocarlos, con su
   volumen, en silencio, en bucle, recortados, con fundido, ocultos mientras no suenan, en pantalla completa y, el
   audio, también en las diapositivas siguientes. Responden a los comandos de sus animaciones (reproducir, pausa,
