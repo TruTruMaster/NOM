@@ -1781,6 +1781,7 @@
             { texto: "Comentar", icono: "message-square", off: !NOM.comentarios || (bs.length !== 1 || b0.tipo !== "imagen"), fn: () => NOM.comentarios.nuevo(ed) },
             { texto: "Elegir todo", icono: "layout-grid", fn: seleccionarTodo },
             { texto: "Capas", icono: "layers", fn: () => capas.abrir() },
+            ...(opc.animar && unico() ? [{ texto: "Animación", icono: "star", sub: opc.animar() }] : []),
             ...(ed.esPropietario ? [
               { texto: "Asignar a…", icono: "user-check", fn: asignarSeleccion },
               { texto: bs.every((b) => b.maestro) ? "Quitar de la plantilla" : "Fijar como plantilla del maestro", corto: bs.every((b) => b.maestro) ? "Liberar" : "Plantilla", icono: "crown", fn: plantillaMaestro },
@@ -2082,7 +2083,7 @@
       ed.lienzo.style.overflow = "hidden";
       // Las miniaturas se repintan como mucho cada 150 ms (al arrastrar no se repintan en cada cuadro).
       let pintarMinis = () => {};
-      const lienzo = crearLienzo(ed, $("[data-escena]", raiz), { acotado: true, alPintar: () => pintarMinis() });
+      const lienzo = crearLienzo(ed, $("[data-escena]", raiz), { acotado: true, alPintar: () => pintarMinis(), animar: () => (NOM.animPanel ? NOM.animPanel.acciones(this._ctxAnim) : []) });
       this._lienzo = lienzo;
 
       pintarMinis = NOM.throttle(() => {
@@ -2201,66 +2202,27 @@
       }
       // ---- 8.3 animaciones: la lista ordenada de la diapositiva ("anim:<página>" en _doc)
       const listaAnim = () => listaAnimaciones(doc(), ed.pagina, bloquesPresentables(doc(), ed.pagina)).map((x) => Object.assign({}, x));
-      const guardarAnim = (l) => { doc().cambiar("_doc", { ["anim:" + ed.pagina]: l.map((x) => ({ id: x.id, tipo: x.tipo, efecto: x.efecto, inicio: x.inicio || "clic", retraso: +x.retraso || 0, dur: +x.dur || 500 })) }); pintarMinis(); };
+      // (se guarda todo lo del efecto: su árbol de PowerPoint, el grupo, el disparador… no solo lo que se ve en el panel)
+      const guardarAnim = (l) => { doc().cambiar("_doc", { ["anim:" + ed.pagina]: l.map((x) => Object.assign({}, x, { inicio: x.inicio || "clic", retraso: +x.retraso || 0, dur: +x.dur || 500 })) }); pintarMinis(); };
       const nombreBloque = (id) => {
         const b = doc().bloque(id) || {};
         const t = b.tipo === "texto" ? NOM.diapo.textoPlano(b.html) || b.ph || "Texto" : b.tipo === "forma" ? b.texto || "Figura" : { imagen: "Imagen", tabla: "Tabla", grafica: "Gráfica", icono: "Ícono", ecuacion: "Ecuación" }[b.tipo] || "Bloque";
         return t.length > 28 ? t.slice(0, 27) + "…" : t;
       };
-      function ponerAnim(id, tipo, efecto) {
-        const l = listaAnim().filter((x) => !(x.id === id && x.tipo === tipo));
-        if (efecto) l.push({ id, tipo, efecto, inicio: "clic", retraso: 0, dur: 500 });
-        guardarAnim(l);
-        aviso(efecto ? `${TIPO_ANIM[tipo]}: ${(EFECTOS[tipo].find((x) => x[0] === efecto) || ["", efecto])[1]} (paso ${l.filter((x) => (x.inicio || "clic") === "clic").length})` : "Animación quitada", { tipo: "ok", ms: 1800 });
-      }
-      function menuAnimacion(b) {
-        const id = lienzo.seleccion(), l = listaAnim();
-        const actual = (t) => (l.find((x) => x.id === id && x.tipo === t) || {}).efecto || "";
-        const items = [];
-        if (id && !ed.soloLectura) {
-          ["e", "n", "x"].forEach((t) => {
-            items.push({ titulo: TIPO_ANIM[t] });
-            EFECTOS[t].forEach(([v, tx]) => items.push({ texto: tx, marcado: actual(t) === v, fn: () => ponerAnim(id, t, actual(t) === v ? null : v) }));
-          });
-          items.push("-", { texto: "Quitar las animaciones de esto", icono: "x", fn: () => { guardarAnim(l.filter((x) => x.id !== id)); } });
-        } else items.push({ titulo: "Elige un bloque para animarlo" });
-        items.push({ texto: "Todas las animaciones de la diapositiva…", icono: "list-ordered", fn: dialogoAnimaciones });
-        NOM.menu(b, items);
-      }
-      /** El panel de animaciones: orden, cuándo empieza cada una, retraso y duración. */
-      function dialogoAnimaciones() {
-        let l = listaAnim();
-        const cuerpo = NOM.html(`<div class="col"><p class="suave chico" style="font-weight:400">Se reproducen de arriba abajo. "Al hacer clic" empieza un paso nuevo; "Con la anterior" y "Después de la anterior" van en el mismo paso.</p><div class="lista anim-lista" data-l></div></div>`);
-        const pintarL = () => {
-          $("[data-l]", cuerpo).innerHTML = l.length ? l.map((x, k) => `<div class="anim-fila" data-k="${k}">
-            <div class="fila" style="align-items:center"><b class="crece recorta">${k + 1}. ${esc(nombreBloque(x.id))}</b><span class="chip chico">${TIPO_ANIM[x.tipo]}</span>
-              <button class="icono-btn chico" data-mover="-1" aria-label="Subir" ${k === 0 ? "disabled" : ""}>${ico("arrow-up", "ico-s")}</button><button class="icono-btn chico" data-mover="1" aria-label="Bajar" ${k === l.length - 1 ? "disabled" : ""}>${ico("arrow-down", "ico-s")}</button><button class="icono-btn chico" data-quitar aria-label="Quitar">${ico("trash-2", "ico-s")}</button></div>
-            <div class="fila" style="flex-wrap:wrap"><select data-campo="efecto">${EFECTOS[x.tipo].map(([v, tx]) => `<option value="${v}" ${x.efecto === v ? "selected" : ""}>${tx}</option>`).join("")}</select>
-              <select data-campo="inicio">${[["clic", "Al hacer clic"], ["con", "Con la anterior"], ["despues", "Después de la anterior"]].map(([v, tx]) => `<option value="${v}" ${(x.inicio || "clic") === v ? "selected" : ""}>${tx}</option>`).join("")}</select>
-              <label class="chico">Retraso <input data-campo="retraso" type="number" min="0" max="20" step="0.1" value="${(+x.retraso || 0) / 1000}" style="width:64px"> s</label>
-              <label class="chico">Duración <input data-campo="dur" type="number" min="0.1" max="10" step="0.1" value="${(+x.dur || 500) / 1000}" style="width:64px"> s</label></div></div>`).join("")
-            : `<p class="suave">Esta diapositiva no tiene animaciones. Elige un bloque y toca Animación.</p>`;
-        };
-        pintarL();
-        cuerpo.addEventListener("click", (e) => {
-          const f = e.target.closest("[data-k]");
-          if (!f) return;
-          const k = +f.dataset.k, m = e.target.closest("[data-mover]");
-          if (m) { const j = k + +m.dataset.mover; [l[k], l[j]] = [l[j], l[k]]; pintarL(); }
-          if (e.target.closest("[data-quitar]")) { l.splice(k, 1); pintarL(); }
-        });
-        cuerpo.addEventListener("change", (e) => {
-          const f = e.target.closest("[data-k]"), c = e.target.dataset.campo;
-          if (!f || !c) return;
-          const x = l[+f.dataset.k];
-          x[c] = c === "retraso" || c === "dur" ? Math.round(parseFloat(e.target.value || "0") * 1000) : e.target.value;
-        });
-        const pie = NOM.html(`<div style="display:contents"><button class="btn" type="button" data-probar>${ico("play", "ico-s")} Ver cómo queda</button><span class="crece"></span><button class="btn" type="button" data-no>Cancelar</button><button class="btn primario" data-si>Guardar</button></div>`);
-        const h = NOM.hoja({ titulo: "Animaciones de la diapositiva", icono: "star", cuerpo, pie, ancha: true });
-        $("[data-no]", pie).onclick = () => h.cerrar();
-        $("[data-si]", pie).onclick = (e) => { e.preventDefault(); if (!ed.soloLectura) guardarAnim(l); h.cerrar(); };
-        $("[data-probar]", pie).onclick = () => { if (!ed.soloLectura) guardarAnim(l); h.cerrar(); presentar(ed); };
-      }
+      // Crear y editar animaciones como en PowerPoint (galería, opciones, panel con línea de tiempo, copiar, trayectorias):
+      // animaciones-panel.js, con este contexto.
+      const ctxAnim = {
+        doc: () => doc(), pagina: () => ed.pagina, seleccion: () => lienzo.seleccion(), soloLectura: () => !!ed.soloLectura,
+        lista: listaAnim, guardar: (l) => guardarAnim(l), nombreBloque,
+        bloques: () => bloquesPresentables(doc(), ed.pagina).map((b) => ({ id: b.id, nombre: nombreBloque(b.id) })),
+        tieneTexto: (id) => { const b = doc().bloque(id) || {}; return !!(b.tipo === "texto" || b.html || b.texto); },
+        T: () => tamDoc(doc()), estiloDiapo: () => (NOM.diapo ? NOM.diapo.estiloDiapo(doc(), ed.pagina) : ""),
+        htmlDiapo: () => htmlDiapositiva(doc(), ed.pagina, null),
+        motor: (el, lista, escala) => motorDiapositiva(el, doc(), ed.pagina, escala, { lista }),
+        bloqueEnEditor: (id) => $(`[data-escena] .bl[data-id="${CSS.escape(id)}"]`, raiz),
+      };
+      this._ctxAnim = ctxAnim;
+      function menuAnimacion(b) { if (NOM.animPanel) NOM.animPanel.menu(ctxAnim, b); }
       /** 8.3 Nueva diapositiva con un diseño (portada, título y contenido, dos columnas…). */
       function nuevaConDiseno(id) {
         const D = NOM.diapo, dis = D.DISENOS.find((x) => x.id === id) || D.DISENOS[0];
@@ -2397,7 +2359,7 @@
         "|",
         { etq: true, id: "diseno", icono: "palette", micro: "Diseño|Tema, fondo y tamaño de las diapositivas.", fn: (e, b) => menuDiseno(b), off: () => ed.soloLectura },
         { etq: true, id: "transicion", icono: "blend", micro: "Transición|Cómo entra esta diapositiva al presentar.", fn: (e, b) => menuTransicion(b) },
-        { etq: true, id: "animacion", icono: "star", micro: "Animación|Entrada, énfasis y salida al presentar, en el orden que elijas.", fn: (e, b) => menuAnimacion(b) },
+        { etq: true, id: "animacion", icono: "star", micro: "Animación|Los efectos de PowerPoint: entrada, énfasis, salida y trayectorias, con sus opciones y el panel de animación.", fn: (e, b) => menuAnimacion(b) },
         "|",
         { id: "color", icono: "palette", micro: "Color|Cambia el color de las figuras seleccionadas.", fn: (e, b) => menuColor(lienzo, b), off: () => !lienzo.seleccion() },
         { id: "alinear", icono: "al-centro-h", micro: "Alinear|En la diapositiva o entre las figuras elegidas.", fn: (e, b) => menuAlinear(lienzo, b), off: () => !lienzo.seleccion() },
@@ -2429,7 +2391,11 @@
         { texto: "Modo presentador", icono: "sticky-note", fn: () => presentar(NOM.editorActual, { presentador: true }), claves: "presentar notas orador" },
         { texto: "Presentar en otra pantalla (proyector)", icono: "cast", fn: () => presentar(NOM.editorActual, { presentador: true, proyectar: true }), claves: "proyector pantalla telefono" },
         { texto: "Capas", icono: "layers", fn: () => this._lienzo.capas.abrir(), claves: "ocultar bloquear orden" },
-        { texto: "Animaciones de la diapositiva", icono: "sparkles", fn: () => { const b = document.querySelector('[aria-label="Animación"]'); if (b) b.click(); }, claves: "animar entrada salida enfasis orden" },
+        { texto: "Panel de animación", icono: "list-ordered", fn: () => NOM.animPanel && NOM.animPanel.panel(this._ctxAnim), claves: "animaciones animar orden linea tiempo intervalos" },
+        { texto: "Agregar animación a lo elegido", icono: "star", fn: () => NOM.animPanel && NOM.animPanel.agregar(this._ctxAnim), claves: "animar entrada salida enfasis efecto powerpoint" },
+        { texto: "Dibujar una trayectoria de animación", icono: "route", fn: () => NOM.animPanel && NOM.animPanel.dibujarTrayectoria(this._ctxAnim), claves: "animar movimiento camino trayectoria personalizada" },
+        { texto: "Copiar animación", icono: "paintbrush", fn: () => NOM.animPanel && NOM.animPanel.copiar(this._ctxAnim), claves: "copiar animacion pincel" },
+        { texto: "Pegar animación en lo elegido", icono: "clipboard-paste", fn: () => NOM.animPanel && NOM.animPanel.pegar(this._ctxAnim), claves: "pegar animacion pincel" },
         { texto: "Diseño (tema, fondo y tamaño)", icono: "palette", fn: () => { const b = document.querySelector('[aria-label="Diseño"]'); if (b) b.click(); }, claves: "tema fondo tamaño 4:3 cartel" },
         { texto: "Insertar un diagrama listo…", icono: "network", fn: () => NOM.diagramas && NOM.diagramas.elegir(this._lienzo), claves: "ciclo linea tiempo organigrama mapa mental venn foda espina pescado flujo" },
         { texto: this._lienzo && this._lienzo.cuadricula() ? "Quitar el ajuste a la cuadrícula" : "Ajustar a la cuadrícula", icono: "magnet", fn: () => this._lienzo.fijarCuadricula(!this._lienzo.cuadricula()), claves: "cuadricula rejilla iman alinear" },
@@ -2446,13 +2412,6 @@
     return posiciones(doc.deLaPagina(p).filter((b) => b.tipo !== "conector" && !b.oculto), true).filter((b) => !fueraDe(b)).sort((a, b) => (a.z || 0) - (b.z || 0));
   }
   // ------------------------------------------------------------ 8.3 animaciones
-  /** Efectos de animación: entrada, énfasis y salida. */
-  const EFECTOS = {
-    e: [["aparecer", "Desvanecer"], ["deslizar", "Desde abajo"], ["deslizar-arriba", "Desde arriba"], ["deslizar-izq", "Desde la izquierda"], ["deslizar-der", "Desde la derecha"], ["zoom", "Acercar"], ["rebotar", "Rebotar"], ["girar", "Girar"]],
-    n: [["pulso", "Pulso"], ["sacudir", "Sacudir"], ["vuelta", "Dar una vuelta"], ["crecer", "Crecer"], ["parpadear", "Parpadear"]],
-    x: [["desvanecer", "Desvanecer"], ["deslizar", "Hacia abajo"], ["alejar", "Alejar"], ["girar", "Girar"]],
-  };
-  const TIPO_ANIM = { e: "Entrada", n: "Énfasis", x: "Salida" };
   /**
    * La lista ordenada de animaciones de una página (como el panel de animaciones de PowerPoint):
    * [{ id (bloque), tipo: "e"|"n"|"x", efecto, inicio: "clic"|"con"|"despues", retraso, dur }].

@@ -5067,8 +5067,17 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
           ps2.push([arbol.ci, arbol.cf, arbolNuevo]);
           // Las animaciones apuntan a figuras por número. Como cada figura conserva el suyo, se quedan;
           // solo se quitan los efectos de las figuras (o párrafos) que ya no están.
-          const tm = cA ? null : O.hijoXml(xs, "timing", raiz.ci, raiz.cf);
-          if (tm) {
+          // (PowerPoint pone el p:timing dentro de mc:AlternateContent cuando usa lo de 2010, como el rebote: se poda cada uno)
+          const tms = [];
+          if (!cA) {
+            const t0 = O.hijoXml(xs, "timing", raiz.ci, raiz.cf);
+            if (t0) tms.push(t0);
+            else O.hijosXml(xs, raiz.ci, raiz.cf).filter((h) => O.local(h.n) === "AlternateContent").forEach((h) => {
+              let q = h.i;
+              for (;;) { const i = xs.indexOf("<p:timing", q); if (i < 0 || i >= h.f) break; const f = xs.indexOf("</p:timing>", i); if (f < 0 || f > h.f) break; tms.push({ i, f: f + 11, ac: h }); q = f + 11; }
+            });
+          }
+          for (const tm of tms) {
             const donde = new Map(), re = /<p:cNvPr\b[^>]*?\sid="(\d+)"/g;
             let mm;
             while ((mm = re.exec(arbolNuevo))) if (!donde.has(mm[1])) donde.set(mm[1], mm.index);
@@ -5079,8 +5088,12 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
               return ((i1 < 0 ? "" : arbolNuevo.slice(i0, i1)).match(/<a:p(?=[\s>\/])/g) || []).length > ultimo;
             };
             const antes = xs.slice(tm.i, tm.f), despues = podarTiming(antes, vivo);
-            if (despues !== antes) ps2.push([tm.i, tm.f, despues]);
+            tm.queda = despues;
+            if (despues !== antes && !(tm.ac && despues === "")) ps2.push([tm.i, tm.f, despues]);
           }
+          // si no quedó ninguna animación, se quita el mc:AlternateContent entero (un Choice vacío no sirve)
+          const acV = tms.find((tm) => tm.ac && tm.queda === "");
+          if (acV) { for (let k = ps2.length - 1; k >= 0; k--) if (ps2[k][0] >= acV.ac.i && ps2[k][1] <= acV.ac.f) ps2.splice(k, 1); ps2.push([acV.ac.i, acV.ac.f, ""]); }
         }
         r.rels.filter((q) => q.tipo !== T.diseno).forEach((q) => { if (!mismas || cF) pq.agregaRel(ruta0, q.id, q.tipo, q.destino); });
         if (cF) { const bg = O.hijoXml(xs, "bg", cSld.ci, cSld.cf); ps2.push(bg ? [bg.i, bg.f, r.fondo] : [cSld.ci, cSld.ci, r.fondo]); }
@@ -5100,7 +5113,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
             const m2 = /<p:cNvPr id="(\d+)"/.exec(figDe2.get(bid) || ""); return m2 && enSalida.has(m2[1]) ? m2[1] : null;
           };
           timingNuevo = timingDe(doc, p, spidDe, (bid) => { const b = porId.get(bid); return !!(b && (b.tipo === "texto" || b.html || b.texto)); });
-          const tmV = hsS.find((h) => O.local(h.n) === "timing");
+          const tmV = hsS.find((h) => O.local(h.n) === "timing") || hsS.find((h) => O.local(h.n) === "AlternateContent" && /<p:timing\b/.test(xs.slice(h.i, h.f)));
           if (tmV) ps2.push([tmV.i, tmV.f, timingNuevo]);
           else if (timingNuevo) { const ref = trEl || hsS.find((h) => O.local(h.n) === "clrMapOvr"), pos = ref ? ref.f : cSld.f; if (!cT || !trEl) ps2.push([pos, pos, timingNuevo]); else timingNuevo = "+" + timingNuevo; }
         }
@@ -6205,7 +6218,9 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       oxActual = null;
       // Animaciones de PowerPoint (p:timing): cada efecto con su árbol tal cual, apuntando a los bloques de NOM
       // (una figura agrupada son varios bloques con el mismo «ox»). Los colores del tema se resuelven aquí.
-      const tmEl = hs(sld.documentElement, "timing")[0];
+      // (con lo de PowerPoint 2010, como el rebote al final, el p:timing va en mc:AlternateContent: se lee el Choice)
+      let tmEl = hs(sld.documentElement, "timing")[0];
+      if (!tmEl) for (const ac of hs(sld.documentElement, "AlternateContent")) { const ch = h1(ac, "Choice") || h1(ac, "Fallback"); const t = ch && h1(ch, "timing"); if (t) { tmEl = t; break; } }
       if (tmEl && NOM.animOffice) {
         const oxDe = new Map();
         hijosArbol.forEach((h, k) => { const c = todos(h, "cNvPr")[0]; if (c && at(c, "id") != null && !oxDe.has(at(c, "id"))) oxDe.set(at(c, "id"), k); });

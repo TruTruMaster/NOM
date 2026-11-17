@@ -109,13 +109,43 @@ Leer al empezar la siguiente sesión, junto con `RELEVO-17NOV-LISTA-OFFICE.md` (
 
 1. (Hecho: la vuelta en PowerPoint real, ver arriba. Ojo: por SSH a Windows no escribir `2>nul` en un comando de
    bash: se vuelve `/dev/null` y cmd se cuelga; usar `office_real.ssh(...)` desde Python.)
-2. **Crear y editar animaciones como en PowerPoint** (hoy el menú de NOM solo ofrece sus 17 efectos): galería con los 262
-   (Entrada/Énfasis/Salida/Trayectorias, categorías Básico/Sutil/Moderado/Llamativo), opciones de efecto (dirección,
-   secuencia: como un objeto, todo a la vez, por párrafo; texto por letra o palabra con % de retraso), intervalos (inicio,
-   duración, retraso, repetir, rebobinar, desencadenador al hacer clic en una figura), inicio y fin suaves, rebote,
-   después de la animación (atenuar a un color, ocultar), panel de animación con línea de tiempo, copiar animación,
-   trayectorias propias dibujadas. Todo con su árbol de la biblioteca (`presetDe`) y modificándolo (iterate, repeatCount…).
-   En la ruedita y la paleta de comandos también (reglas del plan).
+2. **(Hecho el 17-nov, noche; sin probar en el teléfono ni regresión: el usuario estaba fuera de casa.)** Crear y editar
+   animaciones como en PowerPoint, en `js/animaciones-panel.js` (nuevo) con el contexto `ctxAnim` de `lienzo.js`:
+   - Galería con los 262 efectos (Entrada/Énfasis/Salida/Trayectorias; categorías de PowerPoint; las trayectorias por
+     Básico 1-18, Especial 19-34, Líneas y curvas 35-64), buscador en español o con el nombre en inglés. En el menú
+     «Animación» hay seis rápidos a un toque.
+   - Opciones del efecto (`opcionesDe`/`conOpciones` en `animaciones-office.js`): dirección (`variantes`, `cambiarEfecto`
+     conserva las opciones), cantidad de Girar, tamaño de Aumentar o encoger (en `to`, como PowerPoint), color de los
+     énfasis de color, inicio y fin suaves, rebote al final, autorreversa, después de la animación (atenuar a un color,
+     ocultar al terminar, ocultar con el siguiente clic), texto por letra o palabra con % y al revés, por párrafos (un
+     efecto por párrafo con `txEl/pRg`, `grupoP` y `par` en la lista; `build="p"` y `rev="1"` en `bldLst`). Intervalos:
+     inicio, retraso, duración (deshabilitada en los instantáneos, como Aparecer), repetir (n, hasta el siguiente clic,
+     hasta el final), rebobinar, desencadenador (clic en una figura). **Solo se reescribe lo que la persona cambió**
+     (Balancear y Onda giran distinto en cada tramo; los colores del tema y un `tmAbs` se quedan como vinieron).
+   - Panel de animación: vista previa con el mismo motor, reproducir todo o desde la elegida, una fila por efecto (los
+     de por párrafos juntos), barras de tiempo que se arrastran (retraso) y su borde (duración), subir/bajar, opciones,
+     quitar, desencadenadores agrupados.
+   - Copiar y pegar animación (`paraBloque`), trayectoria dibujada a mano (`trayectoriaPropia`: presetClass="path"
+     presetID="0", camino relativo `M 0 0 L … E`, `Z` si se cierra), en la ruedita (Más › Otras › Animación) y en la
+     paleta (panel, agregar, trayectoria, copiar, pegar).
+   - Reproductor: `subTnLst` (atenuar `ppt_c` al siguiente clic, ocultar al terminar o al siguiente clic), «hasta el
+     siguiente clic» se detiene al hacer clic, grupos marcados con su secuencia.
+   - Importar/exportar: el `p:timing` dentro de `mc:AlternateContent` (el que escribe PowerPoint con rebote) se lee (Choice) y
+     se escribe igual (Choice con p14 y Fallback sin p14:*); en la ruta con origen también se encuentra, se poda y, si
+     queda vacío, se quita el AlternateContent entero. `<p:tn val>` del «ocultar al terminar» se guarda como `@ef` y se
+     escribe con el número nuevo del efecto. Los efectos por párrafos importados se marcan como grupo.
+   - Prueba de humo hecha (a02-opciones en el navegador: importar, galería, opciones, vista previa, panel, trayectoria,
+     `timingXml`): sin errores. **Falta** (cuando haya tiempo y PowerPoint): abrir en PowerPoint real un archivo con
+     efectos armados en el panel (repetir, rebote, atenuar, ocultar, por párrafos, trayectoria propia) y pasar el validador
+     de Microsoft; probar en el teléfono (barras con el dedo, trayectoria con el dedo, ruedita).
+   - Pendiente de esto: «Animar la forma adjunta» al ir por párrafos (a02 diap. 23: primer efecto con
+     `<p:spTgt><p:bg/></p:spTgt>` y `bldP build="p" animBg="1" autoUpdateAnimBg="0"`); copiar un efecto por párrafos
+     lo pega como un objeto (volver a partirlo en el bloque nuevo); dibujar las trayectorias en el editor (PowerPoint
+     las muestra punteadas sobre la diapositiva); sonidos de efectos. Datos que faltan en la biblioteca (necesitan
+     PowerPoint): las salidas solo traen su dirección de siempre y faltan direcciones de entrada (Desplazar 3 y 12,
+     Barras diagonales 3, Dividir vertical hacia dentro, Rueda por radios, Arrastrar 4, Rotar vertical, Zoom desde el
+     centro de la diapositiva); «Desplazar hacia fuera» se puede derivar de la entrada (el tav 0 con # de la entrada es
+     el tav 1 sin # de la salida).
 3. Calibrar transiciones con `transiciones_real.py` (empezar por Empujar, Barrido, Dividir, Revelar, Barras, Forma, Cubrir,
    Descubrir, Destello, Cubo, Galería, Caída, Cortinas, Curvatura) y el panel de transiciones (galería, opciones, duración,
    aplicar a todas, avance automático). **Transformar (morph)**: emparejar por forma y texto como PowerPoint (por objeto,

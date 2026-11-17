@@ -599,16 +599,27 @@
       let D = 0;
       bhs.forEach((b) => { D = Math.max(D, b.t.b + b.t.AD); });
       if (te.d == null) te.d = D;
-      const ef = { x, t: te, bhs, iter, D };
+      // «después de la animación» (subTnLst): atenuar o esconder al terminar el efecto o al siguiente clic
+      const desp = [];
+      hijosDe(hijo(ctn, "subTnLst")).forEach((n) => {
+        const cb = hijo(n, "cBhvr"), ctnB = cb && hijo(cb, "cTn");
+        if (!ctnB) return;
+        const st = hijo(ctnB, "stCondLst");
+        const alFin = !!(st && hijosDe(st, "cond").some((q) => A(q).evt === "end"));
+        const attrs = hijo(cb, "attrNameLst") ? hijosDe(hijo(cb, "attrNameLst"), "attrName").map((q) => textoDe(q)) : [];
+        desp.push({ l: loc(n[0]), n, t: { b: 0, d: 0.001, rep: 1, rev: false, acc: 0, dec: 0, spd: 1, fill: "hold", AD: 0.001 }, tgt: hijo(cb, "tgtEl"), attrs, aditivo: null, orden: orden++, rebote: 0,
+          alFin: alFin || A(ctnB).masterRel === "sameClick", rel: A(ctnB).masterRel || "nextClick" });
+      });
+      const ef = { x, t: te, bhs, iter, D, desp };
       return ef;
     }
     /** Los grupos de la secuencia principal y de cada desencadenador, como los arma PowerPoint. */
-    function armarGrupos(items) {
+    function armarGrupos(items, seq) {
       const grupos = [];
       let g = null, sub = null;
       items.forEach((x, i) => {
         const ini = x.inicio || "clic";
-        if (ini === "clic" || !g) { g = { auto: ini !== "clic" && !grupos.length, subs: [] }; grupos.push(g); sub = null; }
+        if (ini === "clic" || !g) { g = { auto: ini !== "clic" && !grupos.length, subs: [], seq: seq || "principal" }; grupos.push(g); sub = null; }
         if (!sub || ini === "despues") { sub = { efs: [] }; g.subs.push(sub); }
         const ef = compilarEfecto(x);
         if (ef) sub.efs.push(ef);
@@ -620,7 +631,7 @@
     const disparos = new Map();
     lista.filter((x) => x.disp).forEach((x) => { if (!disparos.has(x.disp)) disparos.set(x.disp, []); disparos.get(x.disp).push(x); });
     // primero se resuelven los destinos (para saber cuántas letras tiene cada uno) y luego los tiempos
-    const todosGrupos = { principal: armarGrupos(principal), disp: new Map([...disparos].map(([b, l]) => [b, armarGrupos(l.map((x, i) => (i === 0 && x.inicio !== "clic" ? Object.assign({}, x, { inicio: "clic" }) : x)))])) };
+    const todosGrupos = { principal: armarGrupos(principal), disp: new Map([...disparos].map(([b, l]) => [b, armarGrupos(l.map((x, i) => (i === 0 && x.inicio !== "clic" ? Object.assign({}, x, { inicio: "clic" }) : x)), "d:" + b)])) };
     function resolver(grupos) {
       for (const g of grupos) {
         let t0 = 0;
@@ -629,6 +640,7 @@
           let fin = 0;
           for (const ef of s.efs) {
             ef.bhs.forEach((b) => { b.dest = destino(ef.x, b.tgt, ef.iter && ef.iter.type !== "el" ? ef.iter : null); });
+            (ef.desp || []).forEach((b) => { b.dest = destino(ef.x, b.tgt, null); });
             const n = ef.iter ? Math.max(1, ...ef.bhs.map((b) => (b.dest && b.dest.unidades ? b.dest.unidades.length : 1))) : 1;
             ef.n = n;
             ef.delta = ef.iter ? (ef.iter.abs != null ? ef.iter.abs : (ef.iter.pct || 0) * ef.t.d) : 0;
@@ -716,6 +728,8 @@
           case "style.textDecorationUnderline": e.td = v === true || v === "true" ? "underline" : "none"; break;
           case "style.fontSize": e.fsz = +v || 1; break;
           case "imageData.grayscale": e.gris = v === "true" || v === true; break;
+          // atenuar después de la animación: el color del objeto (el texto y, si tiene, el relleno)
+          case "ppt_c": e.color = v; if (e.d && e.d.blq && e.d.blq.querySelector(".forma-svg path:not([fill='none'])")) e.fill = v; break;
           default: break;
         }
       };
@@ -871,10 +885,24 @@
       corriendo.forEach((c, ci) => {
         const tg = T - c.inicio;
         if (tg < 0) return;
+        // el clic que sigue en la misma secuencia (para «hasta el siguiente clic» y lo que pasa al siguiente clic)
+        const sig = corriendo.find((q, qi) => qi > ci && q.g.seq === c.g.seq && !q.g.auto);
         c.g.subs.forEach((s) => {
-          const ts = tg - s.b;
-          if (ts < 0) return;
+          const ts0 = tg - s.b;
+          if (ts0 < 0) return;
           s.efs.forEach((ef) => {
+            let ts = ts0;
+            if (ef.t.hastaClic && sig) ts = Math.min(ts, sig.inicio - c.inicio - s.b);
+            if (ef.desp && ef.desp.length) {
+              const fin = ef.t.b + (isFinite(ef.t.AD) ? ef.t.AD : Infinity);
+              ef.desp.forEach((bh) => {
+                if (!bh.dest || (soloDest && bh.dest !== soloDest)) return;
+                let k = null;
+                if (bh.alFin && ts0 >= fin) k = c.inicio + s.b + fin;
+                else if (!bh.alFin && sig && T >= sig.inicio) k = sig.inicio;
+                if (k != null) activos.push({ bh, s: 1, u: null, ef, k: [ci, k, bh.orden] });
+              });
+            }
             const reps = ef.n || 1;
             for (let j = 0; j < reps; j++) {
               const jj = ef.iter && ef.iter.atras ? reps - 1 - j : j;
@@ -1221,7 +1249,7 @@
             const retraso = c0 && A(c0).delay && A(c0).delay !== "indefinite" ? +A(c0).delay || 0 : 0;
             // lo propio del efecto, sin id, tipo de nodo ni retraso (eso lo lleva la lista)
             const c = copia(ectn);
-            (function limpiar(m) { if (!Array.isArray(m)) return; if (loc(m[0]) === "cTn" && m[1]) { m[1] = Object.assign({}, m[1]); delete m[1].id; } H(m).forEach(limpiar); })(c);
+            (function limpiar(m) { if (!Array.isArray(m)) return; if (loc(m[0]) === "cTn" && m[1]) { m[1] = Object.assign({}, m[1]); delete m[1].id; } if (loc(m[0]) === "tn" && a.id != null && A(m).val === a.id) m[1] = Object.assign({}, A(m), { val: "@ef" }); H(m).forEach(limpiar); })(c);
             delete c[1].nodeType;
             const ini = hijo(c, "stCondLst"); if (ini) c[2] = H(c).filter((h) => h !== ini);
             const pcl = a.presetClass || "";
@@ -1256,6 +1284,17 @@
         medios.push(m);
       }
     });
+    // un efecto por párrafo seguido (como lo escribe PowerPoint con «por párrafos»): se marcan como un grupo
+    const parDe = (x) => { let r = null; (function rec(m) { if (r != null || !Array.isArray(m)) return; if (loc(m[0]) === "pRg") r = +A(m).st; H(m).forEach(rec); })(x.ppt.c); return r; };
+    let gP = null;
+    lista.forEach((x, i) => {
+      const k = x.id ? parDe(x) : null;
+      const prev = lista[i - 1];
+      if (k == null) { gP = null; return; }
+      if (gP && prev && prev.grupoP === gP && prev.id === x.id && prev.efecto === x.efecto && prev.disp === x.disp) { x.grupoP = gP; x.par = k; }
+      else { gP = "i" + i; x.grupoP = gP; x.par = k; }
+    });
+    lista.forEach((x) => { if (x.grupoP && lista.filter((y) => y.grupoP === x.grupoP).length < 2) { delete x.grupoP; } });
     const bl = hijo(raiz, "bldLst");
     const bld = bl ? hijosDe(bl).map((b) => { const m = copia(b); const bs = bloquesDe(A(b).spid) || []; if (bs.length) m[1] = Object.assign({}, A(m), { bid: bs[0] }); return m; }) : [];
     if (!lista.length && !medios.length) return null;
@@ -1287,7 +1326,7 @@
    */
   function timingXml(lista, spidDe, opc) {
     opc = opc || {};
-    let id = 1;
+    let id = 1, idEf = 0;
     const efs = [];
     const usados = new Set();
     // cambiar bid por spid; si el destino ya no está, el comportamiento no se escribe
@@ -1300,7 +1339,9 @@
         a.spid = String(sp); delete a.bid; usados.add(a.spid);
         return [n[0], a, H(n)];
       }
-      if (l === "cTn") { const a = Object.assign({ id: String(++id) }, A(n)); a.id = String(id); return [n[0], a, H(n)]; }
+      if (l === "cTn") { const a = Object.assign({ id: String(++id) }, A(n)); a.id = String(id); if (a.presetClass != null) idEf = id; return [n[0], a, H(n)]; }
+      // «ocultar después de la animación» se refiere al número del efecto
+      if (l === "tn" && A(n).val === "@ef") return [n[0], Object.assign({}, A(n), { val: String(idEf) }), H(n)];
       return null === n ? null : undefined;
     };
     const cambiaTodo = (falta) => { const f = cambia(falta); return (n) => { const r = f(n); return r === undefined ? n : r; }; };
@@ -1394,9 +1435,16 @@
       const k = s2 + "|" + g;
       if (yaB.has(k)) return;
       yaB.add(k);
-      if (opc.conTexto && opc.conTexto(x.id)) blds.push(`<p:bldP spid="${s2}" grpId="${g}" animBg="1"/>`);
+      // por párrafos: build="p" (y rev="1" si van al revés), como PowerPoint
+      if (x.par != null) blds.push(`<p:bldP spid="${s2}" grpId="${g}" build="p"${x.parAtras ? ' rev="1"' : ""}/>`);
+      else if (opc.conTexto && opc.conTexto(x.id)) blds.push(`<p:bldP spid="${s2}" grpId="${g}" animBg="1"/>`);
     });
-    return `<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>${cuerpo}</p:childTnLst></p:cTn></p:par></p:tnLst>${blds.length ? `<p:bldLst>${blds.join("")}</p:bldLst>` : ""}</p:timing>`;
+    const tm = `<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>${cuerpo}</p:childTnLst></p:cTn></p:par></p:tnLst>${blds.length ? `<p:bldLst>${blds.join("")}</p:bldLst>` : ""}</p:timing>`;
+    // Lo de PowerPoint 2010 (p14: el rebote al final) va como lo escribe PowerPoint: en mc:AlternateContent, y para
+    // los programas de antes el mismo p:timing sin esos atributos.
+    if (!/\sp14:/.test(tm)) return tm;
+    const sin = tm.replace(/\sp14:[A-Za-z]+="[^"]*"/g, "");
+    return `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main" Requires="p14">${tm}</mc:Choice><mc:Fallback>${sin}</mc:Fallback></mc:AlternateContent>`;
   }
   /** Multiplica por f los tiempos (duraciones y retrasos) dentro de un efecto. */
   function escalarTiempos(n, f) {
@@ -1431,9 +1479,230 @@
     const k = clavePreset(x);
     const p = k && presets()[k];
     if (p) return p.n + (p.dir ? ` (${p.dir.toLowerCase()})` : "");
+    if (x && x.ppt && A(x.ppt.c).presetClass === "path" && +A(x.ppt.c).presetID === 0) return "Trayectoria personalizada";
     if (x && x.ppt) { const a = A(x.ppt.c); const q = presets()[`${a.presetClass}:${a.presetID}:0`] || Object.entries(presets()).find(([kk]) => kk.startsWith(`${a.presetClass}:${a.presetID}:`)); const pp = Array.isArray(q) ? q[1] : q; return pp ? pp.n : "Efecto de PowerPoint"; }
     return null;
   }
 
-  NOM.animOffice = { rebote, reproductor, presetDe, clavePreset, nombreEfecto, LEGADO, leerTiming, timingXml, deDom, aXml, formula, valorNum, mascara, leerCamino, puntoCamino, tiempoDe, local, activa, acelera, duracionNatural, escalarTiempos, colorNodo, loc, A, H, hijo, hijosDe, copia };
+  // ================================================================== opciones de efecto (lo del cuadro «Opciones de efectos»)
+  // Cada opción es lo mismo que escribe PowerPoint en el árbol del efecto (medido en a02-opciones):
+  // por letra/palabra: <p:iterate type="lt|wd"><p:tmPct val="10000"/></p:iterate>; repetir n: repeatCount="n000"
+  // (hasta el siguiente clic: "indefinite" con endCondLst onNext; hasta el final de la diapositiva: "indefinite");
+  // autorreversa: autoRev="1"; rebobinar al terminar: fill="remove"; inicio y fin suaves: accel/decel (fracción de la
+  // duración × 100000); rebote al final: p14:presetBounceEnd en el efecto y p14:bounceEnd en cada comportamiento que
+  // mueve; después de la animación: subTnLst (atenuar: animClr de ppt_c al siguiente clic; ocultar: set de
+  // visibilidad al terminar o al siguiente clic); por párrafos: un efecto por párrafo con <p:txEl><p:pRg/></p:txEl>.
+  const ORDEN_CTN = ["stCondLst", "endCondLst", "endSync", "iterate", "childTnLst", "subTnLst"];
+  function ponerHijo(c, nodo) {
+    const l = loc(nodo[0]);
+    const hs = H(c).filter((h) => !(Array.isArray(h) && loc(h[0]) === l));
+    const k = ORDEN_CTN.indexOf(l);
+    let i = hs.findIndex((h) => Array.isArray(h) && ORDEN_CTN.indexOf(loc(h[0])) > k);
+    if (i < 0) i = hs.length;
+    hs.splice(i, 0, nodo);
+    c[2] = hs;
+  }
+  function quitarHijo(c, l) { if (Array.isArray(c[2])) c[2] = c[2].filter((h) => !(Array.isArray(h) && loc(h[0]) === l)); }
+  const MUEVE = /^(anim|animMotion|animScale|animRot)$/;
+  /** Recorre los comportamientos (las hojas) de un efecto. */
+  function cadaComp(c, fn) {
+    (function rec(lst) {
+      for (const n of hijosDe(lst)) {
+        const l = loc(n[0]);
+        if (l === "par" || l === "seq" || l === "excl") { const k = hijo(n, "cTn"); if (k) rec(hijo(k, "childTnLst")); continue; }
+        fn(n, l);
+      }
+    })(hijo(c, "childTnLst"));
+  }
+  const hexDe = (n) => { const v = n && hijosDe(n)[0]; if (!v) return null; if (A(v)._c) return A(v)._c; return loc(v[0]) === "srgbClr" ? "#" + A(v).val : null; };
+  /** Las opciones de un efecto de la lista, leídas de su árbol. */
+  function opcionesDe(x) {
+    const pp = presetDe(x);
+    if (!pp || !pp.c) return null;
+    const c = pp.c, a = A(c), it = hijo(c, "iterate"), fin = hijo(c, "endCondLst");
+    const op = {
+      texto: it ? ({ lt: "letra", wd: "palabra" }[A(it).type] || "todo") : "todo",
+      pct: it && hijo(it, "tmPct") ? Math.round(+A(hijo(it, "tmPct")).val / 1000) : 10,
+      atras: !!(it && A(it).backwards === "1"),
+      repetir: a.repeatCount == null ? 1 : a.repeatCount === "indefinite" ? (fin && hijosDe(fin, "cond").some((q) => A(q).evt === "onNext") ? "clic" : "fin") : Math.max(1, +a.repeatCount / 1000),
+      autoRev: a.autoRev === "1" || a.autoRev === "true",
+      rebobinar: a.fill === "remove",
+      suaveIni: (+a.accel || 0) / 100000, suaveFin: (+a.decel || 0) / 100000,
+      rebote: (+a["p14:presetBounceEnd"] || 0) / 100000,
+      despues: null, giro: null, escala: null, color: null,
+    };
+    const sub = hijo(c, "subTnLst");
+    hijosDe(sub).forEach((n) => {
+      const cb = hijo(n, "cBhvr"), ct = cb && hijo(cb, "cTn");
+      if (loc(n[0]) === "animClr") op.despues = { color: hexDe(hijo(n, "to")) || "#C8C8C8" };
+      else if (loc(n[0]) === "set") op.despues = A(ct).masterRel === "nextClick" ? "ocultarClic" : "ocultar";
+    });
+    // los parámetros que PowerPoint deja cambiar: la cantidad en Girar, el tamaño en Aumentar o encoger y el color en
+    // los énfasis de color (en los demás efectos esos valores son parte del efecto)
+    const enfasis = a.presetClass === "emph", pid = +a.presetID;
+    if (enfasis) cadaComp(c, (n, l) => {
+      if (pid !== 8) return;
+      if (l === "animRot" && op.giro == null && A(n).by != null) op.giro = Math.round(+A(n).by / 60000);
+    });
+    if (enfasis) cadaComp(c, (n, l) => {
+      if (l === "animScale" && pid === 6 && op.escala == null && (hijo(n, "to") || hijo(n, "by"))) op.escala = Math.round(+A(hijo(n, "to") || hijo(n, "by")).x / 1000);
+      if (l === "animClr" && op.color == null && hijo(n, "to")) op.color = hexDe(hijo(n, "to"));
+    });
+    return op;
+  }
+  /** Un efecto de la lista con otras opciones (devuelve una copia; el árbol queda en «ppt»). */
+  function conOpciones(x, cambios) {
+    const pp = presetDe(x);
+    if (!pp || !pp.c) return x;
+    cambios = cambios || {};
+    // solo se toca lo que cambió: el resto del árbol queda como lo escribió PowerPoint (Balancear y Onda giran
+    // distinto en cada tramo, los colores del tema siguen siendo del tema, un tmAbs sigue siendo tmAbs…)
+    const orig = opcionesDe(x);
+    const op = Object.assign({}, orig, cambios);
+    const cambia = (...ks) => ks.some((k) => k in cambios && JSON.stringify(cambios[k]) !== JSON.stringify(orig[k]));
+    const c = copia(pp.c), a = c[1] = Object.assign({}, A(c));
+    // por letra o palabra
+    if (cambia("texto", "pct", "atras")) {
+      quitarHijo(c, "iterate");
+      if (op.texto === "letra" || op.texto === "palabra") {
+        const ia = { type: op.texto === "letra" ? "lt" : "wd" };
+        if (op.atras) ia.backwards = "1";
+        ponerHijo(c, ["p:iterate", ia, [["p:tmPct", { val: String(Math.round(Math.max(0, Math.min(100, +op.pct || 0)) * 1000)) }]]]);
+      }
+    }
+    // repetir
+    if (cambia("repetir")) {
+      delete a.repeatCount; quitarHijo(c, "endCondLst");
+      if (op.repetir === "clic" || op.repetir === "fin") {
+        a.repeatCount = "indefinite";
+        if (op.repetir === "clic") ponerHijo(c, ["p:endCondLst", {}, [["p:cond", { evt: "onNext", delay: "0" }, [["p:tgtEl", {}, [["p:sldTgt", {}]]]]]]]);
+      } else if (+op.repetir > 1) a.repeatCount = String(Math.round(+op.repetir * 1000));
+    }
+    if (cambia("autoRev")) { if (op.autoRev) a.autoRev = "1"; else delete a.autoRev; }
+    if (cambia("rebobinar")) a.fill = op.rebobinar ? "remove" : "hold";
+    const pon100 = (k, v) => { if (v > 0) a[k] = String(Math.round(Math.min(1, v) * 100000)); else delete a[k]; };
+    if (cambia("suaveIni")) pon100("accel", op.suaveIni);
+    if (cambia("suaveFin")) pon100("decel", op.suaveFin);
+    const rb = op.rebote > 0 ? String(Math.round(Math.min(0.95, op.rebote) * 100000)) : null;
+    if (cambia("rebote")) { if (rb) a["p14:presetBounceEnd"] = rb; else delete a["p14:presetBounceEnd"]; }
+    cadaComp(c, (n, l) => {
+      if (cambia("rebote") && MUEVE.test(l)) { n[1] = Object.assign({}, A(n)); if (rb) n[1]["p14:bounceEnd"] = rb; else delete n[1]["p14:bounceEnd"]; }
+      if (cambia("giro") && l === "animRot" && A(n).by != null) n[1] = Object.assign({}, A(n), { by: String(Math.round(+op.giro * 60000)) });
+      // Aumentar o encoger: PowerPoint deja by="150000" y escribe el tamaño elegido en «to» (que es lo que manda)
+      if (cambia("escala") && l === "animScale" && (hijo(n, "by") || hijo(n, "to"))) {
+        const v = String(Math.round(op.escala * 1000));
+        quitarHijo(n, "to");
+        n[2] = H(n).concat([["p:to", { x: v, y: v }]]);
+      }
+      if (cambia("color") && op.color && l === "animClr" && hijo(n, "to")) { const to = hijo(n, "to"); to[2] = [["a:srgbClr", { val: op.color.replace("#", "").toUpperCase() }]]; }
+    });
+    if (!cambia("despues")) {
+      const y0 = Object.assign({}, x, { ppt: { c, d0: pp.d0 } });
+      if (!/^ppt:/.test(y0.efecto || "")) y0.efecto = "ppt:" + (clavePreset(x) || `${a.presetClass}:${a.presetID}:${a.presetSubtype || 0}`);
+      return y0;
+    }
+    // después de la animación
+    quitarHijo(c, "subTnLst");
+    const tg = () => ["p:tgtEl", {}, [["p:spTgt", { bid: "@" }]]];
+    if (op.despues && op.despues.color) {
+      ponerHijo(c, ["p:subTnLst", {}, [["p:animClr", { clrSpc: "rgb", dir: "cw" }, [["p:cBhvr", { override: "childStyle" }, [["p:cTn", { dur: "1", fill: "hold", display: "0", masterRel: "nextClick", afterEffect: "1" }], tg(), ["p:attrNameLst", {}, [["p:attrName", {}, ["ppt_c"]]]]]], ["p:to", {}, [["a:srgbClr", { val: op.despues.color.replace("#", "").toUpperCase() }]]]]]]]);
+    } else if (op.despues === "ocultar" || op.despues === "ocultarClic") {
+      const ct = op.despues === "ocultar"
+        ? ["p:cTn", { dur: "1", fill: "hold", display: "0", masterRel: "sameClick", afterEffect: "1" }, [["p:stCondLst", {}, [["p:cond", { evt: "end", delay: "0" }, [["p:tn", { val: "@ef" }]]]]]]]
+        : ["p:cTn", { dur: "1", fill: "hold", display: "0", masterRel: "nextClick", afterEffect: "1" }];
+      ponerHijo(c, ["p:subTnLst", {}, [["p:set", {}, [["p:cBhvr", { override: "childStyle" }, [ct, tg(), ["p:attrNameLst", {}, [["p:attrName", {}, ["style.visibility"]]]]]], ["p:to", {}, [["p:strVal", { val: "hidden" }]]]]]]]);
+    }
+    const y = Object.assign({}, x, { ppt: { c, d0: pp.d0 } });
+    if (!/^ppt:/.test(y.efecto || "")) y.efecto = "ppt:" + (clavePreset(x) || `${a.presetClass}:${a.presetID}:${a.presetSubtype || 0}`);
+    return y;
+  }
+  /** Las variantes (direcciones) de un efecto: [{ clave, dir }]. */
+  function variantes(x) {
+    const k = clavePreset(x) || (x && x.ppt ? `${A(x.ppt.c).presetClass}:${A(x.ppt.c).presetID}:${A(x.ppt.c).presetSubtype || 0}` : null);
+    if (!k) return [];
+    const [cl, id] = k.split(":");
+    return Object.entries(presets()).filter(([kk]) => kk.startsWith(cl + ":" + id + ":")).map(([clave, p]) => ({ clave, dir: p.dir })).filter((v) => v.dir);
+  }
+  /** El mismo efecto con otra clave de la biblioteca (otra dirección o efecto), conservando sus opciones. */
+  function cambiarEfecto(x, clave) {
+    const p = presets()[clave];
+    if (!p) return x;
+    const op = x && presetDe(x) ? opcionesDe(x) : null;
+    const tipo = { entr: "e", exit: "x", emph: "n", path: "r" }[clave.split(":")[0]] || "n";
+    const y = Object.assign({}, x, { tipo, efecto: "ppt:" + clave, dur: x && x.dur && x.efecto && clavePreset(x) && clavePreset(x).split(":").slice(0, 2).join(":") === clave.split(":").slice(0, 2).join(":") ? x.dur : Math.max(1, +p.d0 || 500) });
+    delete y.ppt;
+    if (!op) return y;
+    // (los parámetros propios de cada efecto, como el color o los grados, no pasan a otro efecto)
+    const mismo = clavePreset(x) && clavePreset(x).split(":").slice(0, 2).join(":") === clave.split(":").slice(0, 2).join(":");
+    const pasa = { texto: op.texto, pct: op.pct, atras: op.atras, repetir: op.repetir, autoRev: op.autoRev, rebobinar: op.rebobinar, suaveIni: op.suaveIni, suaveFin: op.suaveFin, rebote: op.rebote, despues: op.despues };
+    if (mismo) Object.assign(pasa, { giro: op.giro, escala: op.escala, color: op.color });
+    const base = opcionesDe(y);
+    const dif = Object.keys(pasa).some((k) => JSON.stringify(pasa[k]) !== JSON.stringify(base[k]));
+    return dif ? conOpciones(y, pasa) : y;
+  }
+  /** Un efecto nuevo de la biblioteca para un bloque. */
+  function nuevoEfecto(id, clave, inicio) {
+    const p = presets()[clave];
+    if (!p) return null;
+    const tipo = { entr: "e", exit: "x", emph: "n", path: "r" }[clave.split(":")[0]] || "n";
+    // (los instantáneos, como Aparecer, no tienen duración: se quedan con la suya, 1 ms, como en PowerPoint)
+    return { id, tipo, efecto: "ppt:" + clave, inicio: inicio || "clic", retraso: 0, dur: Math.max(1, +p.d0 || 500) };
+  }
+  /** Copia de un efecto para otro bloque (copiar animación): lo que apuntaba al bloque de antes apunta al nuevo. */
+  function paraBloque(x, id) {
+    const y = copia(x);
+    (function rec(m) { if (!Array.isArray(m)) return; if (loc(m[0]) === "spTgt" && (A(m).bid === x.id || A(m).bid === "@")) { m[1] = Object.assign({}, A(m), { bid: "@" }); delete m[1].spid; } H(m).forEach(rec); })(y.ppt ? y.ppt.c : null);
+    y.id = id; delete y.ids; delete y.spid; delete y.grupoP; delete y.par; delete y.marcador;
+    if (y.ppt) (function rec(m) { if (!Array.isArray(m)) return; if (loc(m[0]) === "spTgt") m[2] = H(m).filter((h) => !(Array.isArray(h) && loc(h[0]) === "txEl")); H(m).forEach(rec); })(y.ppt.c);
+    return y;
+  }
+  /**
+   * Por párrafos: un efecto por párrafo (como PowerPoint), cada uno con su txEl. indices: los párrafos con texto.
+   * Devuelve la lista de efectos (el primero con el inicio del original; los demás, igual que él).
+   */
+  function porParrafos(x, indices, atras) {
+    const pp = presetDe(x);
+    if (!pp || !pp.c || !indices.length) return [x];
+    const g = "p" + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
+    const orden = atras ? indices.slice().reverse() : indices;
+    return orden.map((k) => {
+      const c = copia(pp.c);
+      (function rec(m) {
+        if (!Array.isArray(m)) return;
+        if (loc(m[0]) === "spTgt" && (A(m).bid == null || A(m).bid === "@" || A(m).bid === x.id)) m[2] = [["p:txEl", {}, [["p:pRg", { st: String(k), end: String(k) }]]]];
+        H(m).forEach(rec);
+      })(c);
+      const y = Object.assign({}, x, { ppt: { c, d0: pp.d0 }, grupoP: g, par: k });
+      if (atras) y.parAtras = true; else delete y.parAtras;
+      if (!/^ppt:/.test(y.efecto || "")) y.efecto = "ppt:" + clavePreset(x);
+      return y;
+    });
+  }
+  /** Juntar un efecto por párrafos en uno solo (como un objeto). */
+  function comoObjeto(x) {
+    const y = Object.assign({}, x);
+    delete y.grupoP; delete y.par; delete y.parAtras;
+    if (y.ppt) { y.ppt = copia(y.ppt); (function rec(m) { if (!Array.isArray(m)) return; if (loc(m[0]) === "spTgt") m[2] = H(m).filter((h) => !(Array.isArray(h) && loc(h[0]) === "txEl")); H(m).forEach(rec); })(y.ppt.c); }
+    return y;
+  }
+  /**
+   * Trayectoria propia (dibujada): pts en px de la diapositiva desde el centro del bloque, T el tamaño de la
+   * diapositiva. Se escribe como PowerPoint: presetClass="path" presetID="0", camino relativo en fracciones.
+   */
+  function trayectoriaPropia(id, pts, T, cerrada) {
+    const f = (v) => String(Math.round(v * 10000) / 10000);
+    const d = "M 0 0 " + pts.slice(1).map((p) => `L ${f(p[0] / T.w)} ${f(p[1] / T.h)}`).join(" ") + (cerrada ? " Z" : " E");
+    const c = ["p:cTn", { presetID: "0", presetClass: "path", presetSubtype: "0", accel: "50000", decel: "50000", fill: "hold", grpId: "0" }, [["p:childTnLst", {}, [
+      ["p:animMotion", { origin: "layout", path: d, pathEditMode: "relative", rAng: "0", ptsTypes: "A".repeat(pts.length) }, [["p:cBhvr", {}, [["p:cTn", { dur: "2000", fill: "hold" }], ["p:tgtEl", {}, [["p:spTgt", { bid: "@" }]]], ["p:attrNameLst", {}, [["p:attrName", {}, ["ppt_x"]], ["p:attrName", {}, ["ppt_y"]]]]]]]]]]]];
+    return { id, tipo: "r", efecto: "ppt:path:0:0", inicio: "clic", retraso: 0, dur: 2000, ppt: { c, d0: 2000 } };
+  }
+  /** El camino (en fracciones de la diapositiva) de un efecto de trayectoria, para dibujarlo en el editor. */
+  function caminoDe(x) {
+    const pp = presetDe(x);
+    let d = null;
+    if (pp && pp.c) cadaComp(pp.c, (n, l) => { if (!d && l === "animMotion" && A(n).path) d = A(n).path; });
+    return d ? leerCamino(d) : null;
+  }
+
+  NOM.animOffice = { rebote, reproductor, presetDe, clavePreset, nombreEfecto, LEGADO, opcionesDe, conOpciones, variantes, cambiarEfecto, nuevoEfecto, paraBloque, porParrafos, comoObjeto, trayectoriaPropia, caminoDe, parrafosDe, contTexto, leerTiming, timingXml, deDom, aXml, formula, valorNum, mascara, leerCamino, puntoCamino, tiempoDe, local, activa, acelera, duracionNatural, escalarTiempos, colorNodo, loc, A, H, hijo, hijosDe, copia };
 })();
