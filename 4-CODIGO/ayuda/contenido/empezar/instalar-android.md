@@ -11,7 +11,7 @@ más). No está en la Play Store: se descarga desde la página.
 
 ## Instalar
 
-1. En el navegador del teléfono abre NOM-COLAB y toca **Descarga la app** (abajo de la pantalla de
+1. En el navegador del teléfono abre NOM y toca **Descarga la app** (abajo de la pantalla de
    entrar). El archivo viene de GitHub, así que no gasta la conexión del servidor.
 2. Abre el archivo `NOM-COLAB.apk`. Si Android lo pide, permite **instalar apps de origen
    desconocido** para tu navegador (solo esa vez).

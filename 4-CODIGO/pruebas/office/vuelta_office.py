@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""La vuelta: lo que exporta NOM-COLAB, abierto con Microsoft Office de verdad (en la Windows de pruebas).
+"""La vuelta: lo que exporta NOM, abierto con Microsoft Office de verdad (en la Windows de pruebas).
 
 Arma en ~/.cache/nom-pruebas/office-real/vuelta/ los archivos que se mandan a Office:
   - cada archivo hecho por Office (w*, x*, p* de office-real/archivos) importado, EDITADO como lo haría una persona
     (texto, celdas, fórmulas nuevas con matrices dinámicas, LET y LAMBDA, diapositivas) y exportado; también
     pasando por el formato propio (.nom)
-  - documentos hechos desde cero en NOM-COLAB (sin archivo de origen): texto, hoja con fórmulas y presentación
+  - documentos hechos desde cero en NOM (sin archivo de origen): texto, hoja con fórmulas y presentación
   - los resultados de ediciones.py (corpus de Microsoft y Apache POI editado), si están
   - tres archivos dañados a propósito (control: Office TIENE que quejarse de esos)
 Luego los sube a Windows, corre windows/abrir_office.py y trae resultado.json.
@@ -30,7 +30,7 @@ X_MATRICES = """
               "c:BF300": "=LET(x;AZ300;y;AZ301;x*y+1)", "c:BG300": "=LAMBDA(n;n*n+1)(6)", "c:BH300": "=FILTRAR(AZ300:AZ302;AZ300:AZ302>1)", "c:BI300": "=UNICOS({1;2;2;3})",
               "c:BJ300": "=SUMA(AZ300:AZ302*AZ300:AZ302)", "c:BK300": "=BYROW({1,2;3,4};LAMBDA(r;SUMA(r)))", "c:BL300": "=MAP({1,2,3};LAMBDA(v;v*10))",
               "c:BM300": "=DIVIDIRTEXTO(\\"a,b;c,d\\";\\",\\";\\";\\")", "c:BO300": "=APILARV({1,2};{3,4})", "c:BQ300": "=TOMAR(AZ300:BA302;2)", "c:BS300": "=SUMA(BA300#)",
-              "c:BT300": "=REDUCE(0;AZ300:AZ302;LAMBDA(a;v;a+v))", "c:BU300": "=SCAN(0;{1,2,3};LAMBDA(a;v;a+v))", "c:B2": "Editado en NOM-COLAB" });
+              "c:BT300": "=REDUCE(0;AZ300:AZ302;LAMBDA(a;v;a+v))", "c:BU300": "=SCAN(0;{1,2,3};LAMBDA(a;v;a+v))", "c:B2": "Editado en NOM" });
             return {};"""
 X09_DATOS = """
             // cambian los datos de los que dependen las matrices: lo que derraman cambia de tamaño
@@ -75,7 +75,7 @@ async () => {
     const sec = doc.secuencia("cuerpo");
     let iz = sec.fin ? null : null;
     const pon = (x, a) => { const vis = doc.secuencia("cuerpo").visibles(); doc.seq("cuerpo", Object.assign({ k: "i", iz: vis.length ? vis[vis.length - 1].id : null, x }, a ? { a } : {})); };
-    pon("Informe hecho en NOM-COLAB"); pon("\n", { estilo: "h1" });
+    pon("Informe hecho en NOM"); pon("\n", { estilo: "h1" });
     pon("Un párrafo con "); pon("negrita", { b: true }); pon(", "); pon("cursiva", { i: true }); pon(" y "); pon("color", { color: "#C2372B" }); pon(".\n");
     pon("Primer punto"); pon("\n", { lista: "numeros" }); pon("Segundo punto"); pon("\n", { lista: "numeros" }); pon("Viñeta"); pon("\n", { lista: "vinetas" });
     pon("Cierre del documento.");
@@ -85,7 +85,7 @@ async () => {
   {
     const doc = NOM.formatos.docDeOps("Presentación nueva", "PRESENTACION", []);
     doc.cambiar("_doc", { paginas: ["d1", "d2"] });
-    doc.cambiar("t1", { tipo: "texto", pagina: "d1", orden: 1, z: 1, x: 80, y: 60, w: 800, h: 100, estilo: "h1", html: "Presentación hecha en NOM-COLAB" });
+    doc.cambiar("t1", { tipo: "texto", pagina: "d1", orden: 1, z: 1, x: 80, y: 60, w: 800, h: 100, estilo: "h1", html: "Presentación hecha en NOM" });
     doc.cambiar("f1", { tipo: "forma", figura: "elipse", pagina: "d1", orden: 2, z: 2, x: 120, y: 220, w: 240, h: 160, color: "#F06A3D", texto: "Círculo" });
     doc.cambiar("f2", { tipo: "forma", figura: "rect", pagina: "d1", orden: 3, z: 3, x: 420, y: 220, w: 260, h: 160, color: "#2F6FB0", texto: "Cuadro" });
     doc.cambiar("t2", { tipo: "texto", pagina: "d2", orden: 1, z: 1, x: 80, y: 60, w: 800, h: 90, estilo: "h1", html: "Segunda diapositiva" });
@@ -139,7 +139,7 @@ def armar(con_ediciones=True):
         for p in sorted(ed.glob("*.*")) if ed.exists() else []:
             if p.suffix in (".docx", ".xlsx", ".pptx"): shutil.copy(p, SALE / ("corpus-" + p.name)); n += 1
     dañados(SALE)
-    print(f"{n} archivos exportados por NOM-COLAB + 3 de control en {SALE}")
+    print(f"{n} archivos exportados por NOM + 3 de control en {SALE}")
 
 
 def mandar_y_abrir():
@@ -156,7 +156,7 @@ def mandar_y_abrir():
     mal = [r for r in nuestros if not r.get("abrio") or r.get("avisos") or r.get("reparado")]
     ctrl_ok = all((not r.get("abrio")) or r.get("avisos") or r.get("reparado") for r in control) and len(control) == 3
     print(f"\nControl (archivos dañados a propósito): {'Office se quejó de los 3 (la prueba sí detecta)' if ctrl_ok else 'NO SE DETECTÓ ALGUNO: ' + json.dumps(control, ensure_ascii=False)[:600]}")
-    print(f"Exportados por NOM-COLAB: {len(nuestros)} · abrieron sin avisos ni reparar: {len(nuestros) - len(mal)} · con algo: {len(mal)}")
+    print(f"Exportados por NOM: {len(nuestros)} · abrieron sin avisos ni reparar: {len(nuestros) - len(mal)} · con algo: {len(mal)}")
     for r in mal: print("  ", r["archivo"], json.dumps({k: r.get(k) for k in ("abrio", "error", "avisos", "reparado", "registro_reparacion")}, ensure_ascii=False)[:700])
     xl = [r for r in nuestros if r.get("app") == "excel"]
     print(f"Excel: fórmulas leídas {sum(r.get('formulas', 0) for r in xl)}, con #NAME? {sum(r.get('nombre_mal', 0) for r in xl)}, matrices que derraman {sum(r.get('derraman', 0) for r in xl)}")

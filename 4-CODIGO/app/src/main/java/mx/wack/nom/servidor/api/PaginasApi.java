@@ -74,6 +74,14 @@ public class PaginasApi {
         return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noCache()).body(Buscadores.sitemap(escrito, Buscadores.base(req)));
     }
 
+    // security.txt con la direccion principal (antes decia siempre la de dpdns aunque se entrara por otro nombre)
+    @GetMapping(value = "/.well-known/security.txt", produces = "text/plain;charset=UTF-8")
+    public ResponseEntity<String> seguridad(HttpServletRequest req) throws IOException {
+        String escrito = leer(".well-known/security.txt");
+        if (escrito == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noCache()).body(escrito.replace(Buscadores.ESCRITA + "/", Buscadores.base(req) + "/"));
+    }
+
     /** Un archivo de static/ (o de donde digan las ubicaciones configuradas) como texto; null si no esta. */
     private String leer(String archivo) throws IOException {
         for (String lugar : lugares) {

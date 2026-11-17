@@ -8,7 +8,7 @@ version: 0.13.0
 ---
 Es **por persona**: en el mismo espacio del teléfono pueden estar mezclados alias y cuentas. Si tu
 celular o tu computadora **sí tiene Internet** (datos o el Wi-Fi de la escuela), puedes entrar con
-tu cuenta de NOM-COLAB en Internet.
+tu cuenta de NOM en Internet.
 
 ## Cómo
 

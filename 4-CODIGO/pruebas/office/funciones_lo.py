@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Compara las funciones de la hoja de NOM-COLAB con LibreOffice, fórmula por fórmula.
+"""Compara las funciones de la hoja de NOM con LibreOffice, fórmula por fórmula.
 
 Arma un .xlsx con datos y una fórmula por renglón (con los nombres en inglés, como los guarda
 Excel), lo abre LibreOffice sin pantalla para que calcule y lo pasa a CSV; después evalúa las
-mismas fórmulas con el motor de NOM-COLAB (en la página real) y compara los resultados.
+mismas fórmulas con el motor de NOM (en la página real) y compara los resultados.
 
   ~/.cache/nom-pruebas/venv/bin/python pruebas/office/funciones_lo.py [--detalle]
 
@@ -55,8 +55,8 @@ CASOS = [
     "ROW(A7)", "COLUMN(C5)", "ROWS(A1:B8)", "COLUMNS(A1:C8)", "ROW(B3:C9)", "ADDRESS(3,2)", "ADDRESS(3,2,4)", "ADDRESS(10,28,2)", "INDIRECT(\"A\"&2)", "SUM(INDIRECT(\"A1:A4\"))",
     "SUM(OFFSET(A1,1,0,3,1))", "OFFSET(A1,2,1)", "SUM(OFFSET(A1:A2,2,1))", "ROW()", "COLUMN()",
 ]
-# (TYPE(TRUE) no se compara: LibreOffice dice 1 —para él un lógico es un número— y Excel dice 4, que es lo que da NOM-COLAB.)
-# Lo que LibreOffice escribe con la configuración regional en inglés y lo que escribe NOM-COLAB
+# (TYPE(TRUE) no se compara: LibreOffice dice 1 —para él un lógico es un número— y Excel dice 4, que es lo que da NOM.)
+# Lo que LibreOffice escribe con la configuración regional en inglés y lo que escribe NOM
 LOGICOS = {"TRUE": True, "FALSE": False, "VERDADERO": True, "FALSO": False}
 PREFIJO = {"IFNA": "_xlfn.", "SWITCH": "_xlfn.", "XOR": "_xlfn.", "TEXTBEFORE": "_xlfn.", "TEXTAFTER": "_xlfn.", "UNICHAR": "_xlfn.", "UNICODE": "_xlfn.", "ISOWEEKNUM": "_xlfn.",
            "CEILING.MATH": "_xlfn.", "FLOOR.MATH": "_xlfn.", "COVARIANCE.P": "_xlfn.", "COVARIANCE.S": "_xlfn.", "RANK.AVG": "_xlfn."}
@@ -98,7 +98,7 @@ JS = r"""
 
 
 def igual(lo, nuestro):
-    """LibreOffice (texto del CSV) contra el valor de NOM-COLAB."""
+    """LibreOffice (texto del CSV) contra el valor de NOM."""
     if "e" in nuestro: return lo.startswith(("#", "Err:")) and not lo.startswith(("#NAME", "Err:508", "Err:509"))
     if "b" in nuestro:
         if lo.upper() in LOGICOS: return LOGICOS[lo.upper()] == nuestro["b"]
@@ -126,11 +126,11 @@ def main():
     bien = mal = sin = 0
     for f, lo, n in zip(CASOS, de_lo, nuestros):
         if lo.startswith(("#NAME", "Err:508", "Err:509")) or (lo == "" and "t" not in n):
-            sin += 1; print(f"  --   {f}: LibreOffice no la calcula ({lo or 'vacío'}); NOM-COLAB = {n}"); continue
+            sin += 1; print(f"  --   {f}: LibreOffice no la calcula ({lo or 'vacío'}); NOM = {n}"); continue
         if igual(lo, n):
             bien += 1
             if detalle: print(f"  ok   {f} = {lo}")
-        else: mal += 1; print(f"  MAL  {f}: LibreOffice = {lo!r}, NOM-COLAB = {n}")
+        else: mal += 1; print(f"  MAL  {f}: LibreOffice = {lo!r}, NOM = {n}")
     print(f"\nFunciones contra LibreOffice: {bien} bien, {mal} mal, {sin} sin comparar, de {len(CASOS)} fórmulas ({total} funciones en la hoja)")
     sys.exit(1 if mal else 0)
 

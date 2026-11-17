@@ -1,4 +1,4 @@
--- NOM-COLAB · Modulo Gestion de cuentas (usuarios, sesiones y preferencias).
+-- NOM · Modulo Gestion de cuentas (usuarios, sesiones y preferencias).
 -- Azure SQL Database (SQL Server). Mismas tablas que schema-h2.sql.
 -- Se ejecuta en cada arranque; todo es idempotente.
 

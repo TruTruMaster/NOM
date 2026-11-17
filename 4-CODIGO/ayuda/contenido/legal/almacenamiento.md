@@ -8,7 +8,7 @@ version: 2026-11-13
 ---
 **No usamos cookies**, ni nuestras ni de otros. La sesión viaja en una cabecera de cada petición.
 
-Lo que NOM-COLAB guarda en tu navegador (o dentro de la app):
+Lo que NOM guarda en tu navegador (o dentro de la app):
 
 | Dónde | Qué | Cifrado |
 |---|---|---|
@@ -20,5 +20,5 @@ Lo que NOM-COLAB guarda en tu navegador (o dentro de la app):
 consulta; para borrar todo, borra los datos del sitio en tu navegador (o los datos de la app en
 Ajustes de Android). Lo que no se haya enviado se perdería.
 
-La nube de NOM-COLAB pasa por Cloudflare; si llegara a insertar su script de estadísticas, la
+La nube de NOM pasa por Cloudflare; si llegara a insertar su script de estadísticas, la
 página lo bloquea.

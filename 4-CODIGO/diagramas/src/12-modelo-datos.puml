@@ -1,5 +1,5 @@
 @startuml 12-modelo-datos
-title NOM-COLAB - Modelo de base de datos (entidad-relación)
+title NOM - Modelo de base de datos (entidad-relación)
 skinparam shadowing false
 skinparam linetype ortho
 hide circle

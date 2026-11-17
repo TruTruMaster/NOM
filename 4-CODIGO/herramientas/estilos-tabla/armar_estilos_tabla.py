@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Convierte los estilos de tabla y de tabla dinámica predefinidos de Excel (ECMA-376, presetTableStyles.xml:
-60 de tabla y 84 de tabla dinámica) a un archivo JavaScript compacto que usa NOM-COLAB para pintar las
+60 de tabla y 84 de tabla dinámica) a un archivo JavaScript compacto que usa NOM para pintar las
 tablas de un libro de Excel igual que Excel (Excel no guarda en el archivo los estilos que trae de fábrica).
 
   python3 armar_estilos_tabla.py presetTableStyles.xml ../../app/src/main/resources/static/js/estilos-tabla-datos.js
@@ -73,7 +73,7 @@ def main(origen, destino):
             if e.get("size") and e.get("size") != "1": f["s"] = int(e.get("size"))
             d[e.get("type")] = f
         salida[est.tag] = d
-    js = ("/* NOM-COLAB · Estilos de tabla y de tabla dinámica que Excel trae de fábrica (ECMA-376, parte 1:\n"
+    js = ("/* NOM · Estilos de tabla y de tabla dinámica que Excel trae de fábrica (ECMA-376, parte 1:\n"
           "   presetTableStyles.xml). Los arma herramientas/estilos-tabla/armar_estilos_tabla.py; los usa js/ooxml.js\n"
           "   al importar un libro (las tablas con formato de Excel se ven con su estilo). Por elemento: f relleno,\n"
           "   k color de letra, b negrita, i cursiva, s tamaño de la franja, bd bordes {l r t b h v: [estilo, color]};\n"

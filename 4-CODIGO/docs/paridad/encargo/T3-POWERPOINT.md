@@ -1,7 +1,7 @@
 # Tarea: POWERPOINT → escribe `salida/POWERPOINT.md`
 
 Lee primero `COMUN.md` (reglas y formato de fila). Catálogo **completo** de PowerPoint para
-Microsoft 365 (escritorio, canal actual) comparado con las presentaciones de NOM-COLAB
+Microsoft 365 (escritorio, canal actual) comparado con las presentaciones de NOM
 (`diapositivas.js`, `lienzo.js`, `graficas.js` y la parte de PowerPoint de `ooxml.js`).
 
 1. **Cinta, pestaña por pestaña, grupo por grupo, comando por comando** (lista oficial del

@@ -1,4 +1,4 @@
-"""Comprueba en Office de verdad la protección de archivos que salieron de NOM-COLAB.
+"""Comprueba en Office de verdad la protección de archivos que salieron de NOM.
 
   python proteccion_ver.py CONTRASEÑA RUTAS…
 

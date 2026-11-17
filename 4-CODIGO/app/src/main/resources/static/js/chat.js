@@ -1,4 +1,4 @@
-/* NOM-COLAB · Chat del espacio (fase 15, parte E).
+/* NOM · Chat del espacio (fase 15, parte E).
    Cada espacio tiene su chat, con imágenes y archivos (hasta 2 MB). El espacio es cerrado, así que
    el chat también. En un espacio cifrado de extremo a extremo los mensajes se cifran en este equipo
    (e2e.js, en el borde de la API) y el servidor no los puede leer; por eso, para reportar uno, quien
@@ -89,9 +89,9 @@
 
     /** Reportar: el equipo no puede leer un chat cifrado, así que se descarga lo reportado ya descifrado. */
     async function reportar(m) {
-      if (!(await confirmar("Reportar un mensaje", "Se descarga un archivo con este mensaje y los 5 anteriores, como los ves tú. Mándalo al equipo de NOM-COLAB (Ayuda → Reportar contenido). Primero habla con el propietario del espacio: él puede borrarlo.", { si: "Descargar el reporte" }))) return;
+      if (!(await confirmar("Reportar un mensaje", "Se descarga un archivo con este mensaje y los 5 anteriores, como los ves tú. Mándalo al equipo de NOM (Ayuda → Reportar contenido). Primero habla con el propietario del espacio: él puede borrarlo.", { si: "Descargar el reporte" }))) return;
       const i = mensajes.indexOf(m);
-      const r = { reporte: "NOM-COLAB · contenido reportado", fecha: new Date().toISOString(), espacio: esp.nombre, cifrado: !!esp.e2e,
+      const r = { reporte: "NOM · contenido reportado", fecha: new Date().toISOString(), espacio: esp.nombre, cifrado: !!esp.e2e,
         mensaje: { autor: m.usuario, hora: new Date(m.t).toISOString(), texto: m.texto, adjunto: m.adjunto ? m.adjunto.nombre : null },
         contexto: mensajes.slice(Math.max(0, i - 5), i).map((x) => ({ autor: x.usuario, hora: new Date(x.t).toISOString(), texto: x.texto })) };
       NOM.formatos.descargar("reporte-nom-colab.json", "application/json", JSON.stringify(r, null, 2));

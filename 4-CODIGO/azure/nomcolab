@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# nomcolab - prende y apaga NOM-COLAB en Azure o en esta computadora.
+# nomcolab - prende y apaga NOM en Azure o en esta computadora.
 #
 #   nomcolab                       menú: 1) Azure o 2) Local, y luego qué hacer
 #   nomcolab azure up|down|estado|reiniciar
@@ -336,7 +336,7 @@ case "$1" in
 esac
 
 if [ -z "$DESTINO" ]; then
-  echo "NOM-COLAB"
+  echo "NOM"
   if systemctl --user is-active --quiet "$SERVICIO" 2>/dev/null; then est="prendido"; else est="apagado"; fi
   elegir "¿Dónde?" "Azure  ($URL)" "Local  (esta computadora; ahora: $est)" "Pi     ($DOMINIO, la Raspberry Pi)"
   DESTINO=$(echo "azure local pi" | cut -d' ' -f"$ELEGIDO")

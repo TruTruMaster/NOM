@@ -973,7 +973,7 @@ public class ServicioDocumentos {
         Espacio e = espacios.requerir(d.espacioId);
 
         Map<String, Object> r = new LinkedHashMap<>();
-        r.put("recibo", "NOM-COLAB · Recibo de proceso de escritura");
+        r.put("recibo", "NOM · Recibo de proceso de escritura");
         r.put("formato", 2);
         Map<String, Object> doc = new LinkedHashMap<>();
         doc.put("id", d.id);
@@ -1034,7 +1034,7 @@ public class ServicioDocumentos {
 
     /** Publico: ¿este recibo lo emitio este servidor y nadie lo cambio? */
     public Map<String, Object> verificarRecibo(Map<String, Object> recibo) {
-        if (recibo == null || !(recibo.get("hash") instanceof String h)) throw ErrorNom.invalido("Ese archivo no es un recibo de NOM-COLAB", null);
+        if (recibo == null || !(recibo.get("hash") instanceof String h)) throw ErrorNom.invalido("Ese archivo no es un recibo de NOM", null);
         Map<String, Object> sin = new LinkedHashMap<>(recibo);
         sin.remove("hash");
         String calculado = Huella.sha256(sin);
@@ -2043,7 +2043,7 @@ public class ServicioDocumentos {
         Documento d = requerir(docId);
         permiso(u, d, Permiso.EDICION);
         int n = 0;
-        String origen = via == null || via.isBlank() ? "otro NOM-COLAB" : (via.length() > 60 ? via.substring(0, 60) : via);
+        String origen = via == null || via.isBlank() ? "otro NOM" : (via.length() > 60 ? via.substring(0, 60) : via);
         for (Object o : filas == null ? List.<Object>of() : filas.subList(0, Math.min(filas.size(), 500))) {
             if (!(o instanceof Map<?, ?> m)) continue;
             Map<String, Object> f = (Map<String, Object>) m;

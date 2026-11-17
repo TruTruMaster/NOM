@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Convierte las 187 geometrías predefinidas de Office (ECMA-376, presetShapeDefinitions.xml) a un archivo
-JavaScript compacto que usa NOM-COLAB para dibujar las formas de PowerPoint, Word y Excel igual que Office.
+JavaScript compacto que usa NOM para dibujar las formas de PowerPoint, Word y Excel igual que Office.
 
   python3 armar_geometrias.py presetShapeDefinitions.xml ../../app/src/main/resources/static/js/geometrias-datos.js
 
@@ -63,7 +63,7 @@ def main(origen, destino):
             trazos.append(t)
         d["p"] = trazos
         salida[nombre] = d
-    js = ("/* NOM-COLAB · Las 187 geometrías predefinidas de Office (ECMA-376, parte 1, anexo D:\n"
+    js = ("/* NOM · Las 187 geometrías predefinidas de Office (ECMA-376, parte 1, anexo D:\n"
           "   presetShapeDefinitions.xml). Las arma herramientas/geometrias/armar_geometrias.py; las dibuja\n"
           "   js/geometrias.js. av: ajustes (manijas) por omisión; gd: guías (fórmulas); rect: dónde va el texto;\n"
           "   p: trazos (M L A Q C Z), con relleno f (none, darken, lighten…) y s: 0 sin contorno. */\n"

@@ -1,4 +1,4 @@
-/* NOM-COLAB · Paquete binario y "archivo de origen".
+/* NOM · Paquete binario y "archivo de origen".
 
    1) NOM.paquete: un contenedor chico y comprimido (JSON + archivos adjuntos). Es el formato del
       .nom (versión 3) y también como se guarda, dentro del documento, el archivo de Office del
@@ -12,7 +12,7 @@
 
    2) NOM.origen: al importar un .docx, .xlsx o .pptx se guarda el archivo original completo en
       el bloque "_origen" del documento. Al exportar al mismo formato se parte de ese original y
-      solo se cambia lo que la persona editó: todo lo que NOM-COLAB no modela (temas, estilos,
+      solo se cambia lo que la persona editó: todo lo que NOM no modela (temas, estilos,
       gráficas, SmartArt, macros de formato, encabezados complejos…) sale idéntico. */
 (function () {
   "use strict";
@@ -78,7 +78,7 @@
   const esPaquete = (u) => !!u && u.length > 9 && u[0] === 0x4E && u[1] === 0x4F && u[2] === 0x4D && u[3] === 3;
   /** Abre un paquete: { json, adjuntos: [Uint8Array] }. Lanza si está dañado. */
   function desempacar(u) {
-    if (!esPaquete(u)) throw new Error("No es un archivo de NOM-COLAB");
+    if (!esPaquete(u)) throw new Error("No es un archivo de NOM");
     const crc = new DataView(u.buffer, u.byteOffset + u.length - 4, 4).getUint32(0, true);
     if (C().crc32(u.subarray(0, u.length - 4)) !== crc) throw new Error("El archivo está dañado (no coincide su suma de comprobación)");
     const p = { i: 5 }, n = leeVarint(u, p);

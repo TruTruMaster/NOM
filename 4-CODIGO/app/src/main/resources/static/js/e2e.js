@@ -1,4 +1,4 @@
-/* NOM-COLAB · Espacios cifrados de extremo a extremo (fase 15, parte D.2).
+/* NOM · Espacios cifrados de extremo a extremo (fase 15, parte D.2).
    El contenido se cifra en este equipo antes de enviarse y se descifra al recibirlo; el servidor
    guarda la estructura en claro (ids, relojes, autor, dueño de cada parte) para seguir juntando
    cambios, revisar permisos y contar aportes, pero no puede leer lo que dicen.

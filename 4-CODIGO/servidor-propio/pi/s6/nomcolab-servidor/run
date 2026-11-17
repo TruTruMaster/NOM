@@ -1,5 +1,5 @@
 #!/bin/sh
-# NOM-COLAB: el jar, con el usuario sin privilegios "nomcolab". Ajustes en /etc/nomcolab.conf.
+# NOM: el jar, con el usuario sin privilegios "nomcolab". Ajustes en /etc/nomcolab.conf.
 exec 2>&1
 VAR=/var/lib/nomcolab
 JAR=/opt/nomcolab/nom-colab.jar

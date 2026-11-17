@@ -1,4 +1,4 @@
-/* NOM-COLAB · Las 187 geometrías predefinidas de Office (ECMA-376, parte 1, anexo D:
+/* NOM · Las 187 geometrías predefinidas de Office (ECMA-376, parte 1, anexo D:
    presetShapeDefinitions.xml). Las arma herramientas/geometrias/armar_geometrias.py; las dibuja
    js/geometrias.js. av: ajustes (manijas) por omisión; gd: guías (fórmulas); rect: dónde va el texto;
    p: trazos (M L A Q C Z), con relleno f (none, darken, lighten…) y s: 0 sin contorno. */

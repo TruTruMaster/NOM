@@ -1,5 +1,5 @@
 #!/bin/sh
-# Vigía de NOM-COLAB (cada 2 minutos): si el servidor o el túnel no responden dos veces
+# Vigía de NOM (cada 2 minutos): si el servidor o el túnel no responden dos veces
 # seguidas, los reinicia. Deja lo que hizo en el diario: journalctl --user -u nomcolab-vigia
 D="$HOME/nomcolab-servidor"; F="$D/.vigia-fallas"
 mkdir -p "$D"

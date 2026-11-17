@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cobertura de Office Open XML en NOM-COLAB.
+"""Cobertura de Office Open XML en NOM.
 
 Uso:
     python3 -I cobertura.py <carpeta-esquemas> <carpeta-corpus> <carpeta-codigo> [<carpeta-salida>]

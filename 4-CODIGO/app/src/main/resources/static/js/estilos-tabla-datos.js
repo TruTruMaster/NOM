@@ -1,4 +1,4 @@
-/* NOM-COLAB · Estilos de tabla y de tabla dinámica que Excel trae de fábrica (ECMA-376, parte 1:
+/* NOM · Estilos de tabla y de tabla dinámica que Excel trae de fábrica (ECMA-376, parte 1:
    presetTableStyles.xml). Los arma herramientas/estilos-tabla/armar_estilos_tabla.py; los usa js/ooxml.js
    al importar un libro (las tablas con formato de Excel se ven con su estilo). Por elemento: f relleno,
    k color de letra, b negrita, i cursiva, s tamaño de la franja, bd bordes {l r t b h v: [estilo, color]};

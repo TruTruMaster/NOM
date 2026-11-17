@@ -1,4 +1,4 @@
-/* NOM-COLAB · Ayuda: el tema de la app (claro u oscuro) y el buscador, sin bibliotecas.
+/* NOM · Ayuda: el tema de la app (claro u oscuro) y el buscador, sin bibliotecas.
    Sin JavaScript la ayuda se navega igual (el buscador lleva a la lista de todas las páginas). */
 (function () {
   "use strict";
@@ -88,7 +88,7 @@
           + `<ul class="lista-articulos">${l.map((a) => `<li><a href="${esc(dir(a.u))}"><b>${esc(a.t)}</b><span>${esc(a.s)}${a.d ? " · " + esc(a.d) : ""}</span></a></li>`).join("")}</ul>`;
       });
     }
-    // Dentro de la app: «Abrir NOM-COLAB» regresa a donde estaba (la página anterior).
+    // Dentro de la app: «Abrir NOM» regresa a donde estaba (la página anterior).
     const volver = document.querySelector("[data-volver-app]");
     if (volver && window.NomAndroid && history.length > 1) volver.addEventListener("click", (e) => { e.preventDefault(); history.back(); });
   });

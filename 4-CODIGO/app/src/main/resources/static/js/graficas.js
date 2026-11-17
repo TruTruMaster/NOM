@@ -1,4 +1,4 @@
-/* NOM-COLAB · gráficas (8.1, 8.3 y 9.6). Las usan la hoja de cálculo, las diapositivas y los
+/* NOM · gráficas (8.1, 8.3 y 9.6). Las usan la hoja de cálculo, las diapositivas y los
    reportes automáticos: a partir de un rango de una hoja se arma un SVG que se actualiza solo.
    Tipos: barras, barras horizontales, líneas, área, dispersión (x, y) y pastel. */
 (function () {

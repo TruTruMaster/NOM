@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Arma todas las fuentes con las medidas de Office que lleva NOM-COLAB y su CSS.
+"""Arma todas las fuentes con las medidas de Office que lleva NOM y su CSS.
 
   ~/.cache/nom-pruebas/venv/bin/python armar_fuentes.py [--office DIR] [--libres DIR]
 
@@ -95,7 +95,7 @@ def main():
     ap.add_argument("--solo", default="", help="armar solo estas familias (coma)")
     a = ap.parse_args()
     sale = STATIC / "fonts/office"; sale.mkdir(parents=True, exist_ok=True)
-    css = ["/* NOM-COLAB · Fuentes con LAS MISMAS MEDIDAS que las de Office (ancho de cada letra y alto del renglón).",
+    css = ["/* NOM · Fuentes con LAS MISMAS MEDIDAS que las de Office (ancho de cada letra y alto del renglón).",
            "   Las arma herramientas/fuentes/armar_fuentes.py: el dibujo es de una fuente libre (OFL) y las medidas,",
            "   de la fuente de Office. Así un documento de Office corta sus renglones y sus páginas igual que en",
            "   Word, Excel o PowerPoint, en la computadora y en el teléfono. Licencias: fonts/LICENCIAS-FUENTES.txt.",

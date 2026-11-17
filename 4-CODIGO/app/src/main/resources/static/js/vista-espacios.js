@@ -1,4 +1,4 @@
-/* NOM-COLAB · Inicio y Módulo 3 (Espacios de trabajo): lista, crear (A3), unirse (A4),
+/* NOM · Inicio y Módulo 3 (Espacios de trabajo): lista, crear (A3), unirse (A4),
    gestión de accesos (A5), almacenamiento (A7), preferencias y nuevo documento. */
 (function () {
   "use strict";
@@ -89,7 +89,7 @@
     if (NOM.anfitrion && NOM.anfitrion.esLocal && NOM.anfitrion.esLocal()) return "este teléfono (comparte sin Internet)";
     const dir = api.empaquetada ? api.servidor() : location.origin;
     const equipo = (dir.replace(/^https?:\/\//i, "").match(/^\[[^\]]*\]|^[^/:]+/) || [""])[0].toLowerCase();
-    if (/(^|\.)nomcolab\.dpdns\.org$|(^|\.)nom\.qd\.je$|azurewebsites\.net$|\.ts\.net$/.test(equipo)) return "NOM-COLAB en Internet";
+    if (/(^|\.)nomcolab\.dpdns\.org$|(^|\.)nom\.qd\.je$|azurewebsites\.net$|\.ts\.net$/.test(equipo)) return "NOM en Internet";
     if (/^(localhost|127(\.\d+){3}|\[::1\])$/.test(equipo)) return "este equipo (es el servidor)";
     return "el equipo " + equipo;
   }
@@ -108,7 +108,7 @@
     if (!a || !caja.isConnected) return;
     const b = html(`<button type="button" class="almacen-linea caja" data-micro="Tu almacenamiento|Cuánto ocupan tus espacios en el servidor y cuánto te queda. Toca para ver el detalle.">
       <span class="modo-insignia" style="background:var(--acento-tenue);color:var(--acento-tinta)">${ico("cloud")}</span>
-      <span class="crece"><b>Guardados en ${esc(nombreServidor())}</b><small>Los ves en cualquier equipo con tu cuenta. Aquí solo se guardan documentos de NOM-COLAB, comprimidos.</small></span>
+      <span class="crece"><b>Guardados en ${esc(nombreServidor())}</b><small>Los ves en cualquier equipo con tu cuenta. Aquí solo se guardan documentos de NOM, comprimidos.</small></span>
       <span class="almacen-uso"><span class="chip ${claseUso(a)}" data-uso>${esc(textoUso(a))}</span>${a.cuota > 0 ? `<span class="barra-uso"><i style="width:${Math.min(100, Math.max(1, (a.uso / a.cuota) * 100))}%"></i></span>` : ""}</span>
     </button>`);
     b.onclick = () => miAlmacenamiento(a);
@@ -133,7 +133,7 @@
         ${a.cuota > 0 && a.uso >= a.cuota ? `<div class="alerta error">${ico("triangle-alert")}<span>Lleno: los cambios nuevos se quedan en cada equipo hasta que liberes espacio.</span></div>` : ""}
       </div>
       <div class="lista">
-        <div class="lista-item">${ico("file-text")}<span class="crece"><b>Solo documentos de NOM-COLAB</b><small>Textos, hojas, presentaciones y diagramas, guardados comprimidos en nuestro propio formato. Lo que importas de Word, Excel o PowerPoint se convierte a ese formato; no es un disco para otros archivos.</small></span></div>
+        <div class="lista-item">${ico("file-text")}<span class="crece"><b>Solo documentos de NOM</b><small>Textos, hojas, presentaciones y diagramas, guardados comprimidos en nuestro propio formato. Lo que importas de Word, Excel o PowerPoint se convierte a ese formato; no es un disco para otros archivos.</small></span></div>
         <div class="lista-item">${ico("users")}<span class="crece"><b>Cuenta lo de tus espacios</b><small>Los documentos y sus versiones, también lo que escriben ahí las personas que invitas. Lo que tú escribes en espacios de otros ocupa el lugar de su propietario.</small></span></div>
         <div class="lista-item">${ico(api.empaquetada ? "smartphone" : "hard-drive")}<span class="crece"><b>Lo de “${esc(NOM.etiquetaEquipo())}” no cuenta</b><small>${locales ? `Tienes ${locales} documento${locales === 1 ? "" : "s"} que vive${locales === 1 ? "" : "n"} solo en este equipo: no ocupa${locales === 1 ? "" : "n"} lugar en el servidor, pero tampoco se ve${locales === 1 ? "" : "n"} en tus otros equipos.` : "Las copias para trabajar sin conexión viven en cada equipo y no ocupan lugar en el servidor."}</small></span><a class="btn chico" href="#/dispositivo" data-ir-equipo>Ver</a></div>
       </div>
@@ -256,7 +256,7 @@
         ? `<div class="alerta aviso">${ico("wifi-off")}<span>Este equipo no está conectado a ningún Wi-Fi. Conéctalo para que los demás lo encuentren.</span></div>`
         : c.activa
           ? `<p class="etiqueta">Si no lo encuentran, que escriban esta dirección en su navegador</p>
-             <div class="lista">${c.direcciones.map((ip) => `<div class="lista-item">${ico("link")}<span class="crece"><b style="font-family:var(--mono)">http://${esc(ip)}:${c.puerto}</b><small>Equipo ${esc(c.equipo)}</small></span><button class="icono-btn" data-qrdir="http://${esc(ip)}:${c.puerto}" aria-label="Código QR" data-micro="Código QR|Quien lo escanea abre NOM-COLAB de este equipo.">${ico("qr-code")}</button><button class="icono-btn" data-copiar="http://${esc(ip)}:${c.puerto}" aria-label="Copiar" data-micro="Copiar dirección|Pégala en el navegador o en la app de tu compañero.">${ico("copy")}</button></div>`).join("")}</div>
+             <div class="lista">${c.direcciones.map((ip) => `<div class="lista-item">${ico("link")}<span class="crece"><b style="font-family:var(--mono)">http://${esc(ip)}:${c.puerto}</b><small>Equipo ${esc(c.equipo)}</small></span><button class="icono-btn" data-qrdir="http://${esc(ip)}:${c.puerto}" aria-label="Código QR" data-micro="Código QR|Quien lo escanea abre NOM de este equipo.">${ico("qr-code")}</button><button class="icono-btn" data-copiar="http://${esc(ip)}:${c.puerto}" aria-label="Copiar" data-micro="Copiar dirección|Pégala en el navegador o en la app de tu compañero.">${ico("copy")}</button></div>`).join("")}</div>
              <p class="suave chico">Lo más fácil para que entren directo, sin pedir permiso: <b>Compartir → Crear código de invitación</b>.</p>`
           : `<div class="alerta info">${ico("lock")}<span>No aparece al buscar. Quienes ya son miembros, o tienen un código de invitación, sí pueden entrar.</span></div>`;
       $$("[data-copiar]", det).forEach((b) => (b.onclick = () => NOM.copiarConAviso(b.dataset.copiar, "Dirección copiada")));
@@ -364,7 +364,7 @@
 
   async function abrirOtroEquipo(e) {
     const url = `http://${e.host}:${e.puerto}`;
-    const ok = await confirmar("Abrir otro equipo", `Este espacio vive en ${e.equipo || e.host}. Se abrirá NOM-COLAB de ese equipo (${url}); ahí necesitas una cuenta propia.`, { si: "Abrir" });
+    const ok = await confirmar("Abrir otro equipo", `Este espacio vive en ${e.equipo || e.host}. Se abrirá NOM de ese equipo (${url}); ahí necesitas una cuenta propia.`, { si: "Abrir" });
     if (!ok) return;
     if (api.empaquetada) { api.fijarServidor(url); api.limpiarSesion(); location.hash = "#/"; location.reload(); }
     else window.open(url, "_blank", "noopener");
@@ -659,7 +659,7 @@
   function inicioSinCuenta(cont) {
     cont.innerHTML = `
       <div class="encabezado">
-        <div><h1>Inicio</h1><p class="sub">Estás usando NOM-COLAB sin cuenta</p></div>
+        <div><h1>Inicio</h1><p class="sub">Estás usando NOM sin cuenta</p></div>
         <div class="fila solo-escritorio"><button class="btn primario" data-cuenta>${ico("user-plus")} Crear cuenta o iniciar sesión</button></div>
       </div>
       <div class="alerta aviso" style="margin-bottom:8px" data-aviso-local>${ico("triangle-alert")}<span>Tus documentos se guardan <b>solo ${NOM.aqui().en}</b>. Si ${NOM.aqui().borrar}, <b>se pierden</b>. Descárgalos (menú … → Descargar copia) o crea una cuenta para guardarlos en un espacio y trabajar con tu equipo.</span></div>
@@ -1075,7 +1075,7 @@
         "-",
         { texto: "Letra de los textos nuevos…", icono: "type", fn: () => formatoEspacio(d, recargar) },
         ...(api.lan ? [{ texto: "Visible en el mismo Wi-Fi…", icono: "wifi", fn: () => conexion(d, recargar) }] : []),
-        { texto: d.sincronia ? "Copia en otro NOM-COLAB…" : "Guardar una copia en otro NOM-COLAB…", icono: "refresh-cw", fn: () => sincronia(d, recargar) },
+        { texto: d.sincronia ? "Copia en otro NOM…" : "Guardar una copia en otro NOM…", icono: "refresh-cw", fn: () => sincronia(d, recargar) },
       ] : []),
     ]);
     const bn = $("[data-a=nuevo]", cont); if (bn) bn.onclick = () => nuevoDocumento(d);
@@ -1158,17 +1158,17 @@
   function sincronia(esp, listo) {
     const s = esp.sincronia;
     const cuerpo = html(`<div class="col">
-      <p class="suave" style="font-weight:400">Por ejemplo, el teléfono del salón (que trabajó sin Internet) con NOM-COLAB en Internet. Cuando haya conexión, los documentos de este espacio se copian en los dos lugares cada 5 minutos: nada se borra y los permisos de cada lugar no cambian.</p>
+      <p class="suave" style="font-weight:400">Por ejemplo, el teléfono del salón (que trabajó sin Internet) con NOM en Internet. Cuando haya conexión, los documentos de este espacio se copian en los dos lugares cada 5 minutos: nada se borra y los permisos de cada lugar no cambian.</p>
       ${s ? `<div class="lista-item">${ico(s.estado === "ok" ? "cloud" : "cloud-off")}<span class="crece"><b>${esc((s.servidor || "").replace(/^https?:\/\//, ""))}</b><small>como ${esc(s.usuario || "")} · ${s.ultima ? "última copia " + esc(haceCuanto(s.ultima)) : "aún sin copiar"} · ${s.documentos} documento(s)${s.error ? " · " + esc(s.error) : ""}</small></span></div>` : ""}
       <form class="col" data-f ${s && s.estado !== "sesion" ? "hidden" : ""}>
-        <div class="campo"><label for="ss">Dirección del otro NOM-COLAB</label><div class="entrada">${ico("server")}<input id="ss" name="servidor" placeholder="nomcolab.dpdns.org o 192.168.1.20:8080" value="${esc(s ? s.servidor : "")}" autocapitalize="none"></div></div>
+        <div class="campo"><label for="ss">Dirección del otro NOM</label><div class="entrada">${ico("server")}<input id="ss" name="servidor" placeholder="www.nom.qd.je o 192.168.1.20:8080" value="${esc(s ? s.servidor : "")}" autocapitalize="none"></div></div>
         <div class="fila"><div class="campo crece"><label for="su">Tu usuario allá</label><div class="entrada"><input id="su" name="usuario" autocapitalize="none" value="${esc(s ? s.usuario : (api.usuario() || {}).nombre || "")}"></div></div>
           <div class="campo crece"><label for="sc">Contraseña allá</label><div class="entrada"><input id="sc" name="contrasena" type="password" autocomplete="off"></div></div></div>
         <div class="alerta error" data-err hidden></div>
         <button class="btn primario">${ico("refresh-cw")} Conectar y copiar</button></form>
       <div data-res></div></div>`);
     const pie = s ? html(`<div style="display:contents"><button class="btn plano peligro" data-quitar>Desconectar</button><span class="crece"></span><button class="btn" data-cambiar>Cambiar cuenta</button><button class="btn primario" data-ahora>${ico("refresh-cw", "ico-s")} Copiar ahora</button></div>`) : null;
-    const h = hoja({ titulo: "Copia en otro NOM-COLAB", icono: "refresh-cw", cuerpo, pie, ancha: true });
+    const h = hoja({ titulo: "Copia en otro NOM", icono: "refresh-cw", cuerpo, pie, ancha: true });
     const res = $("[data-res]", cuerpo), f = $("[data-f]", cuerpo);
     const mostrar = (r) => { res.innerHTML = `<div class="alerta ${r.estado === "ok" ? "ok" : "aviso"}">${ico(r.estado === "ok" ? "circle-check" : "triangle-alert")}<span>${r.estado === "ok" ? `Listo: se enviaron ${r.subidas} cambio(s) y llegaron ${r.bajadas}. ${r.nuevosAlla ? r.nuevosAlla + " documento(s) nuevos allá. " : ""}${r.nuevosAqui ? r.nuevosAqui + " documento(s) nuevos aquí." : ""}` : esc(r.error || "No se pudo copiar")}</span></div>`; };
     f.onsubmit = async (e) => {
@@ -1202,7 +1202,7 @@
         const datos = ext === "docx" ? NOM.ooxml.docx(doc) : ext === "xlsx" ? NOM.ooxml.xlsx(doc) : NOM.ooxml.pptx(doc, modo === "DIAGRAMA");
         archivos.push({ nombre: nombreUnico(d.nombre, ext), datos });
       }
-      archivos.push({ nombre: "LEEME.txt", datos: `Espacio "${esp.nombre}" exportado de NOM-COLAB el ${new Date().toLocaleString("es-MX")}.\r\n${lista.length} documento(s): texto en .docx (Word), hojas en .xlsx (Excel), presentaciones y diagramas en .pptx (PowerPoint).\r\n` });
+      archivos.push({ nombre: "LEEME.txt", datos: `Espacio "${esp.nombre}" exportado de NOM el ${new Date().toLocaleString("es-MX")}.\r\n${lista.length} documento(s): texto en .docx (Word), hojas en .xlsx (Excel), presentaciones y diagramas en .pptx (PowerPoint).\r\n` });
       NOM.formatos.descargarBytes(NOM.formatos.limpioNombre(esp.nombre) + ".zip", "application/zip", NOM.ooxml.zip(archivos));
       cerrar();
       aviso(`Listo: ${lista.length} documento(s) en el .zip`, { tipo: "ok" });
@@ -1232,12 +1232,13 @@
         <input id="pv" type="range" min="5" max="200" step="5" value="${p.versionesConservar}" style="accent-color:var(--acento)"></div>
       <div class="lista">
         <label class="lista-item">${ico("monitor")}<span class="crece"><b>Calidad visual alta</b><small>Desactívala si el equipo se siente lento</small></span><span class="interruptor"><input type="checkbox" data-calidad ${p.calidad === "alta" ? "checked" : ""}><span></span></span></label>
-        <label class="lista-item">${ico("hand")}<span class="crece"><b>Reducir movimiento</b><small>Quita animaciones y transiciones</small></span><span class="interruptor"><input type="checkbox" data-mov ${p.movimientoReducido ? "checked" : ""}><span></span></span></label>
+        <label class="lista-item">${ico("hand")}<span class="crece"><b>Reducir movimiento</b><small>Quita animaciones y transiciones${matchMedia("(prefers-reduced-motion: reduce)").matches ? ". Tu sistema ya lo pide, así que ya se aplica" : ""}</small></span><span class="interruptor"><input type="checkbox" data-mov ${p.movimientoReducido ? "checked" : ""}><span></span></span></label>
         <label class="lista-item">${ico("scan-eye")}<span class="crece"><b>Atenuar en modo enfoque</b><small>Resalta solo el párrafo que escribes</small></span><span class="interruptor"><input type="checkbox" data-atenuar ${p.enfoqueAtenuar ? "checked" : ""}><span></span></span></label>
+        <label class="lista-item">${ico("accessibility")}<span class="crece"><b>Dejar que mis extensiones cambien los colores <span class="suave" style="font-weight:600">(en este equipo)</span></b><small>Para modos oscuros, filtros de contraste o de color del navegador. El alto contraste del sistema siempre se respeta.</small></span><span class="interruptor"><input type="checkbox" data-ext ${NOM.leer("nom.extensiones", false) === true ? "checked" : ""}><span></span></span></label>
       </div>
       ${sinCuenta ? "" : `<div class="lista-item">${ico("download")}<span class="crece"><b>Descargar los datos de mi cuenta</b><small>Lo que este servidor guarda de ti, en un archivo JSON (sin tu contraseña).</small></span><button type="button" class="btn chico" data-mis-datos>Descargar</button></div>`}
       ${sinCuenta || NOM.sinContrasena(u) ? "" : `<div class="lista-item">${ico("key-round")}<span class="crece"><b>Código para recuperar tu contraseña</b><small data-rec>${recuperacion === false ? "Aún no tienes uno: genéralo y guárdalo en un lugar seguro." : "Si olvidas tu contraseña, con él pones una nueva."}</small></span><button type="button" class="btn chico" data-recuperacion>${recuperacion === false ? "Generar" : "Generar otro"}</button></div>`}
-      <p class="suave chico" style="text-align:center;font-weight:400" data-version>NOM-COLAB ${esc(NOM.VERSION || "")}${api.empaquetada ? " · app para Android" : ""}<span data-version-servidor></span></p>
+      <p class="suave chico" style="text-align:center;font-weight:400" data-version>NOM ${esc(NOM.VERSION || "")}${api.empaquetada ? " · app para Android" : ""}<span data-version-servidor></span></p>
     </div>`);
     // B-1: la versión, a la vista (también la del servidor, si es otra)
     if (NOM.acceso && !sinCuenta) NOM.acceso.infoServidor().then((i) => { const el = $("[data-version-servidor]", cuerpo); if (el && i && i.version && i.version !== NOM.VERSION) el.textContent = " · servidor " + i.version; }).catch(() => {});
@@ -1272,6 +1273,8 @@
     };
     $("#pv", cuerpo).oninput = (e) => ($("[data-vv]", cuerpo).textContent = e.target.value);
     ["[data-calidad]", "[data-mov]"].forEach((s) => ($(s, cuerpo).onchange = () => NOM.aplicarPreferencias(leerForm())));
+    // (las extensiones son de cada navegador: se guarda en este equipo y se aplica al recargar)
+    $("[data-ext]", cuerpo).onchange = (e) => { NOM.guardar("nom.extensiones", e.target.checked); aviso(e.target.checked ? "Listo: tus extensiones podrán cambiar los colores desde que recargues la página" : "Listo: desde que recargues, la página vuelve a sus colores", { tipo: "ok" }); };
     $("[data-fabrica]", pie).onclick = async () => {
       try { p = sinCuenta ? Object.assign({}, FABRICA) : await api.put("/api/cuentas/preferencias", FABRICA); guardado = true; NOM.aplicarPreferencias(p); h.cerrar(true); aviso("Se restauraron los valores de fábrica", { tipo: "ok" }); preferencias(); }
       catch (e) { aviso(e.message, { tipo: "error" }); }

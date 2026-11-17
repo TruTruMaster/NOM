@@ -1,5 +1,5 @@
 @startuml 02-paquetes
-title NOM-COLAB - Diagrama de paquetes
+title NOM - Diagrama de paquetes
 skinparam shadowing false
 skinparam linetype ortho
 skinparam packageStyle rectangle

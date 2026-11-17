@@ -1,4 +1,4 @@
-/* NOM-COLAB · compresión propia, sin librerías (DEFLATE: LZ77 + Huffman).
+/* NOM · compresión propia, sin librerías (DEFLATE: LZ77 + Huffman).
    La usan los .zip de Office (.docx, .xlsx y .pptx se guardan comprimidos, como los de Word) y
    el formato propio .nom, que además usa una variante "grande": la misma idea pero con una
    ventana de hasta 4 MB en vez de 32 KB, así encuentra repeticiones lejanas que un .zip no ve.

@@ -12,7 +12,7 @@
     <groupId>mx.wack</groupId>
     <artifactId>nom-colab</artifactId>
     <version>0.1.0</version>
-    <name>NOM-COLAB</name>
+    <name>NOM</name>
     <description>Suite colaborativa en red local - Equipo 6 WACK</description>
 
     <properties>

@@ -1,7 +1,7 @@
 # Relevo: paridad con Word, Excel y PowerPoint + pruebas reales en equipos (14 de noviembre de 2026, 0.13.1)
 
 Para la siguiente sesión. Lo pedido por el dueño: (1) investigar **todo** lo que tienen Word, Excel y
-PowerPoint y que NOM-COLAB todavía no tiene, con la documentación de Microsoft, para que todo lo que
+PowerPoint y que NOM todavía no tiene, con la documentación de Microsoft, para que todo lo que
 se importe y exporte quede perfecto; (2) probar **a mano y de verdad** lo nuevo (0.13.x) con todas
 las formas de conexión: el A55 con la app publicada, el escritorio con su Chromium, la laptop, la
 Raspberry; (3) dejar este relevo para que la siguiente sesión termine el trabajo.
@@ -28,7 +28,7 @@ vigente) y `PLAN-PRUEBAS-PRESENTACION.md` (bloques A-K; este relevo llena parte 
    reales (incluido el teclado Samsung tecla por tecla), el Chromium del escritorio por CDP, y varios
    equipos a la vez contra la Raspberry.
 5. **Investigación de Office** (sección 5): catálogos de Word, Excel y PowerPoint (cinta completa,
-   diálogos, formato del archivo con su sección de ECMA-376, estado en NOM-COLAB con evidencia del
+   diálogos, formato del archivo con su sección de ECMA-376, estado en NOM con evidencia del
    código, prioridad y cómo implementar) y cobertura mecánica de **cada elemento de los esquemas**
    contra el corpus y el código. Parte quedó terminada y parte sigue corriendo en el escritorio
    (se reanuda sola; ver 5.2).
@@ -37,7 +37,7 @@ vigente) y `PLAN-PRUEBAS-PRESENTACION.md` (bloques A-K; este relevo llena parte 
 
 | Equipo | Cómo quedó | Qué hacer |
 |---|---|---|
-| A55 | App 0.13.1 publicable, **otra vez en «NOM-COLAB en Internet»** con la sesión de `pruebaa55x1` (el servidor del teléfono se detuvo; en el teléfono quedó su espacio «Salon A55» con el chat de prueba, del alias de dueño «Grillo 52»); se le dio permiso de notificaciones. En `Download/` quedaron archivos de prueba: carpeta `NOM-pruebas/` (10 de Office), `lo-tdf104420_lostParagraph.docx`, `ms-financial-sample.xlsx`, `ms-animacion.pptx` (exportados) y `Codigo de recuperacion NOM-COLAB - pruebaa55x1.txt`. **No** hay que tocar los demás archivos de `Download/` (son personales). | Al terminar las pruebas: borrar esos archivos (`adb shell rm`) y, si se quiere, el espacio «Salon A55» del teléfono. Para volver de «este teléfono comparte» a la nube: Ajustes → «Cambiar dónde trabaja tu equipo» → abajo «Cambiar» → «Usar NOM-COLAB en Internet» (la notificación «Detener» apaga el servidor, pero al abrir la app vuelve a encenderlo si sigue elegido). |
+| A55 | App 0.13.1 publicable, **otra vez en «NOM en Internet»** con la sesión de `pruebaa55x1` (el servidor del teléfono se detuvo; en el teléfono quedó su espacio «Salon A55» con el chat de prueba, del alias de dueño «Grillo 52»); se le dio permiso de notificaciones. En `Download/` quedaron archivos de prueba: carpeta `NOM-pruebas/` (10 de Office), `lo-tdf104420_lostParagraph.docx`, `ms-financial-sample.xlsx`, `ms-animacion.pptx` (exportados) y `Codigo de recuperacion NOM - pruebaa55x1.txt`. **No** hay que tocar los demás archivos de `Download/` (son personales). | Al terminar las pruebas: borrar esos archivos (`adb shell rm`) y, si se quiere, el espacio «Salon A55» del teléfono. Para volver de «este teléfono comparte» a la nube: Ajustes → «Cambiar dónde trabaja tu equipo» → abajo «Cambiar» → «Usar NOM en Internet» (la notificación «Detener» apaga el servidor, pero al abrir la app vuelve a encenderlo si sigue elegido). |
 | Raspberry | Cuentas de prueba `pruebaa55x1` a `pruebaa55x5` y `pruebaflast1` (contraseñas en `~/.cache/nom-pruebas/cuentas-prueba.json`, fuera de git). Espacio «Pruebas A55» (de x1; flast1 y x2 editan, x3 solo ve) con 8 documentos de prueba. Token de x1 en `~/.cache/nom-pruebas/token-x1` (vence el 17-nov). | Reutilizarlas para lo que falta (B-7, B-10, B-11…). Al final, borrarlas (Ajustes → Borrar mi cuenta, o `DELETE /api/cuentas/yo`). |
 | Escritorio (`flast-desktop`) | Chromium de pruebas abierto en su pantalla (unidad de usuario `nomchromium4`, perfil `~/.var/app/org.chromium.Chromium/data/nom-real`, CDP en el 9333; desde la laptop: `ssh -f -N -L 9333:localhost:9333 100.84.188.120`), con sesión de `pruebaflast1`. La investigación sigue en `~/investigacion-office/` (ver 5.2). | Cerrar ese Chromium al terminar (`/tmp/matar-nom.sh` en el escritorio; ver 6). |
 | Laptop | Servidor de pruebas del 8099 **apagado** (se apagó porque la app del A55 lo encontraba sola en el Wi-Fi: ver H-8). .NET 8 en `~/.dotnet`; validador compilado en `~/.cache/nom-pruebas/openxml-bin`. Registros en `~/.cache/nom-pruebas/registros/2026-11-14-openxml/` y capturas en `~/.cache/nom-pruebas/capturas-reales/`. | Nada. |
@@ -219,7 +219,7 @@ Registro: `~/.cache/nom-pruebas/registros/2026-11-14-openxml/`.
 
 - **Pasos (A55, app publicable, con sesión en la Pi):** Unirse → Escribir código → `V5MP4CWE` (el
   código de un espacio de la Pi, sin el guion) → Entrar.
-- **Pasa:** «Abrir otro equipo — Este espacio vive en V5MP4CWE. Se abrirá NOM-COLAB de ese equipo
+- **Pasa:** «Abrir otro equipo — Este espacio vive en V5MP4CWE. Se abrirá NOM de ese equipo
   (http://V5MP4CWE:8080)». Con guion (`V5MP-4CWE`) sí entra. En el escritorio, el mismo flujo sin
   guion (`RTZQ9TP8`) sí funcionó. La ayuda dice «escriben 8 letras»: la gente no escribe el guion.
 - **Arreglo:** si lo escrito son 8 letras/números (con o sin guion, en mayúsculas o minúsculas), es
@@ -273,7 +273,7 @@ de `~/investigacion-office/*.md` del escritorio).
 
 | Archivo (en el escritorio: `~/investigacion-office/salida/`) | Qué es | Estado al cerrar |
 |---|---|---|
-| `WORD.md` | Catálogo de Word: cada pestaña, grupo y comando, y cada opción de los diálogos; por fila: qué hace, cómo se guarda (parte, elemento, sección de ECMA-376), si NOM-COLAB lo tiene (con `archivo:línea`), qué pasa al importar y exportar, prioridad, cómo implementarlo y en qué archivo del corpus aparece | Archivo, Inicio e Insertar (150 filas); sigue |
+| `WORD.md` | Catálogo de Word: cada pestaña, grupo y comando, y cada opción de los diálogos; por fila: qué hace, cómo se guarda (parte, elemento, sección de ECMA-376), si NOM lo tiene (con `archivo:línea`), qué pasa al importar y exportar, prioridad, cómo implementarlo y en qué archivo del corpus aparece | Archivo, Inicio e Insertar (150 filas); sigue |
 | `POWERPOINT.md` | Lo mismo para PowerPoint, más cada transición, cada animación (`presetClass`/`presetID`), cada geometría y el modelo de herencia | Inicio e Insertar (152 filas); sigue |
 | `EXCEL.md` y `EXCEL-FUNCIONES.csv` | Lo mismo para Excel; todas las funciones (~500) con nombre en español, categoría, versión, prefijo `_xlfn.` y si la app la tiene | Sin escribir todavía; sigue |
 | `OOXML-COBERTURA.md`, `ooxml-elementos.csv`, `ooxml-atributos.csv`, `FUENTES.md`, `herramientas/cobertura.py` | Cada elemento y atributo de los esquemas (WordprocessingML, SpreadsheetML, PresentationML, DrawingML, gráficas, extensiones de Microsoft): en cuántos archivos del corpus aparece, si el importador lo lee y si el exportador lo escribe; el programa es reproducible | CSV hechos (329 KB y 504 KB); falta el documento y las fuentes |

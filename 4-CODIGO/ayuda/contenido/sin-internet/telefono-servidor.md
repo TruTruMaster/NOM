@@ -38,7 +38,7 @@ todo** guardas una copia de este momento en Descargas.
 
 ## Subir el espacio a la nube
 
-En el espacio, **Más → Guardar una copia en otro NOM-COLAB** conecta el espacio con tu cuenta de la nube; se
+En el espacio, **Más → Guardar una copia en otro NOM** conecta el espacio con tu cuenta de la nube; se
 copia solo cada 5 minutos cuando el teléfono tiene Internet. Si el teléfono estuvo sin Internet y
 en la nube también cambiaron el documento, se crea una **rama del teléfono** en la nube (el
 original de la nube no se toca). Lo que escribió cada alias llega a su nombre.

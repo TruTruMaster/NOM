@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Genera los diagramas de actividades de NOM-COLAB con el estilo del modelo
+"""Genera los diagramas de actividades de NOM con el estilo del modelo
 (carriles Usuario / Sistema / Base de datos, cajas rectas, rombos, nodos de
 inicio y fin en rosa).
 

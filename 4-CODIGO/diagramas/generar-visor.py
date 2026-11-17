@@ -45,7 +45,7 @@ for i, (ruta, titulo, desc) in enumerate(DIAGRAMAS):
 
 pagina = f"""<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>NOM-COLAB Diagramas</title><style>
+<title>NOM Diagramas</title><style>
 :root{{--bg:#f6f7f9;--fg:#15202b;--mut:#5b6b7c;--card:#fff;--bd:#dde3ea;--ac:#4343B8}}
 @media(prefers-color-scheme:dark){{:root{{--bg:#11161c;--fg:#e7edf4;--mut:#9aa9b8;--card:#1a212a;--bd:#2c3742;--ac:#9B9BFF}}}}
 *{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,-apple-system,Segoe UI,sans-serif}}
@@ -55,7 +55,7 @@ nav a{{font-size:.82rem;color:var(--ac);text-decoration:none;border:1px solid va
 main{{max-width:1100px;margin:0 auto;padding:16px}}section{{margin:32px 0}}h2{{font-size:1.15rem;margin:0 0 4px}}.d{{color:var(--mut);margin:0 0 12px}}
 .box{{background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px;overflow:auto}}.box svg{{width:100%;height:auto;display:block}}
 </style></head><body>
-<header><h1>NOM-COLAB — Diagramas</h1><p class="sub">Equipo 6 "WACK" · CECyT 9 · 5IM7 · {len(DIAGRAMAS)} diagramas, sin internet</p></header>
+<header><h1>NOM — Diagramas</h1><p class="sub">Equipo 6 "WACK" · CECyT 9 · 5IM7 · {len(DIAGRAMAS)} diagramas, sin internet</p></header>
 <nav>{''.join(nav)}</nav><main>{''.join(secciones)}</main></body></html>"""
 open(os.path.join(AQUI, "index.html"), "w", encoding="utf-8").write(pagina)
 print("index.html:", len(DIAGRAMAS), "diagramas,", len(pagina) // 1024, "KB")

@@ -1,4 +1,4 @@
-/* NOM-COLAB · Módulo 1: Gestión de cuentas (diagramas A1 Crear usuario y A2 Iniciar sesión). */
+/* NOM · Módulo 1: Gestión de cuentas (diagramas A1 Crear usuario y A2 Iniciar sesión). */
 (function () {
   "use strict";
   const NOM = window.NOM;
@@ -21,13 +21,13 @@
     return new Promise((listo) => {
       const cuerpo = html(`<div class="col" style="align-items:center;text-align:center">
         <span class="modo-insignia" style="width:56px;height:56px;border-radius:var(--r-l);background:var(--acento-tenue);color:var(--acento-tinta)">${ico("key-round", "ico-l")}</span>
-        <p style="font-weight:400">Si algún día olvidas tu contraseña, con este código pones una nueva. <b>Guárdalo</b> (foto, papel o archivo): solo se muestra ahora y nadie más lo tiene, ni quien administra NOM-COLAB.</p>
+        <p style="font-weight:400">Si algún día olvidas tu contraseña, con este código pones una nueva. <b>Guárdalo</b> (foto, papel o archivo): solo se muestra ahora y nadie más lo tiene, ni quien administra NOM.</p>
         <b class="qr-codigo" style="font-size:24px;letter-spacing:.08em">${esc(codigo)}</b>
         <div class="fila"><button class="btn chico" data-copiar>${ico("copy", "ico-s")} Copiar</button><button class="btn chico" data-bajar>${ico("download", "ico-s")} Guardar archivo</button></div></div>`);
       const pie = html(`<div style="display:contents"><span class="crece"></span><button class="btn primario" data-ok>Ya lo guardé</button></div>`);
       const h = NOM.hoja({ titulo: "Tu código de recuperación", icono: "key-round", cuerpo, pie, alCerrar: () => listo() });
       $("[data-copiar]", cuerpo).onclick = () => NOM.copiarTexto(codigo).then((ok) => NOM.aviso(ok ? "Código copiado" : "No se pudo copiar: anótalo o usa «Descargar».", { tipo: ok ? "ok" : "aviso", ms: ok ? undefined : 6000 }));
-      $("[data-bajar]", cuerpo).onclick = () => NOM.formatos.descargar(`Codigo de recuperacion NOM-COLAB - ${nombre || "cuenta"}.txt`, "text/plain", `Cuenta: ${nombre || ""}\r\nCódigo para recuperar la contraseña de NOM-COLAB: ${codigo}\r\nGuárdalo en un lugar seguro.\r\n`);
+      $("[data-bajar]", cuerpo).onclick = () => NOM.formatos.descargar(`Codigo de recuperacion NOM - ${nombre || "cuenta"}.txt`, "text/plain", `Cuenta: ${nombre || ""}\r\nCódigo para recuperar la contraseña de NOM: ${codigo}\r\nGuárdalo en un lugar seguro.\r\n`);
       $("[data-ok]", pie).onclick = () => h.cerrar();
     });
   }
@@ -35,7 +35,7 @@
   /** ¿Olvidaste tu contraseña?: usuario + código de recuperación + contraseña nueva. */
   function recuperar(nombre) {
     const cuerpo = html(`<form class="col" novalidate>
-      <p class="suave" style="font-weight:400">Usa el código que te dio NOM-COLAB al crear la cuenta (o el último que generaste en Ajustes).</p>
+      <p class="suave" style="font-weight:400">Usa el código que te dio NOM al crear la cuenta (o el último que generaste en Ajustes).</p>
       <p class="suave chico" style="font-weight:400">${ico("hard-drive", "ico-s")} Lo que está en tus espacios no cambia. Lo que solo está guardado en un equipo (documentos de “${esc(NOM.etiquetaEquipo())}” y cambios sin enviar) va cifrado con tu contraseña de ahora: al entrar con la nueva te la pediremos una vez para recuperarlo, así que si la recuerdas, mejor cámbiala desde tu cuenta.</p>
       <div class="alerta" data-alerta hidden role="alert"></div>
       <div class="campo"><label for="rn">Usuario</label><div class="entrada">${ico("user")}<input id="rn" name="nombre" autocomplete="username" autocapitalize="none" value="${esc(nombre || "")}"></div></div>
@@ -129,7 +129,7 @@
     try { alm = await api.get("/api/cuentas/almacenamiento"); } catch (e) { /* se explica sin las cifras */ }
     const nEsp = alm ? alm.espacios.length : null, nDoc = alm ? alm.documentos : null;
     const cuerpo = html(`<form class="col" novalidate>
-      <div class="alerta error">${ico("triangle-alert")}<span><b>No se puede deshacer.</b> Nadie, ni quien administra NOM-COLAB, puede recuperar la cuenta después.</span></div>
+      <div class="alerta error">${ico("triangle-alert")}<span><b>No se puede deshacer.</b> Nadie, ni quien administra NOM, puede recuperar la cuenta después.</span></div>
       <div class="lista">
         <div class="lista-item">${ico("trash-2")}<span class="crece"><b>Se borran ${nEsp === null ? "tus espacios" : nEsp === 1 ? "tu espacio" : "tus " + nEsp + " espacios"}${nDoc ? " y " + (nDoc === 1 ? "su documento" : "sus " + nDoc + " documentos") : ""}</b><small>Con todas sus versiones, también para las personas con quienes los compartes. Si quieres conservar algo, descárgalo antes.</small></span></div>
         <div class="lista-item">${ico("log-out")}<span class="crece"><b>Sales de los espacios de otras personas</b><small>Lo que escribiste ahí se queda: es de ese espacio.</small></span></div>
@@ -263,7 +263,7 @@
     const vista = html(`
       <main class="bienvenida">
         <div class="bienvenida-col">
-          <div class="marca bienvenida-marca"><svg class="logo"><use href="#logo"/></svg>NOM-COLAB</div>
+          <div class="marca bienvenida-marca"><svg class="logo"><use href="#logo"/></svg>NOM</div>
           <div class="tarjeta-cuenta caja" data-tarjeta></div>
           <p class="bienvenida-que">Documentos de texto, hojas de cálculo, presentaciones y diagramas para trabajar en equipo, con Internet o en el mismo Wi-Fi.</p>
           <footer class="pie-legal">
@@ -395,7 +395,7 @@
       if (/^http:/i.test(dir) && !/^(localhost|127(\.\d+){3}|\[::1\])$/.test(equipo))
         f.append(html(`<p class="servidor-pie" data-sin-cifrar>${ico("triangle-alert", "ico-s")}<span><b>Conexión sin cifrar (red local).</b> Úsala solo en un Wi-Fi de confianza: quien esté en la misma red podría ver lo que se envía.</span></p>`));
       // En la app: a qué servidor se conecta, dicho en palabras, y cómo cambiarlo (para equipos que
-      // usan NOM-COLAB en su propia red, sin Internet).
+      // usan NOM en su propia red, sin Internet).
       if (NOM.anfitrion && NOM.anfitrion.esLocal()) {
         const p = NOM.anfitrion.pie();
         if (p) f.append(p);
@@ -405,10 +405,10 @@
         // H-8: a un equipo del Wi-Fi se entra con una cuenta de ESE equipo. Se dice arriba y en grande,
         // para que nadie escriba ahí la contraseña de su cuenta de Internet.
         if (!internet && !f.querySelector("[data-aviso-wifi]")) {
-          (f.querySelector("[data-alerta]") || f.firstElementChild).before(html(`<div class="alerta aviso" data-aviso-wifi>${ico("wifi")}<span>Vas a entrar a <b>un equipo de este Wi-Fi</b> (${esc(srv)}), no a NOM-COLAB en Internet. Aquí las cuentas son de ese equipo: <b>no escribas la contraseña de tu cuenta de Internet</b> si no conoces a quien lo comparte.</span></div>`));
+          (f.querySelector("[data-alerta]") || f.firstElementChild).before(html(`<div class="alerta aviso" data-aviso-wifi>${ico("wifi")}<span>Vas a entrar a <b>un equipo de este Wi-Fi</b> (${esc(srv)}), no a NOM en Internet. Aquí las cuentas son de ese equipo: <b>no escribas la contraseña de tu cuenta de Internet</b> si no conoces a quien lo comparte.</span></div>`));
         }
-        const s = html(`<p class="servidor-pie">${ico(internet ? "globe" : "wifi", "ico-s")}<span>Trabajas en <b>${internet ? "NOM-COLAB en Internet" : "un equipo del Wi-Fi · " + esc(srv)}</b></span>
-          <button type="button" data-micro="Cambiar dónde trabajas|Si tu equipo usa NOM-COLAB en otro lugar (en Internet, o en una computadora o teléfono del mismo Wi-Fi), elígelo aquí.">Cambiar</button></p>`);
+        const s = html(`<p class="servidor-pie">${ico(internet ? "globe" : "wifi", "ico-s")}<span>Trabajas en <b>${internet ? "NOM en Internet" : "un equipo del Wi-Fi · " + esc(srv)}</b></span>
+          <button type="button" data-micro="Cambiar dónde trabajas|Si tu equipo usa NOM en otro lugar (en Internet, o en una computadora o teléfono del mismo Wi-Fi), elígelo aquí.">Cambiar</button></p>`);
         // DEF-47: al terminar de elegir se vuelve a decidir TODA la pantalla (antes regresaba al formulario
         // de usuario y contraseña aunque lo elegido fuera este mismo teléfono, donde se entra como dueño).
         $("button", s).onclick = () => pintarServidor(tarjeta, () => pintar(raiz, opc), { cambiar: true });
@@ -531,7 +531,7 @@
           <div class="entrada">${ico("door-open")}<input id="re" name="empresa" autocomplete="organization" maxlength="80" placeholder="Ej. CECyT 11 Wilfredo Massieu"></div></div>
         <label class="acepto"><input type="checkbox" name="acepto" required> <span>Leí y acepto los <a href="${NOM.urlAyuda("legal/terminos")}" data-ayuda="legal/terminos">Términos</a> y el <a href="${NOM.urlAyuda("legal/privacidad")}" data-ayuda="legal/privacidad">Aviso de privacidad</a> (<a href="${NOM.urlAyuda("legal/privacidad-corto")}" data-ayuda="legal/privacidad-corto">resumen</a>).</span></label>
         <button class="btn primario ancho" type="submit">Crear cuenta</button>
-        <p class="suave chico" style="text-align:center">Tu contraseña se guarda protegida: nadie puede verla, ni quien administra NOM-COLAB.</p>
+        <p class="suave chico" style="text-align:center">Tu contraseña se guarda protegida: nadie puede verla, ni quien administra NOM.</p>
         <p class="cambio-modo">¿Ya tienes cuenta? <button type="button" class="enlace" data-ir="entrar">Iniciar sesión</button></p>
         ${SEPARADOR}
         <button type="button" class="btn ancho" data-sin-cuenta data-micro="Usar sin cuenta|Trabaja sin registrarte. Tus documentos se guardan solo ${NOM.aqui().en}: si ${NOM.aqui().borrar} se pierden, salvo que los descargues.">${ico("hard-drive")} <span class="btn-sub">Usar sin cuenta<small>Tus documentos se quedan solo ${NOM.aqui().en}</small></span></button>
@@ -589,7 +589,7 @@
       <div><h2>¿Dónde trabaja tu equipo?</h2><p class="suave" style="font-weight:400;margin-top:4px">Si te dieron un código QR, escanéalo y listo. Si no, elige una opción.</p></div>
       <div class="alerta" data-alerta hidden></div>
       <button type="button" class="btn primario ancho" data-escanear>${ico("qr-code")} Escanear el código QR</button>
-      <button type="button" class="btn ancho" data-internet>${ico("cloud")} <span class="btn-sub">Usar NOM-COLAB en Internet<small>Desde cualquier lugar, con datos o Wi-Fi</small></span></button>
+      <button type="button" class="btn ancho" data-internet>${ico("cloud")} <span class="btn-sub">Usar NOM en Internet<small>Desde cualquier lugar, con datos o Wi-Fi</small></span></button>
       ${window.NomAndroid && window.NomAndroid.buscarServidores ? `<button type="button" class="btn ancho" data-buscar>${ico("radio")} <span class="btn-sub">Buscar en este Wi-Fi<small>Una computadora o un teléfono que ya comparte</small></span></button>` : ""}
       <div class="lista" data-encontrados></div>
       <details><summary class="etiqueta" style="cursor:pointer">Escribir la dirección a mano</summary>
@@ -606,7 +606,7 @@
     f.querySelector("[data-sin-cuenta]").onclick = () => NOM.app.sinCuenta();
     // 2.1 En la app: el QR trae la dirección del servidor y el código; el espacio se abre aquí, en la app.
     f.querySelector("[data-escanear]").onclick = () => NOM.union && NOM.union.escanear();
-    f.querySelector("[data-internet]").onclick = () => probar("https://nomcolab.dpdns.org");
+    f.querySelector("[data-internet]").onclick = () => probar(NOM.NUBE);
     // El teléfono también puede ser el servidor de la red (Android 8+).
     const propio = NOM.anfitrion && NOM.anfitrion.opcion(listo);
     if (propio) f.querySelector("[data-alerta]").before(propio);
@@ -624,7 +624,7 @@
       } catch (e) {
         api.fijarServidor(anterior);
         alerta.className = "alerta error"; alerta.hidden = false;
-        alerta.innerHTML = `${ico("wifi-off")}<span>No encontramos NOM-COLAB en esa dirección. Revisa que estés en el mismo Wi-Fi que el equipo que comparte (o que tengas Internet, si es la versión en línea).</span>`;
+        alerta.innerHTML = `${ico("wifi-off")}<span>No encontramos NOM en esa dirección. Revisa que estés en el mismo Wi-Fi que el equipo que comparte (o que tengas Internet, si es la versión en línea).</span>`;
       }
     }
     f.onsubmit = (e) => { e.preventDefault(); if (f.srv.value.trim()) probar(f.srv.value.trim()); };
@@ -664,11 +664,11 @@
     preguntandoLegal = true;
     const nuevo = !r.aceptoVersion;
     const cuerpo = html(`<div class="col">
-      <p class="suave" style="font-weight:400">${nuevo ? "Ahora NOM-COLAB tiene Términos y un Aviso de privacidad." : "Actualizamos los Términos y el Aviso de privacidad."} Léelos y acéptalos para seguir usando tu cuenta.</p>
+      <p class="suave" style="font-weight:400">${nuevo ? "Ahora NOM tiene Términos y un Aviso de privacidad." : "Actualizamos los Términos y el Aviso de privacidad."} Léelos y acéptalos para seguir usando tu cuenta.</p>
       <div class="lista">
         <a class="lista-item" href="${NOM.urlAyuda("legal/privacidad-corto")}" data-ayuda="legal/privacidad-corto">${ico("shield")}<span class="crece"><b>Aviso de privacidad (resumen)</b><small>Qué datos tratamos y para qué</small></span>${ico("chevron-right")}</a>
         <a class="lista-item" href="${NOM.urlAyuda("legal/privacidad")}" data-ayuda="legal/privacidad">${ico("shield")}<span class="crece"><b>Aviso de privacidad completo</b><small>Tus derechos y cómo ejercerlos</small></span>${ico("chevron-right")}</a>
-        <a class="lista-item" href="${NOM.urlAyuda("legal/terminos")}" data-ayuda="legal/terminos">${ico("scale")}<span class="crece"><b>Términos y condiciones</b><small>Las reglas para usar NOM-COLAB</small></span>${ico("chevron-right")}</a>
+        <a class="lista-item" href="${NOM.urlAyuda("legal/terminos")}" data-ayuda="legal/terminos">${ico("scale")}<span class="crece"><b>Términos y condiciones</b><small>Las reglas para usar NOM</small></span>${ico("chevron-right")}</a>
       </div></div>`);
     const pie = html(`<div style="display:contents"><button class="btn" data-salir>Cerrar sesión</button><span class="crece"></span><button class="btn primario" data-acepto>Leí y acepto</button></div>`);
     const h = NOM.hoja({ titulo: "Términos y privacidad", icono: "scale", cuerpo, pie, alCerrar: () => { preguntandoLegal = false; } });

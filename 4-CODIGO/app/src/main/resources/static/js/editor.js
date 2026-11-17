@@ -1,4 +1,4 @@
-/* NOM-COLAB · Editor (diagrama A6). El tipo del documento (texto, hoja, presentación o
+/* NOM · Editor (diagrama A6). El tipo del documento (texto, hoja, presentación o
    diagrama) se elige al crearlo y no cambia: cambiarlo rompería su formato.
    ni de documento, solo de herramientas y de forma de pintar los mismos bloques (CU-20). */
 (function () {

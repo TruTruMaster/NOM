@@ -1,4 +1,4 @@
-/* NOM-COLAB · ecuaciones (8.2). Una notación sencilla tipo LaTeX se convierte en MathML (lo dibuja
+/* NOM · ecuaciones (8.2). Una notación sencilla tipo LaTeX se convierte en MathML (lo dibuja
    el navegador, también sin internet y en la app) y en OMML (las ecuaciones de Word).
    Acepta: \frac{a}{b}, a/b entre llaves no, \sqrt{x}, \sqrt[3]{x}, x^2, x^{10}, x_i, x_{ij}, letras
    griegas (\alpha … \omega, \Delta …), \pm \times \cdot \div \leq \geq \neq \approx \infty \to

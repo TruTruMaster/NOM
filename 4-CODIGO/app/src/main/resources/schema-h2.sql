@@ -1,4 +1,4 @@
--- NOM-COLAB · Modulo Gestion de cuentas (usuarios, sesiones y preferencias).
+-- NOM · Modulo Gestion de cuentas (usuarios, sesiones y preferencias).
 -- H2 embebido: el equipo que comparte el espacio en la red local.
 -- La version para Azure SQL Database es schema-sqlserver.sql (mismas tablas).
 -- Se ejecuta en cada arranque; todo es idempotente.

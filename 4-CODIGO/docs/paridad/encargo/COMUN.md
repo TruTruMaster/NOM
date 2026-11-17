@@ -1,10 +1,10 @@
-# Encargo de investigación: Word, Excel y PowerPoint contra NOM-COLAB
+# Encargo de investigación: Word, Excel y PowerPoint contra NOM
 
 Trabajas solo, sin preguntar nada. Al final tiene que quedar un archivo de salida completo y correcto.
 Trabaja en `~/investigacion-office/` (todo lo necesario ya está ahí). Tienes Internet (búsqueda y
 descarga de páginas), Python 3, Node, git, unzip y curl.
 
-## Qué es NOM-COLAB
+## Qué es NOM
 
 Suite de oficina colaborativa de un equipo de estudiantes: página web + app Android (WebView), en
 JavaScript sin librerías (`script-src 'self'`, sin `eval`), servidor Spring Boot. Tiene cuatro tipos
@@ -59,7 +59,7 @@ servir para implementar sin volver a investigar.
    comandos de la cinta, por pestaña y grupo) y el estándar **ECMA-376** (5.ª edición, partes 1-4,
    ecma-international.org) / ISO/IEC 29500. Cita la URL en cada sección. Si un dato no está en
    Microsoft, otra fuente seria y dilo.
-4. El estado de NOM-COLAB **solo con evidencia del código** (archivo y nombre de función o línea).
+4. El estado de NOM **solo con evidencia del código** (archivo y nombre de función o línea).
    Si no lo encuentras, es «No». No adivines; si dudas, «Revisar» y di qué buscaste.
 5. Escribe el archivo de salida **por secciones, guardando cada sección al terminarla** (si el
    trabajo se corta, tiene que quedar lo hecho). Al final, revisa que no falte ninguna pestaña.
@@ -68,7 +68,7 @@ servir para implementar sin volver a investigar.
 
 ## Formato de cada fila del catálogo
 
-| Comando o función | Qué hace (una línea, para una persona) | Cómo se guarda en el archivo (parte y elemento/atributo; sección de ECMA-376 o de MS-xxx) | NOM-COLAB: Tiene / Parcial / No / No aplica (+ evidencia) | Al importar: se ve y edita / se conserva sin verse / se pierde | Al exportar algo hecho en NOM-COLAB: se escribe / no | Prioridad: Alta (lo usa un estudiante u oficina cada semana) / Media / Baja | Notas para implementar |
+| Comando o función | Qué hace (una línea, para una persona) | Cómo se guarda en el archivo (parte y elemento/atributo; sección de ECMA-376 o de MS-xxx) | NOM: Tiene / Parcial / No / No aplica (+ evidencia) | Al importar: se ve y edita / se conserva sin verse / se pierde | Al exportar algo hecho en NOM: se escribe / no | Prioridad: Alta (lo usa un estudiante u oficina cada semana) / Media / Baja | Notas para implementar |
 
 «No aplica» solo para lo que no tiene sentido en una suite web colaborativa (por ejemplo,
 «Complementos COM»), y di por qué.

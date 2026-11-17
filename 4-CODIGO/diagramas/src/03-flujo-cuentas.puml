@@ -2,7 +2,7 @@
 title Flujo 1 - Registro e inicio de sesion
 skinparam shadowing false
 start
-:Abrir NOM-COLAB;
+:Abrir NOM;
 if (Tiene cuenta?) then (no)
   :Capturar nombre y contrasena;
   :Capturar empresa (opcional);

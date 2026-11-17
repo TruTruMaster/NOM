@@ -995,7 +995,7 @@
 .libre-imagen-marco .libre-imagen { border-radius: 0; }
 .libre-grafica { width: 100%; height: 100%; background: #fff; border-radius: 8px; overflow: hidden; }
 .libre-grafica .graf { width: 100%; height: 100%; }
-/* gráfica de Office: su propio fondo (o ninguno), sin la tarjeta blanca de NOM-COLAB */
+/* gráfica de Office: su propio fondo (o ninguno), sin la tarjeta blanca de NOM */
 .libre-grafica.office { background: transparent; border-radius: 0; overflow: visible; }
 .libre-grafica.office > svg { display: block; overflow: visible; }
 .libre-grafica .graf .graf-titulo { fill: #2B2A33; } .libre-grafica .graf .graf-eje { fill: #6B6875; } .libre-grafica .graf .graf-ley { fill: #4A4854; } .libre-grafica .graf .graf-reja { stroke: #E7E5EE; } .libre-grafica .graf .graf-cero { stroke: #B7B4C2; }
@@ -1264,7 +1264,7 @@
 
 /* ---- Texto de PowerPoint (diapositivas importadas): como lo mide PowerPoint --------------------------
    Cada párrafo y cada tramo traen su letra, su tamaño y su interlineado (1.2 × tamaño × porcentaje); aquí
-   solo los márgenes internos y el anclaje del cuadro, sin los valores propios de NOM-COLAB. */
+   solo los márgenes internos y el anclaje del cuadro, sin los valores propios de NOM. */
 .libre-texto.ppt, .forma .txt.ppt { display: flex; flex-direction: column; justify-content: flex-start; font-size: 18px; line-height: 1.2; font-weight: 400;
   color: #000; overflow: visible; white-space: pre-wrap; word-break: normal; overflow-wrap: break-word; letter-spacing: normal; text-align: left;
   font-kerning: normal; text-rendering: geometricPrecision; max-width: none; max-height: none; }
@@ -1293,7 +1293,7 @@
 .rejilla-hoja .xl-lista > span { flex: 1; overflow: hidden; }
 .rejilla-hoja .xl-lista > b { flex: none; align-self: stretch; width: 17px; border-left: 1px solid #7A7A7A; background: #F0F0F0 url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%227%22 height=%224%22%3E%3Cpath d=%22M0 0h7L3.5 4z%22/%3E%3C/svg%3E') center no-repeat; }
 .rejilla-hoja .xl-grupo { align-items: flex-start; border: 1px solid #BFBFBF; }
-/* Tabla de PowerPoint importada: como PowerPoint (sin los colores ni el relleno de las tablas de NOM-COLAB) */
+/* Tabla de PowerPoint importada: como PowerPoint (sin los colores ni el relleno de las tablas de NOM) */
 .libre-tabla.office { background: transparent; border-radius: 0; overflow: visible; }
 .libre-tabla.office table { border-collapse: collapse; table-layout: fixed; font-size: 18px; line-height: 1.2; color: #000; }
 .libre-tabla.office td { border: 0; padding: 0; background: none; overflow: hidden; word-break: normal; overflow-wrap: break-word; white-space: pre-wrap; text-align: left; font-weight: 400; }

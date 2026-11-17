@@ -1,4 +1,4 @@
-Fuentes que van dentro de NOM-COLAB (carpeta fonts/)
+Fuentes que van dentro de NOM (carpeta fonts/)
 ===================================================
 
 Todas se distribuyen bajo la SIL Open Font License, versión 1.1 (https://openfontlicense.org).

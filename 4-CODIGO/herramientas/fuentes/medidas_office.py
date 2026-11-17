@@ -209,9 +209,9 @@ def clonar(objetivo, base, familia, estilo, copyright_base, salida, recorte=(0.8
     hh = objetivo["hhea"]
     asc, desc, gap = round(hh.ascent * k), round(hh.descent * k), round(hh.lineGap * k)
     fb.setupHorizontalHeader(ascent=asc, descent=desc, lineGap=gap)
-    nombres = {"familyName": familia, "styleName": estilo, "uniqueFontIdentifier": f"{familia} {estilo}; NOM-COLAB",
+    nombres = {"familyName": familia, "styleName": estilo, "uniqueFontIdentifier": f"{familia} {estilo}; NOM",
                "fullName": f"{familia} {estilo}", "psName": (familia + "-" + estilo).replace(" ", ""),
-               "copyright": copyright_base + " Medidas ajustadas para NOM-COLAB (2026).",
+               "copyright": copyright_base + " Medidas ajustadas para NOM (2026).",
                "licenseDescription": "This Font Software is licensed under the SIL Open Font License, Version 1.1.",
                "licenseInfoURL": "https://openfontlicense.org", "version": "Version 1.000"}
     fb.setupNameTable(nombres)

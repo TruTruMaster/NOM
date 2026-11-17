@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# NOM-COLAB · despliegue en Azure (App Service + Azure SQL Database), todo gratis
+# NOM · despliegue en Azure (App Service + Azure SQL Database), todo gratis
 # con la suscripción Azure for Students del IPN. Ver ../docs/DESPLIEGUE-AZURE.md.
 #
 #   ./desplegar.sh crear      # una sola vez: grupo, base de datos, plan, web app y variables

@@ -1,5 +1,5 @@
 [Unit]
-Description=Respaldo diario de NOM-COLAB (03:30; si la computadora estaba apagada, al prenderla)
+Description=Respaldo diario de NOM (03:30; si la computadora estaba apagada, al prenderla)
 
 [Timer]
 OnCalendar=*-*-* 03:30

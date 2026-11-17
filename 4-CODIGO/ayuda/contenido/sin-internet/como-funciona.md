@@ -6,7 +6,7 @@ aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-13
 version: 0.13.0
 ---
-NOM-COLAB está hecho para **colaborar donde no hay Internet**. Hay tres situaciones:
+NOM está hecho para **colaborar donde no hay Internet**. Hay tres situaciones:
 
 ## 1. Tu equipo, solo
 
@@ -17,7 +17,7 @@ editas la última versión de cada documento y puedes crear documentos nuevos. T
 
 ## 2. El mismo Wi-Fi que una computadora que comparte
 
-Una computadora del salón corre NOM-COLAB (la carpeta `2-PAGINA-Servidor`) y los demás entran por
+Una computadora del salón corre NOM (la carpeta `2-PAGINA-Servidor`) y los demás entran por
 su dirección (`http://192.168.1.20:8080`). Esa computadora tiene sus propias cuentas y documentos.
 
 ## 3. Un teléfono que comparte

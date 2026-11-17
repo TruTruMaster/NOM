@@ -1,4 +1,4 @@
-# Plan de construcción de NOM-COLAB
+# Plan de construcción de NOM
 
 Qué construir, en qué orden y cómo comprobar que quedó. Sale de `PENDIENTES.md` (secciones 1 a 5,
 revisión e investigación del 7 de noviembre de 2026). Se trabaja **una fase a la vez**: al terminar
@@ -305,7 +305,7 @@ Sale de comparar los cuatro editores con los programas reales. Primero lo que m�
 
 Idea: al importar un .docx, .xlsx o .pptx se guarda **el archivo original dentro del documento**
 (bloque `_origen`, `js/origen.js`). Al exportar al mismo formato se parte de ese original y solo se
-cambia lo que la persona editó; lo que NOM-COLAB no modela sale idéntico. Se mide con archivos
+cambia lo que la persona editó; lo que NOM no modela sale idéntico. Se mide con archivos
 reales de Microsoft (`pruebas/office/corpus.sh`, `fidelidad.py`, `ediciones.py`).
 
 - [x] Compresor propio sin librerías (`js/compresion.js`, DEFLATE; variante de ventana grande).
@@ -353,13 +353,13 @@ cada punto está en `LOG.md`, entrada 53.
 - [x] Copia de los respaldos de la Raspberry en otro equipo (la laptop, diario).
 - [x] Decidido por el dueño: el disco de la Raspberry no se cifra; no habrá respaldo en el Drive
   de cada persona (el servidor guarda todo, con límite por cuenta a la vista, y solo documentos
-  de NOM-COLAB comprimidos: el estado y las versiones se guardan con gzip).
+  de NOM comprimidos: el estado y las versiones se guardan con gzip).
 - [x] Versión 0.12.1 (interfaz 13), todas las pruebas, publicar servidor y app juntos, LOG.
 
 Sigue pendiente de antes (no es de esta fase): columnas de verdad en pantalla, tabuladores con
 puntos, texto vertical y bordes por celda en Word; comentarios, formato condicional, gráficas e
 imágenes de Excel en pantalla; probar en el A55 (también la política de contenido de la app y el
-APK publicable). `~/NOM-COLAB` (la "copia de trabajo") lleva sin sincronizarse desde el 22 de
+APK publicable). `~/NOM` (la "copia de trabajo") lleva sin sincronizarse desde el 22 de
 octubre: se trabaja directo en `~/NOM`.
 
 ## Fase 12. Revisión completa de pruebas en equipos reales (13 de noviembre de 2026, versión 0.12.2)
@@ -631,7 +631,7 @@ tesis real de 2005 en Word 97-2003 (`Tesis.doc`, 32 MB, 46 600 palabras, 39 tabl
 ## Fase 22. Paridad con Office real (15 y 16 de noviembre de 2026, versión 0.15.0)
 
 Pedido del equipo (15-nov): con una computadora con Windows y Office 2024 de verdad, analizar todo lo que
-ofrecen Word, Excel y PowerPoint, hacer los archivos más complejos posibles y que NOM-COLAB (web y app) los
+ofrecen Word, Excel y PowerPoint, hacer los archivos más complejos posibles y que NOM (web y app) los
 muestre **idénticos**. Método y medidas: `docs/PARIDAD-OFFICE-REAL.md` (28 archivos hechos por Office por
 automatización, su «verdad» medida en Office y la comparación renglón por renglón, celda por celda o imagen por
 imagen con `pruebas/office/comparar_real.py`).
@@ -664,7 +664,7 @@ imagen con `pruebas/office/comparar_real.py`).
       (vertical, girado, apilado, sangría, rellenar, reducir, centrar en la selección), desborde a los dos lados y
       filas de alto fijo que recortan, con los altos en píxeles enteros como Excel.
 - [ ] PowerPoint: SmartArt sin dibujo guardado.
-- [ ] La vuelta: lo que exporta NOM-COLAB abierto en Office real (sin reparar y con el mismo aspecto).
+- [ ] La vuelta: lo que exporta NOM abierto en Office real (sin reparar y con el mismo aspecto).
 - [ ] Paridad en la app de Android (emulador y A55).
 
 ## Cómo quedó (8 de noviembre de 2026)
@@ -709,7 +709,7 @@ sesión anterior: `./desplegar.sh roles` para las columnas nuevas de usuarios.
 - Al importar .pptx, los videos y el SmartArt no se traen (se avisa); las formas libres llegan como
   rectángulos.
 - Investigar necesita Internet en el servidor; sin Internet queda la biblioteca del espacio.
-- La copia de trabajo `~/NOM-COLAB` no se actualizó en esta sesión (es más vieja que `~/NOM`).
+- La copia de trabajo `~/NOM` no se actualizó en esta sesión (es más vieja que `~/NOM`).
 
 ## Orden recomendado para la siguiente sesión
 

@@ -1,4 +1,4 @@
-/* NOM-COLAB · Ver un solo documento con su enlace (8.5): sin cuenta y en solo lectura.
+/* NOM · Ver un solo documento con su enlace (8.5): sin cuenta y en solo lectura.
    El propietario del espacio crea el enlace y lo puede quitar cuando quiera. Lo que se ve sale
    del servidor ya sin comentarios, sin notas del orador y sin las partes asignadas. */
 (function () {
@@ -12,7 +12,7 @@
         <div class="crece ver-titulo"><b data-nombre>Abriendo…</b><small class="suave" data-sub></small></div>
         <button class="btn chico" type="button" data-imprimir hidden>${ico("download", "ico-s")} <span>Imprimir o guardar PDF</span></button></header>
       <main class="ver-cuerpo" data-cuerpo><div class="esqueleto" style="height:60vh;border-radius:var(--r-l)"></div></main>
-      <footer class="ver-pie suave">Hecho con NOM-COLAB · Solo lectura</footer></div>`;
+      <footer class="ver-pie suave">Hecho con NOM · Solo lectura</footer></div>`;
     const cuerpo = $("[data-cuerpo]", raiz);
     let r;
     // Fase 15: un documento cifrado trae su llave después de «~» (nunca llega al servidor).
@@ -31,7 +31,7 @@
       return () => {};
     }
     const d = r.documento || {};
-    document.title = (d.nombre || "Documento") + " · NOM-COLAB";
+    document.title = (d.nombre || "Documento") + " · NOM";
     $("[data-nombre]", raiz).textContent = d.nombre || "Documento";
     const M = (NOM.MODOS || {})[d.modo] || {};
     $("[data-sub]", raiz).textContent = [M.nombre, r.espacio ? "de " + r.espacio : "", "solo lectura"].filter(Boolean).join(" · ");

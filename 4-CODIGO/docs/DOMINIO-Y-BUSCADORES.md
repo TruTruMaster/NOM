@@ -48,7 +48,7 @@ eso los servicios tratan a DigitalPlat como dueño de todo `qd.je`:
 - **Servidor** (`Buscadores.java`, `PaginasApi.java`): la portada y cada página de ayuda y legal
   llevan su dirección principal, lo que muestran las redes al compartir el enlace (Open Graph y
   tarjeta de X, con `img/compartir.png` de 1200×630) y datos de schema.org. En la portada son WebSite
-  con los nombres con que la buscan (NOM, NOMCOLAB, NOM COLAB), Organization con el logo y
+  con los nombres con que la buscan (NOM y los de antes: NOM-COLAB, NOMCOLAB, nomcolab), Organization con el logo y
   WebApplication. En la ayuda son WebPage y la ruta de migas. `robots.txt` y `sitemap.xml` se arman
   con la dirección principal. `/unirse` y `/proyectar` salen con `noindex`.
 - **Página:** un título que describe la app; la portada de `index.html` trae texto que leen los
@@ -101,11 +101,11 @@ Otras cosas que ayudan y no cuestan:
   la descripción. Para refrescar la de Facebook:
   <https://developers.facebook.com/tools/debug/>.
 
-**Qué esperar:** buscando `nomcolab`, `nom colab` o `NOM-COLAB`, el sitio debería salir arriba unos
+**Qué esperar:** buscando `nomcolab`, `nom colab` o `NOM`, el sitio debería salir arriba unos
 días o semanas después de que Google lo indexe: es un nombre propio y casi no hay competencia. Con
 solo `nom` es muy difícil, porque es una palabra muy común (en México la ocupan las Normas Oficiales
 Mexicanas). Eso no se arregla con ajustes, solo con que mucha gente enlace y busque el sitio. Los datos
-de schema.org dicen que «NOM» es un nombre del sitio, para que Google pueda mostrar «NOM-COLAB» como
+de schema.org dicen que «NOM» es un nombre del sitio, para que Google pueda mostrar «NOM» como
 nombre del sitio en los resultados.
 
 ## 5. Comprobar

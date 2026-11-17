@@ -7,7 +7,7 @@ actualizado: 2026-11-13
 version: 2026-11-13
 ---
 **Responsable**: el equipo 6 «WACK» del grupo 5IM7 del CECyT 9 del IPN (Ciudad de México), que opera
-NOM-COLAB como proyecto escolar.
+NOM como proyecto escolar.
 
 **Datos que tratamos**: tu nombre de usuario (y, si la das, tu escuela o grupo), la huella de tu
 contraseña, tus preferencias, tus sesiones, los espacios y documentos que creas o compartes y quién

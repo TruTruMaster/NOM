@@ -861,7 +861,7 @@ def prueba_relevo(P, c, e, salida, movil):
     p.goto(url(P.base, "/#/")); P.t(700); P.cerrar_hojas()
     P.ev("() => NOM.vistaEspacios.preferencias()"); P.t(1500)   # (la ventana sube con una animación: se mide ya quieta)
     ver = P.ev("() => (document.querySelector('.velo .hoja [data-version]') || {}).innerText || ''")
-    check("Ajustes dice la versión de NOM-COLAB", P.ev("() => NOM.VERSION") in ver, ver)
+    check("Ajustes dice la versión de NOM", P.ev("() => NOM.VERSION") in ver, ver)
     cortados = P.ev("() => [...document.querySelectorAll('.velo .hoja-pie .btn, .velo .hoja [data-tema] button')].filter(b => { const r = document.createRange(); r.selectNodeContents(b); const t = r.getBoundingClientRect(), q = b.getBoundingClientRect(); return t.left < q.left - 1 || t.right > q.right + 1 || q.right > innerWidth + 1; }).map(b => b.innerText.trim())")
     check("DEF-43: en Ajustes ningún botón sale cortado («Valores de fábrica», «Oscuro»)", not cortados, cortados)
     P.cerrar_hojas()

@@ -1,4 +1,4 @@
-# PowerPoint (Microsoft 365, escritorio, canal actual) contra las presentaciones de NOM-COLAB
+# PowerPoint (Microsoft 365, escritorio, canal actual) contra las presentaciones de NOM
 
 Catálogo para implementar sin volver a investigar. Compara cada comando de la cinta de PowerPoint, cada transición, cada efecto de animación, cada geometría de forma y cada objeto del archivo `.pptx` con lo que hacen hoy `diapositivas.js`, `lienzo.js`, `graficas.js`, `proyector.js` y la parte de PowerPoint de `ooxml.js` (importar y exportar).
 
@@ -8,13 +8,13 @@ Catálogo para implementar sin volver a investigar. Compara cada comando de la c
 
 **Nombres.** El repositorio solo trae el identificador en inglés. El nombre en español se da cuando es el rótulo conocido de la cinta en español; si no se pudo comprobar, se pone el inglés con «(sin nombre en español verificado)». Los nombres de formas y de efectos de animación en español salen de las páginas `es-es` de learn.microsoft.com (`MsoAutoShapeType`, `MsoAnimEffect`).
 
-**Estados de NOM-COLAB** (solo con evidencia del código, archivo y función o línea):
+**Estados de NOM** (solo con evidencia del código, archivo y función o línea):
 - **Tiene**: la app lo hace de forma equivalente.
 - **Parcial**: lo hace en parte (la evidencia dice qué parte).
 - **No**: no hay código que lo haga (se buscó con `grep` en `lienzo.js`, `diapositivas.js`, `graficas.js`, `proyector.js`, `ooxml.js`).
 - **No aplica**: no tiene sentido en una suite web colaborativa; se da el motivo.
 
-**Columnas de importación y exportación.** *Al importar*: «se ve y edita», «se conserva sin verse» (el archivo original viaja en `_origen` y las partes no tocadas salen idénticas) o «se pierde» (se pierde al reconstruir una diapositiva). *Al exportar algo hecho en NOM-COLAB*: «se escribe» o «no».
+**Columnas de importación y exportación.** *Al importar*: «se ve y edita», «se conserva sin verse» (el archivo original viaja en `_origen` y las partes no tocadas salen idénticas) o «se pierde» (se pierde al reconstruir una diapositiva). *Al exportar algo hecho en NOM*: «se escribe» o «no».
 
 **Regla general de conservación.** `ooxml.js` (`conOrigen`, `huellasPptx`, `parcialesPptx`) copia del original las partes y los objetos que no se tocaron. Cuando una diapositiva tiene algún objeto «nuevo», se regenera la diapositiva completa y se pierden en ella lo que la app no lee (por ejemplo `p:timing`, que solo se conserva si ningún objeto de esa diapositiva se reconstruyó: `ooxml.js` cerca de la línea 2710). Por eso «se conserva sin verse» vale solo para lo que no se edita.
 
@@ -28,11 +28,11 @@ Catálogo para implementar sin volver a investigar. Compara cada comando de la c
 
 ### 1.2 Pestaña Inicio (Home)
 
-Fuente: https://support.microsoft.com/es-es/office/ · lista oficial TabHome. Evidencia de NOM-COLAB: `lienzo.js` (barra de texto y de figura), `diapositivas.js`, `ooxml.js` (`htmlTexto` ~2974-3006, `parrafosRicos` 2360-2381, `pptxArmar`).
+Fuente: https://support.microsoft.com/es-es/office/ · lista oficial TabHome. Evidencia de NOM: `lienzo.js` (barra de texto y de figura), `diapositivas.js`, `ooxml.js` (`htmlTexto` ~2974-3006, `parrafosRicos` 2360-2381, `pptxArmar`).
 
 **Grupo «Portapapeles» (`GroupClipboard`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Pegar (Paste), opciones de pegado (`PasteMenu`, `Paste`, `PasteGallery`, `PasteDuplicate`) | Inserta lo copiado (con formato, solo texto, imagen) | Texto: `a:p`/`a:r`; objetos: nuevo `p:sp`/`p:pic` en `p:spTree` (ECMA-376 19.3.1.45) | Parcial — lienzo.js:924 `pegarBloques` pega bloques copiados dentro de la app; diapositivas.js:226 pega texto en las tablas; no se encontró pegar imágenes del portapapeles del sistema ni opciones «conservar formato de origen/destino» | se ve y edita | se escribe | Alta | Lo que se pega se exporta como objeto nuevo. Pendiente: evento `paste` con `clipboardData.files` para imágenes en `lienzo.js`. Corpus: ms-o12-tipico, ms-rendimiento-tipico, ms-tipico, ms-brownbag |
 | Pegado especial (Paste Special) (`PasteSpecialDialog`) | Elige el formato con que se pega (HTML, imagen, texto) | Sin elemento propio; decide qué objeto se crea | No — no hay cuadro de pegado especial | se ve y edita | no | Baja | Solo tendría sentido «pegar como texto sin formato». |
@@ -42,7 +42,7 @@ Fuente: https://support.microsoft.com/es-es/office/ · lista oficial TabHome. Ev
 
 **Grupo «Diapositivas» (`GroupSlides`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Nueva diapositiva (New Slide) (`SlideNewGallery`) | Agrega una diapositiva con un diseño elegido | Nueva `ppt/slides/slideN.xml` + relación a un `p:sldLayout`; `p:sldId` en `p:sldIdLst` (ECMA-376 19.2.1.34) | Parcial — lienzo.js:2176 `menuNueva` con los 10 diseños de diapositivas.js:166 `DISENOS`; no están ligados a un diseño de patrón (en el archivo solo hay un diseño «blank») | se ve y edita | se escribe | Alta | Al importar, mapear `p:sldLayout` `type` (title, obj, twoObj, secHead…) a `DISENOS` y guardar el `idx` de cada marcador (ver sección 4). Corpus: lo-accent-color, lo-crop-to-shape, lo-cshapes, lo-n821567, lo-slide-sections (+23) |
 | Duplicar las diapositivas seleccionadas (Duplicate Selected Slides) (`DuplicateSelectedSlides`) | Copia la diapositiva justo después | Nueva parte slideN.xml con copia del XML | Tiene — lienzo.js:2036 `duplicarDiapo` (acción «Duplicar») | se ve y edita | se escribe | Alta | Hecho en el modelo; al exportar sale como diapositiva nueva. Corpus: ms-o12-tipico, ms-rendimiento-tipico, ms-tipico |
@@ -55,7 +55,7 @@ Fuente: https://support.microsoft.com/es-es/office/ · lista oficial TabHome. Ev
 
 **Grupo «Fuente» (`GroupFont`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Fuente (Font) (`Font`) | Tipo de letra | `a:rPr/a:latin\|a:ea\|a:cs typeface`; temas `+mj-lt` / `+mn-lt` (ECMA-376 21.1.2.3.7) | Parcial — lienzo.js:181 `tFuente`; se escribe `a:latin` en cada ejecución (ooxml.js `parrafosRicos` 2360-2381). Al importar `htmlTexto` no lee `typeface` ni las fuentes del tema | se ve y edita | se escribe | Alta | Leer `a:latin` y resolver `+mj-lt`/`+mn-lt` con `a:fontScheme` del tema y `p:txStyles`. Corpus: ms-o12-tipico, ms-rendimiento-tipico, ms-tipico, ms-brownbag |
 | Tamaño de fuente, Aumentar, Disminuir (Font Size) (`FontSize`, `FontSizeIncrease`, `FontSizeDecrease`) | Tamaño en puntos | `a:rPr sz` en centésimas de punto (21.1.2.3.9) | Tiene — lienzo.js `tTam`; barra A-/A+; importa `sz` explícito | se ve y edita | se escribe | Alta | El tamaño heredado del patrón no se lee (sección 4). Corpus: ms-o12-tipico, ms-rendimiento-tipico, ms-tipico |
@@ -72,7 +72,7 @@ Fuente: https://support.microsoft.com/es-es/office/ · lista oficial TabHome. Ev
 
 **Grupo «Párrafo» (`GroupParagraph`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Viñetas (Bullets) (`BulletsGallery`, `BulletsAndNumberingBulletsDialog`) | Lista con símbolos | `a:pPr/a:buChar char` + `a:buFont`, `a:buClr`, `a:buSzPct`; imagen `a:buBlip` (21.1.2.4.1) | Parcial — barra «viñetas» (ul); importa `buChar`→ul; el símbolo, color, tamaño y `buBlip` se pierden | se ve y edita | se escribe | Alta | Guardar `char` y `buFont` por párrafo. Corpus: lo-accent-color, lo-crop-to-shape, lo-cshapes, lo-multiplelayoutfooter, lo-n821567 (+23) |
 | Numeración (Numbering) (`NumberingGallery`, `BulletsAndNumberingNumberingDialog`) | Lista numerada | `a:buAutoNum type` (`arabicPeriod`, `arabicParenR`, `romanUcPeriod`, `alphaLcParenR`… 36 valores, ST_TextAutonumberScheme 20.1.10.61) + `startAt` | Parcial — barra «numeración» (ol); importa `buAutoNum`→ol sin el esquema ni `startAt` | se ve y edita | se escribe | Alta | Guardar `type` y `startAt`. Corpus: ninguno |
@@ -89,7 +89,7 @@ Fuente: https://support.microsoft.com/es-es/office/ · lista oficial TabHome. Ev
 
 **Grupo «Dibujo» (`GroupDrawing`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Formas (Shapes) (`GalleryAllShapesAndTextboxes`) | Galería de formas y cuadros de texto | `p:sp/p:spPr/a:prstGeom prst` (187 valores; sección 5) o `a:custGeom` | Parcial — lienzo.js:37 `FIGURAS`: 23 figuras de 187 (+ listas UML/ER/Red); importa 28 nombres (`GEO_INV`), el resto se ve como rectángulo | se ve y edita | se escribe | Alta | Ampliar `GEO`/`GEO_INV` y dibujar con `gdLst` (sección 5). Corpus: lo-cshapes, lo-slide-sections, lo-tdf106638, lo-tdf169781, lo-tdf89927 (+4) |
 | Organizar: traer al frente, enviar al fondo, avanzar, retroceder (Arrange) (`ObjectsArrangeMenu`, `ObjectBringToFront`, `ObjectSendToBack`, `ObjectBringForward`, `ObjectSendBackward`) | Orden de apilado | Orden de los hijos de `p:spTree` | Tiene — lienzo.js `capas` y botón frente/atrás; el orden se conserva al exportar | se ve y edita | se escribe | Alta | Hecho. Corpus: ms-o12-tipico, ms-rendimiento-tipico, ms-tipico |
@@ -116,7 +116,7 @@ Fuente: https://support.microsoft.com/es-es/office/ · lista oficial TabHome. Ev
 
 **Grupo «Edición» (`GroupEditing`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Buscar, Reemplazar (Find, Replace) (`FindDialog`, `ReplaceMenu`, `ReplaceDialog`) | Busca y cambia texto en todas las diapositivas | Texto de `a:t` | No — no hay búsqueda en diapositivas (lienzo.js:1310 `buscar` es de guías) | se ve y edita | se escribe | Alta | Recorrer `textoPlano` (diapositivas.js:112) por página. Corpus: ms-o12-tipico, ms-rendimiento-tipico, ms-tipico |
 | Reemplazar fuentes (Replace Fonts) (`FontsReplaceFonts`) | Cambia una fuente por otra en todo el archivo | `a:latin typeface` | No — no se encontró | se ve y edita | se escribe | Baja | — |
@@ -124,37 +124,37 @@ Fuente: https://support.microsoft.com/es-es/office/ · lista oficial TabHome. Ev
 
 **Grupo «Voz» (`GroupVoiceTools`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Dictar (Dictate) (`DictationMenu`, `Dictate`, `DictateInMenu`, `SetDictationLanguageGallery`) | Escribe por voz | Sin elemento propio | No — no se encontró reconocimiento de voz | se ve y edita | no | Baja | Se podría con la API de voz del navegador (comprobar la política de seguridad del contenido). |
 
 **Grupo «Activación» (`GroupActivation`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Activar Office (Activate Office) (`ActivateOffice`) | Licencia | — | No aplica — licencia de producto, no existe en la suite | se ve y edita | no | Baja | — |
 
 **Grupo «Etiquetas» (`GroupClassifyLabelProtect`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Confidencialidad (Sensitivity) (`ClassifyLabelProtect`) | Aplica una etiqueta de protección | `docProps/custom.xml` y `MSIP_Label_*` | No aplica — usa el servicio de etiquetas de la cuenta de Microsoft 365 | se conserva sin verse | no | Baja | Se conserva en `_origen`. |
 
 **Grupo «Diseñador» (`GroupDesignerOptions`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Ideas de diseño (Designer) (`DesignerPane`) | Propone diseños de diapositiva desde un servicio en línea | — | No aplica — servicio en línea ligado a la cuenta | se ve y edita | no | Baja | Sin equivalente local. |
 
 **Grupo «Complementos» (`GroupOfficeExtensionsAddinFlyout`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Complementos (Add-ins) (`OfficeExtensionsShowAddinFlyout`) | Abre complementos de Office | `ppt/webextensions/` | No aplica — complementos de Office no corren en la suite | se conserva sin verse | no | Baja | Se conservan en `_origen`. |
 
 **Grupo «Asistencia en línea» (`GroupAIAssistance`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Ideas de diseño (Designer) (aparece otra vez en este grupo) (`DesignerPane`) | Servicio en línea | — | No aplica — servicio en línea ligado a la cuenta | se ve y edita | no | Baja | Igual que «Diseñador». |
 
@@ -164,13 +164,13 @@ Fuente: https://support.microsoft.com/es-es/office/ ; lista oficial TabInsert. E
 
 **Grupo «Diapositivas» (`GroupSlides2`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Nueva diapositiva, Duplicar, Desde esquema, Reutilizar (New Slide…) (`SlideNewGalleryInsert`, `DuplicateSelectedSlides`, `SlidesFromOutline`, `SlidesReuseSlides`, `ReuseSlides`, `PasteAsSlide`) | Mismos comandos que en Inicio > Diapositivas | Ver pestaña Inicio | Parcial — Nueva y Duplicar sí (lienzo.js:2176, 2036); esquema, reutilizar y pegar como diapositiva no | se ve y edita | se escribe | Alta | Ver Inicio > Diapositivas. Corpus: lo-accent-color, lo-crop-to-shape, lo-cshapes, lo-n821567, lo-slide-sections (+21) |
 
 **Grupo «Tablas» (`GroupInsertTables`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Tabla (Table) (`TableInsertGallery`, `TableInsert`) | Inserta una tabla de filas y columnas | `p:graphicFrame/a:graphic/a:graphicData uri=".../drawingml/2006/table"/a:tbl` con `a:tblPr`, `a:tblGrid/a:gridCol w`, `a:tr h/a:tc` (21.1.3) | Tiene — lienzo.js:2201 «Tabla…» con editor de datos (diapositivas.js:200-260); filas y columnas; se exporta `a:tbl` (ooxml.js, `tblPr firstRow bandRow`) | se ve y edita | se escribe | Alta | Falta elegir tamaño con cuadrícula y estilo de tabla. Corpus: officer-table-complex, ms-o12-tipico, ms-rendimiento-tipico, ms-tabla-grande, ms-tipico (+1) |
 | Dibujar tabla (Draw Table) (`TableDrawTable`) | Dibuja celdas con lápiz | Igual que tabla con combinación `gridSpan`/`rowSpan`/`hMerge`/`vMerge` | No — no hay dibujo de tablas | se ve y edita | se escribe | Baja | — |
@@ -178,7 +178,7 @@ Fuente: https://support.microsoft.com/es-es/office/ ; lista oficial TabInsert. E
 
 **Grupo «Imágenes» (`GroupImages`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Imágenes: este dispositivo (Pictures) (`FlyoutAnchorInsertPictures`, `PictureInsertFromFilePowerPoint`) | Inserta una imagen desde un archivo | `p:pic` con `p:blipFill/a:blip r:embed` → `ppt/media/imageN.*`; `a:srcRect` recorte; `p:cNvPr descr` texto alternativo (19.3.1.37) | Tiene — lienzo.js:887 `imagen()`, recorte lienzo.js:1225, máscara de forma; `descr` se escribe (ooxml.js:2384) | se ve y edita | se escribe | Alta | Falta `a:srcRect` con valores negativos y relleno de forma. Corpus: lo-accent-color, lo-cshapes, lo-n821567, lo-tdf106638, lo-tdf149206 (+8) |
 | Imágenes desde el teléfono, de la nube o en línea (`InsertMobilePicture`, `InsertM365Picture`, `ClipArtInsertDialog`) | Insertan desde servicios en línea | — | No aplica — dependen de cuentas y servicios de Microsoft; en la suite se insertan desde archivo | se ve y edita | no | Baja | — |
@@ -187,13 +187,13 @@ Fuente: https://support.microsoft.com/es-es/office/ ; lista oficial TabInsert. E
 
 **Grupo «Cámara» (`GroupChunkCameoCamera`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Cameo (Cameo) (`DropdownInsertCameo`, `InsertCameo`, `InsertCameoAllSlides`) | Inserta tu cámara como objeto en vivo | Video en `p:pic` con `a:videoFile` y extensión de Office | No aplica — usa la cámara y la presentación en escritorio | se conserva sin verse | no | Baja | — |
 
 **Grupo «Ilustraciones» (`GroupInsertIllustrations`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Formas (Shapes) (`ShapesInsertGallery`) | Galería de formas | Ver Inicio > Dibujo y sección 5 | Parcial — 23 de 187 formas; lienzo.js:37 | se ve y edita | se escribe | Alta | Ver sección 5. Corpus: lo-cshapes, poi-formas |
 | Iconos (Icons) (`IconInsertFromFile`) | Inserta un icono vectorial | `p:pic` con `a:blip` PNG y `asvg:svgBlip` (extensión `{96DAC541-7B7A-43D3-8B79-37D633B846F1}`, [MS-ODRAWXML]) | Parcial — lienzo.js:2205 `bibliotecaIconos` (íconos propios, se inserta como figura); no lee `svgBlip` | se ve y edita | se escribe | Media | Leer `asvg:svgBlip`, mostrar el SVG y escribir PNG + SVG. Corpus: lo-accent-color, lo-crop-to-shape, lo-cshapes, lo-multiplelayoutfooter, lo-n821567 (+17) |
@@ -203,31 +203,31 @@ Fuente: https://support.microsoft.com/es-es/office/ ; lista oficial TabInsert. E
 
 **Grupo «Contenido» (`GroupContent`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Recopilador (Collector) (`Collector`) | Guarda contenido de la web | — | No aplica — herramienta de navegador antiguo | se ve y edita | no | Baja | — |
 
 **Grupo «Power BI» (`GroupPowerBI`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Power BI (Power BI) (`InsertPowerBI`) | Inserta un informe en vivo | Objeto web de complemento | No aplica — servicio externo con cuenta | se conserva sin verse | no | Baja | — |
 
 **Grupo «Formularios» (`GroupMSForms`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Formularios (Forms) (`InsertMSForms`) | Inserta un formulario en línea | — | No aplica — servicio con cuenta | se conserva sin verse | no | Baja | La suite tiene sus propios formularios. |
 
 **Grupo «Complementos» (`GroupOfficeExtension`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Complementos (Add-ins) (`OfficeExtensionsAppStore`, `OfficeExtensionsGallery2`, `OfficeExtensionsDialog`, `OfficeExtensionsManageOtherAddins`, `ExtensibilityExperimentation`, `OfficeExtensionsFeaturedApp1`, `OfficeExtensionsFeaturedApp2`, `OfficeExtensionsFeaturedApp3`, `OfficeExtensionsFeaturedApp4`, `OfficeExtensionsFeaturedApp5`, `OfficeExtensionsFeaturedApp6`) | Tienda y complementos de Office | `ppt/webextensions/webextension1.xml` | No aplica — los complementos de Office no corren en la suite | se conserva sin verse | no | Baja | Se conservan en `_origen`. |
 
 **Grupo «Vínculos» (`GroupInsertLinks`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Zoom: de resumen, de sección, de diapositiva (Zoom) (`InsertZoomMenu`, `SectionZoomInsert`, `SlideZoomInsert`, `MSPPTInsertTableofContents`) | Miniatura que salta a otra parte | `mc:AlternateContent` con `pslz:sldZm`/`pslz:sectionZm` y `p166:` ([MS-PPTX] 2.6) con imagen de reserva | No — se conserva con la imagen de reserva | se conserva sin verse | no | Media | Mostrar el `mc:Fallback` y saltar a la diapositiva `sldId`. Corpus: lo-tdf169781, lo-tdf89927, ms-animacion, ms-grafica-area, ms-of16 (+2) |
 | Vínculo (Link) (`InsertLinkGallery`, `HyperlinkInsert`) | Enlace web, a diapositiva o a archivo | `a:hlinkClick r:id` + relación `hyperlink` en el texto o en `p:cNvPr` (20.1.2.2.23, 21.1.2.3.5) | Parcial — importa y escribe el enlace en textos de Word; en diapositivas solo detecta texto http(s) (lienzo.js:297); no se escribe `a:hlinkClick` | se ve y edita | no | Alta | Escribir `a:hlinkClick` con relación externa y `action="ppaction://hlinksldjump"` para diapositivas. Corpus: lo-slide-sections, lo-tdf120573, ms-brownbag, ms-tipico, poi-formas |
@@ -235,13 +235,13 @@ Fuente: https://support.microsoft.com/es-es/office/ ; lista oficial TabInsert. E
 
 **Grupo «Comentarios» (`GroupInsertComments`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Comentario nuevo (New Comment) (`InsertNewComment`) | Añade una nota con autor | Clásico: `ppt/comments/commentN.xml` + `commentAuthors.xml`; moderno: `ppt/comments/modernComment_*.xml` + `authors.xml` ([MS-PPTX] 2.1.? p188) | Parcial — comentarios.js los guarda en el documento; no se escriben al .pptx ni se leen del .pptx | se ve y edita | no | Alta | Leer y escribir `p:cm` (clásico) y `p188:cm` (moderno). Corpus: ninguno |
 
 **Grupo «Texto» (`GroupInsertText`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Cuadro de texto (Text Box) (`TextBoxInsert`, `TextBoxInsertMenu`, `TextBoxInsertHorizontal`, `TextBoxInsertVertical`) | Cuadro libre, horizontal o vertical | `p:sp` con `p:cNvSpPr txBox="1"`, `a:bodyPr wrap="square" vert=…` | Parcial — lienzo.js:2199 «Cuadro de texto» (horizontal); el vertical (`vert`) no | se ve y edita | se escribe | Alta | Añadir `vert`. Corpus: lo-accent-color, lo-crop-to-shape, lo-n821567, lo-smartart-linear-rule-vert, lo-tdf106638 (+17) |
 | Encabezado y pie de página (Header & Footer) (`HeaderFooterInsert`) | Fecha, número y pie en cada diapositiva | Marcadores `p:ph type="dt\|ftr\|sldNum"` con `a:fld type="datetime\|slidenum"`; `p:hf` en patrón (19.3.1.25) | No — no hay comando; marcadores de patrón se leen como texto | se ve y edita | se escribe | Alta | Ver sección 6. Corpus: lo-multiplelayoutfooter, lo-slide-sections, lo-tdf106638, lo-tdf169781, lo-tdf89927 (+22) |
@@ -251,14 +251,14 @@ Fuente: https://support.microsoft.com/es-es/office/ ; lista oficial TabInsert. E
 
 **Grupo «Símbolos» (`GroupInsertSymbols`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Ecuación (Equation) (`InsertBuildingBlocksEquationsGallery`, `EquationInsertNew`, `InkEquation`) | Inserta ecuaciones | `a14:m` con `m:oMathPara` dentro de `mc:AlternateContent` (Office Math, 22.1) | Parcial — lienzo.js:2208 `editarEcuacion` (ecuaciones.js: texto tipo LaTeX → OMML en Word); en diapositivas no se lee ni escribe `a14:m` | se ve y edita | se escribe | Media | Reutilizar `ommlATex` del modo texto. Corpus: lo-tdf169781, lo-tdf89927, ms-animacion, ms-grafica-area, ms-of16 |
 | Símbolo (Symbol) (`SymbolInsert`) | Inserta caracteres especiales | Texto Unicode en `a:t`; fuente `a:sym` | No — no hay selector de símbolos (se escribe con el teclado) | se ve y edita | se escribe | Baja | — |
 
 **Grupo «Multimedia» (`GroupInsertMediaClips`)**
 
-| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda en el archivo | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 | Video (Video) (`MovieInsert02`, `InsertVideoFromDevice`, `MovieFromFileInsert`, `InsertM365Video`, `MovieFromClipOrganizerInsert`) | Inserta un video | `p:pic/p:nvPicPr/p:nvPr/a:videoFile r:link` + `p14:media r:embed` → `ppt/media/mediaN.mp4`, imagen de portada `a:blip` (20.1.3.6, [MS-PPTX] p14:media) | No — 0 coincidencias de `videoFile` en la app; se conserva si no se regenera | se ve y edita | se escribe | Alta | Mostrar `<video>` con la portada; escribir `a:videoFile` + `p14:media`. Corpus: lo-tdf120573, ms-presentation |
 | Audio (Audio) (`SoundInsertMenu02`, `SoundInsertFromFile`, `SoundRecord`) | Inserta o graba sonido | `a:audioFile r:link` + `p14:media`; icono `p:pic` (20.1.3.1) | No — no se encontró | se ve y edita | se escribe | Media | `<audio>`; grabar con `MediaRecorder`. Corpus: lo-tdf120573 |

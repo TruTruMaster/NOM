@@ -1,6 +1,6 @@
 ---
 titulo: Preguntas frecuentes
-descripcion: Las 32 dudas más comunes sobre NOM-COLAB.
+descripcion: Las 32 dudas más comunes sobre NOM.
 orden: 1
 aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-13
@@ -8,13 +8,15 @@ version: 0.13.1
 ---
 ## Primeros pasos
 
-### 1. ¿Qué es NOM-COLAB y en qué se parece a Word, Excel, PowerPoint o Canva? {#p1}
+### 1. ¿Qué es NOM y en qué se parece a Word, Excel, PowerPoint o Canva? {#p1}
 Una sola app para texto, hojas, presentaciones y diagramas que varias personas editan a la vez,
-con o sin Internet. Ver [Qué es NOM-COLAB](ayuda:empezar/que-es).
+con o sin Internet. Ver [Qué es NOM](ayuda:empezar/que-es).
 
 ### 2. ¿Cuesta? ¿Tiene anuncios? ¿Usa inteligencia artificial? {#p2}
-Es gratis, sin anuncios y no usa inteligencia artificial para escribir por ti: organiza, cita y
-arma, pero el texto lo escribe la persona.
+Es gratis, sin anuncios y **no usa inteligencia artificial**: nada se escribe solo. Lo que sí hace, con
+reglas fijas y sin inventar nada: busca fuentes (Wikipedia, libros y artículos), arma las citas y la
+bibliografía en APA, pasa tus fichas a un reporte con portada e índice, y convierte un documento en
+presentación o en mapa mental tomando tus propios títulos y párrafos. El texto lo escribe la persona.
 
 ### 3. ¿Necesito una cuenta? {#p3}
 Para trabajar en equipo en Internet, sí. Sin cuenta puedes [usarlo solo en tu equipo](ayuda:empezar/sin-cuenta),
@@ -52,7 +54,9 @@ Sí, también dentro de un espacio: se suben solos al volver. Ver
 [Crear sin Internet](ayuda:sin-internet/crear-sin-internet).
 
 ### 11. ¿Qué pasa con lo que escribí sin Internet cuando vuelve la red? {#p11}
-Si nadie más cambió el documento, se sube tal cual; si alguien sí, se abre una rama. Ver
+Si estuviste sin conexión poco tiempo (2 minutos o menos, con el documento abierto), se junta solo
+con lo de los demás, sin perder nada. Si fue más tiempo: si nadie más cambió el documento, se sube
+tal cual; si alguien sí, se abre una rama. Ver
 [Qué pasa al volver Internet](ayuda:sin-internet/al-volver).
 
 ### 12. ¿Qué es una rama y por qué se creó una de mi documento? {#p12}
@@ -107,7 +111,7 @@ Lo que no tocaste sale idéntico; lo editado se reescribe. Ver [Abrir y descarga
 Ver [Qué se ve igual y qué todavía no](ayuda:office/que-se-ve-igual).
 
 ### 26. ¿Qué es un .nom? {#p26}
-La copia propia de NOM-COLAB, comprimida. Ver [El formato .nom](ayuda:office/formato-nom).
+La copia propia de NOM, comprimida. Ver [El formato .nom](ayuda:office/formato-nom).
 
 ### 27. ¿Cuánto puede pesar un documento? {#p27}
 25 MB. Ver [Tope de 25 MB](ayuda:office/tope-25mb).

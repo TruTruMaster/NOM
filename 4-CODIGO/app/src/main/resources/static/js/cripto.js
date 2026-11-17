@@ -1,4 +1,4 @@
-/* NOM-COLAB · Criptografía para la bóveda local.
+/* NOM · Criptografía para la bóveda local.
    Con WebCrypto (HTTPS, localhost, app Android) se usa PBKDF2-SHA256 + AES-256-GCM nativos.
    En la red local por http:// el navegador no ofrece WebCrypto, así que se usa esta
    implementación en JavaScript puro: SHA-256, HMAC, PBKDF2 y AES-256 en modo CTR con

@@ -1,4 +1,4 @@
-"""Pruebas de seguridad de NOM-COLAB contra un servidor recién arrancado (datos temporales).
+"""Pruebas de seguridad de NOM contra un servidor recién arrancado (datos temporales).
 
     python3 pruebas/seguridad.py                 # usa app/target/nom-colab.jar
     python3 pruebas/seguridad.py ruta/al.jar
@@ -496,7 +496,7 @@ try:
     # (aquí, este mismo servidor, que no está en la lista) se rechaza por firma (401); sin lista sería 403.
     prueba("13.2 Un pase de una nube que no está en la lista no se acepta", True, r("POST", "/api/cuentas/pase/entrar", {"pase": (pa[1] or {}).get("pase", "x.y")})[0] in (401, 403))
     if not EXTERNO and pa[0] == 200 and ll[0] == 200:
-        # Otro NOM-COLAB (como el teléfono que comparte) que confía en la llave de este.
+        # Otro NOM (como el teléfono que comparte) que confía en la llave de este.
         D2 = tempfile.mkdtemp(prefix="nomcolab-pruebas-b-")
         P2 = 8093; B2 = f"http://localhost:{P2}"
         nubes = json.dumps([{"nube": f"http://localhost:{P}", "llave": ll[1]["llave"]}])

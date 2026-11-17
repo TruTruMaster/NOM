@@ -1,4 +1,4 @@
-/* NOM-COLAB · SmartArt sin dibujo guardado: se acomoda con su diseño (layoutDef), sus datos, sus colores (colorsDef) y
+/* NOM · SmartArt sin dibujo guardado: se acomoda con su diseño (layoutDef), sus datos, sus colores (colorsDef) y
    su estilo (styleDef), como lo hace PowerPoint al abrir un archivo que no trae el dibujo ya hecho (los que guardan
    otros programas). Interpreta el lenguaje de los diseños de la norma (ECMA-376, parte 1, 21.4): nodos de diseño,
    recorridos (forEach) por los datos, condiciones (choose/if), restricciones (constrLst) y reglas, con los algoritmos

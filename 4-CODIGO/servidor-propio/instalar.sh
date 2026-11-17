@@ -1,5 +1,5 @@
 #!/bin/sh
-# Instala el servidor propio de NOM-COLAB en esta computadora, siempre prendido en
+# Instala el servidor propio de NOM en esta computadora, siempre prendido en
 # https://nomcolab.dpdns.org (Cloudflare Tunnel) y también en Tailscale Funnel.
 # Requiere: la copia de entrega en ~/NOM (con 2-PAGINA-Servidor), cloudflared (paquete de
 # pkg.cloudflare.com) y haber corrido una vez `cloudflared tunnel login`.

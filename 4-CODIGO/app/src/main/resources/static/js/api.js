@@ -1,4 +1,4 @@
-/* NOM-COLAB · cliente de la API del nodo local.
+/* NOM · cliente de la API del nodo local.
    Desde el navegador la API está en el mismo origen. Dentro de la app Android
    (file://) la dirección del servidor se elige en la pantalla de inicio. */
 (function () {
@@ -6,9 +6,27 @@
   const NOM = window.NOM;
 
   const empaquetada = location.protocol === "file:" || !!window.NomAndroid;
+  // La nube tiene varios nombres (www.nom.qd.je, nom.qd.je y el de antes, nomcolab.dpdns.org): es el
+  // mismo servidor, con las mismas cuentas. Para la app son un solo lugar y se guarda el principal; así
+  // un QR hecho con el nombre de antes no la cambia de servidor ni cierra la sesión.
+  const NUBE_PRINCIPAL = "https://www.nom.qd.je";
+  const NOMBRES_NUBE = /^https?:\/\/((www\.)?nom\.qd\.je|(www\.)?nomcolab\.dpdns\.org)(:443)?\/?$/i;
+  const normal = (u) => (NOMBRES_NUBE.test(String(u || "")) ? NUBE_PRINCIPAL : u);
+  if (empaquetada) {
+    // (una vez: lo guardado con el nombre de antes pasa al principal)
+    try {
+      const s = NOM.leer("nom.servidor", "");
+      if (s && normal(s) !== s) NOM.guardar("nom.servidor", normal(s));
+      ["nom.sesionNube", "nom.infoServidor"].forEach((k) => { const g = NOM.leer(k, null); if (g && g.servidor && normal(g.servidor) !== g.servidor) NOM.guardar(k, Object.assign(g, { servidor: normal(g.servidor) })); });
+    } catch (e) { /* sin almacenamiento */ }
+  }
   const api = {
     empaquetada,
-    servidor() { return empaquetada ? (NOM.leer("nom.servidor", "") || "") : ""; },
+    NUBE_PRINCIPAL,
+    /** ¿Son el mismo servidor? (los nombres de la nube cuentan como uno) */
+    mismoServidor(a, b) { return normal(String(a || "").replace(/\/+$/, "")) === normal(String(b || "").replace(/\/+$/, "")); },
+    esNube(u) { return NOMBRES_NUBE.test(String(u || "")); },
+    servidor() { return empaquetada ? (normal(NOM.leer("nom.servidor", "") || "") || "") : ""; },
     fijarServidor(url) {
       url = String(url || "").trim().replace(/\/+$/, "");
       if (url && !/^https?:\/\//i.test(url)) {
@@ -19,6 +37,7 @@
         url = (enLaRed ? "http://" : "https://") + url;
         if (enLaRed && !/:\d+$/.test(url.replace(/^https?:\/\//, ""))) url += ":8080";
       }
+      url = normal(url);
       NOM.guardar("nom.servidor", url);
       return url;
     },

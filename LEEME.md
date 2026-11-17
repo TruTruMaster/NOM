@@ -1,11 +1,38 @@
-# NOM — todo el proyecto NOM-COLAB listo para usar
+# NOM
+
+Escribe, calcula, presenta y dibuja en equipo, al mismo tiempo, con o sin Internet. Abre y guarda
+Word, Excel y PowerPoint. Gratis, sin anuncios y de código abierto (**GPL-3.0**), en el navegador y
+en Android. Hasta **50 personas conectadas a la vez** por espacio.
+
+- **En Internet:** **https://www.nom.qd.je** (también responde en https://nomcolab.dpdns.org, el
+  nombre de antes; las cuentas son las mismas).
+- **App de Android:** la última versión siempre en
+  [Releases](https://github.com/TruTruMaster/NOM-COLAB/releases/latest) (`NOM-COLAB.apk`). Cada
+  versión trae su SHA-256 y la huella del certificado de firma, para comprobar que es la original.
+- **Sin Internet:** una computadora (o un teléfono) del salón comparte en el mismo Wi-Fi.
 
 Equipo 6 "WACK" · CECyT 9 · 5IM7
+
+> **Si lo bajaste de GitHub:** las carpetas `2-PAGINA-Servidor/` y `3-APP-Android/` no vienen (son
+> programas ya compilados). El APK está en Releases; el servidor se compila con
+> `cd 4-CODIGO/app && mvn package` y se arranca con `java -jar target/nom-colab.jar` (ver
+> `4-CODIGO/README.md`).
+
+### In English
+
+NOM is a free (GPL-3.0) real-time collaborative office suite: documents, spreadsheets,
+presentations and diagrams that several people edit at once, online or on a classroom Wi-Fi without
+Internet (a laptop or an Android phone acts as the server). It opens and saves Word, Excel and
+PowerPoint files (including password-protected ones) without third-party libraries. Server: Spring
+Boot (Java 17); client: plain JavaScript; Android: a WebView app. Live at https://www.nom.qd.je.
+Documentation and the code comments are in Spanish.
+
+## Qué hay en esta carpeta
 
 | Carpeta | Qué es | Qué hacer |
 |---|---|---|
 | **`ENTREGA/`** | **Los PDF para entregar:** el documento del módulo web (base de datos + Azure + seguridad con roles) el plan de pruebas `5IM7_WACK_PP.pdf`, la presentación `5IM7_WACK_Presentacion.pdf` y la especificación de casos de uso `5IM7_WACK_Casos_de_Uso` (.docx y .pdf) | Entregarlos |
-| `1-ENTREGA-Diagramas-de-Actividades/` | **PDF para entregar** (y el mismo en .docx), las 7 imágenes sueltas y los editables de draw.io | Entregar `Diagrama de Actividades NOM-COLAB.pdf` |
+| `1-ENTREGA-Diagramas-de-Actividades/` | **PDF para entregar** (y el mismo en .docx), las 7 imágenes sueltas y los editables de draw.io | Entregar `Diagrama de Actividades NOM.pdf` |
 | `2-PAGINA-Servidor/` | La página completa (servidor + interfaz), **con Java incluido** | Windows: doble clic en `INICIAR-Windows.bat` · Linux: `./INICIAR-Linux.sh` |
 | `3-APP-Android/` | `NOM-COLAB.apk` (Android 7 en adelante) | Pasarla al celular e instalarla |
 | `4-CODIGO/` | Todo el código fuente, diagramas UML y documentación | Para revisar o seguir desarrollando |
@@ -13,33 +40,29 @@ Equipo 6 "WACK" · CECyT 9 · 5IM7
 | `6-PLAN-DE-PRUEBAS/` | Fuentes del plan de pruebas: `fuentes/plan.html`, `fuentes/imprimir.py` (lo genera en `ENTREGA/5IM7_WACK_PP.pdf`), `fuentes/evidencias.py` (toma las capturas de evidencia), `fuentes/casos_integracion.py`, `fuentes/casos_permisos.py`, `fuentes/prueba_limites.py` y `registros/` con la salida de cada suite | Solo si se cambia el plan |
 | `7-PRESENTACION/` | Fuentes de la presentación del proyecto y de la especificación de casos de uso: `fuentes/casos.py` (los textos), `fuentes/generar_casos.py` (arma el Word sobre el formato vacío), `fuentes/presentacion.py` (arma el PDF de 20 diapositivas) y `fuentes/capturas.py` (toma las capturas de la app que usa la presentación); los dos dejan su resultado en `ENTREGA/` | Solo si se cambia la presentación o un caso de uso |
 | `CREDENCIALES-AZURE.txt` | Contraseñas de la base de Azure (administrador y usuarios con rol) y cuentas de prueba. **Privado** | No compartir ni subir |
-| `LOG.md` | Registro de todo lo que se hizo | — |
+| `LOG.md` | Diario de todo lo que se hizo, día por día (es historia: lo viejo puede ya no ser cierto; lo vigente está en `CAMBIOS.md` y en la ayuda) | — |
+| `CAMBIOS.md` | Las versiones y lo que cambió en cada una, en corto | — |
 
-## En Internet (Azure)
+## En Internet: la Raspberry Pi
 
-**https://nomcolab-wack.azurewebsites.net** — el módulo de cuentas conectado a Azure SQL
-Database, con seguridad con roles: en la base (la página entra como `nomcolab_app`, con el rol
-`rol_nomcolab_app`, sin poder tocar las tablas) y en cada espacio (Propietario / Puede editar /
-Solo lectura). Cómo se subió y cómo hacer la demo:
-`4-CODIGO/docs/DESPLIEGUE-AZURE.md`. Normalmente está apagado para no gastar: antes de presentar,
-prenderlo con `nomcolab` → 1 Azure → 1 Prender (abre la base y despierta la página; la primera
-entrada tras un rato sin uso tarda ~1 min porque el plan gratuito se duerme). Al terminar,
-`nomcolab` → 1 Azure → 2 Apagar.
-
-## En Internet desde un servidor propio (la Raspberry Pi)
-
-**https://nomcolab.dpdns.org** — la misma página, corriendo en una Raspberry Pi 5 que está siempre
+**https://www.nom.qd.je** — la página completa, corriendo en una Raspberry Pi 5 que está siempre
 prendida y publicada gratis con un túnel de Cloudflare (sin abrir puertos). La app Android la usa
 como "En Internet". Cada cuenta tiene un límite de almacenamiento a la vista (200 MB) y solo guarda
-documentos de NOM-COLAB, comprimidos. Respaldo diario en la Pi y una copia diaria en la laptop.
+documentos de NOM, comprimidos y cifrados. Respaldo diario en la Pi (14 días) y una copia diaria en
+otra computadora del equipo (30 días). Cómo se administra, los respaldos y la instalación:
+`4-CODIGO/docs/SERVIDOR-PROPIO.md`.
 
-```
-ssh pi5 doas nomcolab-pi estado      # servicios, túnel, respaldo, temperatura
-ssh pi5 doas nomcolab-pi actualizar  # pone el jar nuevo (antes: copiarlo a /home/user/nom-colab.jar.nuevo)
-```
+## En Internet: Azure (para la demostración del módulo)
+
+**https://nomcolab-wack.azurewebsites.net** — el módulo de cuentas conectado a Azure SQL
+Database, con seguridad con roles: en la base (la página entra con un usuario con rol, sin poder
+tocar las tablas) y en cada espacio (Propietario / Puede editar / Solo lectura). Cómo se subió y
+cómo hacer la demo: `4-CODIGO/docs/DESPLIEGUE-AZURE.md`. **Normalmente está apagado** para no gastar
+el crédito: se prende antes de presentar (la primera entrada tras un rato sin uso tarda ~1 min
+porque el plan gratuito se duerme) y se apaga al terminar.
 
 Azure, la Raspberry y un servidor en el salón son independientes (cada uno tiene sus cuentas y
-documentos). Cómo funciona, respaldos e instalación: `4-CODIGO/docs/SERVIDOR-PROPIO.md`.
+documentos).
 
 ## Usarlo en 3 pasos
 

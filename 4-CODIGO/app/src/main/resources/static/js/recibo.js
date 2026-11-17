@@ -1,4 +1,4 @@
-/* NOM-COLAB · Autoría y trabajo en equipo (3.2, 3.2b y 3.3).
+/* NOM · Autoría y trabajo en equipo (3.2, 3.2b y 3.3).
    - Recibo de proceso de escritura: sesiones, letras tecleadas contra pegadas, pegados grandes
      (hora y tamaño, nunca el texto), versiones y la huella SHA-256 que calcula el servidor. Se ve
      como hoja imprimible (PDF desde el navegador; en la app, con la impresión de Android) y se
@@ -35,7 +35,7 @@
     const ses = r.sesiones || [], peg = r.pegadosGrandes || [];
     return `<article class="recibo-hoja">
       <header class="recibo-cab"><svg class="logo" aria-hidden="true"><use href="#logo"/></svg>
-        <div><h1>Recibo de proceso de escritura</h1><p>NOM-COLAB · emitido por <b>${esc(r.servidor || "el servidor")}</b> el ${esc(fecha(r.generado))} a las ${esc(hora(r.generado))}</p></div></header>
+        <div><h1>Recibo de proceso de escritura</h1><p>NOM · emitido por <b>${esc(r.servidor || "el servidor")}</b> el ${esc(fecha(r.generado))} a las ${esc(hora(r.generado))}</p></div></header>
       <section class="recibo-quien">
         <div><span>Documento</span><b>${esc(doc.nombre)}</b><small>${esc(TIPOS[doc.tipo] || doc.tipo || "")} · espacio ${esc(doc.espacio || "")}</small></div>
         <div><span>Persona</span><b>${esc(per.nombre)}</b><small>${r.primeraActividad ? `trabajó del ${esc(fecha(r.primeraActividad))} al ${esc(fecha(r.ultimaActividad))}` : "sin actividad registrada"}</small></div>
@@ -58,7 +58,7 @@
       <p>${textoVersiones(r.versiones || {})}</p>
       <h2>Huella digital</h2>
       <p class="recibo-huella">${esc(r.hash)}</p>
-      <p class="recibo-nota">La huella es el SHA-256 de todo lo de arriba. Para comprobar el recibo, abre NOM-COLAB → Historial → <b>Verificar un recibo</b> y elige el archivo .json: si alguien cambió una sola cifra, la huella ya no coincide. Lo tecleado, lo pegado y lo citado con su fuente (desde las fichas y el panel Investigar) lo anota el editor al momento; el texto pegado nunca se guarda.</p>
+      <p class="recibo-nota">La huella es el SHA-256 de todo lo de arriba. Para comprobar el recibo, abre NOM → Historial → <b>Verificar un recibo</b> y elige el archivo .json: si alguien cambió una sola cifra, la huella ya no coincide. Lo tecleado, lo pegado y lo citado con su fuente (desde las fichas y el panel Investigar) lo anota el editor al momento; el texto pegado nunca se guarda.</p>
     </article>`;
   }
 
@@ -104,7 +104,7 @@
 
   function verificar() {
     const cuerpo = html(`<div class="col">
-      <p class="suave" style="font-weight:400">Elige el archivo <b>.json</b> del recibo (o pega su contenido). NOM-COLAB revisa que la huella coincida y que el recibo salió de aquí.</p>
+      <p class="suave" style="font-weight:400">Elige el archivo <b>.json</b> del recibo (o pega su contenido). NOM revisa que la huella coincida y que el recibo salió de aquí.</p>
       <button class="btn" data-archivo>${ico("file-up")} Elegir archivo .json</button>
       <textarea data-texto rows="5" placeholder="…o pega aquí el contenido del recibo" style="width:100%;border-radius:12px;border:1px solid var(--borde);background:var(--sup-2);padding:10px;font:500 12px/1.4 var(--mono);color:var(--tinta)"></textarea>
       <div data-resultado></div></div>`);

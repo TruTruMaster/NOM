@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Compara a ojo cómo se VE un archivo de Office en NOM-COLAB contra cómo lo pinta LibreOffice.
+"""Compara a ojo cómo se VE un archivo de Office en NOM contra cómo lo pinta LibreOffice.
 
 Por cada archivo: lo importa en la página (como "Importar"), abre el editor, toma una captura de la
 primera página / diapositiva / hoja, lo convierte a PDF con LibreOffice y arma una imagen con las dos
-lado a lado (izquierda LibreOffice, derecha NOM-COLAB) en la carpeta de salida. También anota si la
+lado a lado (izquierda LibreOffice, derecha NOM) en la carpeta de salida. También anota si la
 página tuvo errores de JavaScript y cuánto del texto del original quedó en el documento.
 
   ~/.cache/nom-pruebas/venv/bin/python pruebas/office/visor.py SALIDA archivo1.docx archivo2.pptx …

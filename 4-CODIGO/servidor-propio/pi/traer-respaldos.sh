@@ -1,7 +1,7 @@
 #!/bin/sh
 # Copia de los respaldos de la Raspberry FUERA de la Raspberry.
 #
-# La Pi hace un respaldo diario de los datos de NOM-COLAB (02:00, guarda 14), pero los deja en su
+# La Pi hace un respaldo diario de los datos de NOM (02:00, guarda 14), pero los deja en su
 # propia tarjeta: si la tarjeta se daña, se pierden los datos y los respaldos a la vez. Este guion
 # corre en la laptop (o en cualquier otro equipo con `ssh pi5`) y trae el respaldo más nuevo que
 # todavía no tenga. Aquí se guardan los últimos 30.

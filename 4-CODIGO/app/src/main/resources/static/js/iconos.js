@@ -1,4 +1,4 @@
-/* NOM-COLAB · biblioteca de íconos para presentaciones y diagramas (8.3). Son íconos de Lucide
+/* NOM · biblioteca de íconos para presentaciones y diagramas (8.3). Son íconos de Lucide
    (licencia ISC, ver img/LICENSE-lucide.txt) con nombre en español para buscarlos sin internet. */
 (function () {
   "use strict";

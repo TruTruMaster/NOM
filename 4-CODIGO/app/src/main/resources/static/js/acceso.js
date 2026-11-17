@@ -1,4 +1,4 @@
-/* NOM-COLAB · Entrar sin Internet (fase 13, parte A).
+/* NOM · Entrar sin Internet (fase 13, parte A).
    - Con Internet hay cuenta (la de la nube, la misma en la app y en la página).
    - Quien NO tiene Internet no entra a ninguna cuenta: en el teléfono que comparte entra con un
      ALIAS al azar («Colibrí 37»), sin escribir nada. El alias se guarda en este equipo para ese
@@ -12,9 +12,10 @@
   const NOM = window.NOM;
   const { esc, ico, html, $, aviso, hoja } = NOM;
   const api = () => NOM.api;
-  /** La nube de NOM-COLAB (la Raspberry): donde viven las cuentas. Tiene dos nombres, nomcolab.dpdns.org
-   *  y nom.qd.je (el corto); la página abierta con el corto le habla a la nube con ese mismo nombre. */
-  const NUBE = /^(www\.)?nom\.qd\.je$/.test(location.hostname) ? location.origin : "https://nomcolab.dpdns.org";
+  /** La nube de NOM (la Raspberry): donde viven las cuentas. Su nombre es www.nom.qd.je (también
+   *  responde como nomcolab.dpdns.org, el de antes). La página abierta con cualquiera de sus nombres le
+   *  habla con ese mismo nombre (cada nombre guarda aparte en el navegador); la app usa el principal. */
+  const NUBE = /^(www\.)?nom\.qd\.je$|(^|\.)nomcolab\.dpdns\.org$/.test(location.hostname) ? location.origin : api().NUBE_PRINCIPAL;
   NOM.NUBE = NUBE;
   /** Alias, invitados y cuentas que llegaron con un pase: no tienen contraseña aquí. */
   NOM.sinContrasena = (u) => !!(u && (u.invitado || u.alias || u.nube || u.retirada));
@@ -122,7 +123,7 @@
     if (token) cab.Authorization = "Bearer " + token;
     let r;
     try { r = await fetch(NUBE + ruta, { method: metodo, headers: cab, body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo), signal: ctl.signal, cache: "no-store" }); }
-    catch (e) { throw new (api().ErrorApi)(0, { error: "No se pudo llegar a NOM-COLAB en Internet desde este equipo" }); }
+    catch (e) { throw new (api().ErrorApi)(0, { error: "No se pudo llegar a NOM en Internet desde este equipo" }); }
     finally { clearTimeout(t); }
     let d = null;
     try { d = await r.json(); } catch (e) { d = null; }
@@ -177,7 +178,7 @@
     return new Promise((listo) => {
       const guardada = sesionNube();
       const cuerpo = html(`<form class="col" novalidate>
-        <p class="suave" style="font-weight:400">Tienes Internet en este equipo: entra con tu cuenta de <b>NOM-COLAB en Internet</b>. Tu contraseña va directo a la nube por una conexión cifrada; el teléfono que comparte nunca la ve.</p>
+        <p class="suave" style="font-weight:400">Tienes Internet en este equipo: entra con tu cuenta de <b>NOM en Internet</b>. Tu contraseña va directo a la nube por una conexión cifrada; el teléfono que comparte nunca la ve.</p>
         <div class="alerta" data-alerta hidden role="alert"></div>
         ${guardada ? `<button type="button" class="btn primario ancho" data-guardada>${ico("log-in")} Seguir como ${esc(guardada.usuario.nombre)}</button>
           <div class="fila" style="gap:10px;color:var(--tinta-suave);font-size:13px;font-weight:500"><span style="flex:1;height:1px;background:var(--borde-fuerte)"></span>u otra cuenta<span style="flex:1;height:1px;background:var(--borde-fuerte)"></span></div>` : ""}

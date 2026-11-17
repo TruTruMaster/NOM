@@ -1,4 +1,4 @@
-/* NOM-COLAB · Service worker (6.1): la página sigue abriendo aunque se caiga la red.
+/* NOM · Service worker (6.1): la página sigue abriendo aunque se caiga la red.
    Red primero (el servidor siempre tiene la versión más nueva) y, si no responde en 3 s o no hay
    red, la copia guardada. La API (/api/...) nunca se guarda: los documentos sin red viven en la
    bóveda cifrada de cada cuenta. Al cambiar VERSION se descarta la caché anterior. */

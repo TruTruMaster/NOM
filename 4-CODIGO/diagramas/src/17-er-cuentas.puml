@@ -1,5 +1,5 @@
 @startuml 17-er-cuentas
-title NOM-COLAB - Base de datos del módulo Gestión de cuentas (Azure SQL Database)
+title NOM - Base de datos del módulo Gestión de cuentas (Azure SQL Database)
 skinparam shadowing false
 skinparam linetype ortho
 skinparam defaultFontName Nunito

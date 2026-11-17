@@ -1,4 +1,4 @@
-/* NOM-COLAB · Documentos de este equipo (local primero).
+/* NOM · Documentos de este equipo (local primero).
    Viven solo en este navegador o en la app, no en un servidor, salvo que la persona los guarde
    en un espacio. Con cuenta van cifrados en su bóveda (nom.u.<cuenta>.local.*): solo esa cuenta,
    con su contraseña, puede abrirlos. Sin cuenta se guardan en claro en este navegador.

@@ -1,6 +1,6 @@
 ---
 titulo: Aviso de privacidad integral
-descripcion: Qué datos personales trata NOM-COLAB, para qué, cómo los protege y cómo ejercer tus derechos.
+descripcion: Qué datos personales trata NOM, para qué, cómo los protege y cómo ejercer tus derechos.
 orden: 10
 aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-13
@@ -12,10 +12,10 @@ version: 2026-11-13
 
 El responsable del tratamiento de tus datos personales es el **equipo 6 «WACK»** del grupo 5IM7
 del CECyT 9 «Juan de Dios Bátiz» del Instituto Politécnico Nacional, en la Ciudad de México, que
-desarrolla y opera NOM-COLAB como proyecto escolar. Domicilio para oír y recibir notificaciones: el
+desarrolla y opera NOM como proyecto escolar. Domicilio para oír y recibir notificaciones: el
 medio de contacto de la sección [Cómo ejercer tus derechos](#derechos).
 
-Este aviso aplica a la nube de NOM-COLAB ([nomcolab.dpdns.org](https://nomcolab.dpdns.org)), a la versión en Azure y a
+Este aviso aplica a la nube de NOM ([www.nom.qd.je](https://www.nom.qd.je), también en [nomcolab.dpdns.org](https://nomcolab.dpdns.org)), a la versión en Azure y a
 la app de Android. Una computadora o un teléfono que comparte en un salón **lo opera quien lo
 enciende** (la escuela, el maestro o un alumno): es esa persona quien responde por lo que se guarda
 en su equipo.
@@ -56,7 +56,7 @@ Por eso no te pedimos consentimiento para otras finalidades.
 No compartimos tus datos con nadie para sus propios fines. Por la forma en que funciona el
 servicio, estos proveedores procesan el tráfico o guardan datos por nosotros:
 
-- **Cloudflare** (el túnel por el que se llega a la nube): ve el tráfico cifrado y la dirección IP.
+- **Cloudflare** (el túnel por el que se llega a la nube): ahí termina el HTTPS de tu navegador y desde ahí sigue cifrado por el túnel hasta el servidor. Por eso Cloudflare ve la dirección IP y **podría ver el contenido** de lo que no va en un espacio cifrado de extremo a extremo; no lo usa para nada más.
 - **Microsoft Azure**, solo si usas la versión en Azure.
 - **GitHub**, cuando descargas la app de Android.
 
@@ -64,6 +64,8 @@ servicio, estos proveedores procesan el tráfico o guardan datos por nosotros:
 
 - La nube es una computadora pequeña (Raspberry Pi) del equipo, en México. Los respaldos diarios se
   guardan **14 días** en ella y una copia en una computadora del equipo (30 días).
+- La **versión en Azure** (solo si la usas) guarda sus datos en un centro de datos de Microsoft en **Estados Unidos**
+  (región «West US»). Hoy está apagada; si se enciende, este aviso lo dirá.
 - Tus datos se guardan **mientras exista tu cuenta**. Al borrarla, se borran del servidor en ese
   momento y de los respaldos cuando estos se borran solos (a más tardar en 14 días; 30 en la copia).
 - Lo que está en tu equipo se queda hasta que lo borres.
@@ -71,7 +73,7 @@ servicio, estos proveedores procesan el tráfico o guardan datos por nosotros:
 ## 6. Cómo los protegemos {#seguridad}
 
 - **En tu equipo**: cifrados con una llave que se abre con tu contraseña.
-- **En el camino**: HTTPS por Internet. En la red del salón la conexión no va cifrada y la app lo
+- **En el camino**: HTTPS por Internet hasta Cloudflare y su túnel cifrado hasta el servidor. En la red del salón la conexión no va cifrada y la app lo
   avisa ([Conexión sin cifrar](ayuda:cuentas/conexion-sin-cifrar)).
 - **En el servidor**: cifrado en reposo (AES-256-GCM) de documentos, cuentas y respaldos. Quien
   administra el servidor tiene esa llave.
@@ -82,7 +84,7 @@ Más en [Seguridad](legal:seguridad).
 
 ## 7. Cómo limitar el uso de tus datos {#limitar}
 
-- Usa NOM-COLAB [sin cuenta](ayuda:empezar/sin-cuenta) o con un alias en la red del salón.
+- Usa NOM [sin cuenta](ayuda:empezar/sin-cuenta) o con un alias en la red del salón.
 - No te unas a espacios que no quieras: son cerrados y solo entras si te invitan.
 - Borra las copias de tu equipo en **Este equipo**, sal de un espacio o borra tus documentos.
 - [Borra tu cuenta](ayuda:cuentas/borrar-la-cuenta) cuando quieras.
@@ -109,9 +111,9 @@ Gobierno**, autoridad encargada de la protección de datos personales en posesi�
 
 ## 9. Menores de edad {#menores}
 
-NOM-COLAB no pide la edad. Los espacios son **cerrados**: solo se entra por invitación de su
+NOM no pide la edad. Los espacios son **cerrados**: solo se entra por invitación de su
 propietario. Cada persona decide si se une a un grupo de trabajo; **si eres menor de edad, tus
-padres o tutores son responsables** de que uses NOM-COLAB y de los espacios a los que te unes.
+padres o tutores son responsables** de que uses NOM y de los espacios a los que te unes.
 
 ## 10. Cookies {#cookies}
 

@@ -151,8 +151,8 @@ public class ServicioPases {
     /** Un pase recien hecho para la cuenta abierta. nube: el origen publico de este servidor. */
     public Map<String, Object> emitir(Usuario u, String nube) {
         KeyPair kp = propia;
-        if (kp == null) throw ErrorNom.prohibido("Este servidor no da pases para entrar a otro NOM-COLAB");
-        if (u.sinContrasena()) throw ErrorNom.prohibido("Solo una cuenta con contraseña puede llevarse a otro NOM-COLAB");
+        if (kp == null) throw ErrorNom.prohibido("Este servidor no da pases para entrar a otro NOM");
+        if (u.sinContrasena()) throw ErrorNom.prohibido("Solo una cuenta con contraseña puede llevarse a otro NOM");
         long ahora = System.currentTimeMillis();
         byte[] n = new byte[16];
         azar.nextBytes(n);
@@ -211,7 +211,7 @@ public class ServicioPases {
         }
         String nube;
         try { nube = normalizarNube(String.valueOf(c.get("nube"))); }
-        catch (IllegalArgumentException e) { throw new ErrorNom(ErrorNom.SIN_SESION, "Ese pase no es de una nube de NOM-COLAB que este equipo conozca"); }
+        catch (IllegalArgumentException e) { throw new ErrorNom(ErrorNom.SIN_SESION, "Ese pase no es de una nube de NOM que este equipo conozca"); }
         List<PublicKey> llaves = confiables.get(nube);
         if (llaves == null || llaves.isEmpty())
             throw new ErrorNom(ErrorNom.SIN_SESION, "Ese pase es de " + nube.replaceFirst("^https?://", "") + ", que este equipo no conoce");
@@ -225,7 +225,7 @@ public class ServicioPases {
             } catch (Exception ignorado) { /* la siguiente llave */ }
         }
         if (!ok) throw new ErrorNom(ErrorNom.SIN_SESION, "La firma del pase no es válida");
-        if (!(c.get("v") instanceof Number v) || v.intValue() != 1) throw new ErrorNom(ErrorNom.SIN_SESION, "Ese pase es de otra versión de NOM-COLAB");
+        if (!(c.get("v") instanceof Number v) || v.intValue() != 1) throw new ErrorNom(ErrorNom.SIN_SESION, "Ese pase es de otra versión de NOM");
         long ahora = System.currentTimeMillis();
         long emitido = c.get("emitido") instanceof Number e ? e.longValue() : 0, caduca = c.get("caduca") instanceof Number x ? x.longValue() : 0;
         if (caduca - emitido > DURACION + 1000 || caduca <= 0) throw new ErrorNom(ErrorNom.SIN_SESION, "Ese pase no es válido");

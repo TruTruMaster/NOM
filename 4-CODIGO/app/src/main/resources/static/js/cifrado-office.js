@@ -1,4 +1,4 @@
-/* NOM-COLAB · Archivos de Office con contraseña (MS-OFFCRYPTO).
+/* NOM · Archivos de Office con contraseña (MS-OFFCRYPTO).
    Office guarda un .docx, .xlsx o .pptx con contraseña dentro de un archivo compuesto (CFB, el formato OLE de
    siempre) con dos partes: «EncryptionInfo» (cómo se cifró) y «EncryptedPackage» (el .zip cifrado). Aquí se abre
    con la contraseña (cifrado «Agile» de Office 2010 en adelante y «Standard» de Office 2007) y se guarda con

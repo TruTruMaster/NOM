@@ -1,4 +1,4 @@
-/* NOM-COLAB · Pantalla del proyector (5.5).
+/* NOM · Pantalla del proyector (5.5).
    Quien presenta (desde su teléfono o su computadora) pide un código; la computadora conectada al
    proyector abre /proyectar?c=CÓDIGO en cualquier navegador, sin iniciar sesión, y muestra la
    diapositiva en la que va el presentador, con sus transiciones y animaciones. Si alguien edita
@@ -34,7 +34,7 @@
       return pedirCodigo(e.red ? "No hay conexión" : "No se encontró la presentación",
         e.red ? "Revisa que esta computadora esté en la misma red que el equipo que comparte." : "El código no existe o la presentación ya terminó. Pide el código otra vez.");
     }
-    document.title = (datos.documento && datos.documento.nombre ? datos.documento.nombre + " · " : "") + "Proyector · NOM-COLAB";
+    document.title = (datos.documento && datos.documento.nombre ? datos.documento.nombre + " · " : "") + "Proyector · NOM";
     const doc = new NOM.DocCRDT("proy-" + codigo, datos.estado, { soloLectura: true, soloMemoria: true, local: true });
     const V = NOM.lienzoVista;
     let pagina = datos.pagina || doc.paginas()[0], paso = datos.paso || 0, ultimaPagina = null;

@@ -2,7 +2,7 @@
 
 Encargo del equipo: con una computadora con Windows y Office 2024 (Word, Excel y PowerPoint reales),
 analizar todo lo que Office ofrece, armar los archivos más complejos posibles con todas sus
-herramientas y lograr que NOM-COLAB (web y app) los muestre **idénticos**, sin importar la combinación.
+herramientas y lograr que NOM (web y app) los muestre **idénticos**, sin importar la combinación.
 
 ## 1. Cómo se mide (reproducible)
 
@@ -20,7 +20,7 @@ deja tocar la configuración de página ni exportar a PDF (no se activó).
 | Armar los archivos | `pruebas/office/windows/hacer_word.py`, `hacer_excel.py`, `hacer_powerpoint.py` | Usan las herramientas de Office por automatización; cada función queda anotada en `NOMBRE.funciones.json` (si Office la aceptó) |
 | La referencia | `pruebas/office/windows/verdad.py` | Word: cada renglón de cada página (texto exacto y posición, de `Pages/Rectangles/Lines`) y el PDF de Word. Excel: el texto que muestra cada celda (con `####`), colores ya aplicados por el formato condicional, anchos y altos, gráficas exportadas por Excel y la captura de la ventana a 100 %. PowerPoint: cada forma (posición, giro, relleno, renglones de su texto) y cada diapositiva exportada a 1920×1080 |
 | Manejarlo desde Linux | `pruebas/office/office_real.py enviar | correr ID script.py … | traer PATRÓN` | Copia los programas y las imágenes, corre en Windows y trae los resultados a `~/.cache/nom-pruebas/office-real/` |
-| Comparar | `pruebas/office/comparar_real.py ARCHIVOS… [--movil]` | Importa cada archivo en NOM-COLAB (Chromium) y mide: Word, renglones idénticos y en su página; Excel, texto de cada celda, fondos y anchos; PowerPoint, parecido de cada diapositiva. Deja imágenes Office \| NOM-COLAB \| diferencias en `office-real/comparar/` |
+| Comparar | `pruebas/office/comparar_real.py ARCHIVOS… [--movil]` | Importa cada archivo en NOM (Chromium) y mide: Word, renglones idénticos y en su página; Excel, texto de cada celda, fondos y anchos; PowerPoint, parecido de cada diapositiva. Deja imágenes Office \| NOM \| diferencias en `office-real/comparar/` |
 
 Las imágenes de prueba (fotos, logotipo con transparencia, SVG, video y audio cortos) las hace
 `windows/imagenes.py` en Linux, para que todos los archivos lleven las mismas.
@@ -89,7 +89,7 @@ detalles. Para Word y Excel las medidas son exactas: un renglón o una celda son
 
 ## 4. Lo que falta, por orden de impacto
 
-1. **Fuentes.** Office 2024 usa Aptos (Word), Aptos Narrow (Excel) y Aptos Display (títulos); NOM-COLAB
+1. **Fuentes.** Office 2024 usa Aptos (Word), Aptos Narrow (Excel) y Aptos Display (títulos); NOM
    las pinta con Carlito, que mide distinto, así que ningún renglón corta igual. Faltan también equivalentes
    de Arial Narrow, Arial Black, Calibri Light, Georgia, Verdana, Tahoma, Segoe UI, Consolas y otras.
    Plan: fuentes libres con **las mismas medidas** (ancho de cada letra y alto de renglón) que las de
@@ -104,7 +104,7 @@ detalles. Para Word y Excel las medidas son exactas: un renglón o una celda son
    decorativas, fuentes y estilos de texto heredados).
 5. Después: tablas, imágenes flotantes, columnas, encabezados por sección (Word); bordes, tramas,
    degradados, barras de datos, escalas e íconos (Excel); degradados, efectos, imágenes, tablas, gráficas y
-   SmartArt (PowerPoint); y la vuelta: lo que exporta NOM-COLAB abierto en Office sin reparar y visto igual.
+   SmartArt (PowerPoint); y la vuelta: lo que exporta NOM abierto en Office sin reparar y visto igual.
 
 ## 5. Avance
 
@@ -196,7 +196,7 @@ bordes diagonales, texto girado y alineación vertical, filas de alto fijo que r
 la paridad en la app de Android.
 
 **Lo que seguía antes de la tanda 2:** gráficas de Office (un solo dibujante para Excel, Word y PowerPoint: hoy la hoja
-no muestra las gráficas, imágenes ni formas del archivo y PowerPoint las dibuja con el estilo de NOM-COLAB);
+no muestra las gráficas, imágenes ni formas del archivo y PowerPoint las dibuja con el estilo de NOM);
 Word: secciones con otro tamaño u orientación, columnas, objetos flotantes (cuadros de texto, formas,
 imágenes) y la división automática de palabras; Excel: tramas y degradados en celdas, bordes diagonales, texto
 girado y alineación vertical, filas de alto fijo que recortan; PowerPoint: tablas con su estilo y SmartArt;
@@ -234,7 +234,7 @@ renglones idénticos 57.4 → 77.0 %.
 | x02 a x08: texto, anchos y altos | 100 % (x02 98.3 %) | igual |
 
 **Cómo medir cada gráfica:** `comparar_real.py ARCHIVO.xlsx` compara además cada gráfica contra la imagen que Excel
-exporta de ella (`Chart.Export`): busca la de NOM-COLAB por su lugar y deja `lado-hN-gM.png`. Excel exporta vacía
+exporta de ella (`Chart.Export`): busca la de NOM por su lugar y deja `lado-hN-gM.png`. Excel exporta vacía
 una gráfica que no está a la vista: `windows/verdad.py` lleva la ventana a cada una y reintenta (antes faltaban 21
 de las 37 imágenes de x04). Si Office se traba, `verdad.py` cierra solo el proceso que abrió (nunca un Office que
 la persona tenga abierto).

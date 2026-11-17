@@ -1,4 +1,4 @@
-/* NOM-COLAB · Fase 9: investigar, fichas de trabajo, fuentes y citas en APA. Sin IA: la persona
+/* NOM · Fase 9: investigar, fichas de trabajo, fuentes y citas en APA. Sin IA: la persona
    escribe; la app busca, organiza y cita. Lo que se inserta desde una ficha o una fuente queda en
    el recibo como "citado con su fuente".
      Fuentes del documento: _doc "fuente:<id>" = { tipo, titulo, autores: [{ familia, nombres } | { literal }],

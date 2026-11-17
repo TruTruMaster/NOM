@@ -1,4 +1,4 @@
-/* NOM-COLAB · Dibuja las geometrías predefinidas de Office (rectángulos, flechas, estrellas, llamadas, cintas…)
+/* NOM · Dibuja las geometrías predefinidas de Office (rectángulos, flechas, estrellas, llamadas, cintas…)
    exactamente como Office: evalúa las fórmulas de la norma (ECMA-376, 20.1.9) para el tamaño y los ajustes de
    cada forma y devuelve los trazos en SVG. Los datos están en geometrias-datos.js.
 

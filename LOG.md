@@ -1,4 +1,7 @@
-# LOG — todo lo hecho en NOM-COLAB (16 de octubre de 2026)
+# LOG — todo lo hecho en NOM (antes NOM-COLAB), desde el 16 de octubre de 2026
+
+> Es un **diario**: cada entrada cuenta lo que era cierto ese día (por ejemplo, el límite de personas
+> por espacio cambió de 5 a 50). Lo vigente está en `CAMBIOS.md` y en la ayuda de la app.
 
 ## 1. Revisión del proyecto
 - Se leyó toda la documentación: `Requerimientos WACK.docx`, `Mapa de navegación y casos de uso.docx`,

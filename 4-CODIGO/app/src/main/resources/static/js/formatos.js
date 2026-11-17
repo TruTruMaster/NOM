@@ -1,4 +1,4 @@
-/* NOM-COLAB · ConversorFormato del lado del cliente (CU-28 importar, CU-29 exportar).
+/* NOM · ConversorFormato del lado del cliente (CU-28 importar, CU-29 exportar).
    El editor nunca conoce un formato de archivo: todo entra y sale como bloques. */
 (function () {
   "use strict";
@@ -411,7 +411,7 @@ ${formas.join("\n")}
   /** Abre un .nom versión 3: { d, b, t } y, si vino de Office, las operaciones del archivo de origen. */
   async function deNomBytes(u) {
     const O = NOM.origen, { json, adjuntos } = NOM.paquete.desempacar(u);
-    if (json.f !== "nom-colab") throw new Error("Ese archivo no es un documento de NOM-COLAB");
+    if (json.f !== "nom-colab") throw new Error("Ese archivo no es un documento de NOM");
     if (!json.og) { const c = O.meterDatos({ d: json.d || {}, b: json.b || {}, t: json.t || {} }, adjuntos, null); return { d: c.d, b: c.b, t: c.t, opsOrigen: [] }; }
     // Vino de Office: se vuelve a armar ese archivo, se importa igual que la primera vez y encima van los cambios.
     const partes = new Map();
@@ -479,7 +479,7 @@ ${formas.join("\n")}
     { id: "xlsx", nombre: "Excel (.xlsx)", desc: "Con fórmulas: Excel, Google Sheets o LibreOffice Calc", icono: "sheet" },
     { id: "pptx", nombre: "PowerPoint (.pptx)", desc: "Se abre en PowerPoint, Google Slides o LibreOffice Impress", icono: "presentation" },
     { id: "png", nombre: "Imagen (.png)", desc: "El diagrama de esta página como imagen", icono: "image" },
-    { id: "nom", nombre: "NOM-COLAB (.nom)", desc: "Sin pérdida: se vuelve a importar tal cual", icono: "layers" },
+    { id: "nom", nombre: "NOM (.nom)", desc: "Sin pérdida: se vuelve a importar tal cual", icono: "layers" },
     { id: "html", nombre: "Página web (.html)", desc: "Para abrir en cualquier navegador", icono: "file-text" },
     { id: "md", nombre: "Markdown (.md)", desc: "Texto plano con formato ligero", icono: "type" },
     { id: "csv", nombre: "CSV (.csv)", desc: "La tabla, para Excel o LibreOffice Calc", icono: "sheet" },
@@ -675,7 +675,7 @@ ${formas.join("\n")}
     if (ext === ".nom" || ext === ".json") {
       let datos;
       try { datos = JSON.parse(texto); } catch (e) { throw new Error("El archivo .nom está dañado"); }
-      if (datos.formato !== "nom-colab" || !datos.bloques) throw new Error("Ese JSON no es un documento de NOM-COLAB");
+      if (datos.formato !== "nom-colab" || !datos.bloques) throw new Error("Ese JSON no es un documento de NOM");
       const d = datos.bloques._doc || {};
       const ops = Object.keys(datos.bloques).filter((k) => k !== "_doc").map((k, i) => {
         const { id, ...c } = datos.bloques[k];

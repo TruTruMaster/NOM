@@ -1,4 +1,4 @@
-/* NOM-COLAB · Bóveda local cifrada por cuenta.
+/* NOM · Bóveda local cifrada por cuenta.
    Todo lo que se guarda bajo "nom.u.<cuenta>." (copias de documentos, cambios sin enviar,
    documentos de este equipo, recientes) vive cifrado en IndexedDB. Nada de eso toca
    localStorage en claro.

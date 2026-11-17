@@ -1,4 +1,4 @@
-/* NOM-COLAB · Exportar a formatos de Office (Office Open XML), sin librerías:
+/* NOM · Exportar a formatos de Office (Office Open XML), sin librerías:
    texto → .docx (Word), hoja → .xlsx (Excel), presentación y diagrama → .pptx (PowerPoint).
    Un archivo OOXML es un .zip de XML; aquí se arma comprimido, sin librerías (compresion.js). */
 (function () {
@@ -103,7 +103,7 @@
   const EN = { SUMA: "SUM", PROMEDIO: "AVERAGE", CONTAR: "COUNT", CONTARA: "COUNTA", SI: "IF", ESERROR: "ISERROR", SIERROR: "IFERROR",
     Y: "AND", O: "OR", NO: "NOT", REDONDEAR: "ROUND", RAIZ: "SQRT", POTENCIA: "POWER", CONCATENAR: "CONCATENATE", MAYUSC: "UPPER", MINUSC: "LOWER", LARGO: "LEN",
     BUSCARV: "VLOOKUP", "CONTAR.SI": "COUNTIF", "SUMAR.SI": "SUMIF", HOY: "TODAY", FECHA: "DATE", DIAS: "DAYS", "DÍAS": "DAYS" };
-  // Los errores de NOM-COLAB con el nombre que acepta Excel en un archivo (los demás Excel los da al recalcular)
+  // Los errores de NOM con el nombre que acepta Excel en un archivo (los demás Excel los da al recalcular)
   const ERR_XL = { "#VALOR!": "#VALUE!", "#NOMBRE?": "#NAME?", "#NULO!": "#NULL!", "#DESBORDAMIENTO!": "#VALUE!", "#CALC!": "#VALUE!", "#CICLO!": "#VALUE!" };
   // Matrices dinámicas en el archivo: la parte de metadatos de celda con el tipo XLDAPR (cm="1" en la celda)
   const T_META = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata";
@@ -144,7 +144,7 @@
   }
   const RE_REF_FIN = /((?:'[^']*(?:''[^']*)*'|[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*)!)?\$?[A-Za-z]{1,3}\$?\d+$/;
   const RE_REF_INI = /^((?:'[^']*(?:''[^']*)*'|[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*)!)?\$?[A-Za-z]{1,3}\$?\d+(?::\$?[A-Za-z]{1,3}\$?\d+)?/;
-  /** Una fórmula de NOM-COLAB (en español) como la guarda Excel. xlv: versión del importador con que llegó la hoja
+  /** Una fórmula de NOM (en español) como la guarda Excel. xlv: versión del importador con que llegó la hoja
       (antes de la 5 las matrices escritas se guardaron con «;» entre columnas). */
   function formulaExcel(f, xlv, vieja) {
     let r = "", enTexto = false, llaves = 0;
@@ -457,7 +457,7 @@
     /**
      * Arma el cuerpo con las unidades del documento.xml de origen: la que no cambió (misma huella que
      * al importar) sale textual; la que cambió se escribe de nuevo, con el formato de párrafo original
-     * si ese no se tocó. Lo que NOM-COLAB no muestra (marcadores, controles) se queda en su lugar.
+     * si ese no se tocó. Lo que NOM no muestra (marcadores, controles) se queda en su lugar.
      */
     function cuerpoConOrigen() {
       const O = NOM.origen, H = O.huella, pq = paqueteDe(og);
@@ -483,7 +483,7 @@
       }
       const notaRuta = parte(/\/footnotes$/), notaTxt = notaRuta ? pq.texto(notaRuta) : null;
       if (notaTxt) (notaTxt.match(/<w:footnote [^>]*w:id="(-?\d+)"/g) || []).forEach((m) => { baseNota = Math.max(baseNota, +/w:id="(-?\d+)"/.exec(m)[1]); });
-      // ---- estilos: los de NOM-COLAB se cambian por los del original que se llamen igual
+      // ---- estilos: los de NOM se cambian por los del original que se llamen igual
       const estRuta = parte(/\/styles$/), estTxt = estRuta ? pq.texto(estRuta) : null;
       const porNombre = {}, idsEst = new Set();
       let normal = "Normal";
@@ -996,7 +996,7 @@
           pq.pon(mm.nombre.replace(/^word\//, carpeta), mm.datos);
           pq.extension(mm.nombre.split(".").pop(), /png$/.test(mm.nombre) ? "image/png" : "image/jpeg");
         });
-        // ---- numeración nueva (listas hechas en NOM-COLAB)
+        // ---- numeración nueva (listas hechas en NOM)
         if (instancias.length) {
           const abs = (E.numeracion.match(/<w:abstractNum w:abstractNumId="\d+">[\s\S]*?<\/w:abstractNum>/g) || []).filter((t) => +/abstractNumId="(\d+)"/.exec(t)[1] >= baseAbs).join("");
           const nums = (E.numeracion.match(/<w:num w:numId="\d+">[\s\S]*?<\/w:num>/g) || []).filter((t) => +/numId="(\d+)"/.exec(t)[1] >= baseNum).join("");
@@ -1023,7 +1023,7 @@
             pq.agregaRel(DOC, "rId" + PRE + "Notas", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes", "footnotes.xml");
           }
         }
-        // ---- estilos de NOM-COLAB que el original no tenía
+        // ---- estilos de NOM que el original no tenía
         if (faltan.size) {
           let defs = "";
           faltan.forEach((idNuevo, id) => {
@@ -1252,7 +1252,7 @@ ${instancias.map((n) => `<w:num w:numId="${n.id}"><w:abstractNumId w:val="${n.ab
     if (OGR) return OGR.ensamblar({ estilos, numeracion, notasXml, extras, refs, relsEnc, primera: ep2.primera && (hayEnc || hayPie), pgSz: `<w:pgSz w:w="${(hor ? TAM[1] : TAM[0]) * TWIP}" w:h="${(hor ? TAM[0] : TAM[1]) * TWIP}"${hor ? ' w:orient="landscape"' : ""}/>`, mv, m });
     const titulo = doc.valor("_doc", "nombre") || "Documento";
     // Sin fecha: el mismo documento da siempre exactamente el mismo archivo.
-    const nucleo = XML + `<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>${x(titulo)}</dc:title><dc:creator>NOM-COLAB</dc:creator></cp:coreProperties>`;
+    const nucleo = XML + `<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>${x(titulo)}</dc:title><dc:creator>NOM</dc:creator></cp:coreProperties>`;
     return zip([
       { nombre: "[Content_Types].xml", datos: CT(`<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
 <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
@@ -1301,7 +1301,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
   const RESALTE_WORD = { yellow: "#FFFF00", green: "#00FF00", cyan: "#00FFFF", magenta: "#FF00FF", blue: "#0000FF", red: "#FF0000", darkBlue: "#000080", darkCyan: "#008080",
     darkGreen: "#008000", darkMagenta: "#800080", darkRed: "#800000", darkYellow: "#808000", darkGray: "#808080", lightGray: "#C0C0C0", black: "#000000" };
 
-  /** Ecuación de Word (OMML) → la notación de NOM-COLAB (\\frac, ^, _, \\sqrt…). */
+  /** Ecuación de Word (OMML) → la notación de NOM (\\frac, ^, _, \\sqrt…). */
   function ommlATex(n) {
     const hs = (x) => [...(x ? x.childNodes : [])].filter((c) => c.nodeType === 1);
     const h1 = (x, nombre) => hs(x).find((c) => c.localName === nombre) || null;
@@ -1864,7 +1864,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     // (la posición de un ancla sin importar su ajuste, para las formas)
     function xDeFlota(c, w) { const t = comoFlota(c, w, 1, true); return t.x || 0; }
     function yDeFlota(c) { const t = comoFlota(c, 1, 1, true); return t.y || 0; }
-    /** Cómo va una imagen anclada de Word (wp:anchor) en la página de NOM-COLAB: sin ajuste (libre, en su lugar,
+    /** Cómo va una imagen anclada de Word (wp:anchor) en la página de NOM: sin ajuste (libre, en su lugar,
         delante o detrás del texto), cuadrado/estrecho/transparente (a la izquierda o a la derecha del texto) o arriba
         y abajo (en su propio renglón, con su alineación). Las medidas, desde el párrafo y la columna. */
     function comoFlota(c, w, h, soloPosicion) {
@@ -1942,7 +1942,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       const tblPr = hijo(tbl, "tblPr"), idEst = val(hijo(tblPr, "tblStyle"));
       const partes = partesEstiloTabla(idEst);
       if (!Object.keys(partes).length) return;
-      // con estilo, las líneas son las del estilo (cada celda las lleva): sin las de NOM-COLAB por omisión
+      // con estilo, las líneas son las del estilo (cada celda las lleva): sin las de NOM por omisión
       if (!hijo(tblPr, "tblBorders")) celdas.bordes = "ninguno";
       const lk = hijo(tblPr, "tblLook"), si = (a, def) => { if (!lk) return def; const v = lk.getAttributeNS(W, a) || lk.getAttribute("w:" + a); if (v != null) return v === "1" || v === "true"; const hx = parseInt(val(lk) || "", 16); if (isNaN(hx)) return def; return !!(hx & { firstRow: 0x20, lastRow: 0x40, firstColumn: 0x80, lastColumn: 0x100, noHBand: 0x200, noVBand: 0x400 }[a]); };
       const fl = { fr: si("firstRow", true), lr: si("lastRow", false), fc: si("firstColumn", true), lc: si("lastColumn", false), bh: !si("noHBand", false), bv: !si("noVBand", true) };
@@ -2519,7 +2519,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     const xmlBorde = (bd) => { const lado = (l, si) => (si ? `<${l} style="thin"><color auto="1"/></${l}>` : `<${l}/>`); return `<border>${lado("left", bd.includes("i"))}${lado("right", bd.includes("d"))}${lado("top", bd.includes("a"))}${lado("bottom", bd.includes("b"))}<diagonal/></border>`; };
     const tamExcel = (tl) => (tl ? Math.round(tl * 1.0476 * 2) / 2 : 11);
     const ALIN = { izq: "left", centro: "center", der: "right" };
-    /** Estilo de una celda armado solo con lo que dice el modelo (documento hecho en NOM-COLAB). */
+    /** Estilo de una celda armado solo con lo que dice el modelo (documento hecho en NOM). */
     function estilo(t, ref, esFecha) {
       const b = !!t["n:" + ref], i = !!t["i:" + ref], u = !!t["u:" + ref], k = argb(t["k:" + ref]), tl = +t["tl:" + ref] || 0, tf = String(t["tf:" + ref] || "").replace(/[<>"&]/g, "");
       const kf = [b, i, u, k, tl].join("|") + (tf ? "|" + tf : "");
@@ -2876,7 +2876,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
   /**
    * Devuelve el XML de la hoja de origen con SOLO lo que cambió respecto a lo importado (`base`),
    * o null si no cambió nada. Lo demás (estilos, textos enriquecidos, gráficas, filtros, vínculos,
-   * formato condicional, celdas fuera de lo que NOM-COLAB muestra) queda intacto.
+   * formato condicional, celdas fuera de lo que NOM muestra) queda intacto.
    */
   function parcharHoja(xml, base, t, fab, ev) {
     const O = NOM.origen;
@@ -3134,13 +3134,13 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         const r = parcharHoja(pq.texto(p.ox), baseDe(t, p.ox), t, fab, ev);
         if (r != null) { pq.pon(p.ox, r); cambio = true; }
       } else {
-        // hoja creada en NOM-COLAB dentro de un libro importado
+        // hoja creada en NOM dentro de un libro importado
         p.ruta = `xl/worksheets/nomhoja${++nNueva}.xml`;
         const estiloDe = (ref, esFecha) => { const camb = new Set(CELDA_FMT.filter((k) => tiene(t[k + ":" + ref]))); const fecha = esFecha && !tiene(t["f:" + ref]) ? "dd/mm/yyyy" : null; return camb.size || fecha ? fab.estiloDesde(t, ref, 0, camb, fecha) : 0; };
         pq.pon(p.ruta, hojaDesdeCero(t, ev, fab, estiloDe, i === 0, ""));
         cambio = true;
       }
-      // gráficas hechas en NOM-COLAB: se agregan al dibujo de la hoja (o se le crea uno)
+      // gráficas hechas en NOM: se agregan al dibujo de la hoja (o se le crea uno)
       const gs = doc.vivos().filter((g) => g.tipo === "grafica" && g.hoja === t.id);
       if (!gs.length) return;
       const anclas = [], relsG = [];
@@ -3269,7 +3269,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     return r;
   }
   /**
-   * Lo que NOM-COLAB entiende de un libro de Excel ya abierto (z = el .zip). Síncrono: también lo usa
+   * Lo que NOM entiende de un libro de Excel ya abierto (z = el .zip). Síncrono: también lo usa
    * el exportador para saber qué cambió.
    * OJO: el exportador compara el documento contra lo que ESTA función lee hoy del archivo original.
    * Si aquí se empieza a leer algo nuevo de las celdas (otro color, otra propiedad), en un documento
@@ -4374,7 +4374,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         if (b.tipo === "texto") {
           const tam = b.tTam ? b.tTam / 1.333 : b.estilo === "h1" ? 40 : b.estilo === "h2" ? 28 : 20;
           const neg = b.tNegrita != null ? b.tNegrita : b.estilo === "h1" || b.estilo === "h2";
-          // El nombre del cuadro guarda si era título (al volver a abrirlo en NOM-COLAB se recupera).
+          // El nombre del cuadro guarda si era título (al volver a abrirlo en NOM se recupera).
           return caja(nid, b.estilo === "h1" ? "Título" : b.estilo === "h2" ? "Encabezado" : "Texto", b, parrafosRicos(b.html, tam, neg, textoDe(b)));
         }
         if (b.tipo === "ecuacion") return caja(nid, "Ecuación", b, `<a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="es-MX" sz="${Math.round(((b.tTam || 32) / 1.333) * k * 100)}" dirty="0"/><a:t>${x(NOM.ecuaciones ? NOM.ecuaciones.texto(b.tex || "") : b.tex || "")}</a:t></a:r></a:p>`, "LaTeX: " + (b.tex || ""));
@@ -4507,7 +4507,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     // ---------------------------------------------------------- a partir del archivo original
     /**
      * Cada diapositiva que no cambió sale tal cual. En la que cambió, cada figura sin tocar sale
-     * textual del original y solo las editadas (o nuevas) se escriben de nuevo; lo que NOM-COLAB no
+     * textual del original y solo las editadas (o nuevas) se escriben de nuevo; lo que NOM no
      * muestra (SmartArt, video, marcadores vacíos) se queda en su lugar. Diseños, patrones y tema: intactos.
      */
     function conOrigen(N) {
@@ -4580,7 +4580,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       paginas.forEach((p, n) => {
         const ruta0 = doc.valor("_doc", "os:" + p), hp = hpp[p];
         if (!ruta0 || !hp || !pq.tiene(ruta0) || usadas.has(ruta0)) {
-          // diapositiva hecha en NOM-COLAB (o copia de otra): se arma completa sobre un diseño del original
+          // diapositiva hecha en NOM (o copia de otra): se arma completa sobre un diseño del original
           if (!disenoNuevo) throw new Error("el original no tiene diseños");
           const ruta = `ppt/slides/${pre}slide${++nNueva}.xml`;
           const r = armar(p, n, Object.assign({ idBase: 2 }, esc));
@@ -4682,7 +4682,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
           const sale = [], puestos = new Set();
           let suelta = 0;
           while (suelta < us.length && ["nvGrpSpPr", "grpSpPr"].includes(O.local(us[suelta].n))) sale.push(xs.slice(us[suelta].i, us[suelta++].f));
-          // lo que no se muestra en NOM-COLAB, y lo importado que quedó fuera de la vista pero sigue igual
+          // lo que no se muestra en NOM, y lo importado que quedó fuera de la vista pero sigue igual
           const sueltas = (hasta) => { for (; suelta < hasta; suelta++) if (!hp.e[suelta] || (!enBs.has(suelta) && intacto(suelta))) sale.push(xs.slice(us[suelta].i, us[suelta].f)); };
           r.bs.forEach((b) => {
             const k = b.ox;
@@ -4840,7 +4840,7 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
     const c = (n, v) => `<a:${n}><a:srgbClr val="${v}"/></a:${n}>`;
     const f = '<a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/>';
     const relleno = '<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>';
-    return XML + `<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="NOM-COLAB"><a:themeElements>
+    return XML + `<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="NOM"><a:themeElements>
 <a:clrScheme name="NOM">${c("dk1", "1F1E26")}${c("lt1", "FFFFFF")}${c("dk2", "3A3752")}${c("lt2", "F5F3EF")}${c("accent1", "5B5BD6")}${c("accent2", "3D72F2")}${c("accent3", "2FA868")}${c("accent4", "F08C2A")}${c("accent5", "8B5CF6")}${c("accent6", "D6336C")}${c("hlink", "3D72F2")}${c("folHlink", "8B5CF6")}</a:clrScheme>
 <a:fontScheme name="NOM"><a:majorFont>${f}</a:majorFont><a:minorFont>${f}</a:minorFont></a:fontScheme>
 <a:fmtScheme name="NOM"><a:fillStyleLst>${relleno.repeat(3)}</a:fillStyleLst><a:lnStyleLst>${'<a:ln w="9525"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>'.repeat(3)}</a:lnStyleLst>
@@ -4882,7 +4882,7 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
     const docP = P(pres);
     const sz = todos(docP, "sldSz")[0];
     const cx = sz ? +at(sz, "cx") : 12192000, cy = sz ? +at(sz, "cy") : 6858000;
-    // El tamaño de NOM-COLAB con la proporción más parecida (16:9, 4:3, carta, cuadrado…).
+    // El tamaño de NOM con la proporción más parecida (16:9, 4:3, carta, cuadrado…).
     const proporcion = cx / cy, TAMS = NOM.diapo ? NOM.diapo.TAMANOS : { "16:9": { w: 960, h: 540 } };
     const tamDiapo = Object.keys(TAMS).reduce((m, k) => (Math.abs(TAMS[k].w / TAMS[k].h - proporcion) < Math.abs(TAMS[m].w / TAMS[m].h - proporcion) ? k : m), "16:9");
     const T = TAMS[tamDiapo];
@@ -5090,7 +5090,7 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       }
       return { tipo: "lin", paradas, ang: lin ? Math.round((+(at(lin, "ang") || 0) / 60000) * 100) / 100 : 90 };
     }
-    /** Un relleno de DrawingML (sólido, degradado, imagen, trama) → fondo de NOM-COLAB (con su CSS exacto). */
+    /** Un relleno de DrawingML (sólido, degradado, imagen, trama) → fondo de NOM (con su CSS exacto). */
     async function fondoDeRelleno(f, ph, relsX) {
       if (!f) return null;
       const nm = f.localName;
@@ -5727,7 +5727,7 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
           const libre = geomLibre(spPr);
           const esTexto = !!(phInfo || todos(el, "cNvSpPr").some((c) => at(c, "txBox") === "1") || (!relleno && !pintura && !libre && (!prst || prst === "rect")));
           const cNv = todos(el, "cNvPr")[0], nombreSp = at(cNv, "name") || "", descr = at(cNv, "descr") || "";
-          // Ecuación exportada por NOM-COLAB: la fórmula original viaja en la descripción del cuadro.
+          // Ecuación exportada por NOM: la fórmula original viaja en la descripción del cuadro.
           if (/^LaTeX: /.test(descr)) { agregar(Object.assign({ tipo: "ecuacion", tex: descr.slice(7) }, geo(r))); return; }
           const titulo = phInfo && /title|ctrTitle/.test(phInfo.tipo);
           if (esTexto) {

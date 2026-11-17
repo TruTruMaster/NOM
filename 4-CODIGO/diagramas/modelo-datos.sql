@@ -1,5 +1,5 @@
 -- =====================================================================
--- NOM-COLAB — esquema de base de datos
+-- NOM — esquema de base de datos
 -- Equipo 6 "WACK" · CECyT 9 "Juan de Dios Bátiz" · 5IM7
 --
 -- Corresponde al diagrama 12-modelo-datos.

@@ -1,4 +1,4 @@
-/* NOM-COLAB · Modo Hoja. Cada celda es un campo del bloque tabla ("c:A1"), así dos
+/* NOM · Modo Hoja. Cada celda es un campo del bloque tabla ("c:A1"), así dos
    personas pueden escribir en celdas distintas a la vez y el CRDT no pierde ninguna.
 
    Propiedades por celda (todas "<prefijo>:<A1>", registros LWW independientes):

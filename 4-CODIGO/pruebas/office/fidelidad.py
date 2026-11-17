@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mide qué tan fiel es NOM-COLAB al abrir y volver a guardar archivos reales de Office.
+"""Mide qué tan fiel es NOM al abrir y volver a guardar archivos reales de Office.
 
 Para cada archivo del corpus (pruebas/office/corpus.sh):
   1. lo importa en la página real (Chromium, la misma `NOM.formatos.importar` que usa la gente),
@@ -17,8 +17,8 @@ Deja los archivos exportados y `informe.json` en ~/.cache/nom-pruebas/office-sal
 
 OJO con qué mide cada modo. Sin --modelo, un archivo que no se tocó sale del archivo original que
 el documento lleva guardado: el 100 % solo dice que NO SE PIERDE NADA al descargar. No dice cuánto
-entiende NOM-COLAB del archivo ni qué se ve en el editor. Para eso es --modelo, que exporta solo con
-lo que NOM-COLAB leyó (sin apoyarse en el original), y `pantalla.py`, que revisa lo que se ve.
+entiende NOM del archivo ni qué se ve en el editor. Para eso es --modelo, que exporta solo con
+lo que NOM leyó (sin apoyarse en el original), y `pantalla.py`, que revisa lo que se ve.
 """
 import argparse, base64, difflib, hashlib, json, os, re, subprocess, sys, time, zipfile
 from pathlib import Path
@@ -545,7 +545,7 @@ def main():
     ap.add_argument("--solo", choices=["docx", "xlsx", "pptx"])
     ap.add_argument("--visual", action="store_true", help="también comparar cómo se ven (LibreOffice; tarda)")
     ap.add_argument("--detalle", action="store_true", help="imprimir cada medida")
-    ap.add_argument("--modelo", action="store_true", help="exportar solo con lo que NOM-COLAB leyó, sin el archivo original guardado (lo que de verdad entiende)")
+    ap.add_argument("--modelo", action="store_true", help="exportar solo con lo que NOM leyó, sin el archivo original guardado (lo que de verdad entiende)")
     ap.add_argument("--minimo", type=float, default=0.0, help="salir con error si el promedio queda debajo")
     a = ap.parse_args()
     archivos = [Path(x) for x in a.archivos] or sorted(p for p in CORPUS.rglob("*") if p.suffix in (".docx", ".xlsx", ".pptx"))
@@ -601,7 +601,7 @@ def main():
                 if fila.get("aviso"): print("          aviso:", fila["aviso"])
         nav.close()
     (SALIDA / ("informe-modelo.json" if a.modelo else "informe.json")).write_text(json.dumps(informe, ensure_ascii=False, indent=1))
-    if a.modelo: print("\n(Medida con --modelo: solo lo que NOM-COLAB leyó del archivo, sin el original guardado.)")
+    if a.modelo: print("\n(Medida con --modelo: solo lo que NOM leyó del archivo, sin el original guardado.)")
     print()
     for ext in ("docx", "xlsx", "pptx"):
         fs = [x for x in informe if x["tipo"] == ext]

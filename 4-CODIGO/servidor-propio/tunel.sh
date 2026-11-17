@@ -43,7 +43,7 @@ else:
         json.dump({"AccountTag": r["account_tag"], "TunnelSecret": secreto, "TunnelID": tid}, f)
     print(f"Túnel {NOMBRE} creado: {tid}")
 
-open(f"{C}/nomcolab.yml", "w").write(f"""# Cloudflare Tunnel de NOM-COLAB (lo genera 4-CODIGO/servidor-propio/tunel.sh)
+open(f"{C}/nomcolab.yml", "w").write(f"""# Cloudflare Tunnel de NOM (lo genera 4-CODIGO/servidor-propio/tunel.sh)
 tunnel: {tid}
 credentials-file: {C}/{tid}.json
 metrics: 127.0.0.1:20241

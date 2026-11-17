@@ -1,4 +1,4 @@
-/* NOM-COLAB · Experiencia: encontrar las cosas rápido y saber por dónde empezar.
+/* NOM · Experiencia: encontrar las cosas rápido y saber por dónde empezar.
    - Paleta de comandos (Ctrl+K, o Alt+/ dentro del texto): ir a documentos, espacios y acciones
      escribiendo unas letras. Muestra los atajos de cada acción.
    - Barra de carga arriba: solo aparece si algo tarda más de 160 ms y, si aparece, se queda al
@@ -297,7 +297,7 @@
     const el = html(`<section class="pasos caja" aria-label="Primeros pasos">
       <div class="pasos-cab">
         <svg class="pasos-anillo" viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="18" class="fondo"/><circle cx="22" cy="22" r="18" class="avance" style="stroke-dasharray:${C.toFixed(1)};--fin:${(C * (1 - hechos / pasos.length)).toFixed(1)}"/></svg>
-        <div class="crece"><h2>${hechos === pasos.length ? "¡Todo listo! Ya dominas NOM-COLAB" : "Primeros pasos"}</h2>
+        <div class="crece"><h2>${hechos === pasos.length ? "¡Todo listo! Ya dominas NOM" : "Primeros pasos"}</h2>
           <p class="suave">${hechos === pasos.length ? "Gracias por darle una oportunidad. Esta tarjeta ya no volverá a salir." : `${hechos} de ${pasos.length} · unos minutos y tu equipo estará trabajando aquí.`}</p></div>
         <button class="icono-btn" data-ocultar aria-label="Ocultar primeros pasos" data-micro="Ocultar|Puedes seguir sin ella; no volverá a salir.">${ico("x")}</button>
       </div>

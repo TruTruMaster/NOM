@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Genera el sitio de ayuda y legal de NOM-COLAB (fase 14, parte F) como HTML estático.
+"""Genera el sitio de ayuda y legal de NOM (fase 14, parte F) como HTML estático.
 
     python3 4-CODIGO/ayuda/generar.py
 
@@ -28,7 +28,7 @@ CONTENIDO = os.path.join(AQUI, "contenido")
 STATIC = os.path.normpath(os.path.join(AQUI, "..", "app", "src", "main", "resources", "static"))
 FORMULAS = os.path.join(STATIC, "js", "formulas.js")
 SW = os.path.join(STATIC, "sw.js")
-PUBLICO = "https://nomcolab.dpdns.org"
+PUBLICO = "https://www.nom.qd.je"
 REPO = "https://github.com/TruTruMaster/NOM-COLAB"
 VERSION = "0.14.2"
 
@@ -42,7 +42,7 @@ CONTACTO = {
 }
 
 SECCIONES = [
-    ("empezar", "Empezar", "Qué es NOM-COLAB, crear tu cuenta e instalarlo"),
+    ("empezar", "Empezar", "Qué es NOM, crear tu cuenta e instalarlo"),
     ("sin-internet", "Sin Internet", "Trabajar juntos sin Internet: alias, ramas y el teléfono que comparte"),
     ("espacios", "Espacios y equipo", "Espacios, permisos, invitar, versiones y ramas"),
     ("editores", "Editores", "Texto, hojas, presentaciones, diagramas y la ruedita"),
@@ -271,9 +271,12 @@ def contacto_html():
     c = CONTACTO
     if c["correo"]:
         return f'<p>Escríbenos a <a href="mailto:{c["correo"]}">{c["correo"]}</a>.</p>'
-    return (f'<p>Mientras el equipo crea el correo del proyecto, escríbenos abriendo un reporte en '
-            f'<a href="{c["reportes"]}" target="_blank" rel="noopener">GitHub</a>. Para una falla de seguridad usa el '
-            f'<a href="{c["seguridad"]}" target="_blank" rel="noopener">aviso privado de seguridad</a> (solo lo ve el equipo).</p>')
+    # (lo de tus datos va por un canal privado: un reporte de GitHub es público y deja ver tu usuario y lo que pides)
+    return (f'<p>Mientras el equipo crea el correo del proyecto: para algo de <strong>tus datos</strong> (acceso, corrección, '
+            f'borrado u oposición) o una <strong>falla de seguridad</strong>, usa el '
+            f'<a href="{c["seguridad"]}" target="_blank" rel="noopener">aviso privado de GitHub</a>: solo lo ve el equipo. '
+            f'<strong>No pongas datos personales en un reporte público.</strong> Para dudas y sugerencias, abre un '
+            f'<a href="{c["reportes"]}" target="_blank" rel="noopener">reporte en GitHub</a> (ese sí lo ve cualquiera).</p>')
 
 
 # ---------------------------------------------------------------- plantilla
@@ -321,14 +324,14 @@ def pagina(ruta, titulo, descripcion, contenido, secciones, actual=None, migas=(
     pie = (f'<footer class="pie"><nav aria-label="Legal"><a href="{inicio}">Ayuda</a> · <a href="{relativo(ruta, ruta_de(LEGAL, "privacidad"))}">Privacidad</a> · '
            f'<a href="{relativo(ruta, ruta_de(LEGAL, "terminos"))}">Términos</a> · <a href="{relativo(ruta, ruta_de(LEGAL, "licencias"))}">Licencias</a> · '
            f'<a href="{relativo(ruta, ruta_de(LEGAL, "seguridad"))}">Seguridad</a> · <a href="{relativo(ruta, ruta_de(LEGAL, "accesibilidad"))}">Accesibilidad</a></nav>'
-           f'<p>NOM-COLAB es un proyecto escolar del equipo WACK (CECyT 9, IPN). Software libre bajo la GPL-3.0 · <a href="{REPO}" target="_blank" rel="noopener">Código en GitHub</a></p></footer>')
+           f'<p>NOM es un proyecto escolar del equipo WACK (CECyT 9, IPN). Software libre bajo la GPL-3.0 · <a href="{REPO}" target="_blank" rel="noopener">Código en GitHub</a></p></footer>')
     return f"""<!doctype html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="{CSP}">
-<title>{html.escape(titulo)} · Ayuda de NOM-COLAB</title>
+<title>{html.escape(titulo)} · Ayuda de NOM</title>
 <meta name="description" content="{html.escape(descripcion or "")}">
 <link rel="stylesheet" href="{css}">
 <script src="{js}" defer></script>
@@ -336,13 +339,13 @@ def pagina(ruta, titulo, descripcion, contenido, secciones, actual=None, migas=(
 <body class="{cuerpo_clase}">
 <a class="saltar" href="#contenido">Saltar al contenido</a>
 <header class="cabecera">
-  <a class="marca" href="{inicio}">{LOGO}<span>NOM-COLAB <small>Ayuda</small></span></a>
+  <a class="marca" href="{inicio}">{LOGO}<span>NOM <small>Ayuda</small></span></a>
   <form class="buscar" role="search" action="{relativo(ruta, "ayuda/buscar/index.html")}" method="get">
     <label for="q" class="oculto">Buscar en la ayuda</label>
     <input id="q" name="q" type="search" placeholder="Buscar en la ayuda…" autocomplete="off" data-buscar>
     <div class="resultados" data-resultados hidden></div>
   </form>
-  <a class="volver-app" href="{app}" data-volver-app>Abrir NOM-COLAB</a>
+  <a class="volver-app" href="{app}" data-volver-app>Abrir NOM</a>
 </header>
 <div class="cuerpo">
   <details class="lateral" open><summary>Temas</summary><nav aria-label="Temas de la ayuda"><ul>{"".join(lateral)}</ul></nav></details>
@@ -410,16 +413,16 @@ def main():
     mas = [("sin-internet", "como-funciona"), ("sin-internet", "alias"), ("sin-internet", "al-volver"), ("espacios", "ramas"), ("empezar", "instalar-computadora"),
            ("empezar", "instalar-android"), ("cuentas", "conexion-sin-cifrar"), ("cuentas", "cambiar-y-restablecer"), ("problemas", "no-encuentro-el-telefono")]
     consulta = "".join(f'<li><a href="{relativo(ruta, ruta_de(s, n))}">{html.escape(todos[(s, n)]["titulo"])}</a></li>' for s, n in mas if (s, n) in todos)
-    cuerpo = (f'<p class="entrada">Cómo usar NOM-COLAB para escribir, calcular, presentar y dibujar en equipo, con Internet o sin él. Estas páginas se leen sin iniciar sesión y también '
+    cuerpo = (f'<p class="entrada">Cómo usar NOM para escribir, calcular, presentar y dibujar en equipo, con Internet o sin él. Estas páginas se leen sin iniciar sesión y también '
               f'funcionan sin Internet (en el teléfono que comparte y dentro de la app).</p>'
               f'<ul class="tarjetas">{tarjetas}</ul><h2 id="lo-mas-consultado">Lo más consultado</h2><ul class="mas-consultado">{consulta}</ul>')
-    escribir(ruta, pagina(ruta, "Ayuda de NOM-COLAB", "Ayuda de NOM-COLAB: trabajar en equipo con o sin Internet.", cuerpo, secciones, None, (), (), None, todos, "inicio"))
+    escribir(ruta, pagina(ruta, "Ayuda de NOM", "Ayuda de NOM: trabajar en equipo con o sin Internet.", cuerpo, secciones, None, (), (), None, todos, "inicio"))
     urls.append(ruta)
 
     # Buscar (sin JavaScript: la lista de todo; con JavaScript, los resultados)
     ruta = "ayuda/buscar/index.html"
     todo = "".join(f'<li><a href="{relativo(ruta, x["u"])}"><b>{html.escape(x["t"])}</b><span>{html.escape(x["s"])} · {html.escape(x["d"])}</span></a></li>' for x in sorted(indice, key=lambda y: sin_acentos(y["t"])))
-    escribir(ruta, pagina(ruta, "Buscar en la ayuda", "Buscar en la ayuda de NOM-COLAB", f'<div data-pagina-buscar><p class="entrada">Escribe arriba lo que buscas. Estas son todas las páginas:</p><ul class="lista-articulos">{todo}</ul></div>', secciones, None, [("Ayuda", relativo(ruta, ruta_de("_inicio")))]))
+    escribir(ruta, pagina(ruta, "Buscar en la ayuda", "Buscar en la ayuda de NOM", f'<div data-pagina-buscar><p class="entrada">Escribe arriba lo que buscas. Estas son todas las páginas:</p><ul class="lista-articulos">{todo}</ul></div>', secciones, None, [("Ayuda", relativo(ruta, ruta_de("_inicio")))]))
 
     if rotos:
         print("Enlaces rotos:\n  " + "\n  ".join(rotos)); sys.exit(1)
@@ -428,13 +431,13 @@ def main():
     # robots.txt y sitemap.xml (la Raspberry se deja encontrar; Azure manda noindex en sus cabeceras).
     # Por la red los arma el servidor con la dirección principal (NOM_CANONICO, ver Buscadores.java);
     # estos son los de la app y la base del sitemap. La portada va primero.
-    escribir("robots.txt", f"# NOM-COLAB\nUser-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /unirse\nDisallow: /proyectar\nDisallow: /ayuda/buscar\n\nSitemap: {PUBLICO}/sitemap.xml\n")
+    escribir("robots.txt", f"# NOM\nUser-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /unirse\nDisallow: /proyectar\nDisallow: /ayuda/buscar\n\nSitemap: {PUBLICO}/sitemap.xml\n")
     hoy = datetime.date.today().isoformat()
     escribir("sitemap.xml", '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
              + f"  <url><loc>{PUBLICO}/</loc><lastmod>{hoy}</lastmod></url>\n"
              + "".join(f"  <url><loc>{PUBLICO}/{limpia(u)}</loc><lastmod>{hoy}</lastmod></url>\n" for u in sorted(set(urls)))
              + "</urlset>\n")
-    escribir(".well-known/security.txt", f"# NOM-COLAB: cómo reportar una falla de seguridad (RFC 9116)\nContact: {CONTACTO['seguridad']}\n"
+    escribir(".well-known/security.txt", f"# NOM: cómo reportar una falla de seguridad (RFC 9116)\nContact: {CONTACTO['seguridad']}\n"
              + (f"Contact: mailto:{CONTACTO['correo']}\n" if CONTACTO["correo"] else "")
              + f"Expires: 2027-11-13T00:00:00.000Z\nPreferred-Languages: es, en\nCanonical: {PUBLICO}/.well-known/security.txt\nPolicy: {PUBLICO}/legal/seguridad\n")
     # El service worker guarda de una vez lo legal, «Sin Internet» y las preguntas frecuentes.
@@ -448,6 +451,13 @@ def main():
     else:
         sw = sw.replace('"js/comentarios.js",', '"js/comentarios.js",\n  ' + bloque, 1)
     open(SW, "w", encoding="utf-8").write(sw)
+    # CAMBIOS.md (en la raíz del proyecto): las novedades de la ayuda, para quien mira el repositorio.
+    nov = open(os.path.join(CONTENIDO, "novedades", "index.md"), encoding="utf-8").read()
+    nov = re.sub(r"^---.*?---\n", "", nov, count=1, flags=re.S)
+    nov = re.sub(r"\[([^\]]+)\]\((ayuda|legal|app):[^)]*\)", r"\1", nov)
+    open(os.path.join(AQUI, "..", "..", "CAMBIOS.md"), "w", encoding="utf-8").write(
+        "# Cambios de NOM\n\nLo que cambió en cada versión, en corto (es la página «Novedades» de la ayuda; la "
+        "escribe `4-CODIGO/ayuda/generar.py`). El diario completo, día por día, está en `LOG.md`.\n\n" + nov.lstrip())
     print(f"Ayuda generada: {len(indice)} páginas con contenido, {len(set(urls))} en el mapa del sitio, {len(fijas)} guardadas para sin Internet.")
 
 

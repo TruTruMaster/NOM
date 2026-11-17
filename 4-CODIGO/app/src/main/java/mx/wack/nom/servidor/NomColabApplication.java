@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
- * Nodo local de NOM-COLAB. Sirve la interfaz web, la API y el canal en tiempo
+ * Nodo local de NOM. Sirve la interfaz web, la API y el canal en tiempo
  * real a los equipos de la misma red. Arranca con:
  *
  *     ./mvnw spring-boot:run        o        java -jar target/nom-colab.jar
@@ -20,7 +20,7 @@ public class NomColabApplication {
         try {
             ArranqueCifrado.preparar();
         } catch (Exception e) {
-            System.err.println("NOM-COLAB no arranca: " + e.getMessage());
+            System.err.println("NOM no arranca: " + e.getMessage());
             System.exit(1);
         }
         SpringApplication.run(NomColabApplication.class, args);

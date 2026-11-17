@@ -1,4 +1,4 @@
-/* NOM-COLAB · motor de fórmulas del modo hoja.
+/* NOM · motor de fórmulas del modo hoja.
    Acepta nombres en español y en inglés (=SUMA o =SUM) y los separadores , y ;
    Errores: #REF! #DIV/0! #NOMBRE? #VALOR! #CICLO! #N/A #NUM!
    Fechas como en Excel: un número de serie (días desde el 30/12/1899) que se muestra dd/mm/aaaa.
@@ -2294,7 +2294,7 @@
    * Una fórmula que Excel guardó sin matrices dinámicas (sin t="array") se calcula como en un Excel viejo: un rango
    * que va a una operación, a un argumento de un solo valor o al resultado de la celda da solo la celda de su fila o
    * columna (la intersección implícita). Excel 365 la muestra con «@» ahí (=@A1:A10, =A:A*2 → =@A:A*2): se agrega
-   * igual para que NOM-COLAB la calcule como Excel.
+   * igual para que NOM la calcule como Excel.
    */
   function conInterseccion(formula) {
     const s = String(formula || "");

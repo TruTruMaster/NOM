@@ -1,4 +1,4 @@
-/* NOM-COLAB · Comentarios y sugerencias (7).
+/* NOM · Comentarios y sugerencias (7).
    Un comentario es un bloque más del documento (tipo "comentario"): viaja por el mismo CRDT, así
    que se ve al momento en todos los equipos y funciona igual en la red del salón sin Internet
    (Google Docs y Notion no dejan comentar sin conexión). Se ancla a un tramo del texto (ids de sus

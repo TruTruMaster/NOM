@@ -1,4 +1,4 @@
-# NOM-COLAB — Especificación de casos de uso
+# NOM — Especificación de casos de uso
 
 Equipo 6 "WACK" · CECyT 9 "Juan de Dios Bátiz" · 5IM7
 
@@ -17,7 +17,7 @@ y los diagramas de actividades `actividades/A1` a `A7`.
 | **Usuario** | Visitante autenticado. Hereda todo lo del Visitante y accede a sus espacios y preferencias. |
 | **Propietario** | Usuario que creó un espacio. Hereda todo lo del Usuario y además administra accesos, conexión y almacenamiento de ese espacio. |
 | **Módulo de seguridad** | Actor sistema. Cifra credenciales y aplica el bloqueo por intentos fallidos. |
-| **Nodo remoto (LAN)** | Actor sistema. Otra instancia de NOM-COLAB en la red local. |
+| **Nodo remoto (LAN)** | Actor sistema. Otra instancia de NOM en la red local. |
 | **Dispositivo Android** | Actor sistema. Cliente móvil que sincroniza con un espacio. |
 
 ## Índice

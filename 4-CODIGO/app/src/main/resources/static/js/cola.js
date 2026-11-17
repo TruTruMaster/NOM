@@ -1,4 +1,4 @@
-/* NOM-COLAB · Sin internet de verdad (6.1 y 6.2).
+/* NOM · Sin internet de verdad (6.1 y 6.2).
    - Cola de cambios: lo que se edita sin conexión ya se guarda cifrado en IndexedDB (la bóveda,
      clave nom.u.<cuenta>.cola.<documento>). Aquí se manda solo al volver la red, aunque ese
      documento ya no esté abierto (antes esperaba a que se volviera a abrir). El CRDT junta los
@@ -101,7 +101,7 @@
   });
   window.addEventListener("appinstalled", () => {
     pedidoInstalar = null;
-    NOM.aviso("Listo: NOM-COLAB quedó instalado en esta computadora. Ábrelo desde el menú de inicio o el escritorio, también sin Internet.", { tipo: "ok", ms: 8000 });
+    NOM.aviso("Listo: NOM quedó instalado en esta computadora. Ábrelo desde el menú de inicio o el escritorio, también sin Internet.", { tipo: "ok", ms: 8000 });
     document.dispatchEvent(new CustomEvent("nom-instalable"));
   });
   NOM.instalar = {
@@ -110,7 +110,7 @@
     instalada,
     async pedir() {
       if (!pedidoInstalar) {
-        NOM.aviso("Este navegador no ofrece instalar páginas. En Chrome o Edge: abre el menú del navegador → «Instalar NOM-COLAB». Igual puedes usarlo sin Internet desde aquí, después de una visita con red.", { tipo: "info", ms: 9000 });
+        NOM.aviso("Este navegador no ofrece instalar páginas. En Chrome o Edge: abre el menú del navegador → «Instalar NOM». Igual puedes usarlo sin Internet desde aquí, después de una visita con red.", { tipo: "info", ms: 9000 });
         return false;
       }
       const p = pedidoInstalar;

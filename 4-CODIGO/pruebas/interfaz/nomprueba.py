@@ -1,4 +1,4 @@
-"""Ayudas para probar NOM-COLAB en local (puerto 8099) con Playwright."""
+"""Ayudas para probar NOM en local (puerto 8099) con Playwright."""
 import json, os, time, urllib.request, random, string
 from playwright.sync_api import sync_playwright
 B = os.environ.get("NOM_BASE", "http://localhost:8099")

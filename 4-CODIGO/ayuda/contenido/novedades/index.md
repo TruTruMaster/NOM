@@ -3,9 +3,72 @@ titulo: Novedades
 descripcion: Qué cambió en cada versión, en palabras sencillas.
 orden: 1
 aplica: Navegador, App Android, Teléfono que comparte
-actualizado: 2026-11-15
-version: 0.14.2
+actualizado: 2026-11-17
+version: 0.16.0
 ---
+## 0.16.0 — noviembre de 2026
+
+- **Se llama NOM.** Antes NOM-COLAB. La dirección principal es **www.nom.qd.je**; la de antes
+  (nomcolab.dpdns.org) sigue funcionando con las mismas cuentas, y la app las trata como el mismo lugar
+  (un QR o un enlace con el nombre de antes ya no la cambia de servidor ni cierra tu sesión).
+- **Archivos de Office con contraseña:** se abren pidiendo la contraseña (el cifrado de Office 2010 en
+  adelante y el de Office 2007) y se pueden descargar con contraseña. Office los abre igual.
+- **Protección como en Office:** «Restringir edición» de Word (solo lectura, solo comentarios, solo
+  cambios con control o solo formularios), «Marcar como final», «Contraseña para modificar», proteger
+  hojas de Excel con sus permisos (celdas bloqueadas, fórmulas ocultas) y proteger el libro. Lo que trae
+  el archivo se respeta y se puede poner o quitar desde **… → Proteger (como en Office)**.
+- **Word:** el espacio entre párrafos como Word (el mayor entre el de después y el de antes, sin
+  duplicarse), «Conservar con el siguiente», «Conservar líneas juntas», «Salto de página anterior»,
+  control de líneas viudas y huérfanas, letra capital, y lo que flota (imágenes, formas, cuadros de
+  texto y gráficos) en su lugar de la hoja con el texto alrededor como lo acomoda Word.
+- **SmartArt** con el dibujo y los colores de PowerPoint (antes algunos salían con letra blanca sobre
+  blanco) y los que no traen dibujo, acomodados con su diseño.
+- **Gráficas:** líneas de tendencia con su ecuación y R², barras de error y tabla de datos.
+- **Fórmulas:** matrices dinámicas (los resultados se derraman a las celdas vecinas), `LET` y `LAMBDA`.
+- **Accesibilidad:** el alto contraste del sistema cambia los colores de la interfaz, «reducir
+  movimiento» del sistema se respeta siempre y, si usas una extensión de colores, puedes dejarla
+  actuar en **Ajustes**.
+- **Privacidad, más clara:** qué puede ver Cloudflare, dónde guarda sus datos la versión en Azure y un
+  canal privado para pedir lo de tus datos.
+- **App de Android:** cada versión publica su SHA-256 y la huella del certificado con que se firma.
+
+## 0.15.4 — noviembre de 2026
+
+- **Gráficas 3D de Office** (columnas y circular) con la perspectiva y la luz de Excel, la circular
+  separada, los estilos de gráfica con degradados y transparencia, y el eje secundario en las gráficas
+  combinadas. Las 37 gráficas del libro de prueba quedan entre 92 y 98 % iguales a la imagen que exporta
+  Excel.
+
+## 0.15.3 — noviembre de 2026
+
+- **Formas y cuadros de texto de Word** con su geometría, relleno, contorno, giro y texto, en su lugar.
+- **Excel alineado como Excel:** vertical, sangría, texto girado y apilado, «Reducir hasta ajustar»,
+  «Centrar en la selección», el texto que se desborda a las celdas vecinas y los altos de fila exactos.
+- **Rellenos de Excel:** las 18 tramas, degradados y bordes en diagonal.
+- **Gráficas nuevas de Excel:** histograma, Pareto, cajas y bigotes, cascada, rectángulos, proyección
+  solar y embudo, con los datos vivos de la hoja.
+
+## 0.15.2 — noviembre de 2026
+
+- **Estilos de tabla de Word** con sus franjas, primera y última fila y columna.
+- **Numeración como la escribe Word** («Chapter 1», «1.2», letras y romanos por nivel).
+- **Imágenes flotantes de Word** con su ajuste (cuadrado, estrecho, arriba y abajo, delante o detrás).
+
+## 0.15.1 — noviembre de 2026
+
+- **Gráficas de Office** dibujadas con las reglas de Office (escala, barras, leyenda, rótulos) en Excel,
+  Word y PowerPoint.
+- **Lo que va encima de la hoja de Excel:** imágenes, formas, WordArt, SmartArt, conectores, controles de
+  formulario y notas.
+- **Tablas de PowerPoint** con su estilo, celdas combinadas, rellenos y bordes.
+
+## 0.15.0 — noviembre de 2026
+
+- **Paridad con Office real**, medida contra Word, Excel y PowerPoint 2024 de verdad: 32 familias de
+  letra con las medidas exactas de las de Office (sobre dibujos libres), interlineado y justificado como
+  Word, formato de números y formato condicional completos de Excel, los estilos de tabla de Excel, y las
+  187 formas, rellenos, fondos y líneas de PowerPoint.
+
 ## 0.14.2 — noviembre de 2026
 
 - **Documentos largos de Word** (una tesis de 180 páginas): escribir ya no congela la página unos
@@ -55,7 +118,7 @@ version: 0.14.2
   original cuando otra persona también lo cambió: se abre la [rama](ayuda:espacios/ramas), como debe ser.
 - **PowerPoint**: al cambiar el formato o el texto de una diapositiva importada se conservan sus
   **animaciones**, y los títulos siguen siendo títulos al descargar el archivo.
-- **Word**: al editar un párrafo de un archivo importado ya no se pierde lo que NOM-COLAB no muestra
+- **Word**: al editar un párrafo de un archivo importado ya no se pierde lo que NOM no muestra
   (marcadores, comentarios, campos, idioma del texto, controles de las plantillas).
 - **Códigos de invitación**: se pueden escribir con o sin guion, y también **pegar el enlace
   completo**; en la app, tocar un enlace de invitación abre la app.
@@ -66,7 +129,7 @@ version: 0.14.2
   (`PERCENTIL`, `CUARTIL`, `PENDIENTE`, `PRONOSTICO`, `COEF.DE.CORREL`), texto (`TEXTOANTES`,
   `TEXTODESPUES`), lógicas (`CAMBIAR`, `SI.ND`, `XO`) y de referencia (`FILA`, `COLUMNA`,
   `INDIRECTO`, `DESREF`). Ver la [lista de fórmulas](ayuda:editores/formulas).
-- La **versión** de NOM-COLAB ahora se ve en *Ajustes y preferencias*.
+- La **versión** de NOM ahora se ve en *Ajustes y preferencias*.
 
 ## 0.13.1 — noviembre de 2026
 

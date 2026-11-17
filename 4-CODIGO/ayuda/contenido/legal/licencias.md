@@ -1,16 +1,16 @@
 ---
 titulo: Licencias
-descripcion: La licencia de NOM-COLAB (GPL-3.0) y la de cada biblioteca y fuente que usa.
+descripcion: La licencia de NOM (GPL-3.0) y la de cada biblioteca y fuente que usa.
 orden: 70
 aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-13
 version: 2026-11-13
 ---
-## NOM-COLAB
+## NOM
 
 Copyright © 2026 equipo 6 «WACK» (5IM7, CECyT 9, IPN).
 
-NOM-COLAB es **software libre**: puedes redistribuirlo y modificarlo según los términos de la
+NOM es **software libre**: puedes redistribuirlo y modificarlo según los términos de la
 **Licencia Pública General de GNU, versión 3** (GPL-3.0), publicada por la Free Software Foundation.
 Se distribuye con la esperanza de que sea útil, pero **sin ninguna garantía**. Si distribuyes una
 versión modificada, debe ir con su código fuente y bajo la misma licencia.

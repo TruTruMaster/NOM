@@ -1,6 +1,6 @@
-# Pendientes de NOM-COLAB
+# Pendientes de NOM
 
-Lista de lo que falta para que NOM-COLAB sea original y útil de verdad (revisión del 7 de
+Lista de lo que falta para que NOM sea original y útil de verdad (revisión del 7 de
 noviembre de 2026). La idea central: **"Colabora donde no hay internet"**: un teléfono o una
 laptop comparte, todos se conectan y los datos se quedan en el salón.
 

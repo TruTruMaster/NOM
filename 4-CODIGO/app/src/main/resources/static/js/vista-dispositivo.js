@@ -1,4 +1,4 @@
-/* NOM-COLAB · Archivos en este dispositivo.
+/* NOM · Archivos en este dispositivo.
    Qué documentos guarda este navegador (o la app), cuánto ocupan y qué cambios faltan por enviar.
    Hay tres tipos de datos locales:
    - nom.u.<cuenta>.doc.<id>   copia de un documento del servidor, para abrirlo sin red (se puede borrar: el servidor tiene el original)
@@ -14,7 +14,7 @@
   const pesoPlano = (k) => ((k.length + (localStorage.getItem(k) || "").length) * 2);   // UTF-16
   const leerPlano = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
 
-  /** Agrupa lo que NOM-COLAB guarda en este equipo: la bóveda cifrada de la cuenta y lo que hay en claro. */
+  /** Agrupa lo que NOM guarda en este equipo: la bóveda cifrada de la cuenta y lo que hay en claro. */
   async function inventario() {
     const copias = new Map(), locales = [];
     let cifrado = 0, otros = 0;
@@ -97,7 +97,7 @@
     cont.innerHTML = `
       <div class="encabezado">
         <div><h1>${esc(NOM.etiquetaEquipo())}</h1>
-          <p class="sub">Lo que NOM-COLAB guarda en este ${api.empaquetada ? "teléfono" : "navegador"} y cuánto ocupa</p></div>
+          <p class="sub">Lo que NOM guarda en este ${api.empaquetada ? "teléfono" : "navegador"} y cuánto ocupa</p></div>
       </div>
       ${!api.empaquetada ? `<section class="caja instalar-caja" data-instalar ${NOM.instalar && NOM.instalar.disponible() ? "" : "hidden"} style="padding:16px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
         <span class="modo-insignia" style="background:var(--acento-tenue);color:var(--acento-tinta)">${ico("monitor-down")}</span>

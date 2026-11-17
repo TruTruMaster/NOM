@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "NOM-COLAB"
+rootProject.name = "NOM"
 include(":app")

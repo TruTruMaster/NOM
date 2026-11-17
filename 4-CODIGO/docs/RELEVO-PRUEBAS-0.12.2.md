@@ -56,7 +56,7 @@ $PY office/visor.py SALIDA ~/.cache/nom-pruebas/corpus-web/*/*     # capturas la
    igual que Word es trabajo nuevo (pendiente desde la entrada 52 del LOG).
 2. **Lo que falta de ver de Office** (de antes): columnas de verdad, tabuladores con puntos, texto
    vertical y bordes por celda en Word; comentarios, formato condicional, gráficas e imágenes de Excel.
-   Medida de lo que NOM-COLAB entiende sin el original: `fidelidad.py --modelo` (≈78 %).
+   Medida de lo que NOM entiende sin el original: `fidelidad.py --modelo` (≈78 %).
 3. **Encabezados de Word con tabla y logotipos** (p. ej. `lo-tdf104420_lostParagraph.docx`): se ven
    como una línea de texto sin las imágenes; y si el documento cambia de sección a media obra, el
    encabezado de la segunda sección no se ve. Al descargar sale el original completo.

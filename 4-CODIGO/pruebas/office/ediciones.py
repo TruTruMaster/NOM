@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Prueba lo más delicado de la conversión: importar un archivo real de Office, EDITAR algo en
-NOM-COLAB y volver a exportar. Tiene que salir el cambio y nada más tiene que moverse.
+NOM y volver a exportar. Tiene que salir el cambio y nada más tiene que moverse.
 
 Cada caso importa en la página real (Chromium), cambia el documento con las mismas operaciones
 que usan los editores (doc.cambiar / doc.seq), exporta y revisa el resultado con openpyxl,
@@ -51,7 +51,7 @@ def x_valor(r, orig, sale):
     import openpyxl
     a, b = openpyxl.load_workbook(orig), openpyxl.load_workbook(sale)
     h = b[b.sheetnames[0]]
-    assert h["B2"].value == "Editado en NOM-COLAB", f"B2 = {h['B2'].value!r}"
+    assert h["B2"].value == "Editado en NOM", f"B2 = {h['B2'].value!r}"
     assert h["B2"].font.b, "B2 debería ir en negrita"
     assert h["AZ300"].value == 1234.5, f"AZ300 = {h['AZ300'].value!r}"
     assert str(h["AZ301"].value).upper().replace(" ", "") == "=SUM(AZ300:AZ300)*2", f"AZ301 = {h['AZ301'].value!r}"
@@ -233,7 +233,7 @@ def p_mover(r, orig, sale):
         if i != pg: assert x == y, f"cambió la diapositiva {i + 1}, que no se tocó"
         else: assert len(y) >= len(x), f"figuras en la diapositiva editada: {len(x)} -> {len(y)}"
     s0 = b.slides[0]
-    assert s0.has_notes_slide and "Nota escrita en NOM-COLAB" in s0.notes_slide.notes_text_frame.text, "las notas no quedaron"
+    assert s0.has_notes_slide and "Nota escrita en NOM" in s0.notes_slide.notes_text_frame.text, "las notas no quedaron"
     n = _p_resto(orig, sale, salvo=("posición y tamaño", "notas del orador"))
     return f"figura movida en la {pg + 1}; notas puestas; resto {n.total()*100:.1f}%"
 
@@ -333,7 +333,7 @@ CASOS = {
     "xlsx": [
         ("cambiar celdas y agregar una fórmula", ["ms-financial-sample.xlsx", "ms-complex01.xlsx", "ms-excel14.xlsx", "poi-formato-condicional.xlsx", "ms-dinamica-b1.xlsx", "poi-graficas.xlsx"], """
             const h = "hoja-p1";
-            doc.cambiar(h, { "c:B2": "Editado en NOM-COLAB", "n:B2": true, "c:AZ300": "1234.5", "c:AZ301": "=SUMA(AZ300:AZ300)*2" });
+            doc.cambiar(h, { "c:B2": "Editado en NOM", "n:B2": true, "c:AZ300": "1234.5", "c:AZ301": "=SUMA(AZ300:AZ300)*2" });
             return {};""", x_valor),
         ("renombrar una hoja y agregar otra", ["ms-financial-sample.xlsx", "ms-hojas.xlsx", "ms-complex01.xlsx", "poi-estilos.xlsx"], """
             doc.cambiar("hoja-p1", { nombre: "Renombrada por mí" });
@@ -403,7 +403,7 @@ CASOS = {
             const b = doc.vivos().filter((x) => x.pagina && x.x != null && (x.tipo === "forma" || x.tipo === "imagen" || x.tipo === "texto"))[0];
             if (!b) return { sinFigura: true };
             doc.cambiar(b.id, { x: 37, y: 41 });
-            doc.cambiar("_doc", { ["nota:" + doc.paginas()[0]]: "Nota escrita en NOM-COLAB" });
+            doc.cambiar("_doc", { ["nota:" + doc.paginas()[0]]: "Nota escrita en NOM" });
             return { pagina: doc.paginas().indexOf(b.pagina), tam: NOM.diapo.tam(doc) };""", p_mover),
         ("agregar una diapositiva y borrar otra", PPTX_VARIOS, """
             const pags = doc.paginas(), quitada = pags.length > 1 ? pags[pags.length - 1] : null;

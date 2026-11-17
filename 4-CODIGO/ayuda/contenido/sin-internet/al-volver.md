@@ -35,7 +35,7 @@ Un corte más corto se junta solo: el sistema no pierde ninguna letra de nadie.
 
 ## Casos especiales
 
-| Qué pasó mientras no tenías conexión | Qué hace NOM-COLAB |
+| Qué pasó mientras no tenías conexión | Qué hace NOM |
 |---|---|
 | Creaste un documento nuevo | Se sube como documento nuevo, sin rama |
 | Borraron el original (o está en la papelera) | Lo tuyo queda como documento aparte «(recuperado)» |

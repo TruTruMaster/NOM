@@ -1,4 +1,4 @@
-# NOM-COLAB — Diagramas
+# NOM — Diagramas
 
 Equipo 6 "WACK" · CECyT 9 "Juan de Dios Bátiz" · 5IM7
 
@@ -36,7 +36,7 @@ cuadrícula y de ahí salen `svg/`, `png/` y un `.drawio` editable en diagrams.n
     python3 actividades/generar.py      # regenera A1-A7 y avisa si alguna línea cruza una caja
     python3 generar-visor.py            # reconstruye index.html con todos los diagramas
 
-El documento para entregar está en `../entregables/Diagrama de Actividades NOM-COLAB.docx` (y `.pdf`).
+El documento para entregar está en `../entregables/Diagrama de Actividades NOM.docx` (y `.pdf`).
 
 > **Cambio (oct. 2026):** el módulo *Conoce NOM* se retiró. Su diagrama de casos de
 > uso quedó en `retirado/`. Las preferencias (CU-27) pasaron al menú de la cuenta.

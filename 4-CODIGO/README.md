@@ -1,4 +1,4 @@
-# NOM-COLAB
+# NOM
 
 Suite colaborativa: **texto, hojas de cálculo, presentaciones y diagramas en una sola app**,
 con edición simultánea. Funciona en la red local sin depender de Internet (un equipo o un
@@ -9,7 +9,7 @@ propio: una Raspberry Pi publicada con Cloudflare Tunnel en https://nomcolab.dpd
 Equipo 6 "WACK" · CECyT 9 "Juan de Dios Bátiz" · 5IM7
 
 ```
-NOM-COLAB/
+NOM/
 ├── nucleo/        Lógica del servidor sin Spring (cuentas, espacios, documentos, CRDT, red):
 │                   la comparten el servidor de la computadora y el del teléfono
 ├── app/            Servidor (Java 17 + Spring Boot 4.1) e interfaz web
@@ -18,7 +18,7 @@ NOM-COLAB/
 ├── diagramas/      UML en PlantUML, mapa de navegación (navegacion/generar.py) y actividades (A1-A8)
 ├── azure/          desplegar.sh (crea Azure, roles de la base, sube el jar) · roles-bd.sql · AplicarSql.java ·
 │                   nomcolab (prende y apaga Azure o el servidor propio)
-├── servidor-propio/ publicar NOM-COLAB desde una computadora o la Raspberry Pi (pi/: servicios s6, respaldo, nomcolab-pi)
+├── servidor-propio/ publicar NOM desde una computadora o la Raspberry Pi (pi/: servicios s6, respaldo, nomcolab-pi)
 ├── pruebas/        seguridad.py (API) · interfaz/ (la página en navegadores reales) · office/ (Word, Excel y PowerPoint)
 └── docs/           PLAN-CONSTRUCCION.md · DISENO-UI.md · DESPLIEGUE-AZURE.md · SERVIDOR-PROPIO.md · GUIA-FACIL-DE-USAR.md · MARCA.md
 (Los PDF para entregar están fuera del código, en ../ENTREGA/.)
@@ -37,7 +37,7 @@ java -jar target/nom-colab.jar   # puerto 8080; datos en ./datos-nom
 La consola muestra las direcciones para entrar:
 
 ```
-NOM-COLAB listo.
+NOM listo.
   En este equipo:   http://localhost:8080
   Desde la red:     http://192.168.1.20:8080
 ```
@@ -87,7 +87,7 @@ pruebas/interfaz/correr.sh               # la página en un navegador de verdad 
 python pruebas/interfaz/rastreo.py SALIDA        # toca CADA botón, menú y acción de la ruedita de los 4 editores
 python pruebas/interfaz/prueba_funciones.py SALIDA   # que cada función haga lo correcto (≈180 casos)
 python pruebas/office/fidelidad.py       # Word, Excel y PowerPoint reales de Microsoft: abrir y volver a guardar
-python pruebas/office/visor.py SALIDA archivos…   # cómo se ve en NOM-COLAB junto a LibreOffice
+python pruebas/office/visor.py SALIDA archivos…   # cómo se ve en NOM junto a LibreOffice
 cd azure && ./desplegar.sh roles         # roles de la base en Azure SQL: los aplica y prueba qué se permite y qué no
 ```
 
@@ -101,7 +101,7 @@ tanda quedan en `../6-PLAN-DE-PRUEBAS/registros/`.
 | Módulo (mapa de navegación) | Funcionalidad |
 |---|---|
 | **Gestión de cuentas** | Base de datos (H2 / Azure SQL) con **seguridad con roles en la base** · sin administrador general: cada cuenta controla sus espacios · crear cuenta con **código de recuperación** · iniciar y cerrar sesión · recuperar la contraseña con el código · cambiar la contraseña y **borrar la cuenta** · contraseñas con PBKDF2 + sal · bloqueo por intentos (por cuenta y por red) y tope de cuentas nuevas por hora · preferencias (tema, letra, movimiento) · lo guardado en el equipo va **cifrado** (bóveda por cuenta) |
-| **Espacios de trabajo** | Crear espacio · **invitar con código de 8 letras o QR** (con fecha de vencimiento, anulable, y entrada **con apodo sin cuenta**) · agregar por nombre de usuario · visible en el mismo Wi-Fi (UDP) · Puede editar / Solo lectura / quitar · máximo 50 personas a la vez · carpetas, destacados, ordenar y buscar dentro del contenido · **papelera de 30 días** · @menciones · plantillas del espacio · letra de los textos nuevos · descargar todo · cuánto ocupa y depurar versiones · copia en otro NOM-COLAB |
+| **Espacios de trabajo** | Crear espacio · **invitar con código de 8 letras o QR** (con fecha de vencimiento, anulable, y entrada **con apodo sin cuenta**) · agregar por nombre de usuario · visible en el mismo Wi-Fi (UDP) · Puede editar / Solo lectura / quitar · máximo 50 personas a la vez · carpetas, destacados, ordenar y buscar dentro del contenido · **papelera de 30 días** · @menciones · plantillas del espacio · letra de los textos nuevos · descargar todo · cuánto ocupa y depurar versiones · copia en otro NOM |
 | **Editores** | 4 tipos (fijo al crear) · **texto tipo Word letra por letra** (estilos, listas, tablas, imágenes, notas al pie, ecuaciones, índice, encabezado y pie, columnas, marca de agua, configurar página) · **hoja de cálculo** (fórmulas en español e inglés, referencias $ y entre hojas, relleno, filtro y orden personales, fijar filas, formato condicional, listas desplegables, gráficas) · **presentación** (temas, diseños, animaciones, transiciones, notas, modo presentador, proyector, láser) · **diagrama** (UML, entidad-relación, diagramas listos, texto a diagrama, conectores) · **ruedita de acciones** en los cuatro · comentarios y **modo sugerencia** · partes asignadas a una persona · entrega con fecha límite · **recibo del proceso de escritura** verificable · investigar y citar en APA · deshacer/rehacer · sin conexión con cola persistente |
 | **Importar y exportar** | .docx, .xlsx y .pptx de Office (un archivo sin cambios sale idéntico; lo editado se reescribe), .nom (formato propio comprimido), PDF, HTML, Markdown, CSV, SVG y PNG |
 | **Almacenamiento** | Límite por cuenta a la vista · 25 MB por documento · historial de versiones con vista previa y restauración · respaldos rotativos |
@@ -137,7 +137,7 @@ se abren, con ids deterministas para que dos equipos que los abren a la vez coin
 
 ## Licencia
 
-NOM-COLAB es **software libre** bajo la **Licencia Pública General de GNU, versión 3**
+NOM es **software libre** bajo la **Licencia Pública General de GNU, versión 3**
 (GPL-3.0; el texto completo está en `LICENSE`, en la raíz del repositorio). Puedes usarlo,
 estudiarlo, cambiarlo y compartirlo; si distribuyes una versión modificada, tiene que ir con su
 código fuente y bajo la misma licencia.

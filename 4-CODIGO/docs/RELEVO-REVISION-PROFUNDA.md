@@ -97,7 +97,7 @@ automática».
 - La nube del proyecto es la **Raspberry Pi** (`https://nomcolab.dpdns.org`). Azure es de otra
   materia: se mantiene al día y apagada; se prende solo para demostrar.
 - Límite por cuenta: 200 MB en la Pi, 50 MB en Azure, sin límite en el servidor del salón. Solo
-  documentos de NOM-COLAB, comprimidos. Sin respaldo en Drive.
+  documentos de NOM, comprimidos. Sin respaldo en Drive.
 
 ## 3. Entorno y trampas conocidas
 

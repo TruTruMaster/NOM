@@ -1,5 +1,5 @@
 @startuml 07-navegacion
-title NOM-COLAB - Mapa de navegación (flujo ideal del usuario)
+title NOM - Mapa de navegación (flujo ideal del usuario)
 skinparam shadowing false
 skinparam linetype ortho
 skinparam defaultFontName Nunito

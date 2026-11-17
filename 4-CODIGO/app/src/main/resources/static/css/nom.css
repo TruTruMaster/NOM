@@ -1,5 +1,5 @@
 /* =====================================================================
-   NOM-COLAB — hoja de estilos de la aplicación
+   NOM — hoja de estilos de la aplicación
    ---------------------------------------------------------------------
    Superficies planas con borde, grises neutros y un solo color de marca:
    el azul noche del ícono. El color se guarda para lo que dice algo (el
@@ -87,8 +87,7 @@
   --barra-alto: 56px;
   --foco: 0 0 0 2px var(--sup), 0 0 0 4px var(--acento);
 
-  /* el estilo de la página es este: sin colores forzados ni texto inflado por el sistema */
-  forced-color-adjust: none;
+  /* (el alto contraste del sistema sí cambia la interfaz; solo el contenido de los documentos guarda sus colores, abajo) */
   print-color-adjust: exact; -webkit-print-color-adjust: exact;
 }
 
@@ -898,3 +897,7 @@ p, .sub, small { text-wrap: pretty; }
 :where(.portada-fija-logo) { width: 64px; height: 64px; }
 :where(.portada-fija) nav { margin-top: 6px; font-size: 14px; }
 :where(.portada-fija) a { color: var(--acento-tinta); }
+
+/* Alto contraste del sistema (Windows): la interfaz toma los colores del sistema; lo que ES el documento (páginas,
+   celdas, diapositivas, lienzos, gráficas y muestras de color) se queda con los suyos, porque esos colores son el contenido. */
+.wd-hoja, .rejilla-hoja, .diapo, .escenario, .lienzo, .miniatura, .libre-grafica, .wd-muestras, .lz-muestras, .lz-color, .muestra-cf, .rueda-muestra, .punto-color { forced-color-adjust: none; }

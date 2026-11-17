@@ -137,7 +137,7 @@ libres: alcanza para unas 270 cuentas llenas al tope (hoy todo ocupa 584 KB).
 
 | # | Prueba | Resultado esperado |
 |---|---|---|
-| E-1 | Ver «Guardados en NOM-COLAB en Internet» con su barra | Coincide con lo que dice `/api/cuentas/almacenamiento` |
+| E-1 | Ver «Guardados en NOM en Internet» con su barra | Coincide con lo que dice `/api/cuentas/almacenamiento` |
 | E-2 | Llegar al límite (cuenta de prueba con `NOM_CUOTA_MB=1` en local) | Mensaje claro; lo escrito se queda en el equipo; borrar versiones viejas libera |
 | E-3 | Documento de más de 25 MB | Responde 413; lo escrito se queda en el equipo |
 | E-4 | Chat (DEF-42, corregido en 0.13.1) | El chat suma al almacenamiento («Cuánto espacio ocupa» lo muestra por espacio); al pasar el límite no deja subir archivos, el texto sí |
@@ -147,7 +147,7 @@ libres: alcanza para unas 270 cuentas llenas al tope (hoy todo ocupa 584 KB).
 
 ## Bloque F. Office: que ningún archivo se rompa
 
-**La verdad que hay que saber decir:** NOM-COLAB no es Word, Excel ni PowerPoint, que tienen miles
+**La verdad que hay que saber decir:** NOM no es Word, Excel ni PowerPoint, que tienen miles
 de funciones. Lo que sí garantiza es esto: al importar, **el archivo original viaja dentro del
 documento**. Lo que no se toca sale **idéntico, byte por byte**, y lo que no entiende (gráficas de
 Excel, macros, SmartArt, videos…) se conserva al descargar. Medido con 90 archivos reales de
@@ -205,7 +205,7 @@ la mitad. La causa: `js/compresion.js` es DEFLATE (ventana de 4 MB); `xz` usa LZ
 ## Bloque K. Nuestros documentos a Word, Excel y PowerPoint
 
 Lo de F es **importar** archivos de Office y volver a guardarlos. Aquí es lo contrario: un
-documento **hecho en NOM-COLAB** (sin original de Office dentro) se descarga como `.docx`, `.xlsx`
+documento **hecho en NOM** (sin original de Office dentro) se descarga como `.docx`, `.xlsx`
 o `.pptx` y tiene que abrirse en Office sin «reparar» y verse como en la app.
 
 | # | Documento hecho en la app con… | Descargar como | Revisar en LibreOffice y en Office real |

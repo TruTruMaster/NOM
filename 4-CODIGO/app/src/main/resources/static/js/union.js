@@ -1,4 +1,4 @@
-/* NOM-COLAB · Unirse sin Internet (2.1, 2.2 y 2.3).
+/* NOM · Unirse sin Internet (2.1, 2.2 y 2.3).
    El propietario crea un enlace para su espacio: caduca solo (1 hora a 30 días), se puede revocar y
    puede dejar entrar con apodo, sin registrarse (modo salón). Se comparte como código QR con la
    dirección del equipo que comparte: http://<ip-local>:<puerto>/unirse?c=<código>.
@@ -51,15 +51,15 @@
   const validar = (texto) => {
     const r = leer(texto);
     if (r.tipo && r.codigo && r.codigo.length >= 6) return null;
-    return r.origen ? "Ese código QR no es de un espacio de NOM-COLAB" : "El código tiene 8 letras y números (6 si es para proyectar)";
+    return r.origen ? "Ese código QR no es de un espacio de NOM" : "El código tiene 8 letras y números (6 si es para proyectar)";
   };
 
   /** Lleva a unirse (o a proyectar) con lo que trae un QR o un código, cambiando de servidor si hace falta. */
   async function usar(texto) {
     const r = leer(texto);
-    if (!r.tipo || !r.codigo) return aviso("Ese código QR no es de un espacio de NOM-COLAB", { tipo: "error" });
+    if (!r.tipo || !r.codigo) return aviso("Ese código QR no es de un espacio de NOM", { tipo: "error" });
     if (api().empaquetada) {
-      if (r.origen && r.origen !== api().servidor()) {
+      if (r.origen && !api().mismoServidor(r.origen, api().servidor())) {
         if (api().token() && !(await confirmar("Otro lugar", `Ese código es de ${r.origen.replace(/^https?:\/\//, "")}. La app se conectará ahí (tus documentos no se tocan; para volver, elige otra vez dónde trabajas).`, { si: "Conectar" }))) return;
         if (api().token()) {
           // Si era la sesión de la nube, se guarda: sirve para entrar al teléfono con la misma cuenta
@@ -70,7 +70,7 @@
         }
         api().fijarServidor(r.origen);
       }
-    } else if (r.origen && r.origen !== location.origin) {
+    } else if (r.origen && !api().mismoServidor(r.origen, location.origin)) {
       location.href = r.url;
       return;
     }
@@ -241,7 +241,7 @@
           <span class="suave chico" style="font-weight:500">${esc(PERMISO[enlace.permiso] || "")}${enlace.invitados ? " · con apodo, sin cuenta" : ""} · hasta ${esc(new Date(enlace.caduca).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}</span>
           ${bs.length > 1 ? `<select class="mini-select" data-base aria-label="Dirección">${bs.map((b) => `<option ${b === base ? "selected" : ""}>${esc(b.replace(/^https?:\/\//, ""))}</option>`).join("")}</select>` : url ? `<span class="chico qr-url">${esc(url)}</span>` : ""}
           ${url ? "" : `<div class="alerta aviso chico">${ico("wifi-off")}<span>${api().lan === false
-            ? "Para que el QR funcione, abre NOM-COLAB con la dirección que usan los demás (la de Internet). Mientras, el código sí sirve escrito a mano."
+            ? "Para que el QR funcione, abre NOM con la dirección que usan los demás (la de Internet). Mientras, el código sí sirve escrito a mano."
             : "Este equipo no está en ninguna red. Conecta el Wi-Fi (o el punto de acceso del teléfono) y vuelve a abrir esto. El código sí sirve escrito a mano."}</span></div>`}
           <div class="fila" style="flex-wrap:wrap">
             ${url ? `<button class="btn chico" data-copiar>${ico("copy", "ico-s")} Copiar</button><button class="btn chico" data-compartir>${ico("share-2", "ico-s")} Compartir</button>` : ""}
@@ -254,9 +254,9 @@
       if (c) c.onclick = () => NOM.copiarConAviso(url, "Dirección copiada");
       const sh = $("[data-compartir]", cont);
       if (sh) sh.onclick = () => {
-        const t = `Únete a "${esp.nombre}" en NOM-COLAB: ${url}\n(Código: ${enlace.codigo}. Hay que estar en la misma red Wi-Fi.)`;
+        const t = `Únete a "${esp.nombre}" en NOM: ${url}\n(Código: ${enlace.codigo}. Hay que estar en la misma red Wi-Fi.)`;
         if (window.NomAndroid && window.NomAndroid.compartirTexto) window.NomAndroid.compartirTexto(t);
-        else if (navigator.share) navigator.share({ title: "NOM-COLAB", text: t }).catch(() => {});
+        else if (navigator.share) navigator.share({ title: "NOM", text: t }).catch(() => {});
         else NOM.copiarConAviso(t, "Invitación copiada");
       };
       $("[data-grande]", cont).onclick = () => grande(url, enlace.codigo, esp.nombre);
@@ -271,7 +271,7 @@
       <h2>${esc(titulo || "Únete")}</h2>
       ${url ? NOM.qr.svg(url, { titulo: "Código QR" }) : ""}
       <b class="qr-codigo">${esc(codigo.slice(0, 4))}-${esc(codigo.slice(4))}</b>
-      <p>${url ? `Escanéalo con la cámara, o abre <b>${esc(url.replace(/^https?:\/\//, "").replace(/\/unirse.*$/, ""))}</b> y escribe el código.` : "Escribe el código en NOM-COLAB → Unirse."}</p></div>`);
+      <p>${url ? `Escanéalo con la cámara, o abre <b>${esc(url.replace(/^https?:\/\//, "").replace(/\/unirse.*$/, ""))}</b> y escribe el código.` : "Escribe el código en NOM → Unirse."}</p></div>`);
     document.body.append(capa);
     const cerrar = () => { capa.remove(); document.removeEventListener("keydown", tecla, true); };
     const tecla = (e) => { if (e.key === "Escape") { e.stopPropagation(); cerrar(); } };

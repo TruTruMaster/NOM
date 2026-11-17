@@ -1,5 +1,5 @@
 #!/bin/sh
-# Instala NOM-COLAB en la Raspberry Pi (Alpine con s6-rc) como servicios supervisados:
+# Instala NOM en la Raspberry Pi (Alpine con s6-rc) como servicios supervisados:
 #
 #   nomcolab-servidor   el jar, con su propio usuario sin privilegios (nomcolab)
 #   nomcolab-tunel      Cloudflare Tunnel -> https://nomcolab.dpdns.org (usuario cloudflared)
@@ -42,7 +42,7 @@ chgrp adm $VAR && chmod 750 $VAR
 # ---- quitar la instalación vieja: el cron que lanzaba todo con nohup
 if grep -q nomcolab-servidor /etc/crontabs/root 2>/dev/null; then
   di "quito del crontab de root las líneas de la instalación vieja"
-  grep -v -e nomcolab-servidor -e '^# NOM-COLAB: arranca y vigila' /etc/crontabs/root > /etc/crontabs/root.n
+  grep -v -e nomcolab-servidor -e '^# NOM: arranca y vigila' /etc/crontabs/root > /etc/crontabs/root.n
   cat /etc/crontabs/root.n > /etc/crontabs/root && rm -f /etc/crontabs/root.n
 fi
 migrar=0
@@ -102,7 +102,7 @@ install -m 755 "$AQUI/nomcolab-pi" /usr/local/sbin/nomcolab-pi
 install -m 755 "$AQUI/respaldo-diario" /etc/periodic/daily/nomcolab-respaldo
 # la cuenta de administración puede usar nomcolab-pi sin escribir la contraseña (así la laptop
 # puede actualizar el jar o pedir el estado); todo lo demás sigue pidiéndola
-printf '%s\n' "# NOM-COLAB: estado, reinicio, respaldo y actualización sin contraseña" \
+printf '%s\n' "# NOM: estado, reinicio, respaldo y actualización sin contraseña" \
   "permit nopass $ADMIN as root cmd /usr/local/sbin/nomcolab-pi" > /etc/doas.d/zz-nomcolab.conf
 chmod 600 /etc/doas.d/zz-nomcolab.conf   # zz: doas aplica la última regla que coincide (después de wheel.conf)
 rm -f /etc/doas.d/nomcolab.conf

@@ -1,4 +1,4 @@
-# Guía para que NOM-COLAB sea fácil de usar
+# Guía para que NOM sea fácil de usar
 
 Para quién escribimos: una alumna de secundaria, un maestro de 65 años, alguien que usa el celular
 solo para WhatsApp y alguien que programa. Si la entiende quien sabe menos, la entienden todos.
@@ -85,7 +85,7 @@ Censo 2020): poco más de la secundaria. Por eso cada palabra cuenta.
 
 ---
 
-## 2. Reglas para NOM-COLAB (revisarlas en cada cambio)
+## 2. Reglas para NOM (revisarlas en cada cambio)
 
 1. **Palabras de todos los días.** Usar el glosario de abajo. Frases cortas, en "tú". Nada de
    "servidor", "red local", "sincronizar", "LAN", "cifrado", "token" en lo que ve la gente.
@@ -108,10 +108,10 @@ Censo 2020): poco más de la secundaria. Por eso cada palabra cuenta.
 
 | En vez de… | Decimos… |
 |---|---|
-| Servidor | el equipo que comparte · NOM-COLAB en Internet · otro NOM-COLAB |
+| Servidor | el equipo que comparte · NOM en Internet · otro NOM |
 | Red local, LAN, "en tu red" | el mismo Wi-Fi |
 | Conexión del proyecto (anunciar en la red) | Que lo encuentren en el mismo Wi-Fi |
-| Sincronizar | guardar una copia en otro NOM-COLAB · enviar tus cambios |
+| Sincronizar | guardar una copia en otro NOM · enviar tus cambios |
 | Sincronizando | Guardando… |
 | Solo lectura | Solo ver / Solo puede ver |
 | Revocar, caducar | Anular, vencer |
@@ -122,7 +122,7 @@ Censo 2020): poco más de la secundaria. Por eso cada palabra cuenta.
 | Archivos en este dispositivo | Guardado en este equipo (en la app: Este teléfono) |
 | Empresa u organización | Escuela, empresa o grupo |
 | caracteres | letras o números |
-| Bienvenido (masculino) | Hola de nuevo · Ya estás en NOM-COLAB |
+| Bienvenido (masculino) | Hola de nuevo · Ya estás en NOM |
 
 ---
 
@@ -143,7 +143,7 @@ Censo 2020): poco más de la secundaria. Por eso cada palabra cuenta.
   todo se queda solo en ese equipo; ícono de una persona en "Usuario"; "Hola de nuevo" en vez de
   "Bienvenido de vuelta"; "Tengo un código de invitación".
 - **App Android:** la primera pantalla pregunta "¿Dónde trabaja tu equipo?" con las opciones en el
-  orden en que se usan: escanear el QR, usar NOM-COLAB en Internet, buscar en este Wi-Fi o escribir
+  orden en que se usan: escanear el QR, usar NOM en Internet, buscar en este Wi-Fi o escribir
   la dirección.
 - **Tamaño de la letra** en Ajustes (Normal, Grande, Muy grande), por equipo. En la app agranda
   todo el texto.

@@ -1,4 +1,4 @@
-# NOM-COLAB en Azure — módulo web conectado a la base de datos, con permisos por espacio
+# NOM en Azure — módulo web conectado a la base de datos, con permisos por espacio
 
 **Página:** https://nomcolab-wack.azurewebsites.net
 

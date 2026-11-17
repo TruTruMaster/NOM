@@ -1,4 +1,4 @@
-# NOM-COLAB — Diseño de la interfaz
+# NOM — Diseño de la interfaz
 
 Equipo 6 "WACK" · CECyT 9 · 5IM7 · octubre 2026 (apariencia revisada en noviembre de 2026, versión 0.14.0)
 
@@ -96,7 +96,7 @@ original y suele pasar por otras dos antes; el número exacto de minutos está e
 discusión entre fuentes, pero el costo en estrés y esfuerzo sí se repite
 ([resumen 1](https://blog.saner.ai/context-switching-statistics/),
 [resumen 2](https://concepts.dsebastien.net/concept/task-switching-cost/)).
-NOM-COLAB nació justo para quitar el cambio entre programas.
+NOM nació justo para quitar el cambio entre programas.
 
 | Decisión | Dónde |
 |---|---|
@@ -218,7 +218,7 @@ La página se ve como se diseñó, aunque el navegador o el sistema quieran camb
 |---|---|
 | Modo oscuro automático de Chrome, Samsung Internet y otros | `<meta name="color-scheme" content="light dark">`: la app declara sus propios temas claro y oscuro. |
 | Extensiones de modo oscuro (Dark Reader) | `<meta name="darkreader-lock">`. |
-| Extensiones de temas o estilos (Stylus y similares), traductores | Las hojas de estilo que no son de NOM-COLAB (las nuestras llevan `data-nom`) se quitan en cuanto aparecen (`nucleo.js`, `protegerEstilo()`); `notranslate` evita que un traductor reescriba el texto del editor. |
+| Extensiones de temas o estilos (Stylus y similares), traductores | Las hojas de estilo que no son de NOM (las nuestras llevan `data-nom`) se quitan en cuanto aparecen (`nucleo.js`, `protegerEstilo()`); `notranslate` evita que un traductor reescriba el texto del editor. |
 | Alto contraste forzado de Windows y colores forzados del navegador | `forced-color-adjust: none` (y la app ya cumple contraste AA por sí misma). |
 | Letra inflada en el celular, tamaño de letra del sistema | `text-size-adjust: 100%`; en la app Android `setTextZoom(100)`. |
 | Modo oscuro forzado de Android o de la marca del teléfono | `setAlgorithmicDarkeningAllowed(false)` / `FORCE_DARK_OFF` y `setForceDarkAllowed(false)` en el WebView. |

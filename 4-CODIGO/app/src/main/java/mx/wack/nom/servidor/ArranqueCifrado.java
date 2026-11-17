@@ -57,7 +57,7 @@ public final class ArranqueCifrado {
             if (!cifrar) { cifrado = CifradoReposo.apagado(); return; }
             k = CifradoReposo.nuevaLlave();
             guardarLlave(llaves, k);
-            System.out.println("NOM-COLAB: llave nueva del cifrado en reposo en " + llaves.resolve("reposo.key") + " (guárdala aparte: sin ella no se abren los datos ni los respaldos)");
+            System.out.println("NOM: llave nueva del cifrado en reposo en " + llaves.resolve("reposo.key") + " (guárdala aparte: sin ella no se abren los datos ni los respaldos)");
         }
         CifradoReposo c = CifradoReposo.conLlave(k);
         Path canario = d.resolve(CANARIO);
@@ -81,7 +81,7 @@ public final class ArranqueCifrado {
                 } catch (ReflectiveOperationException e) {
                     throw new IllegalStateException("No se pudo cifrar la base de cuentas: " + (e.getCause() == null ? e : e.getCause()).getMessage(), e);
                 }
-                System.out.println("NOM-COLAB: la base de cuentas ahora va cifrada");
+                System.out.println("NOM: la base de cuentas ahora va cifrada");
             }
             System.setProperty("spring.datasource.url", "jdbc:h2:file:" + d.toString().replace('\\', '/') + "/nom-db;MODE=MSSQLServer;DATABASE_TO_LOWER=TRUE;CIPHER=AES");
             System.setProperty("spring.datasource.password", clave + " ");

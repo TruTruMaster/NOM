@@ -369,7 +369,7 @@ def w04(w):
         s1.PageSetup.DifferentFirstPageHeaderFooter = True
         s1.Headers(2).Range.Text = ""
     with b.paso("encabezado con texto, tabuladores y fecha"):
-        h = s1.Headers(1).Range; h.Text = "NOM-COLAB · Informe de secciones\t\t"
+        h = s1.Headers(1).Range; h.Text = "NOM · Informe de secciones\t\t"
         campo(s1.Headers(1).Range, 'DATE \\@ "d \'de\' MMMM \'de\' yyyy"')
     with b.paso("pie con «Página X de Y»"):
         f = s1.Footers(1).Range; f.Text = "Página "; campo(s1.Footers(1).Range, "PAGE"); texto_al_final(s1.Footers(1).Range, " de "); campo(s1.Footers(1).Range, "NUMPAGES")
@@ -704,7 +704,7 @@ def w06(w):
     with b.paso("WordArt"):
         a7 = D.p("WordArt:")
         for k, efecto in enumerate([0, 8, 15, 22]):
-            wa = d.Shapes.AddTextEffect(efecto, "NOM-COLAB", "Arial Black", 28, True, False, cm(0.2 + k * 4.2), cm(0.5), a7.Range)
+            wa = d.Shapes.AddTextEffect(efecto, "NOM", "Arial Black", 28, True, False, cm(0.2 + k * 4.2), cm(0.5), a7.Range)
             wa.RelativeHorizontalPosition = 0; wa.RelativeVerticalPosition = 2; wa.WrapFormat.Type = 4
         for k in range(4): D.p("")
     with b.paso("grupo de formas"):
@@ -966,7 +966,7 @@ def w10(w):
         d.AutoHyphenation = True; d.HyphenationZone = 18
         par = D.p("Separación automática de palabras: " + texto(1, 5), None, alin=3); par.Format.RightIndent = cm(8)
     with b.paso("derecha a izquierda mezclada con izquierda a derecha"):
-        D.p("Texto mezclado: hola مرحبا بكم في NOM-COLAB 2026 y שלום עולם 123 fin.")
+        D.p("Texto mezclado: hola مرحبا بكم في NOM 2026 y שלום עולם 123 fin.")
     with b.paso("letra de 1 pt y de 120 pt"):
         par = D.p("Letra diminuta de 1 punto: "); D.r(par, "casi invisible " * 5, tam=1)
         D.p("Á", None, tam=120)

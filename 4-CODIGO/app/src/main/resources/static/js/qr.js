@@ -1,4 +1,4 @@
-/* NOM-COLAB · Códigos QR (2.1): dibujarlos y leerlos, sin Internet.
+/* NOM · Códigos QR (2.1): dibujarlos y leerlos, sin Internet.
    - Dibujar: qrcode-generator (js/vendor/qrcode.js, MIT), como SVG que se ve nítido a cualquier
      tamaño (también proyectado en el salón).
    - Leer: la cámara con BarcodeDetector cuando el navegador lo trae (Chrome en Android); si no,

@@ -1,7 +1,7 @@
 package mx.wack.nom.core;
 
 /**
- * Version de NOM-COLAB que corre en este servidor (la computadora, la Raspberry o un telefono que
+ * Version de NOM que corre en este servidor (la computadora, la Raspberry o un telefono que
  * hace de servidor). La informa /api/red/info.
  *
  * La pagina siempre trae la interfaz de su servidor, asi que nunca se desfasa. La app Android trae

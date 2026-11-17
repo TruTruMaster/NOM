@@ -28,7 +28,7 @@ Contenido:
 | Lo editado sin Internet | Si nadie más cambió el documento mientras tanto, se sube tal cual. Si alguien más lo cambió, **se abre una rama** y el original de la nube no se toca |
 | La computadora | Basta con la página descargada (service worker): crear documentos nuevos y editar la última versión que se tenga de cada uno. Sin Internet no se actualizan los espacios ni la nube: todo se queda en el equipo hasta que vuelva |
 | Documentos en el servidor | **Se cifran** (parte D) |
-| Edad | **No hay edad.** Los espacios son cerrados: nadie entra sin invitación (sin ella, unirse solo deja una solicitud que el dueño acepta o no, `ServicioEspacios.unirse`). Cada quien es responsable de unirse o no a un grupo de trabajo; si es menor de edad, sus tutores son responsables, no el equipo. NOM-COLAB está pensado para empresas y escuelas, y la edición (texto, hojas, presentaciones, diagramas) es de uso libre para cualquiera |
+| Edad | **No hay edad.** Los espacios son cerrados: nadie entra sin invitación (sin ella, unirse solo deja una solicitud que el dueño acepta o no, `ServicioEspacios.unirse`). Cada quien es responsable de unirse o no a un grupo de trabajo; si es menor de edad, sus tutores son responsables, no el equipo. NOM está pensado para empresas y escuelas, y la edición (texto, hojas, presentaciones, diagramas) es de uso libre para cualquiera |
 | Fin del servicio | Es un proyecto escolar: al terminar, **el proyecto se queda congelado en GitHub** como portafolio de los cuatro integrantes, y ya. Sin aviso previo ni proceso de cierre |
 | Responsable del aviso, buscadores, «¿Te resultó útil?» | Las recomendaciones de la primera versión: equipo WACK con un correo solo del proyecto; la ayuda de la Raspberry visible en buscadores y Azure con `noindex`; contador anónimo o nada |
 
@@ -265,7 +265,7 @@ Internet: lo sirve la Raspberry, Azure, el jar y el teléfono como servidor, y v
 
 ```
 /ayuda/                         Inicio: buscador, tarjetas por tema, «Lo más consultado»
-  empezar/                      Qué es NOM-COLAB · Crear cuenta y entrar · Código de recuperación ·
+  empezar/                      Qué es NOM · Crear cuenta y entrar · Código de recuperación ·
                                 Usar sin cuenta · Instalar en la computadora · Instalar la app de
                                 Android (orígenes desconocidos, actualizar) · Requisitos
   espacios/                     Espacios y documentos · Permisos · Invitar (enlace, QR, código) ·
@@ -295,7 +295,7 @@ Internet: lo sirve la Raspberry, Azure, el jar y el teléfono como servidor, y v
   uso-aceptable/                Política de uso aceptable
   almacenamiento/               Cookies y almacenamiento en tu equipo (no usamos cookies)
   permisos-android/             Para qué es cada permiso de la app
-  licencias/                    La licencia de NOM-COLAB (GPL-3.0) y las de terceros
+  licencias/                    La licencia de NOM (GPL-3.0) y las de terceros
   seguridad/                    Cómo protegemos tus datos · Reportar una falla de seguridad
   accesibilidad/                Declaración de accesibilidad
   denuncias/                    Reportar contenido
@@ -328,7 +328,7 @@ lea: es un proyecto escolar, no asesoría legal.
   y la edición es de uso libre para cualquiera; una cuenta por persona; cuidar la contraseña y el código de recuperación;
   **lo que escribes es tuyo**; sin Internet no hay cuentas, solo alias, y al volver se suben los
   cambios o se abre una rama, y quien tiene Internet conserva su cuenta; reglas de uso; el código es software libre bajo **GPL-3.0**; «Word,
-  Excel y PowerPoint son marcas de Microsoft; NOM-COLAB no está afiliado a Microsoft»; ley mexicana.
+  Excel y PowerPoint son marcas de Microsoft; NOM no está afiliado a Microsoft»; ley mexicana.
 - **Uso aceptable:** nada ilegal, acoso o burlas (entorno escolar), datos personales de otros sin
   permiso, archivos dañinos, abusar del servicio, intentar romper la seguridad (salvo reportarla).
 - **Almacenamiento en tu equipo:** sin cookies; qué se guarda en `localStorage`, IndexedDB
@@ -344,7 +344,7 @@ lea: es un proyecto escolar, no asesoría legal.
 
 ### F.4 Preguntas frecuentes (borrador)
 
-Primeros pasos: 1. ¿Qué es NOM-COLAB y en qué se parece y se diferencia de Word, Excel, PowerPoint o
+Primeros pasos: 1. ¿Qué es NOM y en qué se parece y se diferencia de Word, Excel, PowerPoint o
 Canva? 2. ¿Cuesta, tiene anuncios, usa inteligencia artificial? 3. ¿Necesito cuenta? 4. ¿Por qué no
 me piden correo y cómo recupero la contraseña? 5. ¿En qué navegadores y teléfonos funciona? ¿Hay
 app para iPhone o computadora? 6. ¿Cualquiera puede entrar a mi espacio? (no: solo por invitación)

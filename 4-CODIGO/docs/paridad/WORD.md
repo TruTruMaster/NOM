@@ -1,6 +1,6 @@
-# Catálogo de Word para Microsoft 365 frente al editor de texto de NOM-COLAB
+# Catálogo de Word para Microsoft 365 frente al editor de texto de NOM
 
-Versión del catálogo: 14 de noviembre de 2026. Alcance: Word para Microsoft 365 de escritorio (Canal actual), formato de archivo `.docx` (WordprocessingML, ECMA-376 5.ª edición / ISO/IEC 29500, con las extensiones de `[MS-DOCX]`) comparado con el editor de texto de NOM-COLAB (`codigo/js/modo-texto.js`) y la parte de Word de `codigo/js/ooxml.js` (`docx`, `docxArmar`, `huellasDocx`, `attrsRun`, `parCrudo`, `parDe`, `attrsParrafo`, `datosSeccion`, `ommlATex`).
+Versión del catálogo: 14 de noviembre de 2026. Alcance: Word para Microsoft 365 de escritorio (Canal actual), formato de archivo `.docx` (WordprocessingML, ECMA-376 5.ª edición / ISO/IEC 29500, con las extensiones de `[MS-DOCX]`) comparado con el editor de texto de NOM (`codigo/js/modo-texto.js`) y la parte de Word de `codigo/js/ooxml.js` (`docx`, `docxArmar`, `huellasDocx`, `attrsRun`, `parCrudo`, `parDe`, `attrsParrafo`, `datosSeccion`, `ommlATex`).
 
 ## Cómo leer este documento
 
@@ -13,9 +13,9 @@ Versión del catálogo: 14 de noviembre de 2026. Alcance: Word para Microsoft 36
 1. Comando o función (y `idMso`).
 2. Qué hace.
 3. Cómo se guarda en el archivo: parte del paquete (`word/document.xml`, `word/styles.xml`…), elemento o atributo y sección de ECMA-376 (parte 1, «ECMA-376-1») o de `[MS-DOCX]`, `[MS-ODRAWXML]`, `[MS-OE376]`, `[MS-OI29500]`.
-4. NOM-COLAB: **Tiene** (se puede hacer en el editor y sale bien al archivo), **Parcial** (existe pero le falta algo; se dice qué), **No**, **No aplica** (solo con motivo), **Revisar** (hay duda; se dice qué se buscó). Siempre con evidencia: archivo y función.
+4. NOM: **Tiene** (se puede hacer en el editor y sale bien al archivo), **Parcial** (existe pero le falta algo; se dice qué), **No**, **No aplica** (solo con motivo), **Revisar** (hay duda; se dice qué se buscó). Siempre con evidencia: archivo y función.
 5. Al importar un `.docx`: **se ve y edita**; **se conserva sin verse** (el archivo original viaja en `_origen`, así que al exportar sale idéntico mientras no se edite la unidad —párrafo, tabla— que lo contiene; si se edita esa unidad y el generador no sabe reescribirlo, **se pierde en esa unidad**); **se pierde** (ni siquiera sobrevive sin tocar nada, o se descarta al leer).
-6. Al exportar algo hecho en NOM-COLAB: **se escribe** o **no**.
+6. Al exportar algo hecho en NOM: **se escribe** o **no**.
 7. Prioridad: **Alta** (lo usa un estudiante u oficina cada semana), **Media**, **Baja**.
 8. Notas para implementar y, en filas Alta y Media, **Corpus →** los archivos de `corpus/docx/` o `corpus-web/docx/` donde aparece el elemento (entre paréntesis, cuántas veces). Es la lista para probar.
 
@@ -26,7 +26,7 @@ Versión del catálogo: 14 de noviembre de 2026. Alcance: Word para Microsoft 36
 **Fuentes principales** (la lista completa con URL está al final):
 `https://learn.microsoft.com/es-es/office/` · `https://support.microsoft.com/es-es/word` · `https://learn.microsoft.com/en-us/openspecs/office_standards/ms-docx/` · `https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/` · `https://ecma-international.org/publications-and-standards/standards/ecma-376/` · `https://github.com/OfficeDev/office-fluent-ui-command-identifiers`.
 
-## Resumen de lo que ya hace NOM-COLAB (evidencia común a muchas filas)
+## Resumen de lo que ya hace NOM (evidencia común a muchas filas)
 
 - Atributos de carácter modelados (`CAR`, `modo-texto.js:69`): `b i u s va color fondo fuente tam enlace sug sugBorrar vers mayus esp`.
 - Atributos de párrafo modelados (`PAR`, `modo-texto.js:73`): `estilo alin lista nivel hecho sangria interlineado antes despues dueno sangiz sangder primera francesa inicio continuar vineta numfmt ox lineaPt borde sombra dir sec`.
@@ -40,12 +40,12 @@ Fuente de la lista: pestañas de la vista Backstage en `wordcontrols.xlsx` (`Tab
 
 ### Nuevo, Abrir, Guardar, Cerrar
 
-| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 
 | Nuevo documento en blanco y desde plantilla (New)<br>`FileNew, FileNewDefault, TabOfficeStart` | Crea un documento vacío o a partir de una plantilla (informe, currículum…) | Plantilla `.dotx`: mismo paquete con tipo de contenido `application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml` (`[Content_Types].xml`, ECMA-376-1 §11.3.10 y 15.2) | Parcial — `plantillas.js` (`vacio-texto`, Acta de reunión, Plan de clase, Reporte de práctica: lista propia de plantillas, sin plantillas `.dotx` de Office) | se ve y edita sólo si se abre como `.docx`; un `.dotx` no está en `IMPORTABLES` (`formatos.js:8`) | se escribe crea `.docx` normal | Media | Aceptar `.dotx` en `IMPORTABLES` y leer el tipo de contenido de plantilla; al exportar a `.docx` cambiar el `Override` de `/word/document.xml` al tipo `document.main+xml`. Corpus → part:[Content_Types].xml: lo-FDO78292.docx, lo-FigureAsLabelPicture.docx, lo-fdo74605.docx (34 de 34 archivos) |
 | Abrir (Open) y Recientes<br>`ButtonOpenBrowse, ButtonCategoryRecentDocuments, ButtonTaskRecentDocuments, ButtonGroupRecentDocuments, TabRecent` | Abre un archivo del equipo o reciente | Sin cambios en el archivo | Tiene — `formatos.js` `IMPORTABLES` (.docx, .nom, .md, .txt, .html…) y lista de documentos del espacio en `vista-espacios.js` | se ve y edita | se escribe | Alta | Abrir `.docx` hasta 10 MB (`MAX_BYTES`, `formatos.js:9`); abrir `.doc`, `.rtf`, `.odt`, `.docm`, `.dotx` no existe (ver «Guardar como»). Corpus → no deja huella propia en el archivo (se prueba en la interfaz o con el archivo exportado) |
-| Abrir desde la nube, Compartidos conmigo, Examinar (cloud places)<br>`ButtonCategoryCloudServices, ButtonTaskSharedWithMe, ButtonTaskDynamicServiceProvider, ButtonGroupCloudServices, ButtonModernOpenPlaces, ButtonTaskFixItHub, OfficeExtensionsGetAddinsButtonOnBackstageBelowOpenDivider` | Abre desde OneDrive, SharePoint u otros servicios | Sin cambios en el archivo | No aplica — el equivalente en NOM-COLAB son los espacios compartidos (`vista-espacios.js`); los servicios de Microsoft no existen en una suite propia | no aplica (no hay nada en el archivo) | no aplica | Baja | No integrar OneDrive/SharePoint; el equivalente es «subir un `.docx` al espacio». |
+| Abrir desde la nube, Compartidos conmigo, Examinar (cloud places)<br>`ButtonCategoryCloudServices, ButtonTaskSharedWithMe, ButtonTaskDynamicServiceProvider, ButtonGroupCloudServices, ButtonModernOpenPlaces, ButtonTaskFixItHub, OfficeExtensionsGetAddinsButtonOnBackstageBelowOpenDivider` | Abre desde OneDrive, SharePoint u otros servicios | Sin cambios en el archivo | No aplica — el equivalente en NOM son los espacios compartidos (`vista-espacios.js`); los servicios de Microsoft no existen en una suite propia | no aplica (no hay nada en el archivo) | no aplica | Baja | No integrar OneDrive/SharePoint; el equivalente es «subir un `.docx` al espacio». |
 | Guardar (Save), Autoguardado (AutoSave)<br>`FileSave, Save, AutoSaveSwitch, TabSave, SaveGroup, ModernSaveGroup, ButtonGroupsSave, SaveCloudServices, LocalSave, ButtonGroupItemSaveLocalServices, ButtonGroupItemSaveCloudServices` | Guarda el documento; con autoguardado se guarda a cada cambio | Paquete completo; `docProps/core.xml` (`dcterms:modified`, `cp:lastModifiedBy`) ECMA-376-2 §11 | Tiene — `editor.js` (cada cambio se envía al documento con `doc().cambiar`) y `cola.js`/`crdt.js` (sincronización continua) | se ve y edita | se escribe | Alta | Al exportar `.docx` no se actualizan `dcterms:modified` ni `cp:lastModifiedBy`: `ooxml.js:714` sólo escribe `dc:title` y `dc:creator` en `docProps/core.xml` cuando el documento es nuevo. Corpus → part:docProps/core.xml: lo-FDO78292.docx, lo-FigureAsLabelPicture.docx, lo-fdo74605.docx (34 de 34 archivos) |
 | Guardar como (Save As): tipos de archivo<br>`TabSave, ButtonTaskDynamicServiceProvider, TabHelp` | Guarda con otro nombre o formato | `.docx` (`document.main+xml`), `.docm` (`document.macroEnabled.main+xml`), `.dotx`/`.dotm`, `.doc` (formato binario `[MS-DOC]`), `.rtf`, `.odt`, `.txt`, `.html`, `.xml` (Flat OPC), `.pdf` | Parcial — `formatos.js` (`POR_TIPO.TEXTO`: docx, pdf, html, md, nom); falta `.dotx`, `.docm`, `.rtf`, `.odt`, `.txt` y Flat OPC | se ve y edita (sólo los de `IMPORTABLES`) | se escribe (los de la lista) | Media | Añadir salida `.txt` (trivial, desde el modelo) y `.rtf` si el equipo lo pide; `.doc` binario y `.odt` quedan en Baja. Corpus → part:[Content_Types].xml: lo-FDO78292.docx, lo-FigureAsLabelPicture.docx, lo-fdo74605.docx (34 de 34 archivos) |
 | Cerrar (Close)<br>`FileClose` | Cierra el documento | Sin cambios | Tiene — volver a la lista de documentos (`vista-espacios.js`, ruta al cerrar el editor en `editor.js`) | se ve y edita | se escribe | Alta | Nada. Corpus → no deja huella propia en el archivo (se prueba en la interfaz o con el archivo exportado) |
@@ -53,7 +53,7 @@ Fuente de la lista: pestañas de la vista Backstage en `wordcontrols.xlsx` (`Tab
 
 ### Información (Info)
 
-| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 
 | Proteger documento → Marcar como final (Mark as Final)<br>`FileMarkAsFinal` | Marca el documento como terminado y de solo lectura | `docProps/custom.xml`: propiedad `_MarkAsFinal` = `true` (ECMA-376-1 §22.3; propiedad definida por Office, ver `[MS-OSHARED]`) | No — no se busca `_MarkAsFinal` en `ooxml.js` (grep) | se conserva sin verse | no | Baja | Si se activa, ponerlo como solo lectura en la interfaz; al exportar escribir la propiedad personalizada.  |
@@ -71,7 +71,7 @@ Fuente de la lista: pestañas de la vista Backstage en `wordcontrols.xlsx` (`Tab
 
 Imprimir con Vista previa (`PrintPreviewAndPrint`, `TabPrint`, `GroupPrintSettings`, `GroupPrintPreview`, `GroupPrintProtectedView`, `FilePrintCustomRange`, `DigitalPrint`): la configuración de página que cambia el archivo se detalla en la sección «Configurar página».
 
-| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 
 | Imprimir (Print): copias, impresora, intervalo, una cara/dos caras, intercalar, orientación, tamaño, márgenes, páginas por hoja<br>`PrintPreviewAndPrint, PrintOptionsMenuWord, FilePrintCustomRange, PrintPreviewShrinkOnePage, PrintPreviewClose, PageNextWord, PagePreviousWord` | Imprime con las opciones del Backstage; «Reducir una página» ajusta tamaño de letra y márgenes para que quepa | Sin cambios en el archivo; el tamaño, orientación y márgenes salen de `w:sectPr` (`w:pgSz`, `w:pgMar`; ECMA-376-1 §17.6.13, §17.6.11) | Parcial — `formatos.js:534-536` abre el diálogo del sistema (`window.print`, o `NomAndroid.imprimir`); `estiloImpresion` (`modo-texto.js:2332`) pone encabezado, pie y número de página con CSS `@page`; sin copias, intervalo ni dos caras propios | no aplica (no hay nada en el archivo) | no aplica | Alta | Mantener el diálogo del sistema; añadir «intervalo de páginas» sólo si se pide. «Reducir una página» no existe; no se guarda en el archivo. Corpus → no deja huella propia en el archivo (se prueba en la interfaz o con el archivo exportado) |
@@ -83,18 +83,18 @@ Imprimir con Vista previa (`PrintPreviewAndPrint`, `TabPrint`, `GroupPrintSettin
 
 Comandos de la cuenta y de la ayuda del producto: cuenta de Microsoft, privacidad, temas de Office, actualizaciones, Insider. `TabHelp`: `GroupBackstageIdentity`, `GroupBackstagePrivacy`, `ManagePrivacy`, `Personalization`, `Theming`, `ManageServices`, `GroupBackstageSignIn`, `GroupBackstageSignInDisabled`, `GroupOfficeBranding`, `GroupClickToRunUpdateStatus`, `GroupUpdateChannel`, `UpdateChannel`, `GroupOfficeInsider`, `GroupOfficeInsiderRegistration`, `GroupOfficeInsiderChannel`, `GroupOfficeInsiderAbout`, `GroupOfficeInsiderHelp`, `GroupAboutOfficeProducts`, `GroupWhatsNewInOfficeProducts`; `TabOfficeFeedback`: `GroupOfficeSendSmile`, `GroupOfficeSendFrown`, `GroupOfficeSendSuggestion`, `OfficeFeedback`, `OfficeFeedbackBackstage`; `PlaceTabHome`: `HomePageSlabCreateNew`, `HomePlaceRecommendedDocuments`, `GroupRecentDocuments`; otros: `AppGuardTrustPromotion`, `GroupCheckIn`, `GroupFileConvert`, `GroupPermissions`, `GroupPrepareForSharing`, `GroupShare`, `GroupOpenPlaces`, `GroupModernOpenPlaces`, `GroupShare`.
 
-| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 
-| Cuenta, privacidad, temas, actualizaciones, Insider, novedades<br>`TabHelp, TabOfficeFeedback, OfficeFeedback, OfficeFeedbackBackstage` | Administra la cuenta de Microsoft y envía comentarios a Microsoft | Sin cambios en el archivo | No aplica — pertenecen a la cuenta y al producto de Microsoft; NOM-COLAB tiene su propia cuenta (`vista-cuentas.js`) y ajustes | no aplica (no hay nada en el archivo) | no aplica | Baja | — |
+| Cuenta, privacidad, temas, actualizaciones, Insider, novedades<br>`TabHelp, TabOfficeFeedback, OfficeFeedback, OfficeFeedbackBackstage` | Administra la cuenta de Microsoft y envía comentarios a Microsoft | Sin cambios en el archivo | No aplica — pertenecen a la cuenta y al producto de Microsoft; NOM tiene su propia cuenta (`vista-cuentas.js`) y ajustes | no aplica (no hay nada en el archivo) | no aplica | Baja | — |
 | Opciones de Word (Word Options): General, Mostrar, Revisión, Guardar, Idioma, Accesibilidad, Avanzadas, Personalizar cinta, Barra de acceso rápido, Complementos, Centro de confianza<br>`ApplicationOptionsDialog` | Cambia el comportamiento de Word; **las que cambian el archivo** se listan una por una en las secciones «Opciones que cambian el archivo» | Ver esas filas | Parcial — el equivalente es `dialogoFormato` (`modo-texto.js:3088`) y `dialogoAtajos` (3142) | se ve y edita (las que cambian el documento) | se escribe | Media | Ver «Opciones que cambian el archivo» más abajo. Corpus → no deja huella propia en el archivo (se prueba en la interfaz o con el archivo exportado) |
 ## Inicio (Home)
 
-Fuente de la lista: pestaña `TabHome` de `wordcontrols.xlsx` (171 controles; los grupos de funciones de asistencia de Microsoft no se catalogan por la regla 2 de `COMUN.md`). Referencias del formato: ECMA-376-1 §17.3.2 (propiedades de carácter, `w:rPr`), §17.3.1 (propiedades de párrafo, `w:pPr`), §17.9 (numeración), §17.7 (estilos), `[MS-DOCX]` §2.6 (extensiones `w14:` de efectos de texto). Ayuda: `https://support.microsoft.com/es-es/office/` (artículos «Aplicar formato a texto»). Tamaños de letra de NOM-COLAB: `TAMANOS` (`modo-texto.js:60`); 12 fuentes con equivalentes de medidas iguales en `FUENTES` (`modo-texto.js:33`).
+Fuente de la lista: pestaña `TabHome` de `wordcontrols.xlsx` (171 controles; los grupos de funciones de asistencia de Microsoft no se catalogan por la regla 2 de `COMUN.md`). Referencias del formato: ECMA-376-1 §17.3.2 (propiedades de carácter, `w:rPr`), §17.3.1 (propiedades de párrafo, `w:pPr`), §17.9 (numeración), §17.7 (estilos), `[MS-DOCX]` §2.6 (extensiones `w14:` de efectos de texto). Ayuda: `https://support.microsoft.com/es-es/office/` (artículos «Aplicar formato a texto»). Tamaños de letra de NOM: `TAMANOS` (`modo-texto.js:60`); 12 fuentes con equivalentes de medidas iguales en `FUENTES` (`modo-texto.js:33`).
 
 ### Grupo Portapapeles (Clipboard)
 
-| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 
 | Pegar (Paste)<br>`Paste, PasteMenu` | Inserta lo copiado en el cursor | Texto y formato llegan como `w:r`/`w:p` normales; no hay parte propia | Tiene — `pegarPortapapeles` (`modo-texto.js:3360`): lee `text/html` y lo convierte con `tokens`, inserta con `insertarEn`; Ctrl+V del sistema también | se ve y edita | se escribe | Alta | Nada: ya funciona. Al pegar de Word, sólo llega lo que el HTML del portapapeles trae. Corpus → no deja huella propia en el archivo (se prueba en la interfaz o con el archivo exportado) |
@@ -107,7 +107,7 @@ Fuente de la lista: pestaña `TabHome` de `wordcontrols.xlsx` (171 controles; lo
 
 ### Grupo Fuente (Font)
 
-| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 
 | Fuente (Font) y Tamaño de fuente (Font Size)<br>`Font, FontSize` | Cambia el tipo y el tamaño de letra | `word/document.xml` → `w:rPr/w:rFonts` (`w:ascii`, `w:hAnsi`, `w:cs`, `w:eastAsia`, `w:asciiTheme`…; §17.3.2.26) y `w:sz`/`w:szCs` (en medios puntos; §17.3.2.38, §17.3.2.39) | Tiene — `CAR` (`fuente`, `tam`), `TAMANOS` (`modo-texto.js:60`), `formato` (1181); exporta `rPr` (`ooxml.js:194`); importa `attrsRun` (`ooxml.js:886`) con fuentes del tema (`asciiTheme`/`hAnsiTheme`) | se ve y edita | se escribe | Alta | La fuente escrita es una sola para ascii/hAnsi; no distingue `w:cs` (escritura compleja) ni `w:eastAsia`. Al exportar, fuentes que no estén en `FUENTES` se escriben igual. Corpus → w:rFonts: ms-ecuaciones.docx (722), lo-tdf104061_tableSectionColumns.docx (598), ms-informe-gobernanza.docx (590); w:sz: ms-informe-gobernanza.docx (4906), ms-ecuaciones.docx (1195), lo-tdf104061_tableSectionColumns.docx (648) |
@@ -132,7 +132,7 @@ Fuente de la lista: pestaña `TabHome` de `wordcontrols.xlsx` (171 controles; lo
 
 ### Grupo Párrafo (Paragraph)
 
-| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 
 | Viñetas (Bullets) y Biblioteca de viñetas, Definir nueva viñeta (Define New Bullet)<br>`BulletsGalleryWord, BulletDefineNew, ListLevelGallery` | Convierte el párrafo en elemento de lista con viñeta (símbolo, imagen o fuente propia) | `w:pPr/w:numPr` (`w:ilvl`, `w:numId`; §17.9.3, §17.9.18) → `word/numbering.xml`: `w:abstractNum/w:lvl` con `w:numFmt w:val="bullet"`, `w:lvlText` (carácter), `w:rPr/w:rFonts` (Symbol, Wingdings), `w:lvlPicBulletId` y `w:numPicBullet` (viñeta de imagen; §17.9.21) | Parcial — `alternarLista("vinetas")` (`modo-texto.js:1239`); 8 símbolos en `VINETAS` (`modo-texto.js:79`); importa `numPr` (`attrsParrafo`, `ooxml.js:1080`: toda lista no numérica es «vinetas»); exporta `w:numbering` con `w:abstractNum`/`w:num` (`ooxml.js:172-736`); sin viñeta de imagen ni fuente de símbolo propia | se ve y edita (símbolo se pierde al editar si no es uno de los 8) | se escribe | Alta | Leer `lvlText` y `rFonts` de cada nivel y guardarlos como `vineta`; escribir `w:lvlPicBulletId` sólo para conservar. Ver «Numeración y viñetas multinivel». Corpus → w:numPr: ms-informe-gobernanza.docx (333), ms-complex01.docx (30), ms-document.docx (30); w:abstractNum: ms-informe-gobernanza.docx (104), ms-marcadores.docx (44), officer-table-complex.docx (40); w:lvlText: ms-informe-gobernanza.docx (856), lo-fdo74605.docx (351), lo-tdf75573_page1frame.docx (351) |
@@ -153,7 +153,7 @@ Fuente de la lista: pestaña `TabHome` de `wordcontrols.xlsx` (171 controles; lo
 
 ### Grupo Estilos (Styles)
 
-| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 
 | Galería de estilos rápidos (Quick Styles gallery)<br>`QuickStylesGallery` | Aplica Normal, Sin espaciado, Título 1…, Título, Subtítulo, Énfasis… | `w:pPr/w:pStyle` o `w:rPr/w:rStyle` con `@w:val`=`styleId` definido en `word/styles.xml` (`w:style`, §17.7.4.17) | Parcial — `ESTILOS` (8: Normal, Título, Subtítulo, Título 1-3, Cita, Código); `formatoParrafo({estilo})`; importa el estilo por nombre (`ESTILO_POR_NOMBRE`, `attrsParrafo`); se ven sólo los que coincidan con esos 8; los demás se ven con su formato calculado (herencia `letraDe`/`parDe`) pero no como estilo | se ve y edita (por herencia) | se escribe (8 estilos) | Alta | Ver «Estilos». Ampliar la galería con los estilos del documento (`w:style` tipo paragraph con `w:qFormat`). Corpus → w:pStyle: ms-informe-gobernanza.docx (1081), officer-table-complex.docx (756), ms-complex0.docx (556); w:style: raro-combinaciones.docx (324), officer-table-complex.docx (208), lo-fdo74605.docx (108); w:qFormat: officer-table-complex.docx (64), lo-groupshape-fontname.docx (56), raro-combinaciones.docx (50) |
@@ -162,7 +162,7 @@ Fuente de la lista: pestaña `TabHome` de `wordcontrols.xlsx` (171 controles; lo
 
 ### Grupo Edición (Editing)
 
-| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 
 | Buscar (Find) y Panel de navegación (Navigation Pane find)<br>`NavigationPaneFind, FindPopup, FindDialog, InsightsInDocSearch` | Busca texto en el documento y lo resalta | No se guarda | Parcial — `buscar` (`modo-texto.js:2642`, Ctrl+H), `calcularHallazgos` (2667), `pintarHallazgos` (2684) con «Palabra completa»; el panel de navegación se reemplaza por el esquema (`alternarEsquema`, 2632); sin búsqueda de formato, comodines ni «distinguir mayúsculas» (Revisar: grep de «mayúsculas» dentro de `buscar`) | no aplica (no hay nada en el archivo) | no aplica | Alta | Añadir «Coincidir mayúsculas y minúsculas». Corpus → no deja huella propia en el archivo (se prueba en la interfaz o con el archivo exportado) |
@@ -172,7 +172,7 @@ Fuente de la lista: pestaña `TabHome` de `wordcontrols.xlsx` (171 controles; lo
 
 ### Grupos Voz, Editor, Complementos y Confidencialidad
 
-| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 
 | Dictar y Transcribir (Dictate, Transcribe)<br>`DictationMenu, Dictate, DictateInMenu, TranscribeWord` | Convierte voz en texto | No se guarda | No — sin reconocimiento de voz en `modo-texto.js` (grep «SpeechRecognition») | no aplica (no hay nada en el archivo) | no aplica | Baja | El navegador ofrece `SpeechRecognition` en algunos casos; no hace falta guardar nada en el archivo.  |
@@ -186,7 +186,7 @@ Fuentes: lista oficial de comandos (`TabInsert`) en https://github.com/OfficeDev
 
 ### Grupo Páginas (Pages)
 
-| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 
 | Portada (Cover Page), Quitar portada actual, Guardar selección en la galería de portadas<br>`CoverPageInsertGallery, CoverPageRemove, SaveSelectionToCoverPageGallery` | Inserta una portada prediseñada al inicio del documento | Bloque de creación: `w:sdt` con `w:sdtPr/w:docPartObj/w:docPartGallery w:val="Cover Pages"` (§17.5.2.12, §17.5.2.13) al principio de `word/document.xml`; los diseños en `word/glossary/document.xml` (`w:docPart`) | No — sin «portada» en `modo-texto.js` ni `ooxml.js` (grep) | se conserva sin verse (el `w:sdt` se ve como texto si es un bloque simple) | no | Media | Para el estudiante la portada es de uso semanal. Primero leer el `w:sdt` de portada como bloques normales; después ofrecer 3 plantillas propias. Corpus → w:docPartObj: ms-complex01.docx (3), ms-document.docx (3), lo-tdf107111.docx (2); w:sdt: ms-complex01.docx (33), ms-document.docx (33), lo-FDO78292.docx (22); part:word/glossary/document.xml: lo-FDO78292.docx, ms-complex2005.docx (2 de 34 archivos) |
@@ -195,18 +195,18 @@ Fuentes: lista oficial de comandos (`TabInsert`) en https://github.com/OfficeDev
 
 ### Grupo Tablas (Tables)
 
-| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 
 | Tabla: cuadrícula de inserción y «Insertar tabla…» (Table, Insert Table)<br>`TableInsertGallery, TableInsertDialogWord` | Crea una tabla de N columnas × M filas | `w:tbl` con `w:tblPr` (`w:tblStyle`, `w:tblW`, `w:tblLook`), `w:tblGrid/w:gridCol`, `w:tr/w:tc/w:p` (§17.4.38) | Tiene — `selectorTabla` (`modo-texto.js:2894`), `insertarTabla` (1614); exporta `tabla()` (`ooxml.js`) | se ve y edita | se escribe | Alta | Falta «Autoajustar a la ventana / al contenido» (`w:tblLayout`) en el diálogo. Corpus → w:tbl: lo-fdo76316.docx (5), ms-informe-gobernanza.docx (5), ms-complex2005.docx (4); w:tblGrid: lo-fdo76316.docx (5), ms-informe-gobernanza.docx (5), ms-complex2005.docx (4); w:tblLook: lo-fdo76316.docx (5), ms-informe-gobernanza.docx (5), ms-complex2005.docx (4) |
 | Dibujar tabla (Draw Table)<br>`TableDrawTable` | Dibuja la tabla con el lápiz | Igual que `w:tbl` | No — sin modo de dibujo de celdas en `modo-texto.js` (grep «dibujar») | se ve y edita | se escribe | Baja | Sólo interfaz.  |
 | Convertir texto en tabla (Convert Text to Table)<br>`ConvertTextToTable` | Convierte párrafos separados por tabulaciones/comas en tabla | Produce `w:tbl`; no se guarda el separador | No — sin conversión texto↔tabla en `modo-texto.js` (grep) | se ve y edita | se escribe | Baja | Útil al pegar datos; ya se pega TSV/CSV como tabla en `pegarPortapapeles` (3360) — Revisar.  |
-| Hoja de cálculo de Excel (Excel Spreadsheet)<br>`TableExcelSpreadsheetInsert` | Incrusta una hoja de Excel como objeto | `w:object/o:OLEObject` con `ProgID="Excel.Sheet.12"`, parte `word/embeddings/Microsoft_Excel_Worksheet*.xlsx`, imagen de respaldo `v:imagedata` (§17.3.3.19; MS-OI29500) | No — sin objetos OLE nuevos; los del archivo se conservan (`oe`/`objetoDe` en `origen.js`) | se conserva sin verse | no | Baja | En NOM-COLAB lo natural es insertar una tabla o enlazar una hoja del propio espacio.  |
+| Hoja de cálculo de Excel (Excel Spreadsheet)<br>`TableExcelSpreadsheetInsert` | Incrusta una hoja de Excel como objeto | `w:object/o:OLEObject` con `ProgID="Excel.Sheet.12"`, parte `word/embeddings/Microsoft_Excel_Worksheet*.xlsx`, imagen de respaldo `v:imagedata` (§17.3.3.19; MS-OI29500) | No — sin objetos OLE nuevos; los del archivo se conservan (`oe`/`objetoDe` en `origen.js`) | se conserva sin verse | no | Baja | En NOM lo natural es insertar una tabla o enlazar una hoja del propio espacio.  |
 | Tablas rápidas y Guardar selección en la galería (Quick Tables)<br>`QuickTablesInsertGallery, SaveSelectionToQuickTablesGallery` | Inserta una tabla prediseñada (calendario, matriz…) | Bloque de creación `w:docPartObj/w:docPartGallery w:val="Tables"` (§17.5.2.13) | No — sin galería de bloques (grep «docPart» en `codigo/js`: 0) | se conserva sin verse | no | Baja | —  |
 
 ### Grupo Ilustraciones (Illustrations)
 
-| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 
 | Imágenes: Este dispositivo, Imágenes de archivo, Imágenes en línea (Pictures)<br>`FlyoutAnchorInsertPictures, PictureInsertFromFile, InsertMobilePicture, InsertM365Picture, ClipArtInsertDialog, InsertPictureFlyoutAnchor` | Inserta una imagen desde el equipo o del banco de Microsoft | `w:drawing/wp:inline` o `wp:anchor` → `a:graphic/a:graphicData/pic:pic` (`pic:blipFill/a:blip r:embed`), parte `word/media/imageN.*` (§20.4.2.8, §20.4.2.3, §20.2.2.5) | Parcial — `insertarImagen`/`insertarImagenSrc` (`modo-texto.js:1591`), pegar imagen (`pegarPortapapeles`, 3360); exporta `wp:inline` y `wp:anchor` (`ooxml.js`); sin banco de imágenes ni desde móvil | se ve y edita | se escribe | Alta | Ver «Imágenes» (ajuste, recorte, efectos). Corpus → wp:inline: ms-complex2005.docx (18), ms-complex0.docx (13), ms-complex2010.docx (13); wp:anchor: lo-fdo74605.docx (104), ms-complex01.docx (11), ms-document.docx (11); pic:pic: ms-complex2005.docx (17), ms-complex0.docx (13), ms-complex2010.docx (13); part:word/media/imageN.png: lo-FDO78292.docx, lo-tdf104061_tableSectionColumns.docx, lo-tdf130804.docx (11 de 34 archivos) |
@@ -219,16 +219,16 @@ Fuentes: lista oficial de comandos (`TabInsert`) en https://github.com/OfficeDev
 
 ### Grupo Colaborar (Collaborate), Complementos (Add-ins) y Multimedia (Media)
 
-| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 
-| Componentes de Loop (Loop Components): lista con viñetas, lista de tareas, tabla, párrafo, preguntas y respuestas…<br>`LoopComponents, LoopBulletedList, LoopChecklist, LoopNumberedList, LoopParagraph, LoopTable, LoopTaskList, LoopQA` | Bloques de contenido compartido que se sincronizan entre archivos de Microsoft 365 | Hipervínculo o `w:sdt`/objeto con vínculo al servicio de Microsoft | No aplica — depende del servicio Loop de Microsoft 365; NOM-COLAB tiene su propio trabajo en tiempo real (`crdt.js`, `union.js`) | se conserva sin verse | no | Baja | — |
+| Componentes de Loop (Loop Components): lista con viñetas, lista de tareas, tabla, párrafo, preguntas y respuestas…<br>`LoopComponents, LoopBulletedList, LoopChecklist, LoopNumberedList, LoopParagraph, LoopTable, LoopTaskList, LoopQA` | Bloques de contenido compartido que se sincronizan entre archivos de Microsoft 365 | Hipervínculo o `w:sdt`/objeto con vínculo al servicio de Microsoft | No aplica — depende del servicio Loop de Microsoft 365; NOM tiene su propio trabajo en tiempo real (`crdt.js`, `union.js`) | se conserva sin verse | no | Baja | — |
 | Obtener complementos, Mis complementos, Complementos recomendados (Add-ins)<br>`OfficeExtensionsAppStore, OfficeExtensionsGallery2, OfficeExtensionsDialog, OfficeExtensionsManageOtherAddins, ExtensibilityExperimentation, OfficeExtensionsFeaturedApp1, OfficeExtensionsFeaturedApp2, OfficeExtensionsFeaturedApp3, OfficeExtensionsFeaturedApp4, OfficeExtensionsFeaturedApp5, OfficeExtensionsFeaturedApp6, AddInsMenuAnchor` | Instala complementos web de Office | `word/webextensions/webextension1.xml` y `taskpanes.xml` (MS-OWEXML) | No aplica — los complementos de Office funcionan con el sistema de Office; no se ejecutan en una suite propia | se conserva sin verse | no | Baja | Conservar partes `webextension*` (no aparecen en el corpus).  |
 | Video en línea (Online Video)<br>`MovieFromClipOrganizerInsert` | Inserta un video de un sitio web | `wp:inline/a:graphic/a:graphicData` con `pic:pic` y `a:blip` (imagen de portada), `a:hlinkClick` con `a:videoFile` o `wp15:webVideoPr` (`embeddedHtml`) (MS-ODRAWXML) | No — sin videos (grep «video» en `modo-texto.js`: 0) | se ve y edita (imagen de portada) | no | Baja | —  |
 
 ### Grupo Vínculos (Links) y Comentarios (Comments)
 
-| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 
 | Vínculo, Vínculos recientes, Reusar archivos (Link, Reuse Files)<br>`InsertLinkGallery, HyperlinkInsert, ReuseFilesForLink` | Crea un hipervínculo a una página web, archivo, lugar del documento o correo | `w:hyperlink` con `r:id` (relación externa `TargetMode="External"` en `document.xml.rels`) o `w:anchor` (marcador interno), `w:tooltip`, `w:history`; en campo: `HYPERLINK "url" \l "marcador" \o "texto"` (§17.16.22, §17.16.5.28) | Parcial — `enlace` (`modo-texto.js:1622`, Ctrl+K); exporta `w:hyperlink r:id` con estilo `Hyperlink` (`ooxml.js:589`); no se escribe `w:anchor` ni `w:tooltip`; importa `r:id`; `HYPERLINK` como campo no (grep) | se ve y edita (sólo URL externa) | se escribe | Alta | Añadir enlaces a marcadores (`w:anchor`) junto con Marcador y Referencia cruzada; texto de ayuda `w:tooltip`. Corpus → w:hyperlink: ms-complex2005.docx (47), ms-complex01.docx (6), ms-document.docx (6); FIELD:A: ms-complex0.docx (1), ms-complex2010.docx (1) |
@@ -238,7 +238,7 @@ Fuentes: lista oficial de comandos (`TabInsert`) en https://github.com/OfficeDev
 
 ### Grupo Encabezado y pie de página (Header & Footer)
 
-| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 
 | Encabezado, Pie de página (Header, Footer): galería, Editar, Quitar, Guardar selección<br>`HeaderInsertGallery, HeaderFooterEditHeader, HeaderFooterRemoveHeaderWord, SaveSelectionToHeaderGallery, FooterInsertGallery, HeaderFooterEditFooter, HeaderFooterRemoveFooterWord, SaveSelectionToFooterGallery, HeaderAndFooterMenuAnchor` | Texto repetido arriba o abajo de cada página | `word/headerN.xml`, `word/footerN.xml` (`w:hdr`, `w:ftr`) enlazados desde `w:sectPr/w:headerReference` / `w:footerReference` con `w:type` default, first, even (§17.10.5, §17.10.2, §17.10.1) | Parcial — `dialogoEncabezado` (`modo-texto.js:3109`): texto en 3 alineaciones, logo, marca de agua; exporta `w:hdr`/`w:ftr` (`ooxml.js:599-650`); importa encabezados simples (`medicion.txt`: 38 % encabezados, 50 % pies); la galería de bloques no | se ve y edita (texto y número de página; tablas e imágenes no) | se escribe | Alta | Ver «Encabezado y pie». Un encabezado con tabla se regenera como texto plano. Corpus → w:hdr: ms-informe-gobernanza.docx (19), ms-complex01.docx (9), lo-fdo74605.docx (3); w:ftr: ms-informe-gobernanza.docx (19), ms-complex01.docx (9), lo-fdo74605.docx (4); w:headerReference: ms-informe-gobernanza.docx (19), ms-complex01.docx (9), lo-fdo74605.docx (3) |
@@ -246,7 +246,7 @@ Fuentes: lista oficial de comandos (`TabInsert`) en https://github.com/OfficeDev
 
 ### Grupo Texto (Text)
 
-| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 
 | Cuadro de texto, galería y Dibujar cuadro de texto vertical, Guardar selección (Text Box)<br>`TextBoxInsertGallery, TextBoxInsert, TextBoxInsertVerticalWord, SaveSelectionToTextBoxGallery` | Caja de texto flotante con su propio formato | `wp:anchor/…/wps:wsp` con `wps:txbx/w:txbxContent` (varios `w:p`) y `wps:bodyPr` (`vert`, `lIns`, `anchor`) dentro de `mc:AlternateContent`; respaldo `v:textbox` (§20.4.2.3; MS-ODRAWXML §2.5) | No — sin cuadros de texto (grep «txbx» en `modo-texto.js`: sólo lectura del texto, línea 616); en la presentación existen (`diapositivas.js`) | se conserva sin verse (texto leído) | no (el original se conserva si no se toca) | Alta | Ver «Formas y cuadros de texto». Corpus → wps:txbx: lo-fdo74605.docx (46), lo-groupshape-fontname.docx (21), ms-complex01.docx (5); w:txbxContent: lo-fdo74605.docx (92), lo-groupshape-fontname.docx (42), ms-complex01.docx (10); mc:AlternateContent: lo-fdo74605.docx (104), ms-complex01.docx (23), ms-document.docx (23) |
@@ -260,7 +260,7 @@ Fuentes: lista oficial de comandos (`TabInsert`) en https://github.com/OfficeDev
 
 ### Grupo Símbolos (Symbols)
 
-| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 
 | Ecuación, Galería de ecuaciones, Ecuación de lápiz, Guardar selección (Equation)<br>`InsertBuildingBlocksEquationsGallery, EquationInsertNew, InkEquation, SaveSelectionToEquationGallery` | Inserta una ecuación matemática editable | `m:oMathPara` / `m:oMath` (`m:r/m:t`, `m:f`, `m:rad`, `m:sSup`, `m:nary`, `m:d`, …) (§22.1) | Parcial — `dialogoEcuacion` (`modo-texto.js:674`) con `NOM.ecuaciones.omml(tex)` (`ooxml.js:581`); se importa con `ommlATex` (764); sin galería ni escritura a mano; cubre sólo lo que se pueda escribir en TeX | se ve y edita (si la estructura está en `ommlATex`) | se escribe | Alta | Ver «Ecuaciones (OMML)». Corpus → m:oMath: ms-complex01.docx (1), ms-document.docx (1); m:oMathPara: ms-complex01.docx (1), ms-document.docx (1); m:f: ms-complex01.docx (1), ms-document.docx (1) |
@@ -269,7 +269,7 @@ Fuentes: lista oficial de comandos (`TabInsert`) en https://github.com/OfficeDev
 
 ### Grupo Código de barras y etiquetas
 
-| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM-COLAB | Al importar | Al exportar | Prioridad | Notas para implementar |
+| Comando o función | Qué hace | Cómo se guarda (parte, elemento/atributo, sección) | NOM | Al importar | Al exportar | Prioridad | Notas para implementar |
 |---|---|---|---|---|---|---|---|
 
 | Código de barras / Etiqueta (Barcode, Label)<br>`BarcodeInsert, LabelInsert` | Inserta un código de barras o genera etiquetas de dirección | Campo `DISPLAYBARCODE` / `BARCODE`, `w:tbl` de etiquetas (§17.16.5) | No — sin coincidencias en `modo-texto.js` ni `ooxml.js` (grep del nombre del comando) | se ve y edita | no | Baja | Sólo para Japón y correspondencia; sin trazas en el corpus.  |

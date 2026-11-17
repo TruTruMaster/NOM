@@ -1,4 +1,4 @@
-/* NOM-COLAB · plantillas (Plantilla del diagrama de clases, CU-18 flujo 2a).
+/* NOM · plantillas (Plantilla del diagrama de clases, CU-18 flujo 2a).
    Cada plantilla produce las operaciones iniciales del documento. */
 (function () {
   "use strict";

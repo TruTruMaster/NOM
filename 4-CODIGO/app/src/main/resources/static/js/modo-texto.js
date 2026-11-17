@@ -1,4 +1,4 @@
-/* NOM-COLAB · Modo Texto: procesador de textos tipo Word, letra por letra en tiempo real.
+/* NOM · Modo Texto: procesador de textos tipo Word, letra por letra en tiempo real.
 
    Todo el documento es UNA hoja editable (no un cuadro por párrafo). Su contenido es la
    secuencia CRDT del bloque "cuerpo" (secuencia.js): cada letra, salto de párrafo u objeto

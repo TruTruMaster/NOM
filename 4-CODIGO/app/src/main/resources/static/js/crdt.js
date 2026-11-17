@@ -1,4 +1,4 @@
-/* NOM-COLAB · motor CRDT del cliente (gemelo de core/crdt/MotorCRDT.java).
+/* NOM · motor CRDT del cliente (gemelo de core/crdt/MotorCRDT.java).
    Documento = mapa LWW de bloques; cada campo gana por (reloj de Lamport, id de nodo).
    El texto de los documentos de texto es además una secuencia letra por letra (secuencia.js):
    sus operaciones viajan en op.s y se guardan en estado.seq[bloque].

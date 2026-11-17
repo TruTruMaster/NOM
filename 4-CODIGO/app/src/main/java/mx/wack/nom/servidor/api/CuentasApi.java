@@ -169,7 +169,7 @@ public class CuentasApi {
     /** Publico: presentar un pase de una nube de confianza (si este servidor acepta pases). */
     @PostMapping("/pase/entrar")
     public Map<String, Object> entrarConPase(@RequestBody Pase p, HttpServletRequest req) {
-        if (!pases.aceptaPases()) throw ErrorNom.prohibido("Este NOM-COLAB no acepta pases de otra nube");
+        if (!pases.aceptaPases()) throw ErrorNom.prohibido("Este NOM no acepta pases de otra nube");
         cuentas.limitarPases(Origen.de(req));
         Sesion s = cuentas.desdePase(pases.verificar(p == null ? null : p.pase()));
         return yo(cuentas.porId(s.usuarioId).orElseThrow(), s.token, s.expira);

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Compara cómo se ve un archivo en NOM-COLAB contra cómo lo pinta Microsoft Office de verdad.
+"""Compara cómo se ve un archivo en NOM contra cómo lo pinta Microsoft Office de verdad.
 
 La referencia sale de Office en Windows (`office_real.py` + `windows/verdad.py`): por cada renglón de
-cada página, su texto exacto y su posición. Aquí se importa el mismo archivo en NOM-COLAB (Chromium
+cada página, su texto exacto y su posición. Aquí se importa el mismo archivo en NOM (Chromium
 con Playwright), se mide cada renglón pintado y se compara:
 
   - renglones idénticos (mismo texto de principio a fin = Word cortó en el mismo lugar)
   - renglones en la misma página y a qué distancia vertical quedaron
   - número de páginas
-  - imágenes lado a lado por página: Office | NOM-COLAB | diferencias (en rojo lo que solo está en
-    Office, en azul lo que solo está en NOM-COLAB)
+  - imágenes lado a lado por página: Office | NOM | diferencias (en rojo lo que solo está en
+    Office, en azul lo que solo está en NOM)
 
   ~/.cache/nom-pruebas/venv/bin/python pruebas/office/comparar_real.py ARCHIVO.docx … [--movil] [--salida DIR]
 
@@ -185,13 +185,13 @@ def pdf_a_png(pdf, carpeta, dpi=96):
 
 
 def lado_a_lado(a, b, ruta, titulo=""):
-    """Office | NOM-COLAB | diferencias."""
+    """Office | NOM | diferencias."""
     A = sobre_blanco(a) if a else None
     B = sobre_blanco(b) if b else None
     w = max(x.width for x in (A, B) if x); h = max(x.height for x in (A, B) if x)
     lienzo = Image.new("RGB", (w * 3 + 40, h + 30), "white")
     d = ImageDraw.Draw(lienzo)
-    d.text((10, 8), "Office  " + titulo, fill="black"); d.text((w + 30, 8), "NOM-COLAB", fill="black"); d.text((2 * w + 40, 8), "diferencias", fill="black")
+    d.text((10, 8), "Office  " + titulo, fill="black"); d.text((w + 30, 8), "NOM", fill="black"); d.text((2 * w + 40, 8), "diferencias", fill="black")
     if A: lienzo.paste(A, (0, 30))
     if B: lienzo.paste(B, (w + 20, 30))
     if A and B:
@@ -282,7 +282,7 @@ EN_ES.update({"am": "a. m.", "pm": "p. m.", "true": "verdadero", "false": "falso
 
 
 def igual_excel(a, b):
-    """Mismo texto de celda, sin contar el idioma (Excel en inglés frente a NOM-COLAB en español) ni los
+    """Mismo texto de celda, sin contar el idioma (Excel en inglés frente a NOM en español) ni los
     espacios que Excel agrega para llenar el ancho (formato contable)."""
     norm = lambda t: re.sub(r"\s+", " ", (t or "").replace("\u00a0", " ")).strip().lower()
     a, b = norm(a), norm(b)
@@ -292,7 +292,7 @@ def igual_excel(a, b):
         return re.sub(r"[a-z]+", lambda m: EN_ES.get(m.group(0), m.group(0)), t)
     quita = lambda t: t.replace("¡", "").replace("¿", "").replace(" ", "")
     # la «fecha corta del sistema» (formato 14 de Excel) sale con el orden de la región de Windows: en esa
-    # computadora (en-US) mes/día/año; NOM-COLAB y un Excel de México la muestran día/mes/año
+    # computadora (en-US) mes/día/año; NOM y un Excel de México la muestran día/mes/año
     m1, m2 = re.fullmatch(r"(\d{1,2})/(\d{1,2})/(\d{2,4})(.*)", a), re.fullmatch(r"(\d{1,2})/(\d{1,2})/(\d{2,4})(.*)", b)
     if m1 and m2 and int(m1[1]) == int(m2[2]) and int(m1[2]) == int(m2[1]) and m1[3] == m2[3] and m1[4].strip() == m2[4].strip(): return True
     return quita(es(a)) == quita(es(b)) or quita(es(a)) == quita(b)
@@ -404,7 +404,7 @@ def medir_xlsx(nav, esp, archivo, carpeta, verdad, nombre):
             off.crop((max(0, x0), max(0, y0), max(0, x0) + 1250, max(0, y0) + 800)).save(carpeta / f"office-h{hi + 1}.png")
             lado_a_lado(carpeta / f"office-h{hi + 1}.png", ruta, carpeta / f"lado-h{hi + 1}.png", h["nombre"])
             hoja["parecido"] = parecido_img(carpeta / f"office-h{hi + 1}.png", ruta, (625, 400))
-        # cada gráfica contra la imagen que Excel sacó de ella (Chart.Export): se busca la de NOM-COLAB por su lugar
+        # cada gráfica contra la imagen que Excel sacó de ella (Chart.Export): se busca la de NOM por su lugar
         if h.get("graficas"):
             nom_g = p.evaluate("""() => {
               const a1 = document.querySelector('td[data-c="0"][data-f="0"]'); if (!a1) return [];

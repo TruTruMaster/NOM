@@ -1,4 +1,4 @@
-/* NOM-COLAB · Gráficas de Office (DrawingML «c:chartSpace») dibujadas como Office. El mismo dibujante para
+/* NOM · Gráficas de Office (DrawingML «c:chartSpace») dibujadas como Office. El mismo dibujante para
    Excel, Word y PowerPoint: se lee el XML de la gráfica con su estilo (colores, letras, ejes, leyenda, rótulos)
    y se pinta en SVG con las reglas de Office: escala automática de los ejes, ancho y separación de las barras,
    leyenda abajo, títulos, cuadrícula, rebanadas desde las 12 en punto…

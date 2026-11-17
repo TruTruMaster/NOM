@@ -19,7 +19,7 @@ public class AvisoArranque {
 
     @EventListener(ApplicationReadyEvent.class)
     public void listo() {
-        StringBuilder sb = new StringBuilder("\n\n  NOM-COLAB listo.\n    En este equipo:   http://localhost:" + nodo.puerto() + "\n");
+        StringBuilder sb = new StringBuilder("\n\n  NOM listo.\n    En este equipo:   http://localhost:" + nodo.puerto() + "\n");
         for (String ip : nodo.direcciones()) sb.append("    Desde la red:     http://").append(ip).append(':').append(nodo.puerto()).append('\n');
         if (nodo.direcciones().isEmpty()) sb.append("    (Sin red local: conecta el equipo a una red para colaborar)\n");
         log.info(sb.toString());

@@ -1,6 +1,6 @@
 ---
 titulo: Términos y condiciones de uso
-descripcion: Las reglas para usar NOM-COLAB.
+descripcion: Las reglas para usar NOM.
 orden: 30
 aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-13
@@ -8,7 +8,7 @@ version: 2026-11-13
 ---
 !> **Proyecto escolar.** Este texto lo redactó el equipo con base en la Ley Federal de Protección de Datos Personales en Posesión de los Particulares publicada en el Diario Oficial de la Federación el 20 de marzo de 2025 (en vigor desde el 21 de marzo de 2025). No es asesoría legal: está pendiente la revisión del profesor y del texto vigente en el DOF.
 
-## 1. Qué es NOM-COLAB
+## 1. Qué es NOM
 
 Un proyecto escolar del equipo 6 «WACK» (5IM7, CECyT 9, IPN), **gratuito**, que se ofrece **tal
 como está**: no garantizamos que el servicio esté siempre prendido, que no tenga errores ni que no
@@ -27,7 +27,7 @@ como portafolio del equipo, y cualquiera puede usarlo con su propio servidor (ve
 
 ## 4. Espacios y edades
 
-Los espacios son **cerrados**: solo se entra por invitación de su propietario. NOM-COLAB está pensado
+Los espacios son **cerrados**: solo se entra por invitación de su propietario. NOM está pensado
 para **escuelas y empresas**, y editar documentos es de uso libre para cualquiera. **No pedimos la
 edad**: cada quien es responsable de unirse o no a un grupo de trabajo y de lo que hace ahí; si eres
 menor de edad, lo son tus padres o tutores.
@@ -46,17 +46,17 @@ se abre una rama. Un teléfono o computadora que comparte lo opera quien lo enci
 
 ## 7. Uso aceptable
 
-Al usar NOM-COLAB aceptas la [Política de uso aceptable](legal:uso-aceptable). Podemos suspender
+Al usar NOM aceptas la [Política de uso aceptable](legal:uso-aceptable). Podemos suspender
 cuentas o quitar contenido que la incumpla.
 
 ## 8. Software libre
 
-El código de NOM-COLAB es software libre bajo la **GPL-3.0** ([Licencias](legal:licencias)).
+El código de NOM es software libre bajo la **GPL-3.0** ([Licencias](legal:licencias)).
 
 ## 9. Marcas
 
 Word, Excel y PowerPoint son marcas de Microsoft Corporation; Canva es marca de Canva Pty Ltd.
-NOM-COLAB no está afiliado a ellas.
+NOM no está afiliado a ellas.
 
 ## 10. Cambios y ley aplicable
 

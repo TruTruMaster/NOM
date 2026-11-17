@@ -1,7 +1,7 @@
 # Tarea: WORD → escribe `salida/WORD.md`
 
 Lee primero `COMUN.md` (reglas y formato de fila). Catálogo **completo** de Word para Microsoft 365
-(escritorio, canal actual) comparado con el editor de texto de NOM-COLAB (`modo-texto.js`, y la
+(escritorio, canal actual) comparado con el editor de texto de NOM (`modo-texto.js`, y la
 parte de Word de `ooxml.js`).
 
 1. **Cinta, pestaña por pestaña, grupo por grupo, comando por comando.** Usa la lista oficial de

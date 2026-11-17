@@ -1,4 +1,4 @@
--- NOM-COLAB · Seguridad con roles en Azure SQL Database (como la práctica 7: usuarios, GRANT y roles).
+-- NOM · Seguridad con roles en Azure SQL Database (como la práctica 7: usuarios, GRANT y roles).
 --
 -- El administrador del servidor (nomadmin) solo se usa para crear y cambiar tablas. La página se
 -- conecta con un usuario que recibe sus privilegios por un ROL, no uno por uno:

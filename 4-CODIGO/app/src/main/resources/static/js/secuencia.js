@@ -1,4 +1,4 @@
-/* NOM-COLAB · Texto colaborativo letra por letra (CRDT de secuencia tipo RGA).
+/* NOM · Texto colaborativo letra por letra (CRDT de secuencia tipo RGA).
    Cada carácter tiene un id único (t@n: reloj de Lamport y nodo) y recuerda a su "vecino
    izquierdo" al nacer. Con eso todos los equipos ordenan igual, sin importar en qué orden
    lleguen las operaciones, y dos personas pueden escribir en la misma palabra a la vez.

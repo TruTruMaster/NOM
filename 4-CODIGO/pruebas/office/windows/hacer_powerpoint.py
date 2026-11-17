@@ -416,7 +416,7 @@ def p07(p):
     with b.paso("número de diapositiva, pie y fecha"):
         for sl in P.pr.Slides:
             hf = sl.HeadersFooters
-            try: hf.SlideNumber.Visible = True; hf.Footer.Visible = True; hf.Footer.Text = "NOM-COLAB · prueba de temas"; hf.DateAndTime.Visible = True; hf.DateAndTime.UseFormat = True
+            try: hf.SlideNumber.Visible = True; hf.Footer.Visible = True; hf.Footer.Text = "NOM · prueba de temas"; hf.DateAndTime.Visible = True; hf.DateAndTime.UseFormat = True
             except Exception: pass
     return P.guardar()
 
@@ -483,7 +483,7 @@ def p09(p):
         for t in ["Ion.thmx", "Retrospect.thmx", "Facet.thmx"]:
             if os.path.exists(os.path.join(TEMAS_DIR, t)): P.pr.ApplyTheme(os.path.join(TEMAS_DIR, t)); break
     with b.paso("portada"):
-        sl = P.diapo("Title Slide", "Proyecto NOM-COLAB"); sl.Shapes(2).TextFrame.TextRange.Text = "Colabora donde no hay Internet\rEquipo 5IM7 · Noviembre de 2026"
+        sl = P.diapo("Title Slide", "Proyecto NOM"); sl.Shapes(2).TextFrame.TextRange.Text = "Colabora donde no hay Internet\rEquipo 5IM7 · Noviembre de 2026"
     with b.paso("agenda"):
         sl = P.diapo("Title and Content", "Agenda"); sl.Shapes(2).TextFrame.TextRange.Text = "Problema\rPropuesta\rArquitectura\rResultados\rSiguientes pasos"
     with b.paso("problema con imagen"):

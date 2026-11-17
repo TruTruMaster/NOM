@@ -1,4 +1,4 @@
-/* NOM-COLAB · diapositivas (8.3): tamaño, temas, fondos, diseños de diapositiva, texto con formato
+/* NOM · diapositivas (8.3): tamaño, temas, fondos, diseños de diapositiva, texto con formato
    dentro de los cuadros, editor de datos para tablas y gráficas, e imagen (PNG) de una diapositiva.
    Lo usan el lienzo (lienzo.js), el proyector (proyector.js) y la exportación (ooxml.js).
 
@@ -310,7 +310,7 @@
           series: Array.from({ length: cols - 1 }, (_, c) => ({ nombre: val(c + 1, 0), vals: Array.from({ length: filas - 1 }, (_, f) => val(c + 1, f + 1)) })) };
         const fam = (n) => (NOM.textoRico ? NOM.textoRico.cssFuente(n) : n);
         return NOM.graficaOffice.svg(b.office, Math.max(20, +b.w || 420), Math.max(20, +b.h || 260), { pt: +b.ptOffice || 1, datos, familia: fam, sinBorde: true, formato: NOM.formulas.formatoXL ? (v, f) => NOM.formulas.formatoXL(v, f).t : null });
-      } catch (e) { /* si algo falla, la gráfica de NOM-COLAB */ }
+      } catch (e) { /* si algo falla, la gráfica de NOM */ }
     }
     return NOM.graficas.svg(r ? NOM.graficas.datos(ev, r) : null, b.clase || "barras", { titulo: b.titulo, ejeX: b.ejeX, ejeY: b.ejeY, colores: b.colores, ancho: Math.max(200, Math.round(b.w || 420)), alto: Math.max(140, Math.round(b.h || 240)), autonomo });
   }
@@ -342,7 +342,7 @@
     return h + "</table></div>";
   }
   function tablaHtml(b) {
-    if (b.office && Array.isArray(b.office.anchos) && Array.isArray(b.office.altos) && b.office.celdas) { try { return tablaOfficeHtml(b); } catch (e) { /* la tabla de NOM-COLAB */ } }
+    if (b.office && Array.isArray(b.office.anchos) && Array.isArray(b.office.altos) && b.office.celdas) { try { return tablaOfficeHtml(b); } catch (e) { /* la tabla de NOM */ } }
     const filas = +b.filas || 0, cols = +b.cols || 0;
     let mf = filas - 1, mc = cols - 1;
     if (!filas || !cols) { const r = rangoUsado(b); if (!r) return `<div class="libre-tabla"><table><tr><td>Tabla vacía (doble clic para escribir)</td></tr></table></div>`; mf = r.f2; mc = r.c2; }

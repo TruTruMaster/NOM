@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NOM-COLAB · Mapa de navegación (árbol del sitio con el flujo ideal del usuario).
+"""NOM · Mapa de navegación (árbol del sitio con el flujo ideal del usuario).
 
 Cada pantalla tiene una posición fija en una cuadrícula y las uniones son ortogonales
 (padre → barra horizontal → hijos), así ninguna línea cruza una caja.
@@ -217,7 +217,7 @@ def generar():
 <defs><marker id="flecha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 <path d="M0,0 L10,5 L0,10 z" fill="#3A3752"/></marker></defs>
 <rect width="100%" height="100%" fill="#FFFFFF"/>
-<text x="{ANCHO / 2}" y="60" text-anchor="middle" font-family="Nunito, sans-serif" font-size="34" font-weight="900" fill="#1E1B2E">NOM-COLAB · Mapa de navegación</text>
+<text x="{ANCHO / 2}" y="60" text-anchor="middle" font-family="Nunito, sans-serif" font-size="34" font-weight="900" fill="#1E1B2E">NOM · Mapa de navegación</text>
 <text x="{ANCHO / 2}" y="92" text-anchor="middle" font-family="Nunito, sans-serif" font-size="18" font-weight="600" fill="#55526A">El camino ideal del usuario, de la bienvenida al documento</text>
 {chr(10).join(partes)}
 {cajas}

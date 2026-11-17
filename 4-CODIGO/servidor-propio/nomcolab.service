@@ -1,8 +1,8 @@
-# NOM-COLAB en esta computadora, siempre prendido (https://nomcolab.dpdns.org).
+# NOM en esta computadora, siempre prendido (https://nomcolab.dpdns.org).
 # Arranca solo con la computadora aunque nadie inicie sesión (linger) y se levanta si se cae.
 # %h = la carpeta de inicio del usuario.
 [Unit]
-Description=NOM-COLAB (servidor propio: nomcolab.dpdns.org por Cloudflare Tunnel y Tailscale Funnel)
+Description=NOM (servidor propio: nomcolab.dpdns.org por Cloudflare Tunnel y Tailscale Funnel)
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=0

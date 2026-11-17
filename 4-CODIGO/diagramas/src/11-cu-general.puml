@@ -1,5 +1,5 @@
 @startuml 11-cu-general
-title NOM-COLAB - Casos de uso (vista general)
+title NOM - Casos de uso (vista general)
 skinparam shadowing false
 left to right direction
 
@@ -11,7 +11,7 @@ actor "Dispositivo\nAndroid" as A <<sistema>>
 U -up-|> V
 P -up-|> U
 
-rectangle "NOM-COLAB" {
+rectangle "NOM" {
   rectangle "Gestión de cuentas" {
     usecase "Crear usuario\nCU-01" as G1
     usecase "Iniciar / cerrar sesión\nCU-02, CU-03" as G2

@@ -1,5 +1,5 @@
 #!/bin/sh
-# nomcolab-pi: NOM-COLAB en la Raspberry Pi.
+# nomcolab-pi: NOM en la Raspberry Pi.
 #
 #   nomcolab-pi estado        servicios, si contesta, túnel, datos y último respaldo
 #   nomcolab-pi reiniciar     reinicia el servidor y el túnel

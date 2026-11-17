@@ -1,5 +1,5 @@
 [Unit]
-Description=Revisa NOM-COLAB cada 2 minutos
+Description=Revisa NOM cada 2 minutos
 
 [Timer]
 OnBootSec=3min

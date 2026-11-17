@@ -1,6 +1,6 @@
-# NOM-COLAB en tu propia computadora (servidor propio en internet)
+# NOM en tu propia computadora (servidor propio en internet)
 
-Además de Azure (que se queda para la entrega escolar), NOM-COLAB puede correr en una
+Además de Azure (que se queda para la entrega escolar), NOM puede correr en una
 computadora de la casa y estar en internet **gratis**, sin abrir puertos del módem y con HTTPS.
 
 > **Estado actual (13 de noviembre de 2026):** el servidor propio corre en la **Raspberry Pi 5**
@@ -84,7 +84,7 @@ Tailscale, así que:
   CGNAT (común en Telmex, Izzi y Totalplay);
 - nadie ve la IP de la casa;
 - el certificado HTTPS lo pone Tailscale;
-- el tiempo real de NOM-COLAB funciona: el servidor manda un "latido" cada 20 s.
+- el tiempo real de NOM funciona: el servidor manda un "latido" cada 20 s.
 
 Es gratis porque viene incluido en el plan Personal de Tailscale (Tailscale cobra a empresas).
 Está pensado para proyectos personales; el tráfico pasa por sus servidores y tiene límites de
@@ -99,7 +99,7 @@ Todo se hace con el script `nomcolab` (`4-CODIGO/azure/nomcolab`, enlazado en `~
 
 ```
 $ nomcolab
-NOM-COLAB
+NOM
 
 ¿Dónde?
   1) Azure  (https://nomcolab-wack.azurewebsites.net)
@@ -181,7 +181,7 @@ se reparten las visitas y cada uno tiene sus propios datos.
 
 ## Almacenamiento: qué se guarda y cuánto
 
-- En el servidor solo se guardan **documentos de NOM-COLAB** (textos, hojas, presentaciones y
+- En el servidor solo se guardan **documentos de NOM** (textos, hojas, presentaciones y
   diagramas). No hay forma de subir otros archivos: lo que se importa de Word, Excel o
   PowerPoint se convierte al formato propio (el original va dentro del documento, recomprimido).
 - En disco van **comprimidos y cifrados** (desde la 0.13.0, ver «Cifrado en reposo» abajo): el
@@ -256,7 +256,7 @@ respaldos también van cifrados**.
 
 ## En la Raspberry Pi (así está montado)
 
-La Pi (`pi5` en Tailscale, Raspberry Pi 5, Alpine Linux con s6-rc) corre NOM-COLAB desde el 10 de
+La Pi (`pi5` en Tailscale, Raspberry Pi 5, Alpine Linux con s6-rc) corre NOM desde el 10 de
 noviembre de 2026. Se instaló con `servidor-propio/pi/instalar-pi.sh` (se puede volver a correr:
 no repite lo que ya está hecho):
 

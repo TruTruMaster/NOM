@@ -1,4 +1,4 @@
-/* NOM-COLAB · arranque y navegación (diagrama 07: Bienvenida → Cuentas → Inicio → Espacios → Editor). */
+/* NOM · arranque y navegación (diagrama 07: Bienvenida → Cuentas → Inicio → Espacios → Editor). */
 (function () {
   "use strict";
   const NOM = window.NOM;
@@ -9,7 +9,7 @@
   const app = (NOM.app = {
     espacios: api.token() ? NOM.leer(api.clave("cache.espacios"), []) : [],
     fijarEspacios(l) { app.espacios = l || []; pintarRielEspacios(); },
-    fijarTitulo(t) { const el = $("[data-titulo-movil]"); if (el) el.textContent = t; document.title = t + " · NOM-COLAB"; },
+    fijarTitulo(t) { const el = $("[data-titulo-movil]"); if (el) el.textContent = t; document.title = t + " · NOM"; },
     fijarFab(fn) { fab = fn; const b = $("[data-fab]"); if (b) b.hidden = !fn; },
     alIniciarSesion() {
       NOM.local.salir(); api.migrarClaves(); app.espacios = NOM.leer(api.clave("cache.espacios"), []);
@@ -48,7 +48,7 @@
     raiz.innerHTML = "";
     const c = html(`<div class="app con-riel">
       <aside class="riel" aria-label="Navegación">
-        <a class="marca" href="#/" style="text-decoration:none;color:inherit"><svg class="logo"><use href="#logo"/></svg>NOM-COLAB</a>
+        <a class="marca" href="#/" style="text-decoration:none;color:inherit"><svg class="logo"><use href="#logo"/></svg>NOM</a>
         <button class="riel-buscar" type="button" data-a="paleta" aria-label="Buscar o ir a (Ctrl+K)">${ico("search", "ico-s")}<span class="crece">Buscar o ir a…</span><kbd>Ctrl K</kbd></button>
         <a class="riel-item" href="#/" ${actual === "inicio" ? 'aria-current="page"' : ""}>${ico("house")} Inicio</a>
         ${sinCuenta ? `
@@ -74,7 +74,7 @@
       <div>
         <header class="barra-movil">
           ${actual === "espacio" ? `<a class="icono-btn" href="#/" aria-label="Volver">${ico("chevron-left")}</a>` : `<svg class="logo" style="width:30px;height:30px"><use href="#logo"/></svg>`}
-          <span class="titulo recorta" data-titulo-movil>${esc(tituloMovil || "NOM-COLAB")}</span>
+          <span class="titulo recorta" data-titulo-movil>${esc(tituloMovil || "NOM")}</span>
           <button class="icono-btn" data-a="paleta" aria-label="Buscar o ir a">${ico("search")}</button>
           <span class="chip ${api.enLinea ? "ok" : "error"}" data-red-chip style="${api.enLinea ? "display:none" : ""}">${ico("wifi-off", "ico-s")} Sin red</span>
           <button class="icono-btn" data-a="cuenta" aria-label="Cuenta">${avatar(u)}</button>
@@ -187,7 +187,7 @@
     NOM.ocultarMicro();
     if (NOM.rueda) NOM.rueda.cerrar();
     if (desmontar) { try { desmontar(); } catch (e) { console.error(e); } desmontar = null; }
-    document.title = "NOM-COLAB";
+    document.title = "NOM";
     const h = location.hash || "#/";
     let m;
     // Unirse con un código o QR (2.1) y la pantalla del proyector (5.5): con o sin cuenta.
@@ -202,13 +202,13 @@
     }
     if (!api.token() && !NOM.local.activo()) {
       // La entrada es la portada del sitio: el mismo título que index.html (es el que muestran los buscadores).
-      document.title = "NOM-COLAB: documentos, hojas y presentaciones en equipo";
+      document.title = "NOM: documentos, hojas y presentaciones en equipo";
       NOM.vistaCuentas.pintar(raiz, cuentasModo ? { modo: cuentasModo } : undefined); cuentasModo = null; return;
     }
     if (h.startsWith("#/dispositivo")) {
       const v = cascaron("dispositivo", NOM.etiquetaEquipo());
       app.fijarFab(null);
-      document.title = NOM.etiquetaEquipo() + " · NOM-COLAB";
+      document.title = NOM.etiquetaEquipo() + " · NOM";
       await NOM.vistaDispositivo.pintar(v);
       return;
     }
@@ -261,7 +261,7 @@
     if (visto.clave === clave && visto.dia === hoy) return;
     NOM.guardar("nom.versionAvisada", { clave, dia: hoy });
     if (suya < mia) {
-      NOM.aviso(`Este servidor tiene una versión anterior de NOM-COLAB${info.version && suya ? " (" + info.version + ")" : ""} que esta app (${NOM.VERSION}). Puedes trabajar, pero lo que importes de Word, Excel o PowerPoint puede verse distinto en la página hasta que actualicen el servidor.`, { tipo: "aviso", ms: 12000 });
+      NOM.aviso(`Este servidor tiene una versión anterior de NOM${info.version && suya ? " (" + info.version + ")" : ""} que esta app (${NOM.VERSION}). Puedes trabajar, pero lo que importes de Word, Excel o PowerPoint puede verse distinto en la página hasta que actualicen el servidor.`, { tipo: "aviso", ms: 12000 });
     } else {
       NOM.aviso(`Hay una versión más nueva de la app (${info.version || "nueva"}; tienes la ${NOM.VERSION}). Actualízala para ver los documentos igual que en la página.`,
         { tipo: "aviso", ms: 15000, accion: { texto: "Descargar", fn: () => { location.href = "https://github.com/TruTruMaster/NOM-COLAB/releases/latest/download/NOM-COLAB.apk"; } } });

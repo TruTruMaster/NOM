@@ -37,7 +37,7 @@ import mx.wack.nom.core.servicio.ServicioSincronia;
 import mx.wack.nom.core.servicio.ServicioPases;
 
 /**
- * El teléfono como servidor de NOM-COLAB. Corre en primer plano (con su notificación) para que
+ * El teléfono como servidor de NOM. Corre en primer plano (con su notificación) para que
  * Android no lo cierre, y mantiene el Wi-Fi y el procesador despiertos mientras sirve. Arma los
  * mismos servicios que el servidor de la computadora sobre archivos de la app, abre el puerto
  * HTTP (8080 o el siguiente libre) y se anuncia en la red como cualquier otro servidor.
@@ -229,7 +229,7 @@ public class ServicioAnfitrion extends Service {
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CANAL) == null) {
             NotificationChannel c = new NotificationChannel(CANAL, "Servidor en este teléfono", NotificationManager.IMPORTANCE_LOW);
-            c.setDescription("Avisa mientras el teléfono comparte los espacios de NOM-COLAB en la red.");
+            c.setDescription("Avisa mientras el teléfono comparte los espacios de NOM en la red.");
             nm.createNotificationChannel(c);
         }
         if (texto == null) {
@@ -242,7 +242,7 @@ public class ServicioAnfitrion extends Service {
         PendingIntent detener = PendingIntent.getService(this, 1, new Intent(this, ServicioAnfitrion.class).setAction(DETENER), fl);
         Notification.Builder b = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(this, CANAL) : new Notification.Builder(this);
         Notification n = b.setSmallIcon(R.drawable.ic_notificacion)
-                .setContentTitle("Este teléfono es el servidor de NOM-COLAB")
+                .setContentTitle("Este teléfono es el servidor de NOM")
                 .setContentText(texto)
                 .setStyle(new Notification.BigTextStyle().bigText(texto))
                 .setOngoing(true)

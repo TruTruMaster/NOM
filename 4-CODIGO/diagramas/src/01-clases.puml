@@ -1,5 +1,5 @@
 @startuml 01-clases
-title NOM-COLAB - Diagrama de clases (nucleo)
+title NOM - Diagrama de clases (nucleo)
 skinparam shadowing false
 skinparam classAttributeIconSize 0
 skinparam linetype ortho

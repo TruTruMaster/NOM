@@ -1,4 +1,4 @@
-/* NOM-COLAB · Ruedita de acciones (menú radial o "pie menu").
+/* NOM · Ruedita de acciones (menú radial o "pie menu").
    Como la rueda de "ping" de los juegos: un anillo de acciones alrededor del dedo o del cursor.
    Se elige por DIRECCIÓN, no por posición exacta; con práctica se hace de memoria sin mirar
    (marking menu, Kurtenbach y Buxton). Igual en computadora, celular y la app.

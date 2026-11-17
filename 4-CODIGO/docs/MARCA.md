@@ -1,4 +1,4 @@
-# NOM-COLAB — Marca: "la llama compartida"
+# NOM — Marca: "la llama compartida"
 
 Equipo 6 "WACK" · CECyT 9 · 5IM7 · octubre 2026
 

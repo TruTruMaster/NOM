@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Copia de un .pptx (o .docx/.xlsx) con sus SmartArt SIN el dibujo guardado (ppt/diagrams/drawingN.xml):
-como los guardan otros programas. PowerPoint los vuelve a acomodar con su diseño (layout) al abrirlos; NOM-COLAB
+como los guardan otros programas. PowerPoint los vuelve a acomodar con su diseño (layout) al abrirlos; NOM
 también tiene que hacerlo.
 
   python3 sin_dibujo_smartart.py ENTRADA.pptx SALIDA.pptx

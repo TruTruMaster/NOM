@@ -1,4 +1,4 @@
-"""Abre con Office de verdad cada archivo exportado por NOM-COLAB y anota si Office pidió repararlo.
+"""Abre con Office de verdad cada archivo exportado por NOM y anota si Office pidió repararlo.
 
   python abrir_office.py CARPETA        (los .docx, .xlsx y .pptx de esa carpeta, relativa a nomoffice\\)
 
@@ -100,7 +100,7 @@ def abrir_excel(x, ruta):
             r["titulo"] = x.ActiveWindow.Caption
             r["reparado"] = "[Repaired]" in str(x.ActiveWindow.Caption) or "[Reparado]" in str(x.ActiveWindow.Caption)
             r["hojas"] = wb.Worksheets.Count
-            # fórmulas que Excel no entendió y matrices que derraman (lo nuevo de NOM-COLAB)
+            # fórmulas que Excel no entendió y matrices que derraman (lo nuevo de NOM)
             nombre_mal = derraman = formulas = 0
             for ws in wb.Worksheets:
                 try: ur = ws.UsedRange

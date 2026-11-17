@@ -1,4 +1,4 @@
-/* NOM-COLAB · núcleo de interfaz: utilidades, íconos, avisos, hojas, menús y micro-textos.
+/* NOM · núcleo de interfaz: utilidades, íconos, avisos, hojas, menús y micro-textos.
    Scripts clásicos (sin módulos ES) para que la misma interfaz corra desde el servidor
    y empaquetada dentro de la app Android (file://). */
 (function () {
@@ -337,7 +337,8 @@
     const raiz = document.documentElement;
     const oscuro = p.tema === "oscuro" || (p.tema !== "claro" && matchMedia("(prefers-color-scheme: dark)").matches);
     const antes = raiz.dataset.tema, nuevo = oscuro ? "oscuro" : "claro";
-    const quieto = !!p.movimientoReducido;
+    // (menos movimiento si lo pide la app o el sistema: «reducir movimiento» de Windows, Android, macOS o iOS)
+    const quieto = !!p.movimientoReducido || matchMedia("(prefers-reduced-motion: reduce)").matches;
     raiz.dataset.tema = nuevo;
     // Los colores se funden un instante en vez de saltar.
     if (antes && antes !== nuevo && !quieto) {
@@ -346,20 +347,24 @@
       tTema = setTimeout(() => raiz.classList.remove("cambiando-tema"), 240);
     }
     raiz.dataset.calidad = p.calidad === "baja" ? "baja" : "alta";
-    raiz.dataset.movimiento = p.movimientoReducido ? "reducido" : "normal";
+    raiz.dataset.movimiento = quieto ? "reducido" : "normal";
     const meta = $('meta[name="theme-color"]');
     if (meta) meta.content = oscuro ? "#191A20" : "#ECEDF1";
     guardar("nom.pref", p);
   }
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => aplicarPreferencias(leer("nom.pref", {})));
+  matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", () => aplicarPreferencias(leer("nom.pref", {})));
   aplicarPreferencias(leer("nom.pref", {}));
 
   // ------------------------------------------------------------ estilo protegido
   // Extensiones de modo oscuro o de temas, y traductores, meten hojas de estilo propias que cambian
-  // la página. Las que no son de NOM-COLAB (las nuestras llevan data-nom) se quitan en cuanto
-  // aparecen. El modo oscuro automático de Chrome y Dark Reader se apagan desde index.html, y el
-  // alto contraste forzado y el tamaño de letra del sistema, desde nom.css.
+  // la página. Las que no son de NOM (las nuestras llevan data-nom) se quitan en cuanto
+  // aparecen. El modo oscuro automático de Chrome y Dark Reader se apagan desde index.html. Con el alto
+  // contraste del sistema, o si la persona lo pide en Preferencias, no se quita nada: sus herramientas mandan.
   function protegerEstilo() {
+    // (con alto contraste del sistema, o si la persona lo pidió en Preferencias, sus herramientas de colores mandan)
+    const respetar = () => matchMedia("(forced-colors: active)").matches || matchMedia("(prefers-contrast: more)").matches || leer("nom.extensiones", false) === true;
+    if (respetar()) return;
     const ajena = (n) => n.nodeType === 1 && !n.hasAttribute("data-nom") && (n.tagName === "STYLE" || (n.tagName === "LINK" && /(^|\s)stylesheet(\s|$)/i.test(n.rel || "")));
     const limpiar = (padre) => {
       Array.from(padre.children).forEach((n) => { if (ajena(n)) n.remove(); });
@@ -367,7 +372,7 @@
     };
     // Solo los hijos directos de <html>, <head> y <body>: ahí las meten; vigilar todo el árbol
     // costaría en cada tecla del editor.
-    const obs = new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => { if (ajena(n)) n.remove(); })));
+    const obs = new MutationObserver((ms) => { if (respetar()) return; ms.forEach((m) => m.addedNodes.forEach((n) => { if (ajena(n)) n.remove(); })); });
     [document.documentElement, document.head, document.body].filter(Boolean).forEach((padre) => { limpiar(padre); obs.observe(padre, { childList: true }); });
   }
   if (document.body) protegerEstilo(); else document.addEventListener("DOMContentLoaded", protegerEstilo);

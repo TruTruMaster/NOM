@@ -1,4 +1,4 @@
-/* NOM-COLAB · Ramas para lo editado sin Internet (fase 13, parte B).
+/* NOM · Ramas para lo editado sin Internet (fase 13, parte B).
    Al volver la red, por cada documento que la persona cambió sin conexión:
    - si nadie más lo cambió mientras tanto, lo suyo se sube tal cual (como antes);
    - si alguien más lo cambió, se abre una RAMA: un documento nuevo, ligado al original, con todo

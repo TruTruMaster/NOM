@@ -26,14 +26,14 @@ import mx.wack.nom.servidor.seguridad.Origen;
 public final class Buscadores {
 
     /** La direccion con la que se escribieron sitemap.xml, robots.txt y los enlaces de la ayuda. */
-    static final String ESCRITA = "https://nomcolab.dpdns.org";
+    static final String ESCRITA = "https://www.nom.qd.je";
     private static final Pattern BASE_VALIDA = Pattern.compile("https?://[a-z0-9.-]+(:\\d{1,5})?");
     private static final Pattern TITULO = Pattern.compile("<title>([^<]*)</title>");
     private static final Pattern RESUMEN = Pattern.compile("<meta name=\"description\" content=\"([^\"]*)\"");
     private static final Pattern MIGAS = Pattern.compile("<nav class=\"migas\"[^>]*>(.*?)</nav>", Pattern.DOTALL);
     private static final Pattern MIGA = Pattern.compile("<a href=\"([^\"]*)\">([^<]*)</a>");
 
-    static final String NOMBRE = "NOM-COLAB";
+    static final String NOMBRE = "NOM";
     static final String RESUMEN_INICIO = "Escribe, calcula, presenta y dibuja en equipo, al mismo tiempo, con o sin Internet. "
             + "Abre y guarda Word, Excel y PowerPoint. Gratis y de código abierto, en el navegador y en Android.";
     static final String APK = "https://github.com/TruTruMaster/NOM-COLAB/releases/latest/download/NOM-COLAB.apk";
@@ -51,7 +51,7 @@ public final class Buscadores {
 
     /** robots.txt: todo se puede leer menos la API y las direcciones de un solo uso (unirse, proyectar). */
     static String robots(String base) {
-        return "# NOM-COLAB\n"
+        return "# NOM\n"
                 + "User-agent: *\n"
                 + "Allow: /\n"
                 + "Disallow: /api/\n"
@@ -97,7 +97,7 @@ public final class Buscadores {
         s.append("<meta property=\"og:image:type\" content=\"image/png\">\n");
         s.append("<meta property=\"og:image:width\" content=\"1200\">\n");
         s.append("<meta property=\"og:image:height\" content=\"630\">\n");
-        s.append("<meta property=\"og:image:alt\" content=\"NOM-COLAB: documentos, hojas de cálculo y presentaciones en equipo, con o sin Internet\">\n");
+        s.append("<meta property=\"og:image:alt\" content=\"NOM: documentos, hojas de cálculo y presentaciones en equipo, con o sin Internet\">\n");
         s.append("<meta name=\"twitter:card\" content=\"summary_large_image\">\n");
         s.append("<meta name=\"twitter:title\" content=\"").append(titulo).append("\">\n");
         s.append("<meta name=\"twitter:description\" content=\"").append(resumen).append("\">\n");
@@ -113,7 +113,8 @@ public final class Buscadores {
         String org = base + "/#organizacion";
         return "{\"@context\":\"https://schema.org\",\"@graph\":["
                 + "{\"@type\":\"WebSite\",\"@id\":\"" + base + "/#sitio\",\"url\":\"" + base + "/\",\"name\":\"" + NOMBRE + "\","
-                + "\"alternateName\":[\"NOM\",\"NOMCOLAB\",\"NOM COLAB\",\"Nom Colab\",\"nomcolab\"],"
+                // (el nombre de antes, para que también se encuentre así)
+                + "\"alternateName\":[\"NOM-COLAB\",\"NOMCOLAB\",\"NOM COLAB\",\"nomcolab\"],"
                 + "\"description\":" + json(RESUMEN_INICIO) + ",\"inLanguage\":\"es\",\"publisher\":{\"@id\":\"" + org + "\"}},"
                 + "{\"@type\":\"Organization\",\"@id\":\"" + org + "\",\"name\":\"" + NOMBRE + "\",\"url\":\"" + base + "/\","
                 + "\"logo\":{\"@type\":\"ImageObject\",\"url\":\"" + base + "/img/icono-512.png\",\"width\":512,\"height\":512},"
@@ -142,7 +143,7 @@ public final class Buscadores {
             Matcher a = MIGA.matcher(n.group(1));
             while (a.find()) migas.add(new String[] { a.group(1).startsWith("/") ? base + a.group(1) : a.group(1), a.group(2) });
         }
-        String nombre = titulo.replaceAll("\\s*·\\s*(Ayuda de )?NOM-COLAB\\s*$", "");
+        String nombre = titulo.replaceAll("\\s*·\\s*(Ayuda de )?NOM\\s*$", "");
         migas.add(new String[] { url, nombre });
         StringBuilder l = new StringBuilder();
         for (int i = 0; i < migas.size(); i++) {

@@ -1,7 +1,7 @@
 # Tarea: EXCEL → escribe `salida/EXCEL.md` y `salida/EXCEL-FUNCIONES.csv`
 
 Lee primero `COMUN.md` (reglas y formato de fila). Catálogo **completo** de Excel para Microsoft 365
-(escritorio, canal actual) comparado con la hoja de NOM-COLAB (`modo-hoja.js`, `formulas.js`,
+(escritorio, canal actual) comparado con la hoja de NOM (`modo-hoja.js`, `formulas.js`,
 `graficas.js` y la parte de Excel de `ooxml.js`).
 
 ## A. `salida/EXCEL-FUNCIONES.csv` (hazlo primero)
@@ -21,7 +21,7 @@ compara el total con la página). Columnas, separadas por coma y con comillas cu
   tabla `INGLES`), si no `no`.
 - `prioridad`: Alta = uso escolar u oficina cada semana; Media; Baja (ingeniería, cubos, web, compat).
 - `devuelve_matriz`: `si` para funciones de matriz dinámica (FILTRAR, ORDENAR, UNICOS, SECUENCIA…).
-Al final de `EXCEL.md`, una sección «Funciones» con el total, cuántas tiene NOM-COLAB, el porcentaje
+Al final de `EXCEL.md`, una sección «Funciones» con el total, cuántas tiene NOM, el porcentaje
 por categoría y las 100 que faltan más importantes en orden.
 
 ## B. `salida/EXCEL.md`

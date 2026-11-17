@@ -1,4 +1,4 @@
-/* NOM-COLAB · El teléfono como servidor (solo en la app Android).
+/* NOM · El teléfono como servidor (solo en la app Android).
    La app trae el mismo servidor que la computadora: cuentas, espacios, documentos en tiempo real,
    versiones y la página web para los demás. Al encenderlo, este teléfono se conecta a sí mismo
    (127.0.0.1) y los demás equipos entran por su dirección en el Wi-Fi —o en el punto de acceso
@@ -48,7 +48,7 @@
   }
 
   function compartir(dir) {
-    const t = `Entra a NOM-COLAB en mi teléfono: ${dir}\n(Con la app: "¿Dónde trabaja tu equipo?" → "Buscar en este Wi-Fi". En la computadora: abre la dirección en el navegador; hay que estar en el mismo Wi-Fi.)`;
+    const t = `Entra a NOM en mi teléfono: ${dir}\n(Con la app: "¿Dónde trabaja tu equipo?" → "Buscar en este Wi-Fi". En la computadora: abre la dirección en el navegador; hay que estar en el mismo Wi-Fi.)`;
     if (window.NomAndroid && window.NomAndroid.compartirTexto) window.NomAndroid.compartirTexto(t);
     else NOM.copiarConAviso(dir, "Dirección copiada");
   }
@@ -110,7 +110,7 @@
             : "Este teléfono puede guardar los espacios y los documentos de tu equipo para que trabajen juntos sin Internet y sin computadora. Aquí no hay cuentas: quien llega entra con un alias al azar (o con su cuenta, si su equipo tiene Internet). Mientras esté encendido verás un aviso arriba y gasta un poco más de batería."}</p>
           ${e.activo ? (dirs.length
             ? `<div class="lista">${dirs.map((d) => `<div class="lista-item"><span class="anfitrion-icono chico">${ico("wifi", "ico-s")}</span><span class="crece"><b style="font-family:var(--mono)">${esc(d.replace(/^http:\/\//, ""))}</b><small>${esc(d)}</small></span>
-                <button class="icono-btn" data-qr-dir="${esc(d)}" aria-label="Mostrar QR" data-micro="Código QR|Quien lo escanea abre NOM-COLAB de este teléfono en su navegador.">${ico("qr-code")}</button>
+                <button class="icono-btn" data-qr-dir="${esc(d)}" aria-label="Mostrar QR" data-micro="Código QR|Quien lo escanea abre NOM de este teléfono en su navegador.">${ico("qr-code")}</button>
                 <button class="icono-btn" data-copiar="${esc(d)}" aria-label="Copiar" data-micro="Copiar dirección">${ico("copy")}</button>
                 <button class="icono-btn" data-compartir="${esc(d)}" aria-label="Compartir" data-micro="Compartir dirección|WhatsApp, correo, Bluetooth…">${ico("share-2")}</button></div>`).join("")}</div>
                ${esLocal() && NOM.api.token() ? `<button class="btn primario" data-invitar>${ico("qr-code")} Invitar con código QR</button>` : ""}`
@@ -154,7 +154,7 @@
     pintar();
   }
 
-  /** QR con la dirección del teléfono: quien lo escanea abre NOM-COLAB en su navegador. */
+  /** QR con la dirección del teléfono: quien lo escanea abre NOM en su navegador. */
   function qrDireccion(dir) {
     NOM.hoja({ titulo: "Entrar a este teléfono", icono: "qr-code", cuerpo: `<div class="col" style="align-items:center;text-align:center">
       <div class="qr-caja" style="width:min(280px,70vw)">${NOM.qr ? NOM.qr.svg(dir, { titulo: "QR para entrar a este teléfono" }) : ""}</div>

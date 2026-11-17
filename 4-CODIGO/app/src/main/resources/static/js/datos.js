@@ -1,4 +1,4 @@
-/* NOM-COLAB · Fase 9 (generar sin IA), lo que se arma con lo que ya existe:
+/* NOM · Fase 9 (generar sin IA), lo que se arma con lo que ya existe:
    - Datos → reporte: de una hoja o de un CSV/XLSX (por ejemplo, una encuesta de Google Forms), un
      documento con el resumen, tablas de frecuencias, medidas y gráficas. Son cuentas, no opiniones.
    - Combinar correspondencia: un texto con {{campos}} + una hoja = un documento por fila.

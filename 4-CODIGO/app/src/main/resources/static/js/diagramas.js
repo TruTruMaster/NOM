@@ -1,4 +1,4 @@
-/* NOM-COLAB · Diagramas listos y texto a diagrama (8.4 y fase 9).
+/* NOM · Diagramas listos y texto a diagrama (8.4 y fase 9).
    Cada diagrama es una función que acomoda figuras y flechas a partir de datos sencillos (una lista
    de pasos, un esquema con sangría…). La galería los muestra con un ejemplo; "texto a diagrama" usa
    lo que la persona escribe. Nada se inventa: el contenido siempre es el de la persona. */

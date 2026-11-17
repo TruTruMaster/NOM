@@ -8,7 +8,7 @@ version: 0.13.0
 ---
 ## Crear la cuenta
 
-1. Abre NOM-COLAB (en la app, elige **Usar NOM-COLAB en Internet**) y toca **Crear cuenta**.
+1. Abre NOM (en la app, elige **Usar NOM en Internet**) y toca **Crear cuenta**.
 2. Escribe un **nombre de usuario**: de 3 a 24 letras o números; puede llevar punto, guion o guion
    bajo, sin espacios. Así te verán los demás.
 3. Escribe una **contraseña** de al menos 8 caracteres. Una frase larga es más segura que una

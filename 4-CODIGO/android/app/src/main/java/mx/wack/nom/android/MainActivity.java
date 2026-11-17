@@ -50,7 +50,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Cliente Android de NOM-COLAB (ClienteAndroid del diagrama de clases).
+ * Cliente Android de NOM (ClienteAndroid del diagrama de clases).
  *
  * La interfaz es la misma que sirve el servidor, empaquetada en assets/: así el
  * editor abre aunque no haya red (CU-26) y las operaciones se encolan en el
@@ -422,7 +422,7 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 try {
                     PrintManager pm = (PrintManager) getSystemService(Context.PRINT_SERVICE);
-                    String t = titulo == null || titulo.isEmpty() ? "NOM-COLAB" : titulo;
+                    String t = titulo == null || titulo.isEmpty() ? "NOM" : titulo;
                     pm.print(t, web.createPrintDocumentAdapter(t), new PrintAttributes.Builder().setMediaSize(PrintAttributes.MediaSize.NA_LETTER).build());
                 } catch (Exception e) {
                     Toast.makeText(MainActivity.this, "No se pudo abrir la impresión", Toast.LENGTH_LONG).show();

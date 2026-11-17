@@ -6,7 +6,7 @@ aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-13
 version: 2026-11-13
 ---
-Queremos que NOM-COLAB lo pueda usar cualquier persona. La meta es cumplir las **Pautas de
+Queremos que NOM lo pueda usar cualquier persona. La meta es cumplir las **Pautas de
 Accesibilidad para el Contenido Web (WCAG) 2.2, nivel AA**.
 
 ## Lo que ya hace
@@ -14,8 +14,13 @@ Accesibilidad para el Contenido Web (WCAG) 2.2, nivel AA**.
 - Contraste de texto medido (al menos 4.5:1) en tema claro y oscuro.
 - Todo se puede hacer con teclado, y con el dedo en la ruedita; nada depende de pasar el mouse.
 - Botones y campos con nombre para lectores de pantalla; avisos que se anuncian.
-- Letra más grande (Ajustes) y respeto a «reducir movimiento» del sistema.
-- Funciona desde 360 píxeles de ancho.
+- Letra más grande (Ajustes). «Reducir movimiento» se aplica si lo pide el sistema (Windows, Android,
+  macOS o iOS) o si lo eliges en Ajustes.
+- El **alto contraste del sistema** (Windows) cambia los colores de toda la interfaz; los documentos
+  conservan los suyos, porque esos colores son el contenido.
+- Si usas una extensión de colores (modo oscuro, filtros de contraste o de color), actívala en
+  **Ajustes → Dejar que mis extensiones cambien los colores**.
+- Funciona desde 320 píxeles de ancho (probado así).
 
 ## Lo que falta
 
