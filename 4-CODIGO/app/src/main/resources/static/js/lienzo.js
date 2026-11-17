@@ -692,7 +692,7 @@
       bs.filter((b) => b.tipo !== "conector").sort((a, b) => (a.z || 0) - (b.z || 0)).forEach((b, i) => {
         mapa[b.id] = b;
         const ajeno = motivoAjeno(b);
-        const el = html(`<div class="bl${b.sinPos ? " sin-pos" : ""}${sel.has(b.id) ? " sel" : ""}${clasesBloque(b)}${fuera(b) ? " fuera" : ""}${resaltados.has(b.id) ? " cambiado" : ""}${ajeno && !ed.soloLectura ? " ajeno" : ""}" data-id="${esc(b.id)}" data-tipo="${esc(b.tipo)}" style="${estiloBloque(b, i)}${b.dueno ? `--dueno:${esc(ed.colorDe(b.dueno))};` : ""}"${b.dueno ? ` data-dueno="${esc(ed.nombreDe(b.dueno))}"` : ""}>${contenido(b)}${comentados.has(b.id) ? `<span class="lz-coment" title="Comentarios">${ico("message-square", "ico-s")}${comentados.get(b.id) > 1 ? comentados.get(b.id) : ""}</span>` : ""}</div>`);
+        const el = html(`<div class="bl${b.sinPos ? " sin-pos" : ""}${sel.has(b.id) ? " sel" : ""}${clasesBloque(b)}${fuera(b) ? " fuera" : ""}${resaltados.has(b.id) ? " cambiado" : ""}${ajeno && !ed.soloLectura ? " ajeno" : ""}" data-id="${esc(b.id)}" data-tipo="${esc(b.tipo)}" style="${estiloBloque(b, i)}${b.dueno ? `--dueno:${esc(ed.colorDe(b.dueno))};` : ""}"${b.dueno ? ` data-dueno="${esc(ed.nombreDe(b.dueno))}"` : ""}>${contenido(b)}${b.medio ? `<span class="nm-medio-marca">${ico(b.medio.tipo === "audio" ? "volume-2" : "play", "ico-s")} ${b.medio.tipo === "audio" ? "Audio" : "Video"}</span>` : ""}${comentados.has(b.id) ? `<span class="lz-coment" title="Comentarios">${ico("message-square", "ico-s")}${comentados.get(b.id) > 1 ? comentados.get(b.id) : ""}</span>` : ""}</div>`);
         if (sel.size === 1 && sel.has(b.id) && !ed.soloLectura) adornos(el, b);
         mundo.append(el);
       });
@@ -2502,7 +2502,7 @@
       // Varias animaciones del mismo bloque en el mismo paso (entrada y énfasis…) van juntas.
       const st = s && s.anim.length ? `animation-name:${s.anim.map((x) => `a-${x.tipo}-${x.efecto}`).join(",")};animation-duration:${s.anim.map((x) => x.dur + "ms").join(",")};animation-delay:${s.anim.map((x) => x.t + "ms").join(",")};animation-fill-mode:both;animation-timing-function:cubic-bezier(.2,.8,.2,1);` : "";
       // (el texto de PowerPoint no se recorta en el borde de su cuadro: PowerPoint lo deja salir)
-      return `<div class="bl${clasesBloque(b)}${s && s.anim.length ? " animando" : ""}${b.accion ? " con-accion" : ""}" data-id="${esc(b.id)}" style="${estiloBloque(b)}overflow:${b.tipo === "forma" || b.ppt || b.office ? "visible" : "hidden"};${st}">${contenido(b)}</div>`;
+      return `<div class="bl${clasesBloque(b)}${s && s.anim.length ? " animando" : ""}${b.accion ? " con-accion" : ""}${b.medio ? " con-medio" : ""}" data-id="${esc(b.id)}" style="${estiloBloque(b)}overflow:${b.tipo === "forma" || b.ppt || b.office ? "visible" : "hidden"};${st}">${contenido(b)}</div>`;
     }).join("");
   }
 
@@ -2557,6 +2557,8 @@
     const inicio = Date.now();
     const reloj = presentador ? setInterval(() => { const s2 = Math.floor((Date.now() - inicio) / 1000); $("[data-tiempo]", rep).textContent = `${Math.floor(s2 / 60)}:${String(s2 % 60).padStart(2, "0")}`; }, 1000) : null;
     let kActual = 1, motor = null;
+    // los videos y audios de PowerPoint se reproducen desde el archivo original guardado en el documento (js/medios-diapositiva.js)
+    const medios = NOM.mediosDiapo ? NOM.mediosDiapo.sesion(doc, { raiz: rep, escala: () => kActual }) : null;
     function escalar(el, caja, p) {
       if (NOM.diapo) NOM.diapo.aplicar(el, doc, p);
       const T = tamDoc(doc);
@@ -2597,7 +2599,9 @@
       borrarMarcas(false);
       escala();
       if (motor) motor.detener();
-      motor = motorDiapositiva(d, doc, p, () => kActual);
+      // videos y audios de PowerPoint (antes del motor: sus comandos de reproducir, pausa… llegan por alMedio)
+      if (medios) medios.montar(d, p, i);
+      motor = motorDiapositiva(d, doc, p, () => kActual, medios ? { alMedio: (bid, tipo, cmd) => medios.comando(bid, cmd) } : undefined);
       total = motor ? motor.pasos : 0;
       paso = revelarTodo ? total : 0;
       if (motor) { if (revelarTodo) motor.irAPaso(total, true); else motor.preparar(); }
@@ -2689,6 +2693,7 @@
 
     function salir() {
       if (motor) motor.detener();
+      if (medios) medios.cerrar();
       if (trActual) trActual.saltar();
       clearTimeout(avanceAuto);
       clearInterval(reloj);
@@ -2701,6 +2706,8 @@
     }
     function tecla(e) {
       e.stopPropagation();
+      // las teclas de PowerPoint para los medios: Alt+P, Alt+Q, Alt+↑/↓, Alt+Inicio/Fin
+      if (medios && medios.tecla(e)) { e.preventDefault(); return; }
       const k = e.key.toLowerCase();
       if (["ArrowRight", "ArrowDown", " ", "PageDown", "Enter"].includes(e.key)) { e.preventDefault(); avanzar(); }
       else if (["ArrowLeft", "ArrowUp", "PageUp", "Backspace"].includes(e.key)) { e.preventDefault(); retroceder(); }
@@ -2719,6 +2726,8 @@
       // una figura que desencadena animaciones (como en PowerPoint): el clic la anima en vez de avanzar
       const fig = e.target.closest(".bl[data-id]");
       if (fig && motor && motor.esDisparador(fig.dataset.id) && d.contains(fig)) { motor.disparar(fig.dataset.id); return; }
+      // un video o audio sin desencadenador: el clic lo reproduce o lo pausa (lo mismo que el botón de su barra)
+      if (fig && medios && d.contains(fig) && medios.esMedio(fig.dataset.id)) { medios.alternar(fig.dataset.id); return; }
       // un vínculo o botón de acción (como en PowerPoint): ir a otra diapositiva, a la siguiente, a una página web…
       const acc = fig && d.contains(fig) && (doc.bloque(fig.dataset.id) || {}).accion;
       if (acc && irAccion(acc)) return;

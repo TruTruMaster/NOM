@@ -1445,3 +1445,18 @@ exporta Excel de ella (ver la entrada 68).
 - Contra Word real: w05 de 9 a 8 páginas (como Word), renglones en su página 17.1 → 85.7 %, imagen 91.8 → 93.8 %;
   w09 de 10 a 9 páginas (como Word). Once de los doce documentos de Word con las mismas páginas que Word.
 - Falta: tabla flotante con el texto alrededor.
+
+## 77. Videos y audios de PowerPoint en la presentación (17 de noviembre de 2026)
+- Los videos y audios de un .pptx se reproducen al presentar como en PowerPoint: solos o al tocarlos, con su
+  volumen, en silencio, en bucle, recortados, con fundido, ocultos mientras no suenan, en pantalla completa y, el
+  audio, también en las diapositivas siguientes. Responden a los comandos de sus animaciones (reproducir, pausa,
+  detener, ir a un momento).
+- No se copian al documento: se toman del archivo original que NOM ya guarda al importar. Al descargar el .pptx
+  siguen siendo video o audio aunque se haya movido o cambiado su tamaño.
+- Al pasar el puntero sale una barra (reproducir o pausa, la posición con sus marcadores, el tiempo y el sonido) y
+  sirven las teclas de PowerPoint (Alt+P, Alt+Q, Alt+↑/↓, Alt+Inicio/Fin). En el editor el bloque dice «Video» o
+  «Audio».
+- Arreglo en las animaciones: después del primer «reproducir» ya no llegaba ningún otro comando a los medios, y
+  regresar a una diapositiva arrancaba sus videos.
+- Falta: insertar un video o audio desde NOM, empezar animaciones con un marcador, el video en la pantalla del
+  proyector y probarlo en el teléfono y en PowerPoint.

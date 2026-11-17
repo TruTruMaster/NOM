@@ -677,7 +677,10 @@
     const corriendo = [];                // [{ g, inicio }] en el orden en que empezaron
     let siguiente = 0;                   // el siguiente grupo de la secuencia principal
     const sigDisp = new Map();
-    let medio = new Map();               // bid → último comando de medio aplicado
+    // comandos de medios (reproducir, pausa…) ya dados: uno por comportamiento y por cada vez que empieza. Al saltar a un
+    // paso (regresar a una diapositiva) se anotan como dados sin reproducir nada; al calcular «ppt_x» no cuentan.
+    const mediosHechos = new Set();
+    let mediosCallados = false, enFoto = false, tAct = 0;
 
     // ---- evaluar un cuadro
     function base(d) {
@@ -844,7 +847,11 @@
           return;
         }
         case "cmd": {
-          if (ctx.alMedio && bh.dest) { const clave = bh.dest.bid + "|" + a.cmd; if (s >= 0 && !medio.get(bh.ordenUnico + "")) { medio.set(bh.ordenUnico + "", true); ctx.alMedio(bh.dest.bid, a.type, a.cmd); } void clave; }
+          if (enFoto || !ctx.alMedio || !bh.dest) return;
+          const k = bh.orden + "@" + Math.round(tAct);
+          if (mediosHechos.has(k)) return;
+          mediosHechos.add(k);
+          if (!mediosCallados) ctx.alMedio(bh.dest.bid, a.type, a.cmd);
           return;
         }
         default: return;
@@ -939,7 +946,8 @@
           if (ac.k[1] >= Tb - 1e-6) continue;
           if ((ac.u == null ? null : ac.u) !== (u == null ? null : u) && d.unidades) continue;
           e.foto = fotoDe(d, u, ac.k[1], (prof || 0) + 1);
-          aplicarBh(ac.bh, ac.s, u, e, ac.ef);
+          enFoto = true;
+          try { aplicarBh(ac.bh, ac.s, u, e, ac.ef); } finally { enFoto = false; }
         }
       }
       const f = { ppt_x: e.x, ppt_y: e.y, ppt_w: e.w, ppt_h: e.h, ppt_r: e.r };
@@ -955,10 +963,13 @@
         const e = d.unidades && ac.u != null ? (d.unidades[ac.u] ? estadoDe(d, ac.u) : null) : estadoDe(d, null);
         if (!e) continue;
         e.foto = fotoDe(d, u, ac.k[1]);
+        tAct = ac.k[1];
         aplicarBh(ac.bh, ac.s, u, e, ac.ef);
       }
       pintar();
     }
+    /** Evaluar sin dar comandos a los medios (saltar a un paso o medir): solo se anotan como dados. */
+    function evaluarCallado() { mediosCallados = true; try { evaluar(); } finally { mediosCallados = false; } }
 
     // ---- pintar: cada destino con su estado
     const ultimo = new Map();
@@ -1139,7 +1150,7 @@
         else { siguiente = 0; evaluar(); }
       },
       /** El estado de antes de empezar (lo que entra después, oculto), sin arrancar nada: para la transición. */
-      preparar() { if (raf) { cancelAnimationFrame(raf); raf = 0; } corriendo.length = 0; reloj = 0; siguiente = 0; fotos.clear(); evaluar(); },
+      preparar() { if (raf) { cancelAnimationFrame(raf); raf = 0; } corriendo.length = 0; reloj = 0; siguiente = 0; fotos.clear(); mediosHechos.clear(); evaluar(); },
       /** ¿Quedan clics de la secuencia principal? */
       quedan: () => siguiente < todosGrupos.principal.length,
       /** Un clic: lo que siga de la secuencia principal. false si ya no queda nada (pasar a la siguiente diapositiva). */
@@ -1155,7 +1166,7 @@
       /** Sin animar: todo lo de los primeros k clics ya hecho (final: también el último a su final). */
       irAPaso(k, final) {
         if (raf) { cancelAnimationFrame(raf); raf = 0; }
-        corriendo.length = 0; reloj = 0; siguiente = 0; fotos.clear();
+        corriendo.length = 0; reloj = 0; siguiente = 0; fotos.clear(); mediosHechos.clear();
         const gs = todosGrupos.principal;
         let hechos = 0;
         while (siguiente < gs.length && (gs[siguiente].auto || hechos < k)) {
@@ -1164,7 +1175,7 @@
           alFinal();
         }
         if (final) while (siguiente < gs.length) { empezar(gs[siguiente++]); alFinal(); }
-        evaluar();
+        evaluarCallado();
       },
       esDisparador: (bid) => todosGrupos.disp.has(bid),
       /** Clic en una figura que desencadena animaciones. */
@@ -1181,11 +1192,11 @@
       /** Para medir: el grupo k (de la secuencia principal, contando el automático) en el instante t (ms desde que empezó). */
       cuadro(k, t) {
         if (raf) { cancelAnimationFrame(raf); raf = 0; }
-        corriendo.length = 0; reloj = 0; siguiente = 0; fotos.clear();
+        corriendo.length = 0; reloj = 0; siguiente = 0; fotos.clear(); mediosHechos.clear();
         const gs = todosGrupos.principal;
         for (let i = 0; i < k && i < gs.length; i++) { empezar(gs[i]); alFinal(); }
         if (gs[k]) { empezar(gs[k]); reloj += t; }
-        evaluar();
+        evaluarCallado();
       },
       /** Duración (ms) de cada grupo de la secuencia principal. */
       duraciones: () => todosGrupos.principal.map((g) => g.d),

@@ -5320,6 +5320,30 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       if (!act && rel && rel.externo && /^(https?:|mailto:)/i.test(rel.bruto || "")) return { tipo: "url", url: rel.bruto };
       return null;
     }
+    /**
+     * El video o audio de una imagen de PowerPoint (a:videoFile / a:audioFile y p14:media en su nvPr), o undefined:
+     * { tipo, ruta (la parte del archivo con el medio), recorte { ini, fin } (ms que se quitan al principio y al final,
+     * p14:trim), fundido { ent, sal } (ms, p14:fade), marcadores [{ n, t }] (ms, p14:bmkLst) }. El medio no se copia: al
+     * presentar se saca del archivo original que guarda el documento (js/medios-diapositiva.js). Uno vinculado (fuera
+     * del archivo) no se puede reproducir y se queda como imagen.
+     */
+    function medioDePic(el, rels) {
+      const nv = h1(el, "nvPicPr"), nvPr = nv && h1(nv, "nvPr");
+      if (!nvPr) return undefined;
+      const vf = h1(nvPr, "videoFile"), af = h1(nvPr, "audioFile"), m14 = todos(nvPr, "media")[0];
+      if (!vf && !af && !m14) return undefined;
+      const r14 = m14 && rels[rid(m14, "embed")], rL = (vf || af) && rels[rid(vf || af, "link")];
+      const rel = r14 && !r14.externo ? r14 : rL && !rL.externo ? rL : null;
+      if (!rel || !rel.destino) return undefined;
+      const m = { tipo: af && !vf ? "audio" : "video", ruta: rel.destino };
+      if (!vf && !af && /\.(mp3|m4a|wav|wma|aac|ogg|oga|flac|midi?)$/i.test(rel.destino)) m.tipo = "audio";
+      const tr = m14 && todos(m14, "trim")[0], fd = m14 && todos(m14, "fade")[0], bm = m14 ? todos(m14, "bmk") : [];
+      const ms = (v) => Math.max(0, Math.round(+v || 0));
+      if (tr && (ms(at(tr, "st")) || ms(at(tr, "end")))) m.recorte = { ini: ms(at(tr, "st")), fin: ms(at(tr, "end")) };
+      if (fd && (ms(at(fd, "in")) || ms(at(fd, "out")))) m.fundido = { ent: ms(at(fd, "in")), sal: ms(at(fd, "out")) };
+      if (bm.length) m.marcadores = bm.map((b) => ({ n: at(b, "name") || "", t: ms(at(b, "time")) })).sort((p, q) => p.t - q.t);
+      return m;
+    }
     async function relsDe(ruta) {
       const t = await z.texto(carpeta(ruta) + "_rels/" + ruta.slice(ruta.lastIndexOf("/") + 1) + ".rels");
       const m = {};
@@ -6213,7 +6237,9 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
           if (lum && at(lum, "bright")) filtros.brillo = Math.round(100 + +at(lum, "bright") / 1000);
           if (lum && at(lum, "contrast")) filtros.contraste = Math.round(100 + +at(lum, "contrast") / 1000);
           agregar(Object.assign({ tipo: "imagen", src, recorte, mascara: prst && prst !== "rect" && prst !== "roundRect" ? GEO_INV[prst] : undefined, alt: at(todos(el, "cNvPr")[0], "descr") || undefined,
-            filtros: Object.keys(filtros).length ? filtros : undefined, opacidad: alfaI && at(alfaI, "amt") ? Math.max(0.05, +at(alfaI, "amt") / 100000) : undefined }, geo(r)));
+            filtros: Object.keys(filtros).length ? filtros : undefined, opacidad: alfaI && at(alfaI, "amt") ? Math.max(0.05, +at(alfaI, "amt") / 100000) : undefined,
+            // video o audio de PowerPoint: la imagen es su portada (o el ícono del altavoz)
+            medio: medioDePic(el, rels) }, geo(r)));
           return;
         }
         if (nm === "graphicFrame") {

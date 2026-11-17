@@ -27,6 +27,8 @@ version: 0.16.0
   videos), y ahora también se crean y se editan igual: los mismos efectos con sus opciones, el panel de
   animación con línea de tiempo, copiar animación, trayectorias dibujadas y el panel de transiciones.
   Lo que armes se guarda en el .pptx como lo escribe PowerPoint.
+- **Videos y audios de un .pptx** se reproducen al presentar, como en PowerPoint: solos o al tocarlos,
+  con su volumen, en bucle y recortados, con una barra para pausar o ir a otra parte.
 - **Gráficas:** líneas de tendencia con su ecuación y R², barras de error y tabla de datos.
 - **Fórmulas:** matrices dinámicas (los resultados se derraman a las celdas vecinas), `LET` y `LAMBDA`.
 - **Accesibilidad:** el alto contraste del sistema cambia los colores de la interfaz, «reducir

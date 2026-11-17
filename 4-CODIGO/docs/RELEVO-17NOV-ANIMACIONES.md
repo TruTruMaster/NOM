@@ -164,8 +164,32 @@ Leer al empezar la siguiente sesión, junto con `RELEVO-17NOV-LISTA-OFFICE.md` (
    Cuadro «Acción al hacer clic» en el menú Animación, la ruedita (Animación › Vínculo) y la paleta. Probado ida y vuelta
    (importar lo exportado) con los tres tipos. Arreglo de paso: en la ruta con origen, las relaciones externas nuevas
    salían sin `TargetMode="External"`. Falta: vínculos dentro del texto (a:rPr/hlinkClick), «al pasar el mouse»
-   (hlinkMouseOver), abrir otro archivo o programa, y sonidos de acción. **Sigue de este punto:** medios en diapositivas (video y audio con `cmd` playFrom/togglePause, marcadores), compilación de gráficas y SmartArt
-   por serie/categoría/nivel, botones de acción y vínculos a diapositivas, sonidos de efectos y transiciones.
+   (hlinkMouseOver), abrir otro archivo o programa, y sonidos de acción. **Sigue de este punto:** compilación de gráficas y
+   SmartArt por serie/categoría/nivel, sonidos de efectos y transiciones.
+   - **Video y audio de PowerPoint al presentar (hecho el 17-nov, tarde, en otra sesión; sin pruebas largas: el usuario
+     estaba fuera de casa).** Al importar, la imagen de un `p:pic` con `a:videoFile`/`a:audioFile`/`p14:media` queda con
+     `bloque.medio` = { tipo, ruta (la parte del .pptx), recorte {ini, fin} de `p14:trim`, fundido {ent, sal} de
+     `p14:fade`, marcadores de `p14:bmkLst` } (`medioDePic` en `ooxml.js`). **El medio no se copia al documento:** al
+     presentar, `js/medios-diapositiva.js` lo saca del original que ya guarda el documento (`NOM.origen.leer(doc).zip`) como
+     URL de blob. Los ajustes salen del nodo `p:video`/`p:audio` de `animMedios:<p>` (volumen, silencio, repetir hasta
+     detener = `repeatCount="indefinite"`, ocultar mientras no se reproduce = `showWhenStopped="0"`, seguir en las
+     siguientes = `numSld`, pantalla completa = `fullScrn`) y los comandos llegan del motor por `ctx.alMedio`:
+     `playFrom(s)`, `play`, `togglePause`, `pause`, `resume`, `stop`, `seek(s)`. Clic en un medio sin desencadenador:
+     reproducir o pausa. Barra al pasar el puntero (reproducir/pausa, posición con marcadores, tiempo, sonido) y teclas de
+     PowerPoint (Alt+P, Alt+Q, Alt+↑/↓, Alt+Inicio/Fin). En el editor, la marca «Video»/«Audio» sobre el bloque. Al
+     exportar con el original, la figura reescrita conserva su `p:nvPicPr` (DEF-45), así que sigue siendo video.
+   - **Arreglo en el motor (`animaciones-office.js`):** el comando de medio usaba `bh.ordenUnico`, que no existía: todos
+     compartían la clave «undefined» y después del primero (por ejemplo, reproducir) ya no llegaba ninguno (pausa, volver
+     a reproducir). Ahora la clave es comportamiento + momento en que empieza; al saltar a un paso (`irAPaso`, `cuadro`) se
+     anotan como dados sin reproducir nada (regresar a una diapositiva ya no arranca sus videos) y `fotoDe` no los cuenta.
+   - Prueba de humo (Chromium sin pantalla, tres archivos: `lo-video-loop-mute`, `lo-tdf120573`, `p08` diap. 40):
+     reproducir solo y en silencio al 80 %, clic = pausa/sigue, audio al hacer clic desde 0, Alt+Q, nada queda al salir;
+     sin errores. Nota: `nucleo.js` quita las hojas de estilo sin `data-nom` (la de los medios ya lo lleva).
+   - **Falta de medios:** desencadenadores por marcador (`onMediaBookmark`: no hay archivo de PowerPoint con uno para ver
+     cómo lo escribe; los marcadores ya se ven en la barra), confirmar en PowerPoint que `p14:trim end` es lo que se quita
+     al final (así se tomó) y que `p14:fade` va en ms, insertar un video o audio desde NOM (necesita que el usuario decida
+     dónde se guarda: dentro del documento pesa mucho), video en la pantalla del proyector, medios en línea (YouTube) y
+     al exportar sin original (hoy sale solo la portada). Probar en el teléfono y en PowerPoint real.
 5. Texto estático de PowerPoint ~2 px más arriba que en PowerPoint (medido en un cuadro de texto Arial 54 negrita: tinta
    en 284 contra 288 px a 1280 de ancho): revisar la posición del primer renglón (esto sube todos los efectos de texto).
 6. Luego la lista del relevo anterior: herramientas de datos de Excel, EMF/WMF, citas y bibliografía, combinar

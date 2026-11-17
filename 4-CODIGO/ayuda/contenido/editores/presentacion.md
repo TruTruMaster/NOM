@@ -18,6 +18,10 @@ version: 0.16.0
   otra figura. Con el dedo: mantén presionado el bloque → **Más → Otras → Animación**.
 - **Transiciones como en PowerPoint** (Transformar, Empujar, Cubo, Cortinas, Curvatura de página…), con
   sus opciones, su duración y si se avanza al hacer clic o sola después de unos segundos.
+- **Videos y audios de PowerPoint**: al presentar se reproducen como en PowerPoint (solos o al tocarlos,
+  con su volumen, en bucle, recortados y con fundido). Al pasar el puntero sale una barra con reproducir o
+  pausa, la posición y el sonido; con el teclado, **Alt+P** reproduce o pausa y **Alt+Q** detiene. Se toman
+  del archivo que importaste, sin guardar otra copia en el documento.
 - **Notas del orador** y **modo presentador** (lo que sigue, el reloj y tus notas).
 - **Presentar en otra pantalla**: abre `/proyectar` en el navegador del proyector y escribe el código
   de 6 letras; avanzas desde tu teléfono o tu computadora. Puntero **láser** y **pluma**.
