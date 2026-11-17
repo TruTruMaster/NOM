@@ -472,6 +472,23 @@
 .wd-tab td { border: 1px solid #8E8E8E; padding: 2pt 5pt; vertical-align: top; }
 .wd-tab.con-cab tr:first-child td { font-weight: bold; background: #F2F2F2; }
 .wd-celda { outline: none; min-height: 1.2em; white-space: pre-wrap; user-select: text; -webkit-user-select: text; }
+/* Tablas de Word: sus márgenes de celda (Word: 0 arriba y abajo, 0.19 cm a los lados), el interlineado y el espacio de
+   los párrafos de las celdas (con «Tabla con cuadrícula», renglón sencillo y nada después), el alto exacto de la fila
+   (lo que no cabe se corta) y las filas de encabezado repetidas en cada hoja. */
+.wd-tab.de-word td { padding: var(--cpt, 0px) var(--cpr, 7.2px) var(--cpb, 0px) var(--cpl, 7.2px); }
+.wd-tab.de-word .wd-celda { line-height: calc(var(--cli, 1) * var(--af, 1.2)); min-height: calc(var(--cli, 1) * var(--af, 1.2) * 1em); padding: var(--cant, 0px) 0 var(--cdesp, 0px); }
+.wd-tab.de-word.con-clx .wd-celda { line-height: var(--clx); min-height: var(--clx); }
+.wd-tab tr.exacta .wd-celda { max-height: calc(var(--fa) - var(--cpt, 0px) - var(--cpb, 0px)); overflow: hidden; }
+.wd-tab tr.wd-fila-corte, .wd-tab tr.wd-fila-corte > td { border: 0 !important; padding: 0 !important; background: none !important; }
+.wd-cab-rep { position: absolute; left: 0; right: 0; pointer-events: none; user-select: none; -webkit-user-select: none; z-index: 1; }
+.wd-cab-rep .wd-tab { background: var(--wd-papel, #fff); }
+/* Celdas de Word con imágenes, listas o tablas adentro: como en Word (no se escribe encima; doble clic para editarlas como texto) */
+.wd-celda.rica { cursor: default; }
+.wd-celda.rica .wd-cel-p { margin: 0; }
+.wd-celda.rica .wd-cel-p + .wd-cel-p { margin-top: var(--cdesp, 0px); }
+.wd-cel-marca { display: inline-block; text-indent: 0; }
+.wd-cel-img { display: inline-block; vertical-align: bottom; max-width: 100%; object-fit: contain; }
+.wd-tab.anidada { margin: 0; }
 .wd-celda:focus { box-shadow: inset 0 0 0 2px rgba(68, 114, 196, .5); }
 .wd-tab-ctl { display: none; gap: 4px; margin-top: 4px; font-family: var(--letra, inherit); }
 .wd-tabla:hover .wd-tab-ctl, .wd-tabla:focus-within .wd-tab-ctl { display: flex; flex-wrap: wrap; }
@@ -979,6 +996,8 @@
 .ecu-ayudas button:hover { background: var(--acento-tenue); }
 @media print {
   .wd-corte { display: none !important; }
+  .wd-fila-corte, .wd-cab-rep, .wd-celda-corte { display: none !important; }
+  .wd-tab tr[data-no-partir] { break-inside: avoid; }
   .wd-notas-finales { display: block; margin-top: 18pt; border-top: 1px solid #999; padding-top: 6pt; font-size: 9pt; }
   .wd-notas-finales .wd-notas-titulo { font-weight: bold; margin-bottom: 4pt; }
   .wd-notas-finales p { margin: 0 0 3pt; }

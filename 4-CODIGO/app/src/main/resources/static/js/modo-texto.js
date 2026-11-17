@@ -1855,7 +1855,8 @@
       const FT = () => NOM.formulas;
       let celdaActiva = null;     // { ref, celda }
       let alcanceTab = "celda";   // a qué se aplica el formato: celda, fila, columna o tabla
-      const dimTabla = (b) => ({ filas: Math.min(Math.max(1, b.filasTexto || 3), 200), cols: Math.min(Math.max(1, b.colsTexto || 3), 20) });
+      // (Word deja hasta 63 columnas; filas, las de un documento largo)
+      const dimTabla = (b) => ({ filas: Math.min(Math.max(1, b.filasTexto || 3), 3000), cols: Math.min(Math.max(1, b.colsTexto || 3), 63) });
       function combinadasTabla(b) {
         const spans = {}, cubiertas = new Set();
         for (const k in b) {
@@ -1873,20 +1874,67 @@
         const resto = Math.max(0, 100 - fijos);
         return a.map((x) => (x || (libres ? resto / libres : 0)));
       }
-      function pintarTabla(o, b, ref) {
-        o.dataset.ref = ref;
-        if (!b) { o.innerHTML = `<span class="wd-falta">Tabla no disponible</span>`; return; }
+      /** Lo de una celda de Word que el texto simple no guarda (ooxml.js ricoCelda), mientras su texto siga como se importó. */
+      function ricoDe(b, r) {
+        const h = b["h:" + r];
+        if (!h) return null;
+        try { const o = JSON.parse(h); return o && Array.isArray(o.b) && o.t === NOM.origen.huella(String(b["c:" + r] || "")) ? o.b : null; } catch (e) { return null; }
+      }
+      const IMG_OK = /^data:image\/(png|jpe?g|gif|webp|bmp);base64,[A-Za-z0-9+/=]+$/;
+      function htmlRico(bs, prof) {
+        return bs.map((x) => {
+          if (x.tabla) return prof < 3 && x.tabla.celdas ? htmlTabla(Object.assign({ filasTexto: x.tabla.filas, colsTexto: x.tabla.cols }, x.tabla.celdas), false, prof + 1) : "";
+          const st = [], al = { centro: "center", der: "right", just: "justify" }[x.al];
+          if (al) st.push("text-align:" + al);
+          const fr = Math.max(0, Math.min(200, +x.fr || 24)), iz = Math.max(0, Math.min(400, +x.iz || 48));
+          if (x.m != null) st.push(`padding-left:${iz}px;text-indent:-${fr}px`);
+          const marca = x.m != null ? `<span class="wd-cel-marca" style="min-width:${fr}px">${esc(String(x.m))}</span>` : "";
+          const runs = (x.r || []).map((t) => {
+            if (t.img) { const w0 = Math.max(4, Math.min(2000, +t.w || 40)), h0 = Math.max(4, Math.min(3000, +t.h || +t.w || 40)); return IMG_OK.test(t.img) ? `<img class="wd-cel-img" src="${t.img}" alt="" style="width:${w0}px;aspect-ratio:${w0} / ${h0};height:auto">` : ""; }
+            return envolver(String(t.x || ""), t.a || {});
+          }).join("");
+          return `<div class="wd-cel-p"${st.length ? ` style="${st.join(";")}"` : ""}>${marca}${runs || "<br>"}</div>`;
+        }).join("");
+      }
+      /** El HTML de una tabla (sin sus botones). `editable`: con celdas que se escriben; `prof`: dentro de otra celda. */
+      function htmlTabla(b, editable, prof) {
         const { filas, cols } = dimTabla(b);
         const { spans, cubiertas } = combinadasTabla(b);
         const anchos = anchosTabla(b, cols);
-        let h = `<table class="wd-tab ${b.encabezado ? "con-cab" : ""} bordes-${esc(b.bordes || "todos")}"><colgroup>${anchos.map((w) => `<col style="width:${w.toFixed(2)}%">`).join("")}</colgroup><tbody>`;
+        // De Word: márgenes de celda (arriba, derecha, abajo, izquierda), interlineado y espacio de los párrafos de las celdas
+        const mar = String(b.cmar || "").split(",").map(Number), esp = String(b.cesp || "").split(",").map(Number);
+        const vars = [];
+        if (mar.length === 4 && mar.every((v) => v >= 0 && v < 200)) vars.push(`--cpt:${mar[0]}px;--cpr:${mar[1]}px;--cpb:${mar[2]}px;--cpl:${mar[3]}px`);
+        if (+b.clx > 0) vars.push(`--clx:${+b.clx}px`); else if (+b.cli > 0) vars.push(`--cli:${+b.cli}`);
+        if (esp.length === 2 && esp.every((v) => v >= 0 && v < 500)) vars.push(`--cant:${esp[0]}px;--cdesp:${esp[1]}px`);
+        // filas de encabezado que se repiten arriba de cada hoja (en <thead>: así también al imprimir)
+        const cab = Math.min(filas, Math.max(+b.cabRep || 0, 0));
+        // ancho de Word (px o % del texto), centrada o a la derecha, y su sangría
+        const pw = /^p:(\d+(\.\d+)?)$/.exec(String(b.tw || ""));
+        if (pw && +pw[1] > 0 && +pw[1] <= 500) vars.push(`width:${+pw[1]}%`); else if (+b.tw > 20 && +b.tw < 5000) vars.push(`width:${+b.tw}px`);
+        if (b.tj === "c") vars.push("margin-left:auto;margin-right:auto"); else if (b.tj === "d") vars.push("margin-left:auto"); else if (+b.ti && Math.abs(+b.ti) < 2000) vars.push(`margin-left:${+b.ti}px`);
+        let h = `<table class="wd-tab${prof ? " anidada" : ""} ${b.encabezado ? "con-cab" : ""}${b.cmar || b.cli || b.clx ? " de-word" : ""}${+b.clx > 0 ? " con-clx" : ""} bordes-${esc(b.bordes || "todos")}"${cab ? ` data-cab="${cab}"` : ""}${vars.length ? ` style="${esc(vars.join(";"))}"` : ""}><colgroup>${anchos.map((w) => `<col style="width:${w.toFixed(2)}%">`).join("")}</colgroup>${cab ? "<thead>" : "<tbody>"}`;
         for (let f = 0; f < filas; f++) {
-          h += "<tr>";
+          if (cab && f === cab) h += "</thead><tbody>";
+          // alto de la fila (exacto: lo que no cabe se corta, como Word; mínimo) y si se puede partir entre hojas
+          const fh = /^([em])(\d+(\.\d+)?)$/.exec(String(b["fh:" + f] || ""));
+          h += `<tr${fh ? ` style="height:${+fh[2]}px;--fa:${+fh[2]}px"${fh[1] === "e" ? ' class="exacta"' : ""}` : ""}${b["fp:" + f] ? ' data-no-partir="1"' : ""}>`;
           for (let c = 0; c < cols; c++) {
             const r = FT().ref(c, f);
             if (cubiertas.has(r)) continue;
-            const sp = spans[r], st = [];
+            const sp = spans[r], st = [], rico = ricoDe(b, r);
             if (b["r:" + r]) st.push("background-color:" + b["r:" + r]);
+            if (b["va:" + r] === "c") st.push("vertical-align:middle"); else if (b["va:" + r] === "b") st.push("vertical-align:bottom");
+            // diagonales de Word (de arriba a la izquierda hacia abajo a la derecha, y al revés)
+            const dgs = String(b["bxd:" + r] || "").split(";").map((q) => q.split(":")).filter(([l, e2, w2, c2]) => (l === "tl" || l === "tr") && /^#[0-9A-F]{6}$/i.test(c2 || "") && +w2 > 0);
+            // (una línea de SVG estirada a la celda: nítida, del grueso de Word)
+            if (dgs.length) st.push("background-image:" + dgs.map(([l, , w2, c2]) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'><line x1='0' y1='${l === "tl" ? 0 : 100}' x2='100' y2='${l === "tl" ? 100 : 0}' stroke='${c2}' stroke-width='${Math.min(4, +w2)}' vector-effect='non-scaling-stroke'/></svg>`)}")`).join(",") + ";background-size:100% 100%;background-repeat:no-repeat");
+            // (en Word el margen de la celda se mide desde la línea de la cuadrícula: el borde no le quita lugar al texto;
+            // con bordes juntos, el navegador sí le quita la mitad de cada uno, y un texto justo bajaba de renglón)
+            if (mar.length === 4 && mar.every((v) => v >= 0 && v < 200)) {
+              const ancho = (l) => { const m = new RegExp("(^|;)" + l + ":(solid|double|dotted|dashed):([\\d.]+):").exec(String(b["bxw:" + r] || "")); return m ? +m[3] : b.bordes === "ninguno" ? 0 : 1; };
+              st.push(`padding-left:${Math.max(0, mar[3] - ancho("i") / 2).toFixed(2)}px;padding-right:${Math.max(0, mar[1] - ancho("d") / 2).toFixed(2)}px`);
+            }
             // bordes de la celda que pide el estilo de tabla de Word («a:solid:1.33:#4472C4;b:no…»)
             if (b["bxw:" + r]) String(b["bxw:" + r]).split(";").forEach((q) => {
               const [l, e2, w2, c2] = q.split(":"), lado = { a: "top", b: "bottom", i: "left", d: "right" }[l];
@@ -1899,11 +1947,21 @@
             if (b["i:" + r]) ce.push("font-style:italic");
             if (b["k:" + r]) ce.push("color:" + b["k:" + r]);
             if (b["al:" + r]) ce.push("text-align:" + ({ izq: "left", centro: "center", der: "right" }[b["al:" + r]] || "left"));
-            h += `<td${sp ? ` colspan="${sp[0]}" rowspan="${sp[1]}"` : ""}${st.length ? ` style="${esc(st.join(";"))}"` : ""}><div class="wd-celda" data-celda="${r}" ${ed.soloLectura ? "" : 'contenteditable="true"'} spellcheck="true"${ce.length ? ` style="${esc(ce.join(";"))}"` : ""}>${esc(b["c:" + r] || "")}</div></td>`;
+            if (+b["z:" + r] > 0 && +b["z:" + r] < 200) ce.push(`font-size:${+b["z:" + r]}pt`);
+            // texto girado (Word: hacia arriba o hacia abajo)
+            if (b["td:" + r] === "abajo") ce.push("writing-mode:vertical-rl;white-space:pre-wrap"); else if (b["td:" + r] === "arriba") ce.push("writing-mode:vertical-rl;transform:rotate(180deg);white-space:pre-wrap");
+            h += `<td${sp ? ` colspan="${sp[0]}" rowspan="${sp[1]}"` : ""}${st.length ? ` style="${esc(st.join(";"))}"` : ""}><div class="wd-celda${rico ? " rica" : ""}"${prof ? "" : ` data-celda="${r}"`} ${editable && !rico ? 'contenteditable="true"' : ""} spellcheck="true"${ce.length ? ` style="${esc(ce.join(";"))}"` : ""}${rico && editable ? ' title="Doble clic para escribir en ella como texto"' : ""}>${rico ? htmlRico(rico, prof) : esc(b["c:" + r] || "")}</div></td>`;
           }
           h += "</tr>";
         }
-        h += "</tbody></table>";
+        h += cab && cab >= filas ? "</thead></table>" : "</tbody></table>";
+        return h;
+      }
+      function pintarTabla(o, b, ref) {
+        o.dataset.ref = ref;
+        if (!b) { o.innerHTML = `<span class="wd-falta">Tabla no disponible</span>`; return; }
+        const anchos = anchosTabla(b, dimTabla(b).cols);
+        let h = htmlTabla(b, !ed.soloLectura, 0);
         if (!ed.soloLectura) {
           const bt = (t, i, tx, micro) => `<button type="button" data-t="${t}" data-micro="${esc(micro || tx)}" aria-label="${esc(tx)}">${ico(i, "ico-s")}${tx && !micro ? " " + esc(tx) : ""}</button>`;
           h += `<span class="wd-tab-ctl" contenteditable="false">${bt("fila", "between-horizontal-start", "Fila", "Insertar fila")}${bt("col", "between-vertical-start", "Columna", "Insertar columna")}${bt("combinar", "table-cells-merge", "", "Combinar o separar celdas")}<span class="sep"></span>${bt("n", "bold", "", "Negrita")}${bt("i", "italic", "", "Cursiva")}${bt("k", "baseline", "", "Color de letra")}${bt("r", "paint-bucket", "", "Relleno")}${bt("al", "align-center", "", "Alinear")}${bt("bordes", "grid-3x3", "", "Bordes")}${bt("cab", "heading-1", "", "Fila de encabezado")}<span class="sep"></span><select data-t="alcance" aria-label="Aplicar a">${[["celda", "A la celda"], ["fila", "A la fila"], ["columna", "A la columna"], ["tabla", "A toda la tabla"]].map(([v, tx]) => `<option value="${v}" ${alcanceTab === v ? "selected" : ""}>${tx}</option>`).join("")}</select>${bt("borrar", "trash-2", "", "Eliminar fila, columna o tabla")}</span>`;
@@ -1968,17 +2026,31 @@
         if (e.key !== "Tab" && !(e.key === "Enter" && !e.shiftKey)) return;
         e.preventDefault();
         const td = cel.closest("td"), tr = td.parentElement, i = [...tr.children].indexOf(td);
-        let sig = e.key === "Enter" ? tr.nextElementSibling && tr.nextElementSibling.children[Math.min(i, tr.nextElementSibling.children.length - 1)]
-          : e.shiftKey ? (td.previousElementSibling || (tr.previousElementSibling && tr.previousElementSibling.lastElementChild)) : (td.nextElementSibling || (tr.nextElementSibling && tr.nextElementSibling.children[0]));
+        const filasT = [...cel.closest("table").rows].filter((x) => !x.classList.contains("wd-fila-corte")), fi = filasT.indexOf(tr);
+        const sigF = filasT[fi + 1] || null, antF = filasT[fi - 1] || null;
+        let sig = e.key === "Enter" ? sigF && sigF.children[Math.min(i, sigF.children.length - 1)]
+          : e.shiftKey ? (td.previousElementSibling || (antF && antF.lastElementChild)) : (td.nextElementSibling || (sigF && sigF.children[0]));
         if (!sig && e.key === "Tab" && !e.shiftKey) {
           // Tab en la última celda agrega una fila (como en Word).
           const ref = cel.closest("[data-ref]").dataset.ref;
           doc().cambiar(ref, { filasTexto: (doc().valor(ref, "filasTexto") || 3) + 1 });
-          setTimeout(() => { const t = cuerpo.querySelector(`[data-ref="${ref}"] tr:last-child td .wd-celda`); if (t) t.focus(); }, 20);
+          setTimeout(() => { const t = cuerpo.querySelector(`[data-ref="${ref}"] > table.wd-tab > tbody > tr:last-child td .wd-celda`); if (t) t.focus(); }, 20);
           return;
         }
-        if (sig) { const c = sig.querySelector("[data-celda]"); c.focus(); const r = document.createRange(); r.selectNodeContents(c); getSelection().removeAllRanges(); getSelection().addRange(r); }
+        const c = sig && sig.querySelector("[data-celda]");
+        if (c && c.isContentEditable) { c.focus(); const r = document.createRange(); r.selectNodeContents(c); getSelection().removeAllRanges(); getSelection().addRange(r); }
       }, true);
+      // Una celda de Word con imágenes, listas o tablas adentro se ve como en Word y no se escribe encima (se perdería lo que
+      // no es texto). Con doble clic se vuelve una celda de texto, si la persona lo confirma.
+      cuerpo.addEventListener("dblclick", async (e) => {
+        const cel = e.target.closest && e.target.closest(".wd-celda.rica[data-celda]");
+        if (!cel || ed.soloLectura) return;
+        e.preventDefault(); e.stopPropagation();
+        const ref = cel.closest("[data-ref]").dataset.ref, r = cel.dataset.celda;
+        if (!(await NOM.confirmar("Editar como texto", "Esta celda trae imágenes, listas o una tabla de Word. Para escribir en ella aquí se queda solo su texto. Si no la editas, al descargar en Word sale tal como estaba.", { si: "Editar como texto" }))) return;
+        doc().cambiar(ref, { ["h:" + r]: null });
+        setTimeout(() => { const c = cuerpo.querySelector(`[data-ref="${ref}"] [data-celda="${r}"]`); if (c && c.isContentEditable) c.focus(); }, 30);
+      });
       /** Celdas a las que se aplica el formato según el alcance elegido. */
       function celdasAlcance(b, celda) {
         const { filas, cols } = dimTabla(b), p = FT().parseRef(celda), l = [];
@@ -2018,7 +2090,9 @@
           const p = k.slice(0, i), r = k.slice(i + 1), v = b[k];
           if (v == null || v === "" || v === false) continue;
           if (p === "aw") { const c = FT().colNum(r) - 1, nc = eje === "c" ? nueva(c) : c; if (nc != null) nuevos["aw:" + FT().colLetra(nc)] = v; continue; }
-          if (!PROPS_TAB.includes(p)) continue;
+          // (lo de cada fila de Word: su alto y si se puede partir)
+          if (p === "fh" || p === "fp") { const nf = eje === "f" ? nueva(+r) : +r; if (nf != null) nuevos[p + ":" + nf] = v; continue; }
+          if (!PROPS_TAB.includes(p) && !["bxw", "bxd", "z", "va", "td", "h", "o"].includes(p)) continue;
           const pos = FT().parseRef(r);
           if (!pos) continue;
           if (p === "m") {
@@ -2033,7 +2107,9 @@
           nuevos[p + ":" + FT().ref(nc, nf)] = v;
         }
         const campos = {};
-        for (const k in b) { const i = k.indexOf(":"); if (i > 0 && (PROPS_TAB.includes(k.slice(0, i)) || k.startsWith("aw:")) && b[k] != null && b[k] !== "" && !(k in nuevos)) campos[k] = null; }
+        for (const k in b) { const i = k.indexOf(":"); if (i > 0 && (PROPS_TAB.includes(k.slice(0, i)) || ["aw", "fh", "fp", "bxw", "bxd", "z", "va", "td", "h", "o"].includes(k.slice(0, i))) && b[k] != null && b[k] !== "" && !(k in nuevos)) campos[k] = null; }
+        // las filas de encabezado: si se inserta o se quita dentro de ellas, cambian
+        if (eje === "f" && +b.cabRep > 0 && en < +b.cabRep) campos.cabRep = Math.max(0, +b.cabRep + (n > 0 ? n : -Math.min(-n, +b.cabRep - en)));
         for (const k in nuevos) if (JSON.stringify(nuevos[k]) !== JSON.stringify(b[k] == null ? null : b[k])) campos[k] = nuevos[k];
         campos[eje === "f" ? "filasTexto" : "colsTexto"] = Math.max(1, Math.min(eje === "f" ? 200 : 20, total + n));
         // Los anchos en % de las columnas que quedan se reparten de nuevo.
@@ -2604,6 +2680,9 @@
         }
         cuerpo.classList.remove("con-secciones");
         quitarContinuaciones();
+        // (las tablas partidas entre hojas: filas de relleno, encabezados repetidos, bordes del corte y su recorte)
+        $$(".wd-fila-corte, .wd-cab-rep, .wd-borde-corte", cuerpo).forEach((x) => x.remove());
+        $$("table.wd-tab[data-cortada]", cuerpo).forEach((t) => { t.style.clipPath = ""; delete t.dataset.cortada; });
         $$(".wd-corte", cuerpo).forEach((x) => { const p = x.parentNode; x.remove(); if (p) p.normalize(); });
         quitarApartes(null);
         cuerpo.style.minHeight = "";
@@ -2861,10 +2940,12 @@
                     if (top + alto > tope + 1 && alto <= fondoHoja(p) - (p.top + g.m[0])) { r.lleno = true; break; }
                   }
                 }
-                if (top + h > tope + 1 && !(primero && top <= arriba + 1 && h > tope - arriba)) {
-                  // ¿se parte entre esta hoja y las siguientes?
+                if (top + h > tope + 1 && !(primero && top <= arriba + 1 && h > tope - arriba && !el.querySelector(":scope > .wd-tabla > table.wd-tab"))) {
+                  // ¿se parte entre esta hoja y las siguientes? (una tabla, por filas o por renglones de la fila, como Word)
                   const pAnt = p;
-                  if (partirEntreHojas(el, top, tope, () => { cerrarHoja(p); p = nuevaHoja(g); return { destino: p.top + g.m[0], abajo: fondoHoja(p) }; })) {
+                  const otraHoja = () => { cerrarHoja(p); p = nuevaHoja(g); return { destino: p.top + g.m[0], abajo: fondoHoja(p) }; };
+                  const esTabla = !!el.querySelector(":scope > .wd-tabla > table.wd-tab");
+                  if (esTabla ? (() => { const r2 = partirTabla(el, top, tope, otraHoja); return !!(r2 && p !== pAnt); })() : partirEntreHojas(el, top, tope, otraHoja)) {
                     anotar(pAnt, el, notasEl, med);
                     if (!pAnt.primero) pAnt.primero = el;
                     pAnt.bajo = Math.max(pAnt.bajo || 0, tope);
@@ -3371,6 +3452,13 @@
       /** Lo que tiene que caber de un párrafo arriba de su hoja para quedarse ahí: sus primeras líneas si se puede partir,
           completo si no (líneas juntas, objetos, o tan corto que partirlo dejaría una línea sola). */
       function parteMinima(el, h) {
+        // (una tabla: con el título de arriba basta su primera fila —después de las de encabezado—, como en Word)
+        const tb = el.querySelector(":scope > .wd-tabla > table.wd-tab");
+        if (tb && tb.rows.length) {
+          const r = tb.rows[Math.min(+(tb.dataset.cab || 0), tb.rows.length - 1)];
+          const er = el.getBoundingClientRect(), z = er.height / (el.offsetHeight || 1) || 1;
+          return Math.min(h, (r.getBoundingClientRect().bottom - er.top) / z);
+        }
         if (el.dataset.juntas === "1" || el.querySelector(".wd-obj.bloque, .wd-imagen.libre, .wd-imagen.flota-izq, .wd-imagen.flota-der, .wd-excl")) return h;
         const m = minLineas(el), ls = lineasDe(el);
         return ls.length < 2 * m ? h : ls[m - 1].b;
@@ -3419,10 +3507,20 @@
           // este baja con él
           else if (top > arriba + 1 && i + 1 < n && conSiguiente(el) && !cabeConSiguiente(kids, i, top, tops, altos, corr, abajo, util)) destino = (pi + 1) * paso + pg.m.s;
           else if (top + h > abajo + 1) {
+            // Una tabla se parte entre hojas como Word (por filas o por renglones dentro de la fila); si ni su primera fila
+            // cabe, empieza en la hoja siguiente (y ahí se parte, abajo).
+            const esTabla = !!el.querySelector(":scope > .wd-tabla > table.wd-tab");
+            if (esTabla) {
+              let pAct = pi;
+              const sig = () => { pAct++; return { destino: pAct * paso + pg.m.s, abajo: pAct * paso + H - pg.m.i - reservado(pAct) }; };
+              partido = partirTabla(el, top, abajo, sig);
+              if (partido) corr += partido.crece; else destino = (pi + 1) * paso + pg.m.s;
+            } else {
             // Un párrafo que no cabe se parte (si deja al menos 2 líneas en cada página); si no, pasa completo.
             partido = partirParrafo(el, top, paso, H, pg, reservado, notasEl, medidor, calcular);
             if (partido) { corr += partido.crece; if (partido.puntos && partido.puntos.length) partes.push(partido); }
             else if (h <= util) destino = (pi + 1) * paso + pg.m.s;
+            }
           }
           forzar = null;
           let topFinal = top;
@@ -3435,6 +3533,14 @@
             topFinal = destino;
             // (en la hoja nueva, lo que flota se vuelve a acomodar)
             if (!calcular && flot) corr += flotarEnHoja(el, Math.floor(topFinal / paso));
+            // una tabla que bajó y tampoco cabe en su hoja nueva se parte desde ahí
+            if (!partido && topFinal + h > Math.floor(topFinal / paso) * paso + H - pg.m.i - reservado(Math.floor(topFinal / paso)) + 1 && el.querySelector(":scope > .wd-tabla > table.wd-tab")) {
+              let pAct = Math.floor(topFinal / paso);
+              const lim2 = pAct * paso + H - pg.m.i - reservado(pAct);
+              const sig = () => { pAct++; return { destino: pAct * paso + pg.m.s, abajo: pAct * paso + H - pg.m.i - reservado(pAct) }; };
+              const p2 = partirTabla(el, topFinal, lim2, sig);
+              if (p2) { partido = p2; corr += p2.crece; }
+            }
           }
           if (calcular) esperado[i] = topFinal;
           // Cada nota va en la página donde quedó su número.
@@ -3570,6 +3676,123 @@
         }
         return res;
       }
+      /**
+       * Parte una tabla entre hojas como Word. La fila que no cabe se parte por renglones en cada celda (lo normal en Word:
+       * «permitir que la fila se divida entre páginas»; con control de viudas, dos renglones en cada lado) o pasa completa
+       * a la hoja siguiente (si no se permite, si es de alto exacto o si no le cabe ni un renglón). Arriba de cada hoja
+       * nueva van las filas de encabezado que se repiten. Lo de la tabla que quedaría en el margen de abajo, entre las hojas
+       * y en el margen de arriba se recorta, y el corte de una fila partida lleva su borde, como en Word.
+       * `top`: dónde queda el párrafo de la tabla; `lim`: el fondo del texto de su hoja; `siguiente()` → { destino, abajo }
+       * de la hoja que sigue (se llama una vez por cada hoja nueva). Devuelve { crece } o null si ni la primera fila cabe
+       * (la tabla empieza en la hoja siguiente).
+       */
+      function partirTabla(el, top, lim, siguiente) {
+        const o = el.querySelector(":scope > .wd-tabla"), tb = o && o.querySelector(":scope > table.wd-tab");
+        if (!tb || vista !== "paginas" || !tb.rows.length) return null;
+        const alto0 = el.offsetHeight;
+        const med = () => { const er = el.getBoundingClientRect(); return { top: er.top, z: er.height / (el.offsetHeight || 1) || 1 }; };
+        const y = (m, v) => top + (v - m.top) / m.z;   // de la pantalla a la posición en el cuerpo
+        const filas = () => [...tb.rows].filter((r) => !r.classList.contains("wd-fila-corte"));
+        const cab = Math.min(+(tb.dataset.cab || 0), filas().length - 1);
+        const cs = getComputedStyle(tb), padT = parseFloat(cs.getPropertyValue("--cpt")) || 0, padB = parseFloat(cs.getPropertyValue("--cpb")) || 0;
+        let altoCab = 0;
+        if (cab > 0) { const m = med(), rs = filas(); altoCab = y(m, rs[cab - 1].getBoundingClientRect().bottom) - y(m, rs[0].getBoundingClientRect().top); }
+        const bandas = [], bordes = [];
+        let desde = cab, cortes = 0, ultimo = -1, forzada = false;
+        for (let vuelta = 0; vuelta < 600; vuelta++) {
+          const m = med(), rs = filas();
+          let k = -1;
+          for (let j = desde; j < rs.length; j++) if (y(m, rs[j].getBoundingClientRect().bottom) > lim + 1) { k = j; break; }
+          if (k < 0) break;
+          const fila = rs[k], yF = y(m, fila.getBoundingClientRect().top);
+          // ¿cuántos renglones de cada celda caben en esta hoja? (con control de viudas: dos en cada lado o ninguno)
+          const partible = forzada || (!fila.dataset.noPartir && !fila.classList.contains("exacta"));
+          const celdas = [...fila.cells].map((td) => td.querySelector(":scope > .wd-celda")).filter(Boolean);
+          const plan = partible ? celdas.map((c) => {
+            const ls = lineasDe(c), cr = c.getBoundingClientRect(), cz = cr.height / (c.offsetHeight || 1) || 1;
+            const abs = ls.map((l) => ({ t: y(m, cr.top + l.t * cz), b: y(m, cr.top + l.b * cz) }));
+            // (un renglón cabe si también cabe el margen de abajo de la celda, como en Word)
+            let q = abs.findIndex((l) => l.b + padB > lim + 1);
+            if (q < 0) return { c, q: -1, abs };
+            if (abs.length >= 4) { if (abs.length - q < 2) q = abs.length - 2; if (q < 2) q = 0; } else if (q < abs.length) q = 0;
+            return { c, q, abs };
+          }) : [];
+          // (se parte si alguna celda necesita cortar y algo de la fila se queda en esta hoja)
+          const quedan = plan.some((p) => p.q >= 0) && plan.some((p) => p.q > 0 || (p.q < 0 && p.abs.length));
+          if (!quedan && k === desde && cortes === 0 && k <= cab) return null;            // ni la primera fila cabe: la tabla baja completa
+          // una fila que no se puede partir y no cabe ni en una hoja vacía: Word la parte de todos modos (o la deja salir)
+          if (k === ultimo && !quedan) { if (!forzada && partible === false) { forzada = true; continue; } break; }
+          const sig = siguiente();
+          if (!sig || !(sig.destino > lim)) break;
+          ultimo = k; forzada = false; cortes++;
+          const arribaSig = sig.destino + altoCab;
+          if (!quedan) {
+            // la fila pasa completa: una fila de relleno sin bordes la lleva al principio de la hoja siguiente
+            const alto = arribaSig - yF;
+            if (alto <= 0) { lim = sig.abajo; desde = k; continue; }
+            const tr = document.createElement("tr");
+            tr.className = "wd-fila-corte"; tr.setAttribute("aria-hidden", "true");
+            tr.innerHTML = `<td colspan="${Math.max(1, tb.querySelectorAll("col").length)}" style="height:${alto.toFixed(2)}px"></td>`;
+            fila.parentNode.insertBefore(tr, fila);
+            // (sin cortar el borde de la fila de arriba ni el de la que baja: van a la mitad de la línea)
+            bandas.push([y(m, rs[Math.max(0, k - 1)].getBoundingClientRect().bottom) + 1.5, arribaSig - 1.5]);
+          } else {
+            // la fila se parte: lo que no cabe de cada celda baja al principio de la hoja siguiente (con su margen de arriba)
+            let fondo = yF;
+            plan.forEach((p) => { if (p.q !== 0 && p.abs.length) fondo = Math.max(fondo, p.abs[(p.q < 0 ? p.abs.length : p.q) - 1].b); });
+            fondo += padB;
+            plan.forEach((p) => {
+              if (p.q < 0 || !p.abs.length) return;
+              const lt = p.abs[p.q].t, alto = arribaSig + padT - lt;
+              if (alto <= 0) return;
+              const cr = p.c.getBoundingClientRect(), cz = cr.height / (p.c.offsetHeight || 1) || 1;
+              const punto = inicioDeLinea(p.c, cr.top + (lt - y(m, cr.top)) * cz + 1, true);
+              if (!punto) return;
+              const rg = document.createRange();
+              rg.setStart(punto.node, punto.off);
+              rg.insertNode(crearCorte(alto + "px"));
+            });
+            bandas.push([fondo, arribaSig]);
+            // el borde que cierra la fila en esta hoja y (sin encabezado repetido) el que la abre en la siguiente
+            const td0 = fila.cells[0], bc = td0 ? getComputedStyle(td0) : null;
+            const linea = bc && parseFloat(bc.borderBottomWidth) > 0 ? `${bc.borderBottomWidth} ${bc.borderBottomStyle} ${bc.borderBottomColor}` : bc && parseFloat(bc.borderTopWidth) > 0 ? `${bc.borderTopWidth} ${bc.borderTopStyle} ${bc.borderTopColor}` : null;
+            if (linea) { bordes.push([fondo, linea]); if (!altoCab) bordes.push([arribaSig, linea]); }
+          }
+          // arriba de la hoja nueva, las filas de encabezado (una copia que no se edita)
+          if (altoCab) {
+            const m2 = med(), yo = y(m2, o.getBoundingClientRect().top);
+            const c = document.createElement("div");
+            c.className = "wd-cab-rep"; c.setAttribute("aria-hidden", "true"); c.contentEditable = "false";
+            c.style.top = (sig.destino - yo).toFixed(2) + "px";
+            const t2 = tb.cloneNode(false);
+            t2.removeAttribute("data-cortada"); t2.style.clipPath = "";
+            const cg = tb.querySelector("colgroup"), th = tb.tHead;
+            if (cg) t2.append(cg.cloneNode(true));
+            if (th) t2.append(th.cloneNode(true));
+            t2.querySelectorAll("[contenteditable]").forEach((x) => x.removeAttribute("contenteditable"));
+            t2.querySelectorAll("[data-celda]").forEach((x) => x.removeAttribute("data-celda"));
+            c.append(t2);
+            o.append(c);
+          }
+          lim = sig.abajo; desde = k;
+        }
+        if (bandas.length || bordes.length) {
+          // lo de la tabla entre hojas (margen de abajo, separación y margen de arriba) no se ve; el corte lleva su borde
+          const m = med(), r = tb.getBoundingClientRect(), y0 = y(m, r.top), W = r.width / m.z, H = r.height / m.z;
+          let d = `M-20,-20 H${(W + 20).toFixed(2)} V${(H + 20).toFixed(2)} H-20 Z`;
+          for (const [a, b] of bandas) if (b - a > 0.5) d += ` M-20,${(a - y0).toFixed(2)} H${(W + 20).toFixed(2)} V${(b - y0).toFixed(2)} H-20 Z`;
+          tb.style.clipPath = `path(evenodd, "${d}")`;
+          tb.dataset.cortada = "1";
+          const yo = y(m, o.getBoundingClientRect().top), x0 = (r.left - o.getBoundingClientRect().left) / m.z;
+          for (const [yy, linea] of bordes) {
+            const b = document.createElement("div");
+            b.className = "wd-borde-corte"; b.setAttribute("aria-hidden", "true");
+            b.style.cssText = `position:absolute;left:${x0.toFixed(2)}px;width:${W.toFixed(2)}px;top:${(yy - yo - 0.5).toFixed(2)}px;border-top:${linea};pointer-events:none`;
+            o.append(b);
+          }
+        }
+        return cortes ? { crece: el.offsetHeight - alto0 } : { crece: 0 };
+      }
       /** En qué línea del párrafo está la llamada de una nota. Se mide por su centro: el número va en
           superíndice y sobresale por arriba, así que por su borde de arriba caía en la línea anterior. */
       function lineaDeNota(o, lineas, er, z) {
@@ -3578,11 +3801,11 @@
       }
       /** El primer carácter de texto que está en la línea que empieza en y (coordenadas de pantalla).
           Funciona aunque el párrafo no esté a la vista (no usa caretRangeFromPoint). */
-      function inicioDeLinea(el, y) {
+      function inicioDeLinea(el, y, enCelda) {
         const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
         const r = document.createRange();
         for (let n = w.nextNode(); n; n = w.nextNode()) {
-          if (!n.length || (n.parentElement && n.parentElement.closest("[data-obj], .wd-corte"))) continue;
+          if (!n.length || (n.parentElement && n.parentElement.closest(enCelda ? ".wd-corte" : "[data-obj], .wd-corte"))) continue;
           r.setStart(n, n.length - 1); r.setEnd(n, n.length);
           // Cada letra se ubica por su centro: un subíndice al final de la línea de arriba baja tanto que
           // su borde de arriba ya parecía de esta línea (el corte quedaba antes de él: un renglón de más).

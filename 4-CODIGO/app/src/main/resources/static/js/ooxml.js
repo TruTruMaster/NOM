@@ -325,6 +325,14 @@
 
   // ------------------------------------------------------------ Word (.docx)
   const TWIP = 15;   // 1 px (96 ppp) = 15 twips
+  /** Lo que es de una celda de tabla (texto y formato): su firma dice si cambió desde que se importó. */
+  const CAMPOS_CELDA = ["c", "n", "i", "k", "r", "al", "m", "z", "va", "td", "bxw", "bxd", "h"];
+  function firmaCelda(o, ref) {
+    const t = JSON.stringify(CAMPOS_CELDA.map((p) => (o[p + ":" + ref] == null || o[p + ":" + ref] === false ? null : o[p + ":" + ref])));
+    let h = 0x811C9DC5;
+    for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+    return (h >>> 0).toString(36) + t.length.toString(36);
+  }
   const ESTILO_WORD = { titulo: "Title", subtitulo: "Subtitle", h1: "Heading1", h2: "Heading2", h3: "Heading3", cita: "Quote", codigo: "Codigo" };
   const ALIN_WORD = { centro: "center", der: "right", just: "both" };
   const hexW = (c) => (/^#[0-9a-f]{6}$/i.test(c || "") ? c.slice(1).toUpperCase() : null);
@@ -419,7 +427,10 @@
     const tabla = (b) => {
       const filas = Math.max(1, b.filasTexto || 3), cols = Math.max(1, b.colsTexto || 3);
       const fijos = Array.from({ length: cols }, (_, c) => +b["aw:" + F().colLetra(c)] || 0), suma = fijos.reduce((s2, v) => s2 + v, 0), libres = fijos.filter((v) => !v).length;
-      const anchos = fijos.map((v) => Math.round(((v || (libres ? Math.max(0, 100 - suma) / libres : 0)) / 100) * anchoTexto));
+      // (el ancho de la tabla: el de Word si lo trae —px o % del texto—; si no, el del texto)
+      const pctT = /^p:(\d+(\.\d+)?)$/.exec(String(b.tw || ""));
+      const anchoTabla = pctT ? Math.round((anchoTexto * +pctT[1]) / 100) : +b.tw > 20 ? Math.round(+b.tw * 15) : anchoTexto;
+      const anchos = fijos.map((v) => Math.round(((v || (libres ? Math.max(0, 100 - suma) / libres : 0)) / 100) * anchoTabla));
       const spans = {}, tapadas = {};
       for (const k in b) {
         if (!k.startsWith("m:") || !/^\d+x\d+$/.test(String(b[k] || ""))) continue;
@@ -430,9 +441,27 @@
       }
       const lados = BORDES_TABLA[b.bordes || "todos"] || BORDES_TABLA.todos;
       const bordes = `<w:tblBorders>${["top", "left", "bottom", "right", "insideH", "insideV"].map((l) => (lados.includes(l) ? `<w:${l} w:val="single" w:sz="4" w:space="0" w:color="8E8E8E"/>` : `<w:${l} w:val="nil"/>`)).join("")}</w:tblBorders>`;
-      let t = `<w:tbl><w:tblPr><w:tblStyle w:val="TablaNom"/><w:tblW w:w="${anchoTexto}" w:type="dxa"/>${bordes}<w:tblLayout w:type="fixed"/><w:tblLook w:val="04A0" w:firstRow="${b.encabezado ? 1 : 0}" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr><w:tblGrid>${anchos.map((w) => `<w:gridCol w:w="${w}"/>`).join("")}</w:tblGrid>`;
+      // márgenes de celda de Word (px: arriba, derecha, abajo, izquierda) y el espaciado de los párrafos de las celdas
+      const mar = String(b.cmar || "").split(",").map(Number), conMar = mar.length === 4 && mar.every((v) => v >= 0 && v < 200);
+      const tw = (px) => Math.round(px * 15);
+      const margenes = conMar ? `<w:tblCellMar><w:top w:w="${tw(mar[0])}" w:type="dxa"/><w:left w:w="${tw(mar[3])}" w:type="dxa"/><w:bottom w:w="${tw(mar[2])}" w:type="dxa"/><w:right w:w="${tw(mar[1])}" w:type="dxa"/></w:tblCellMar>` : "";
+      const esp = String(b.cesp || "").split(",").map(Number), conEsp = esp.length === 2 && esp.every((v) => v >= 0 && v < 500);
+      const linea = +b.clx > 0 ? ` w:line="${tw(+b.clx)}" w:lineRule="exact"` : +b.cli > 0 ? ` w:line="${Math.round(+b.cli * 240)}" w:lineRule="auto"` : "";
+      const espCelda = `<w:spacing${conEsp ? ` w:before="${tw(esp[0])}"` : ""} w:after="${conEsp ? tw(esp[1]) : 0}"${linea}/>`;
+      const cabRep = Math.max(+b.cabRep || 0, b.encabezado ? 1 : 0);
+      // ancho (de Word: px o % del texto), alineación y sangría
+      const pct = /^p:(\d+(\.\d+)?)$/.exec(String(b.tw || ""));
+      const tblW = pct ? `<w:tblW w:w="${Math.round(+pct[1] * 50)}" w:type="pct"/>` : +b.tw > 20 ? `<w:tblW w:w="${tw(+b.tw)}" w:type="dxa"/>` : `<w:tblW w:w="${anchoTexto}" w:type="dxa"/>`;
+      const tblJc = b.tj === "c" ? '<w:jc w:val="center"/>' : b.tj === "d" ? '<w:jc w:val="right"/>' : "";
+      const tblInd = +b.ti ? `<w:tblInd w:w="${tw(+b.ti)}" w:type="dxa"/>` : "";
+      // (las líneas de cada celda que trajo de Word van en la celda)
+      const conBxw = Object.keys(b).some((k) => k.startsWith("bxw:") || k.startsWith("bxd:"));
+      let t = `<w:tbl><w:tblPr><w:tblStyle w:val="TablaNom"/>${tblW}${tblJc}${tblInd}${bordes}<w:tblLayout w:type="fixed"/>${margenes}<w:tblLook w:val="04A0" w:firstRow="${b.encabezado ? 1 : 0}" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr><w:tblGrid>${anchos.map((w) => `<w:gridCol w:w="${w}"/>`).join("")}</w:tblGrid>`;
       for (let f = 0; f < filas; f++) {
-        t += `<w:tr>${b.encabezado && f === 0 ? "<w:trPr><w:tblHeader/></w:trPr>" : ""}`;
+        // la fila: que no se parta entre páginas, su alto (exacto o mínimo) y si se repite arriba de cada hoja
+        const fh = /^([em])(\d+(\.\d+)?)$/.exec(String(b["fh:" + f] || ""));
+        const trPr = `${b["fp:" + f] ? "<w:cantSplit/>" : ""}${fh ? `<w:trHeight w:val="${tw(+fh[2])}" w:hRule="${fh[1] === "e" ? "exact" : "atLeast"}"/>` : ""}${f < cabRep ? "<w:tblHeader/>" : ""}`;
+        t += `<w:tr>${trPr ? `<w:trPr>${trPr}</w:trPr>` : ""}`;
         for (let c = 0; c < cols; c++) {
           const r = F().ref(c, f), tp = tapadas[r];
           if (tp && !tp.primeraCol) continue;   // tapada a la derecha: va dentro del gridSpan
@@ -441,12 +470,23 @@
           const refBase = tp ? tp.tl : r;
           const ancho = anchos.slice(c, c + (sp ? sp[0] : 1)).reduce((s2, v) => s2 + v, 0);
           const fondo = hexW(b["r:" + refBase]) || (b.encabezado && f === 0 ? "F2F2F2" : null);
-          const tcPr = `<w:tcW w:w="${ancho}" w:type="dxa"/>${sp && sp[0] > 1 ? `<w:gridSpan w:val="${sp[0]}"/>` : ""}${sp && sp[1] > 1 ? (tp ? '<w:vMerge/>' : '<w:vMerge w:val="restart"/>') : ""}${fondo ? `<w:shd w:val="clear" w:color="auto" w:fill="${fondo}"/>` : ""}`;
-          const a2 = { b: !!b["n:" + refBase] || (b.encabezado && f === 0), i: !!b["i:" + refBase], color: b["k:" + refBase] || null };
+          // bordes de la celda (de Word) en el orden del esquema: top, left, bottom, right, diagonales
+          let tcB = "";
+          if (conBxw && !tp) {
+            const lados = {}; String(b["bxw:" + refBase] || "").split(";").forEach((q) => { const [l, e2, w2, c2] = q.split(":"); if (l) lados[l] = [e2, w2, c2]; });
+            String(b["bxd:" + refBase] || "").split(";").forEach((q) => { const [l, e2, w2, c2] = q.split(":"); if (l) lados[l] = [e2, w2, c2]; });
+            const linea = (n, v) => (!v ? "" : v[0] === "no" ? `<w:${n} w:val="nil"/>` : `<w:${n} w:val="${{ double: "double", dotted: "dotted", dashed: "dashed" }[v[0]] || "single"}" w:sz="${Math.max(2, Math.min(96, Math.round((+v[1] || 1) * 0.75 * 8)))}" w:space="0" w:color="${hexW(v[2]) || "auto"}"/>`);
+            tcB = linea("top", lados.a) + linea("left", lados.i) + linea("bottom", lados.b) + linea("right", lados.d) + linea("tl2br", lados.tl) + linea("tr2bl", lados.tr);
+            if (tcB) tcB = `<w:tcBorders>${tcB}</w:tcBorders>`;
+          }
+          const vAl = b["va:" + refBase] === "c" ? '<w:vAlign w:val="center"/>' : b["va:" + refBase] === "b" ? '<w:vAlign w:val="bottom"/>' : "";
+          const tDir = b["td:" + refBase] === "arriba" ? '<w:textDirection w:val="btLr"/>' : b["td:" + refBase] === "abajo" ? '<w:textDirection w:val="tbRl"/>' : "";
+          const tcPr = `<w:tcW w:w="${ancho}" w:type="dxa"/>${sp && sp[0] > 1 ? `<w:gridSpan w:val="${sp[0]}"/>` : ""}${sp && sp[1] > 1 ? (tp ? '<w:vMerge/>' : '<w:vMerge w:val="restart"/>') : ""}${tcB}${fondo ? `<w:shd w:val="clear" w:color="auto" w:fill="${fondo}"/>` : ""}${tDir}${vAl}`;
+          const a2 = { b: !!b["n:" + refBase] || (b.encabezado && f === 0), i: !!b["i:" + refBase], color: b["k:" + refBase] || null, tam: +b["z:" + refBase] > 0 ? +b["z:" + refBase] : null };
           const jc = ALIN_WORD[b["al:" + refBase]];
           const v = tp ? "" : String(b["c:" + r] || "");
           void base;
-          t += `<w:tc><w:tcPr>${tcPr}</w:tcPr>${v.split("\n").map((l) => `<w:p><w:pPr><w:spacing w:after="0"/><w:ind w:firstLine="0"/>${jc ? `<w:jc w:val="${jc}"/>` : ""}</w:pPr>${l ? texto(l, a2) : ""}</w:p>`).join("")}</w:tc>`;
+          t += `<w:tc><w:tcPr>${tcPr}</w:tcPr>${v.split("\n").map((l) => `<w:p><w:pPr>${espCelda}<w:ind w:firstLine="0"/>${jc ? `<w:jc w:val="${jc}"/>` : ""}</w:pPr>${l ? texto(l, a2) : ""}</w:p>`).join("")}</w:tc>`;
         }
         t += "</w:tr>";
       }
@@ -812,8 +852,132 @@
         return abre + conEstilos(ppr) + cuerpoP + "</w:p>";
       };
       let parchados = 0;
+      /**
+       * Una tabla de Word que se editó sale de su XML original con solo lo que cambió: las celdas cuya firma no cambió salen
+       * tal cual (imágenes, listas, tablas adentro, estilo); las que cambiaron conservan su formato de celda, de párrafo y
+       * de letra con el texto nuevo; una fila nueva copia la forma de la de arriba. null si cambió la forma de la tabla
+       * (columnas o celdas combinadas): entonces se escribe de nuevo.
+       */
+      const parcharTabla = (u, b) => {
+        const hs = O.hijosXml(xd, u.ci, u.cf), trs = hs.filter((h) => O.local(h.n) === "tr");
+        if (!trs.length || hs.some((h) => !["tblPr", "tblGrid", "tr", "bookmarkStart", "bookmarkEnd"].includes(O.local(h.n)))) return null;
+        const filasO = [];
+        for (const tr of trs) {
+          const celdas = [];
+          let k = 0;
+          for (const h of O.hijosXml(xd, tr.ci, tr.cf)) {
+            const ln = O.local(h.n);
+            if (ln === "trPr" || ln === "tblPrEx") continue;
+            if (ln !== "tc") return null;
+            const tcPr = O.hijoXml(xd, "tcPr", h.ci, h.cf), gs = tcPr && O.hijoXml(xd, "gridSpan", tcPr.ci, tcPr.cf), vm = tcPr && O.hijoXml(xd, "vMerge", tcPr.ci, tcPr.cf);
+            const span = Math.max(1, +(gs ? O.attr(xd, gs, "w:val") : 1) || 1);
+            celdas.push({ k, span, tc: h, tcPr, vm: vm ? O.attr(xd, vm, "w:val") || "continue" : null });
+            k += span;
+          }
+          filasO.push({ tr, celdas });
+        }
+        const nC = Math.min(63, Math.max(...filasO.map((f) => f.celdas.reduce((s, c) => s + c.span, 0))));
+        if ((+b.colsTexto || 0) !== nC) return null;
+        const nF = Math.max(1, +b.filasTexto || 0), deOrig = [];
+        for (let f = 0; f < nF; f++) {
+          let o = -1;
+          for (let c = 0; c < nC && o < 0; c++) { const s = String(b["o:" + F().ref(c, f)] || ""); if (/^\d+\|/.test(s)) o = +s.split("|")[0]; }
+          deOrig.push(o >= 0 && o < filasO.length ? o : -1);
+        }
+        if (deOrig.some((o, f) => o >= 0 && deOrig.indexOf(o) !== f)) return null;   // una fila del original repetida
+        // las celdas combinadas tienen que ser las mismas que en el original (en las filas que vienen de él)
+        const combO = {}, abiertas = {};
+        filasO.forEach((fo, f) => fo.celdas.forEach((ce) => {
+          if (ce.vm === "continue" && abiertas[ce.k]) { const a = abiertas[ce.k]; a.h++; combO[a.r] = `${a.w}x${a.h}`; return; }
+          abiertas[ce.k] = ce.vm === "restart" ? { r: ce.k + "," + f, w: ce.span, h: 1 } : null;
+          if (ce.span > 1 || ce.vm === "restart") combO[ce.k + "," + f] = `${ce.span}x1`;
+        }));
+        Object.keys(combO).forEach((x) => { if (combO[x] === "1x1") delete combO[x]; });
+        const combA = {};
+        for (const k2 in b) {
+          if (!k2.startsWith("m:") || !/^\d+x\d+$/.test(String(b[k2] || "")) || b[k2] === "1x1") continue;
+          const p = F().parseRef(k2.slice(2));
+          if (!p || p.f >= nF) continue;
+          if (deOrig[p.f] < 0) return null;
+          combA[p.c + "," + deOrig[p.f]] = String(b[k2]);
+        }
+        if (JSON.stringify(Object.entries(combO).sort()) !== JSON.stringify(Object.entries(combA).sort())) return null;
+        // una celda escrita de nuevo: su formato de celda (con el relleno de ahora) y el de su primer párrafo y su primera
+        // letra, con el texto de ahora
+        const ORDEN_TC = ["noWrap", "tcMar", "textDirection", "tcFitText", "vAlign", "hideMark", "headers", "cellIns", "cellDel", "cellMerge", "tcPrChange"];
+        const celdaNueva = (ce, ref, nueva) => {
+          let tcPr = ce.tcPr ? xd.slice(ce.tcPr.i, ce.tcPr.f) : "<w:tcPr></w:tcPr>";
+          if (tcPr.endsWith("/>")) tcPr = "<w:tcPr></w:tcPr>";
+          if (nueva) tcPr = tcPr.replace(/<w:vMerge\b[^>]*\/>|<w:vMerge\b[^>]*>\s*<\/w:vMerge>/, "");
+          tcPr = tcPr.replace(/<w:shd\b[^>]*\/>/, "");
+          const fondo = hexW(b["r:" + ref]);
+          if (fondo) {
+            const shd = `<w:shd w:val="clear" w:color="auto" w:fill="${fondo}"/>`, m = new RegExp("<w:(" + ORDEN_TC.join("|") + ")\\b").exec(tcPr);
+            tcPr = m ? tcPr.slice(0, m.index) + shd + tcPr.slice(m.index) : tcPr.replace(/<\/w:tcPr>$/, shd + "</w:tcPr>");
+          }
+          if (tcPr === "<w:tcPr></w:tcPr>") tcPr = "";
+          const p0 = O.hijoXml(xd, "p", ce.tc.ci, ce.tc.cf), ppr0 = p0 ? O.hijoXml(xd, "pPr", p0.ci, p0.cf) : null;
+          let ppr = ppr0 && !xd.slice(ppr0.i, ppr0.f).endsWith("/>") ? xd.slice(ppr0.i, ppr0.f) : "";
+          // (sin lo que es de otra cosa: marca de revisión del párrafo o el final de sección)
+          ppr = ppr.replace(/<w:rPr\b[\s\S]*?<\/w:rPr>|<w:rPr\/>/, "").replace(/<w:jc\b[^>]*\/>/, "");
+          const jc = ALIN_WORD[b["al:" + ref]];
+          if (jc) ppr = ppr ? ppr.replace(/<\/w:pPr>$/, `<w:jc w:val="${jc}"/></w:pPr>`) : `<w:pPr><w:jc w:val="${jc}"/></w:pPr>`;
+          // la letra: la de la primera letra de la celda, con la negrita, la cursiva, el color y el tamaño de ahora
+          let rpr0 = "";
+          if (p0) for (const r of O.hijosXml(xd, p0.ci, p0.cf)) { if (O.local(r.n) !== "r") continue; const rp = O.hijoXml(xd, "rPr", r.ci, r.cf); rpr0 = rp && rp.cf > rp.ci ? xd.slice(rp.ci, rp.cf) : ""; break; }
+          rpr0 = rpr0.replace(/<w:(b|bCs|i|iCs|color|sz|szCs)\b[^>]*\/>/g, "");
+          const a = { b: !!b["n:" + ref], i: !!b["i:" + ref], color: b["k:" + ref] || null, tam: +b["z:" + ref] > 0 ? +b["z:" + ref] : null };
+          // (en el orden del esquema: lo de la fuente va antes que negrita y cursiva; color y tamaño, después)
+          const fuente = (rpr0.match(/<w:(rStyle|rFonts)\b[^>]*\/>/g) || []).join(""), resto = rpr0.replace(/<w:(rStyle|rFonts)\b[^>]*\/>/g, "");
+          const ab = (a.b ? "<w:b/><w:bCs/>" : "") + (a.i ? "<w:i/><w:iCs/>" : "");
+          const ct = (hexW(a.color) ? `<w:color w:val="${hexW(a.color)}"/>` : "") + (a.tam ? `<w:sz w:val="${Math.round(a.tam * 2)}"/><w:szCs w:val="${Math.round(a.tam * 2)}"/>` : "");
+          // (color y tamaño van antes que subrayado, sombreado y lo demás del final)
+          const iFin = resto.search(/<w:(kern|position|sz|szCs|highlight|u|effect|bdr|shd|fitText|vertAlign|rtl|cs|em|lang|eastAsianLayout|specVanish|oMath|w14:|w15:)\b/);
+          const antesCt = iFin < 0 ? resto : resto.slice(0, iFin), despCt = iFin < 0 ? "" : resto.slice(iFin);
+          const rprX = fuente + ab + antesCt + ct + despCt ? `<w:rPr>${fuente}${ab}${antesCt}${ct}${despCt}</w:rPr>` : "";
+          const v = String(b["c:" + ref] || "");
+          const ps2 = v.split("\n").map((l) => `<w:p>${ppr}${l ? l.split(/(\t)/).filter((z) => z !== "").map((z) => `<w:r>${rprX}${z === "\t" ? "<w:tab/>" : `<w:t xml:space="preserve">${x(z)}</w:t>`}</w:r>`).join("") : ""}</w:p>`).join("");
+          const tcAbre = xd.slice(ce.tc.i, O.finEtiqueta(xd, ce.tc.i) + 1);
+          return (tcAbre.endsWith("/>") ? "<w:tc>" : tcAbre) + tcPr + ps2 + "</w:tc>";
+        };
+        const out = [xd.slice(u.i, trs[0].i)];
+        let ultima = null;
+        for (let f = 0; f < nF; f++) {
+          const o = deOrig[f], fo = o >= 0 ? filasO[o] : null, base = fo || ultima;
+          if (!base) return null;
+          const partes = [];
+          let pos = base.tr.i;
+          for (const ce of base.celdas) {
+            if (ce.k >= nC) return null;
+            const ref = F().ref(ce.k, f), firma = String(b["o:" + ref] || "");
+            partes.push(xd.slice(pos, ce.tc.i));
+            const igual = fo && firma === o + "|" + firmaCelda(b, ref);
+            if (fo && (ce.vm === "continue" || igual)) partes.push(xd.slice(ce.tc.i, ce.tc.f));
+            else partes.push(celdaNueva(ce, ref, !fo));
+            pos = ce.tc.f;
+          }
+          partes.push(xd.slice(pos, base.tr.f));
+          // (una fila nueva no se repite como encabezado aunque la de arriba sí)
+          let fila = partes.join("");
+          if (!fo) fila = fila.replace(/<w:tblHeader\b[^>]*\/>/, "");
+          out.push(fila);
+          if (fo) ultima = fo;
+        }
+        out.push(xd.slice(trs[trs.length - 1].f, u.f));
+        return out.join("");
+      };
       const gen = (q, u, mismoPa, ultimo, partido) => {
+        // una tabla de Word: se parcha sobre la original (solo lo que cambió)
+        if (u && O.local(u.n) === "tbl" && NOM.ooxml.parcharTablas !== false) {
+          const tb = ps[q].tramos.length === 1 && ps[q].tramos[0].e && ps[q].tramos[0].e.tipo === "tabla" ? ps[q].tramos[0].e : null;
+          if (tb) {
+            let t = null;
+            try { t = parcharTabla(u, tb); } catch (e) { if (typeof console !== "undefined") console.warn("Word: una tabla no se pudo parchar; se escribe de nuevo.", e); }
+            if (t != null) { parchados++; return t + (q === ps.length - 1 ? "<w:p/>" : ""); }
+          }
+        }
         const U = { ppr: null, sect: "", objeto: u ? objetoDe(u) : null, numId: null };
+
         if (u && O.local(u.n) === "p") {
           const pp = O.hijoXml(xd, "pPr", u.ci, u.cf);
           if (mismoPa) { U.ppr = pp ? xd.slice(pp.i, pp.f) : ""; if (!ultimo) U.ppr = U.ppr.replace(/<w:sectPr\b[^>]*\/>|<w:sectPr\b[\s\S]*<\/w:sectPr>/, ""); }
@@ -1358,7 +1522,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     // propiedades, para saber con qué letra y qué espaciado se ve de verdad cada párrafo (en un
     // documento real casi nada trae formato propio: la fuente y el interlineado vienen del estilo)
     const estilos = {}, defEstilo = {};
-    let rprDef = null, pprDef = null, idNormal = null;
+    let rprDef = null, pprDef = null, idNormal = null, idTablaNormal = null;
     const stTxt = await z.texto("word/styles.xml");
     if (stTxt) {
       const ds = P(stTxt), dd = ds.getElementsByTagNameNS(W, "docDefaults")[0];
@@ -1368,6 +1532,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         estilos[id] = nm;
         defEstilo[id] = { nombre: nm, tipo, base: val(hijo(s, "basedOn")), ppr: hijo(s, "pPr"), rpr: hijo(s, "rPr"), nodo: tipo === "table" ? s : undefined };
         if (tipo === "paragraph" && ["1", "true"].includes(at(s, "default") || "") && idNormal == null) idNormal = id;
+        if (tipo === "table" && ["1", "true"].includes(at(s, "default") || "") && idTablaNormal == null) idTablaNormal = id;
       });
     }
     // fuentes del tema: los estilos suelen decir "la fuente del cuerpo" en vez de su nombre
@@ -1938,6 +2103,48 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       const sz = +(b.getAttributeNS(W, "sz") || b.getAttribute("w:sz") || 4) / 8, col = b.getAttributeNS(W, "color") || b.getAttribute("w:color");
       return [{ double: "double", dotted: "dotted", dashed: "dashed", dashSmallGap: "dashed", dotDash: "dashed" }[v] || "solid", Math.max(0.5, Math.round(sz * (96 / 72) * 100) / 100), /^[0-9a-f]{6}$/i.test(col || "") ? "#" + col.toUpperCase() : "#000000"];
     };
+    /**
+     * Los bordes que la tabla y cada celda traen escritos (encima de los del estilo, como Word): los de la tabla
+     * (tblBorders: afuera y entre celdas) y los de cada celda (tcBorders, con sus diagonales). Si hay, la tabla va sin
+     * las líneas de NOM por omisión: cada celda lleva las suyas.
+     */
+    function bordesDirectosWord(tbl, celdas, filas, nF, nC) {
+      const tb = hijo(hijo(tbl, "tblPr"), "tblBorders");
+      const lado = (b, n, n2) => (b ? lineaWord(hijo(b, n)) || (n2 ? lineaWord(hijo(b, n2)) : null) : null);
+      const leer = (s) => { const o = {}; String(s || "").split(";").forEach((q) => { const [l, ...r] = q.split(":"); if (l) o[l] = r[0] === "no" ? "no" : r.length >= 3 ? [r[0], +r[1], r[2]] : null; }); return o; };
+      const escribir = (bd) => Object.entries(bd).filter(([, v]) => v).map(([l, v]) => (v === "no" ? `${l}:no` : `${l}:${v[0]}:${v[1]}:${v[2]}`)).join(";");
+      let hay = false;
+      filas.forEach((tr, f) => {
+        let k = 0;
+        hijos(tr, "tc").forEach((tc) => {
+          const tcPr = hijo(tc, "tcPr"), span = Math.max(1, +(val(hijo(tcPr, "gridSpan")) || 1)), R = F().ref(k, f);
+          const vm = hijo(tcPr, "vMerge"), sigue = vm && (val(vm) || "continue") === "continue";
+          const k0 = k;
+          k += span;
+          if (sigue || k0 >= nC) return;
+          const m = String(celdas["m:" + R] || "1x1").split("x").map(Number), alto = Math.max(1, m[1] || 1);
+          const tcb = hijo(tcPr, "tcBorders");
+          if (!tb && !tcb) return;
+          const bd = leer(celdas["bxw:" + R]);
+          if (tb) {
+            const a = f === 0 ? lado(tb, "top") : lado(tb, "insideH"), b = f + alto - 1 >= nF - 1 ? lado(tb, "bottom") : lado(tb, "insideH");
+            const i = k0 === 0 ? lado(tb, "left", "start") : lado(tb, "insideV"), d = k0 + span >= nC ? lado(tb, "right", "end") : lado(tb, "insideV");
+            if (a) bd.a = a; if (b) bd.b = b; if (i) bd.i = i; if (d) bd.d = d;
+          }
+          if (tcb) {
+            const a = lado(tcb, "top"), b = lado(tcb, "bottom"), i = lado(tcb, "left", "start"), d = lado(tcb, "right", "end");
+            if (a) bd.a = a; if (b) bd.b = b; if (i) bd.i = i; if (d) bd.d = d;
+            // diagonales: de arriba a la izquierda hacia abajo a la derecha (tl2br) y al revés (tr2bl)
+            const dg = [["tl", lado(tcb, "tl2br")], ["tr", lado(tcb, "tr2bl")]].filter(([, v]) => Array.isArray(v)).map(([l, v]) => `${l}:${v[0]}:${v[1]}:${v[2]}`).join(";");
+            if (dg) celdas["bxd:" + R] = dg;
+          }
+          const txt = escribir(bd);
+          if (txt) { celdas["bxw:" + R] = txt; hay = true; }
+        });
+      });
+      // (cada celda lleva sus líneas: las de NOM por omisión, no)
+      if (hay) celdas.bordes = "ninguno";
+    }
     function estiloTablaWord(tbl, celdas, nF, nC) {
       const tblPr = hijo(tbl, "tblPr"), idEst = val(hijo(tblPr, "tblStyle"));
       const partes = partesEstiloTabla(idEst);
@@ -2122,7 +2329,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       if (c.shd) pa.sombra = c.shd;
       if (c.rtl) pa.dir = "rtl";
       Object.keys(pa).forEach((k) => pa[k] == null && delete pa[k]);
-      return { pa, letra };
+      return { pa, letra, crudo: c };
     }
     // ---- secciones: cada una puede traer otra hoja y otro número de columnas
     const TAMS = { carta: [816, 1056], a4: [794, 1123], oficio: [816, 1344], a5: [559, 794], media: [529, 816] };
@@ -2164,6 +2371,195 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       if (Math.abs(nueva.w - ant.w) > 8 || Math.abs(nueva.h - ant.h) > 8) partes.push(`hoja ${nueva.hor ? "horizontal" : "vertical"} de ${Math.round((nueva.w / 37.7953) * 10) / 10} × ${Math.round((nueva.h / 37.7953) * 10) / 10} cm`);
       const nuevaHoja = nueva.tipo !== "continuous";
       return partes.length || nuevaHoja ? (nuevaHoja ? "p|" : "c|") + partes.join(" · ") : null;
+    }
+    /** Una tabla de Word: { filas, cols, celdas } (los campos del bloque «tabla»; ver modo-texto.js). prof: anidada dentro de otra. */
+    async function leerTabla(c, prof) {
+      const filas = hijos(c, "tr"), celdas = {};
+      let cols = 0;
+      // texto de una celda: sus párrafos, y si trae otra tabla adentro, sus renglones con " | "
+      const textoCelda = (tc) => {
+        const out = [];
+        const rec = (n) => hijos(n).forEach((h) => {
+          if (h.localName === "p") out.push([...h.getElementsByTagNameNS(W, "t")].filter((t) => { for (let q = t.parentNode; q && q !== h; q = q.parentNode) if (q.localName === "txbxContent" || q.localName === "Fallback") return false; return true; }).map((t) => t.textContent).join(""));
+          else if (h.localName === "tbl") hijos(h, "tr").forEach((tr) => out.push(hijos(tr, "tc").map((x2) => textoCelda(x2).replace(/\n/g, " ")).join(" | ")));
+          else if (h.localName === "sdt") rec(hijo(h, "sdtContent"));
+        });
+        rec(tc);
+        return out.join("\n").trim();
+      };
+      const abiertas = {};   // columna → celda donde empezó una combinación vertical
+      for (const [f, tr] of filas.entries()) {
+        let k = 0;
+        for (const tc of hijos(tr, "tc")) {
+          const tcPr = hijo(tc, "tcPr");
+          const span = Math.max(1, +(val(hijo(tcPr, "gridSpan")) || 1));
+          const vm = hijo(tcPr, "vMerge"), vmv = vm ? val(vm) || "continue" : null;
+          const ref = F().ref(k, f);
+          if (vmv === "continue" && abiertas[k]) {
+            const tl = abiertas[k], m = String(celdas["m:" + tl] || "1x1").split("x").map(Number);
+            celdas["m:" + tl] = `${m[0]}x${m[1] + 1}`;
+          } else {
+            // todos los párrafos de la celda, también los que van dentro de un control de contenido
+            const t = textoCelda(tc);
+            if (t) celdas["c:" + ref] = t;
+            // lo que el texto simple no guarda (imágenes, listas, tablas adentro, letra mezclada): para verla como Word
+            // mientras nadie cambie su texto (con la huella del texto con que se importó)
+            const rico = await ricoCelda(tc, prof);
+            if (rico) celdas["h:" + ref] = JSON.stringify({ t: NOM.origen.huella(t || ""), b: rico });
+            if (span > 1 || vmv === "restart") celdas["m:" + ref] = `${span}x1`;
+            abiertas[k] = vmv === "restart" ? ref : null;
+            const shd = hijo(tcPr, "shd"), fill = shd && (shd.getAttributeNS(W, "fill") || shd.getAttribute("w:fill"));
+            if (fill && /^[0-9a-f]{6}$/i.test(fill) && fill.toUpperCase() !== "FFFFFF") celdas["r:" + ref] = "#" + fill.toUpperCase();
+            const negritas = [...tc.getElementsByTagNameNS(W, "r")].filter((rr) => rr.textContent.trim());
+            if (negritas.length && negritas.every((rr) => { const rp = hijo(rr, "rPr"); return rp && hijo(rp, "b") && val(hijo(rp, "b")) !== "0"; })) celdas["n:" + ref] = true;
+            // cursiva y color si toda la celda los lleva; alineación, la de su primer párrafo
+            if (negritas.length && negritas.every((rr) => { const rp = hijo(rr, "rPr"); return rp && activo(hijo(rp, "i")); })) celdas["i:" + ref] = true;
+            const colores = new Set(negritas.map((rr) => { const k = val(hijo(hijo(rr, "rPr"), "color")); return k && /^[0-9a-f]{6}$/i.test(k) ? "#" + k.toUpperCase() : ""; }));
+            if (colores.size === 1 && [...colores][0] && [...colores][0] !== "#000000") celdas["k:" + ref] = [...colores][0];
+            const p0 = hijo(tc, "p"), jc = p0 ? parCrudo(hijo(p0, "pPr"), {}).jc : null, al = { center: "centro", right: "der", end: "der" }[jc];
+            if (al) celdas["al:" + ref] = al;
+            // alineación vertical y texto girado (hacia arriba o hacia abajo), como en Word
+            const vAl = val(hijo(tcPr, "vAlign"));
+            if (vAl === "center" || vAl === "both") celdas["va:" + ref] = "c"; else if (vAl === "bottom") celdas["va:" + ref] = "b";
+            const tDir = val(hijo(tcPr, "textDirection"));
+            if (/^(btLr|tbRl|tbRlV|tbLrV)$/.test(tDir || "")) celdas["td:" + ref] = /^bt/.test(tDir) ? "arriba" : "abajo";
+          }
+          k += span;
+        }
+        cols = Math.max(cols, k);
+      }
+      Object.keys(celdas).forEach((x) => { if (x.startsWith("m:") && celdas[x] === "1x1") delete celdas[x]; });
+      // Filas como Word: alto exacto («e») o mínimo («m») en px, «permitir que la fila se divida entre páginas»
+      // apagado (fp) y las filas de arriba que se repiten en cada hoja («repetir como fila de encabezado»)
+      {
+        let cab = 0, seguidas = true;
+        filas.forEach((tr, f) => {
+          const trPr = hijo(tr, "trPr"), th = hijo(trPr, "trHeight"), v = th ? +(val(th) || 0) : 0;
+          if (v > 0 && at(th, "hRule") !== "auto") celdas["fh:" + f] = (at(th, "hRule") === "exact" ? "e" : "m") + Math.round((v / 15) * 100) / 100;
+          if (activo(hijo(trPr, "cantSplit"))) celdas["fp:" + f] = 1;
+          if (seguidas && activo(hijo(trPr, "tblHeader"))) cab++; else seguidas = false;
+        });
+        if (cab) celdas.cabRep = cab;
+      }
+      // Márgenes de celda y párrafos de las celdas: lo del documento, luego el estilo de tabla, luego el estilo del párrafo
+      // y lo propio (así los pone Word: con «Tabla con cuadrícula», renglón sencillo y sin espacio después; sin estilo,
+      // los 8 pt y el 1.08 del documento). Word deja 0 arriba y abajo y 0.19 cm a los lados.
+      try {
+        const marDe = (m) => {
+          if (!m) return null;
+          const g = (l, l2) => { const q = hijo(m, l) || (l2 ? hijo(m, l2) : null); if (!q) return null; const tp = at(q, "type"); return tp === "nil" ? 0 : !tp || tp === "dxa" ? (+(at(q, "w") || 0) || 0) / 15 : null; };
+          return [g("top"), g("right", "end"), g("bottom"), g("left", "start")];
+        };
+        const deEstilo = (id, prof) => {
+          const d = id != null ? defEstilo[id] : null;
+          if (!d || d.tipo !== "table" || (prof || 0) > 20) return { ppr: pBase, rpr: rBase, mar: [0, 7.2, 0, 7.2] };
+          const b = deEstilo(d.base, (prof || 0) + 1), m = marDe(hijo(hijo(d.nodo, "tblPr"), "tblCellMar"));
+          return { ppr: parCrudo(d.ppr, b.ppr), rpr: attrsRun(d.rpr, b.rpr), mar: m ? m.map((x, k) => (x != null ? x : b.mar[k])) : b.mar };
+        };
+        const est = deEstilo(val(hijo(hijo(c, "tblPr"), "tblStyle")) || idTablaNormal);
+        const mt = marDe(hijo(hijo(c, "tblPr"), "tblCellMar")), mar = mt ? mt.map((x, k) => (x != null ? x : est.mar[k])) : est.mar;
+        celdas.cmar = mar.map((x) => Math.round(x * 100) / 100).join(",");
+        // el estilo del párrafo (con su base) va encima de lo de la tabla
+        const sobre = (id, base, prof) => { const d = id != null ? defEstilo[id] : null; return !d || (prof || 0) > 20 ? base : parCrudo(d.ppr, d.base != null ? sobre(d.base, base, (prof || 0) + 1) : base); };
+        const p0 = (() => { const tc0 = filas.length ? hijo(filas[0], "tc") : null; return tc0 ? hijo(tc0, "p") : null; })();
+        if (p0) {
+          const ppr0 = hijo(p0, "pPr"), pc = parCrudo(ppr0, sobre(val(hijo(ppr0, "pStyle")) || idNormal, est.ppr));
+          if (pc.linea && (!pc.regla || pc.regla === "auto")) celdas.cli = Math.round((pc.linea / 240) * 10000) / 10000;
+          else if (pc.linea && pc.regla === "exact") celdas.clx = Math.round((pc.linea / 15) * 100) / 100;
+          else celdas.cli = 1;
+          celdas.cesp = `${Math.round(((pc.antes || 0) / 15) * 100) / 100},${Math.round(((pc.desp || 0) / 15) * 100) / 100}`;
+        }
+        // tamaño de letra de cada celda si todo su texto lo lleva y no es el del documento
+        const tamDoc = rN.tam || 10;
+        filas.forEach((tr, f) => {
+          let k = 0;
+          hijos(tr, "tc").forEach((tc) => {
+            const span = Math.max(1, +(val(hijo(hijo(tc, "tcPr"), "gridSpan")) || 1)), ref = F().ref(k, f);
+            k += span;
+            const tams = new Set();
+            hijos(tc, "p").forEach((pp) => {
+              const base = letraDe(val(hijo(hijo(pp, "pPr"), "pStyle")) || idNormal);
+              hijos(pp, "r").forEach((rr) => { if (rr.textContent.trim()) tams.add(attrsRun(hijo(rr, "rPr"), base).tam || tamDoc); });
+            });
+            if (tams.size === 1 && [...tams][0] !== tamDoc && celdas["c:" + ref] != null) celdas["z:" + ref] = [...tams][0];
+          });
+        });
+      } catch (e) { /* la tabla sin sus medidas de Word */ }
+      // anchos de columna (en % del ancho de la tabla) y si la tabla no lleva líneas
+      const rejilla = hijos(hijo(c, "tblGrid"), "gridCol").map((gc) => +(at(gc, "w") || 0) || 0), totalRej = rejilla.reduce((a2, b2) => a2 + b2, 0);
+      if (totalRej > 0 && rejilla.length === cols && cols <= 63 && new Set(rejilla).size > 1) rejilla.forEach((w2, k2) => { celdas["aw:" + F().colLetra(k2)] = Math.round((w2 / totalRej) * 10000) / 100; });
+      // Estilo de tabla de Word (Tabla con cuadrícula 4 – Énfasis 2…): por capas como Word —toda la tabla, franjas,
+      // primera y última fila y columna, esquinas— según lo que pide la tabla (tblLook). Lo propio de cada celda gana.
+      try { estiloTablaWord(c, celdas, filas.length, Math.min(63, cols)); } catch (e) { /* la tabla sin su estilo */ }
+      try { bordesDirectosWord(c, celdas, filas, filas.length, Math.min(63, cols)); } catch (e) { /* sin los bordes propios */ }
+      // ancho de la tabla (de Word: en px o en % del texto; sin él, la suma de sus columnas), alineación y sangría
+      {
+        const tp = hijo(c, "tblPr"), tw = hijo(tp, "tblW"), tipo = at(tw, "type"), v = +(at(tw, "w") || 0) || 0;
+        if (tipo === "pct" && v > 0) celdas.tw = "p:" + Math.round((String(at(tw, "w")).endsWith("%") ? parseFloat(at(tw, "w")) : v / 50) * 100) / 100;
+        else if (tipo === "dxa" && v > 0) celdas.tw = Math.round((v / 15) * 100) / 100;
+        else if (totalRej > 0) celdas.tw = Math.round((totalRej / 15) * 100) / 100;
+        const tj = val(hijo(tp, "jc"));
+        if (tj === "center") celdas.tj = "c"; else if (tj === "right" || tj === "end") celdas.tj = "d";
+        const ti = hijo(tp, "tblInd"), vi = ti && (at(ti, "type") || "dxa") === "dxa" ? +(at(ti, "w") || 0) || 0 : 0;
+        if (vi) celdas.ti = Math.round((vi / 15) * 100) / 100;
+      }
+      const tb = hijo(hijo(c, "tblPr"), "tblBorders");
+      const sinLineas = (b2) => !!b2 && ["top", "left", "bottom", "right", "insideH", "insideV"].every((l) => { const q = hijo(b2, l); return !q || ["nil", "none"].includes(val(q)); });
+      if (tb ? sinLineas(tb) : !val(hijo(hijo(c, "tblPr"), "tblStyle")) && !c.getElementsByTagNameNS(W, "tcBorders").length) celdas.bordes = "ninguno";
+      // de qué fila del original es cada celda y su firma (al descargar, las que no cambiaron salen tal cual)
+      for (let f = 0; f < filas.length; f++) for (let k2 = 0; k2 < Math.min(63, cols); k2++) { const ref = F().ref(k2, f); celdas["o:" + ref] = f + "|" + firmaCelda(celdas, ref); }
+      return filas.length ? { filas: filas.length, cols: Math.min(63, cols), celdas } : null;
+    }
+    /**
+     * Lo de una celda de Word que el texto simple no guarda (imágenes, listas, tablas adentro, letra mezclada o alineaciones
+     * distintas), para dibujarla como Word: [{ r: [{ x, a } | { img, w, h }], al, m (la marca de la lista), iz, fr } | { tabla }].
+     * null si con su texto y el formato de la celda basta.
+     */
+    async function ricoCelda(tc, prof) {
+      const out = [], cuenta = {}, firmas = new Set(), alins = new Set();
+      let complejo = false;
+      const romano = (n) => { let r = ""; [[1000, "m"], [900, "cm"], [500, "d"], [400, "cd"], [100, "c"], [90, "xc"], [50, "l"], [40, "xl"], [10, "x"], [9, "ix"], [5, "v"], [4, "iv"], [1, "i"]].forEach(([v, l]) => { while (n >= v) { r += l; n -= v; } }); return r; };
+      const letra = (n) => { let r = ""; for (; n > 0; n = Math.floor((n - 1) / 26)) r = String.fromCharCode(97 + ((n - 1) % 26)) + r; return r; };
+      const numero = (fmt, n) => ({ a: letra(n), A: letra(n).toUpperCase(), i: romano(n), I: romano(n).toUpperCase(), "01": String(n).padStart(2, "0") }[fmt] || String(n));
+      async function rec(n) {
+        for (const h of hijos(n)) {
+          if (h.localName === "p") {
+            const ppr = hijo(h, "pPr"), ap = attrsParrafo(ppr), tramos = [], info = {};
+            await runs(h, ap.letra, tramos, info);
+            const r = [];
+            for (const t of tramos) {
+              if (t.e && t.e.tipo === "imagen" && t.e.src) { r.push({ img: t.e.src, w: Math.round(+t.e.w || 0), h: Math.round(+t.e.h || 0) }); complejo = true; }
+              else if (t.e) { if (t.e.txt) r.push({ x: String(t.e.txt), a: {} }); }
+              else if (t.x) { r.push({ x: t.x, a: t.a || {} }); if (t.x.trim()) firmas.add(JSON.stringify(t.a || {})); }
+            }
+            const b = { r }, pa = ap.pa, cr = ap.crudo || {};
+            if (pa.alin) b.al = pa.alin;
+            alins.add(pa.alin || "");
+            if (pa.lista) {
+              complejo = true;
+              const nivel = +pa.nivel || 0, clave = (pa.numid || pa.lista) + "|";
+              Object.keys(cuenta).forEach((x) => { const [c0, n0] = x.split("#"); if (c0 === clave && +n0 > nivel) delete cuenta[x]; });
+              const k = clave + "#" + nivel;
+              cuenta[k] = (cuenta[k] || 0) + 1;
+              if (pa.lista === "vinetas") b.m = ["•", "o", "▪"][nivel % 3];
+              else {
+                const fm = String(pa.numfmt || "1."), m = /^(1|a|A|i|I|01)([.)])$/.exec(fm);
+                b.m = pa.numtxt ? String(pa.numtxt).replace(/%([1-9])/g, (_, d) => numero(String(pa.numfmts || "").split(",")[+d - 1] || "1", cuenta[clave + "#" + (+d - 1)] || 1)) : m ? numero(m[1], cuenta[k]) + m[2] : cuenta[k] + ".";
+              }
+              // sangría de Word: a la izquierda y la francesa (la marca va en ella)
+              b.iz = Math.round(((cr.izq != null ? cr.izq : 720 * (nivel + 1)) / 15) * 10) / 10;
+              b.fr = Math.round(((cr.fr != null && cr.fr > 0 ? cr.fr : 360) / 15) * 10) / 10;
+            }
+            out.push(b);
+          } else if (h.localName === "tbl" && (prof || 0) < 3) {
+            const t = await leerTabla(h, (prof || 0) + 1);
+            if (t) { out.push({ tabla: t }); complejo = true; }
+          } else if (h.localName === "sdt") await rec(hijo(h, "sdtContent"));
+        }
+      }
+      await rec(tc);
+      if (firmas.size > 1 || alins.size > 1) complejo = true;
+      return complejo ? out : null;
     }
     async function bloque(n, unidad) {
       const lista = hijos(n);
@@ -2211,62 +2607,9 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
           }
           else parrafos.push({ pa, tramos });
         } else if (c.localName === "tbl") {
-          const filas = hijos(c, "tr"), celdas = {};
-          let cols = 0;
-          // texto de una celda: sus párrafos, y si trae otra tabla adentro, sus renglones con " | "
-          const textoCelda = (tc) => {
-            const out = [];
-            const rec = (n) => hijos(n).forEach((h) => {
-              if (h.localName === "p") out.push([...h.getElementsByTagNameNS(W, "t")].filter((t) => { for (let q = t.parentNode; q && q !== h; q = q.parentNode) if (q.localName === "txbxContent" || q.localName === "Fallback") return false; return true; }).map((t) => t.textContent).join(""));
-              else if (h.localName === "tbl") hijos(h, "tr").forEach((tr) => out.push(hijos(tr, "tc").map((x2) => textoCelda(x2).replace(/\n/g, " ")).join(" | ")));
-              else if (h.localName === "sdt") rec(hijo(h, "sdtContent"));
-            });
-            rec(tc);
-            return out.join("\n").trim();
-          };
-          const abiertas = {};   // columna → celda donde empezó una combinación vertical
-          filas.forEach((tr, f) => {
-            let k = 0;
-            hijos(tr, "tc").forEach((tc) => {
-              const tcPr = hijo(tc, "tcPr");
-              const span = Math.max(1, +(val(hijo(tcPr, "gridSpan")) || 1));
-              const vm = hijo(tcPr, "vMerge"), vmv = vm ? val(vm) || "continue" : null;
-              const ref = F().ref(k, f);
-              if (vmv === "continue" && abiertas[k]) {
-                const tl = abiertas[k], m = String(celdas["m:" + tl] || "1x1").split("x").map(Number);
-                celdas["m:" + tl] = `${m[0]}x${m[1] + 1}`;
-              } else {
-                // todos los párrafos de la celda, también los que van dentro de un control de contenido
-                const t = textoCelda(tc);
-                if (t) celdas["c:" + ref] = t;
-                if (span > 1 || vmv === "restart") celdas["m:" + ref] = `${span}x1`;
-                abiertas[k] = vmv === "restart" ? ref : null;
-                const shd = hijo(tcPr, "shd"), fill = shd && (shd.getAttributeNS(W, "fill") || shd.getAttribute("w:fill"));
-                if (fill && /^[0-9a-f]{6}$/i.test(fill) && fill.toUpperCase() !== "FFFFFF") celdas["r:" + ref] = "#" + fill.toUpperCase();
-                const negritas = [...tc.getElementsByTagNameNS(W, "r")].filter((rr) => rr.textContent.trim());
-                if (negritas.length && negritas.every((rr) => { const rp = hijo(rr, "rPr"); return rp && hijo(rp, "b") && val(hijo(rp, "b")) !== "0"; })) celdas["n:" + ref] = true;
-                // cursiva y color si toda la celda los lleva; alineación, la de su primer párrafo
-                if (negritas.length && negritas.every((rr) => { const rp = hijo(rr, "rPr"); return rp && activo(hijo(rp, "i")); })) celdas["i:" + ref] = true;
-                const colores = new Set(negritas.map((rr) => { const k = val(hijo(hijo(rr, "rPr"), "color")); return k && /^[0-9a-f]{6}$/i.test(k) ? "#" + k.toUpperCase() : ""; }));
-                if (colores.size === 1 && [...colores][0] && [...colores][0] !== "#000000") celdas["k:" + ref] = [...colores][0];
-                const p0 = hijo(tc, "p"), jc = p0 ? parCrudo(hijo(p0, "pPr"), {}).jc : null, al = { center: "centro", right: "der", end: "der" }[jc];
-                if (al) celdas["al:" + ref] = al;
-              }
-              k += span;
-            });
-            cols = Math.max(cols, k);
-          });
-          Object.keys(celdas).forEach((x) => { if (x.startsWith("m:") && celdas[x] === "1x1") delete celdas[x]; });
-          // anchos de columna (en % del ancho de la tabla) y si la tabla no lleva líneas
-          const rejilla = hijos(hijo(c, "tblGrid"), "gridCol").map((gc) => +(at(gc, "w") || 0) || 0), totalRej = rejilla.reduce((a2, b2) => a2 + b2, 0);
-          if (totalRej > 0 && rejilla.length === cols && cols <= 20 && new Set(rejilla).size > 1) rejilla.forEach((w2, k2) => { celdas["aw:" + F().colLetra(k2)] = Math.round((w2 / totalRej) * 10000) / 100; });
-          // Estilo de tabla de Word (Tabla con cuadrícula 4 – Énfasis 2…): por capas como Word —toda la tabla, franjas,
-          // primera y última fila y columna, esquinas— según lo que pide la tabla (tblLook). Lo propio de cada celda gana.
-          try { estiloTablaWord(c, celdas, filas.length, Math.min(20, cols)); } catch (e) { /* la tabla sin su estilo */ }
-          const tb = hijo(hijo(c, "tblPr"), "tblBorders");
-          const sinLineas = (b2) => !!b2 && ["top", "left", "bottom", "right", "insideH", "insideV"].every((l) => { const q = hijo(b2, l); return !q || ["nil", "none"].includes(val(q)); });
-          if (tb ? sinLineas(tb) : !val(hijo(hijo(c, "tblPr"), "tblStyle")) && !c.getElementsByTagNameNS(W, "tcBorders").length) celdas.bordes = "ninguno";
-          if (filas.length) parrafos.push({ pa: { ox }, tramos: [{ e: { tipo: "tabla", filas: filas.length, cols: Math.min(20, cols), celdas } }] });
+          const t = await leerTabla(c, 0);
+          // (una tabla de Word no deja espacio antes ni después: el del párrafo de abajo cuenta solo)
+          if (t) parrafos.push({ pa: { ox, antes: 0, despues: 0 }, tramos: [{ e: { tipo: "tabla", filas: t.filas, cols: t.cols, celdas: t.celdas } }] });
         } else if (c.localName === "sdt") await bloque(hijo(c, "sdtContent"), ox);
       }
     }
