@@ -40,6 +40,11 @@ tenía.
 
 ## 2. Confirmado (medido de verdad)
 
+**La meta es 100 % en todo** (pedido del usuario, 17-nov): un renglón, una celda o un cuadro de animación «igual» o no;
+lo que esté por debajo de 100 % es trabajo pendiente, no «suficiente». El parecido de imagen (PowerPoint) nunca da 100 %
+exacto por el suavizado de bordes: para PowerPoint, la meta es diferencia de píxeles por debajo del umbral de suavizado
+en cada diapositiva y cada cuadro, y cambiar `comparar_real.py` y `animaciones_real.py` para que lo reporten así.
+
 «Confirmado» = medido contra Office real o probado de punta a punta. **Ojo:** casi todo se midió con la 0.15.x;
 desde entonces hay 24 commits sin regresión, así que hay que **volver a medirlo** antes de publicar (sección 6).
 
@@ -121,22 +126,29 @@ real salvo lo que se dice.
 
 ## 5. Falta construir (paridad con Office), por programa
 
+Revisado en el código el 17-nov (búsqueda por nombres en español e inglés): lo que dice «no existe» no aparece en
+`js/`; lo que existe a medias dice qué hay. Al empezar cada punto, volver a buscar por si otra sesión lo hizo.
+
 Cada punto lleva entre corchetes cómo se comprueba: **[R]** contra Office real (Windows), **[V]** la vuelta (exportar,
 abrir en Office sin reparar, validador), **[T]** en el teléfono/app.
 
 ### Word
 1. **División automática de palabras** (guiones, `w:autoHyphenation`) [R] — es lo que más baja w10.
 2. **Tabla flotante** (`w:tblpPr`) con el texto alrededor, en el motor de «lo que flota» [R][V].
-3. **Citas y bibliografía** (campos `CITATION`/`BIBLIOGRAPHY`, `customXml/Sources.xml`) unidas a `citas.js` [R][V].
-4. **Combinar correspondencia** (`MERGEFIELD`, origen de datos de Excel/CSV, vista previa, generar documentos) [R][V].
-5. Campos en general (`w:fldSimple`/`instrText`: hoy se leen; actualizar PAGE, NUMPAGES, DATE, REF, SEQ, TOC al
-   editar) y puntos guía del índice [R].
-6. **Pegar con formato** desde Word, Google Docs o una página web (decidido el 17-nov; `modo-texto.js` ya lee
-   `text/html` en parte: completarlo con estilos, listas, tablas e imágenes) [T].
-7. Controles de contenido y formularios (casillas, listas, fechas), marcas de agua editables, temas de documento.
+3. **Citas y bibliografía de Word:** NOM ya tiene sus propias citas (`citas.js`: fuentes, APA, lista de referencias).
+   Falta el puente con Word: leer y escribir los campos `CITATION`/`BIBLIOGRAPHY` y `customXml/Sources.xml` [R][V].
+4. **Combinar correspondencia de Word:** NOM ya lo hace a su modo (`datos.js`: texto con `{{campos}}` + una hoja = un
+   documento por fila). Falta el de Word: `MERGEFIELD`, el origen de datos guardado en el .docx y la vuelta [R][V].
+5. Campos: PAGE/NUMPAGES ya se leen y se escriben, y la tabla de contenido se exporta. Falta actualizar al editar DATE,
+   REF, SEQ (títulos de figura), referencias cruzadas e índice, y los puntos guía del índice [R].
+6. **Pegar con formato:** ya existe a medias (`modo-texto.js` toma el HTML del portapapeles con negritas, listas,
+   vínculos…). Falta completarlo desde Word, Google Docs y páginas web: estilos, tablas, imágenes, colores (decidido 17-nov) [T].
+7. Controles de contenido: los de Word (`w:sdt`) ya se conservan y su texto se edita. Falta usarlos como formularios
+   (casilla, lista desplegable, fecha) y crearlos desde NOM; marcas de agua editables; temas de documento.
 8. Rellenos degradado/trama/imagen en formas de Word, puntas y guiones de líneas, lienzos (parte hecha en `fa3cc00`:
    volver a medir w06).
-9. Imágenes **EMF/WMF** (hoy no se ven; también en Excel y PowerPoint) [R].
+9. Imágenes **EMF/WMF**: se conservan dentro del original (salen al exportar), pero **no se ven** en NOM; dibujarlas
+   (también en Excel y PowerPoint) [R].
 10. Abrir **.doc** (Word 97-2003): estimado 2-3 sesiones (texto, formato, tablas, imágenes, encabezados y pies).
 11. Macros: conservar `vbaProject.bin` (.docm), ver y editar módulos (MS-OVBA), intérprete aislado.
 
@@ -211,6 +223,9 @@ the features we already had»):
 
 ## 8. Orden recomendado para construir
 
+0. **Llevar a 100 % lo que ya se mide** (sección 2): cada renglón de Word que no es idéntico, cada celda o alto de
+   Excel distinto, cada diapositiva y cada cuadro de animación de PowerPoint con diferencia. Es la base: lo nuevo se
+   construye sobre lo que ya da exacto.
 1. Medios fase 2 y 3 (almacén + insertar), porque el usuario ya decidió y es lo que más se nota.
 2. PowerPoint: los 2 px del texto, calibrar transiciones y Morph (necesitan la Windows: hacerlo estando el usuario).
 3. Word: división de palabras, tabla flotante, pegar con formato, citas y bibliografía, combinar correspondencia.
