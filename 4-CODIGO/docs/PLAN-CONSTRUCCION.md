@@ -452,7 +452,7 @@ Detalle en `docs/PLAN-CUENTAS-PC-Y-AYUDA.md`, partes D.2 y E. No hay edades: los
 - [x] Pruebas: `pruebas/interfaz/prueba_e2e.py` (navegador: el servidor nunca ve el texto, el nombre
       ni el chat; otro miembro, el QR con la llave en el #, el enlace para ver y el proyector) y la
       sección 15 de `pruebas/seguridad.py`. Versión 0.13.0 (interfaz 14).
-- [ ] Azure unida a la misma cuenta, solo si llega a ser requisito (G.1).
+- [x] ~~Azure unida a la misma cuenta~~: descartada (17-nov: «Azure ya no se toma en cuenta»).
 
 ## Fase 16. Pruebas antes de la presentación (13 al 20 de noviembre de 2026)
 
@@ -521,7 +521,7 @@ Pruebas: `PaginasLimpiasTest` (4 casos), `prueba_ayuda.py` 24 de 24 (75 páginas
 - [ ] Que el equipo repita a mano las pruebas del plan y confirme los nombres de responsables y las calificaciones de usabilidad antes del 27 de noviembre.
 - [x] Corregir DEF-50 (un método que no existe responde 500 en vez de 405). Hecho en la 0.14.2 (fase 21); el plan de pruebas (PDF) lo sigue mostrando como defecto encontrado: el equipo decide si lo actualiza.
 - [x] Presentación, casos de uso y plan de pruebas como documentos de la empresa (15-nov, tarde): sin logotipos ni menciones de la escuela, del grupo ni de la materia; en las portadas y en el pie va el logotipo de WACK. Las capturas de la app se repitieron con un espacio de nombre neutro (`7-PRESENTACION/fuentes/capturas.py` y `6-PLAN-DE-PRUEBAS/fuentes/evidencias.py`, nuevos). Los nombres de archivo conservan `5IM7_WACK_…` porque es la nomenclatura obligatoria de entrega.
-- [ ] Decidir si la app también deja de decir que es un proyecto escolar: el aviso «Proyecto escolar» de las páginas de ayuda y legales y el ejemplo «CECyT 11…» del campo de organización al crear la cuenta siguen ahí.
+- [x] La app deja de decir que es un proyecto escolar (decidido el 17-nov: «deslindar totalmente»): ayuda, legal, pie del sitio, campo de organización y LEEME dicen solo WACK. Los entregables escolares conservan su nomenclatura.
 
 ## Fase 20. Texto fuente, imágenes, PDF y OCR (decidido el 15 de noviembre de 2026; se construye después del 27 de noviembre)
 
@@ -568,7 +568,7 @@ Ningún OCR acierta siempre: una foto movida o una letra manuscrita difícil pro
 - «Convertir de esto a esto» como catálogo abierto: solo las rutas que la app ya domina (Office, `.nom`, PDF, Markdown, HTML).
 
 ### 20.9 Propuesta aparte, sin decidir
-- [ ] Pegar desde Word, Google Docs o una página web conservando el formato.
+- [ ] **Decidido (17-nov): sí.** Pegar desde Word, Google Docs o una página web conservando el formato.
 
 ## Fase 21. Revisión para la entrega del primer semestre (15 de noviembre de 2026, noche; versión 0.14.2)
 
@@ -625,7 +625,7 @@ tesis real de 2005 en Word 97-2003 (`Tesis.doc`, 32 MB, 46 600 palabras, 39 tabl
 - [ ] Repetir en el A55 (la depuración inalámbrica perdió el emparejamiento: hay que volver a vincularla).
 - [ ] Recoger la investigación de Office de flast (se cortó el 14-nov por el límite semanal de uso; ver
       `docs/paridad/LEEME.md`).
-- [ ] Propuesta sin decidir: abrir `.doc` (Word 97-2003) directamente, sin pasar por Word. Es otro formato
+- [ ] Abrir `.doc` (Word 97-2003) directamente (17-nov: el usuario preguntó cuánto trabajo es; estimado 2-3 sesiones para texto, formato, tablas, imágenes, encabezados y pies; va después de PowerPoint, paridad y pendientes sueltos). Es otro formato
       completo (binario); calcularlo antes de prometerlo.
 
 ## Fase 22. Paridad con Office real (15 y 16 de noviembre de 2026, versión 0.15.0)

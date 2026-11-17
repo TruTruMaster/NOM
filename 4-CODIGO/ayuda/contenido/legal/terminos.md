@@ -6,11 +6,11 @@ aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-13
 version: 2026-11-13
 ---
-!> **Proyecto escolar.** Este texto lo redactó el equipo con base en la Ley Federal de Protección de Datos Personales en Posesión de los Particulares publicada en el Diario Oficial de la Federación el 20 de marzo de 2025 (en vigor desde el 21 de marzo de 2025). No es asesoría legal: está pendiente la revisión del profesor y del texto vigente en el DOF.
+!> Este texto se redactó con base en la Ley Federal de Protección de Datos Personales en Posesión de los Particulares publicada en el Diario Oficial de la Federación el 20 de marzo de 2025 (en vigor desde el 21 de marzo de 2025). Todavía no lo ha revisado un abogado.
 
 ## 1. Qué es NOM
 
-Un proyecto escolar del equipo 6 «WACK» (5IM7, CECyT 9, IPN), **gratuito**, que se ofrece **tal
+Un servicio de **WACK**, **gratuito**, que se ofrece **tal
 como está**: no garantizamos que el servicio esté siempre prendido, que no tenga errores ni que no
 se pierdan datos. Haz copias de lo importante (Descargar todo, .nom).
 

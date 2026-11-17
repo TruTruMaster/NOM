@@ -528,7 +528,7 @@
         ${campoContrasena("rc", "new-password").replace('id="rc"', 'id="rc" name="contrasena"')}
         <div class="fila"><div class="medidor crece" data-medidor data-n="0"><i></i><i></i><i></i><i></i></div><span class="chico suave" data-fuerza style="min-width:70px;text-align:right;font-weight:600"></span></div>
         <div class="campo"><label for="re">Escuela, empresa o grupo <span class="suave" style="font-weight:600">(opcional)</span></label>
-          <div class="entrada">${ico("door-open")}<input id="re" name="empresa" autocomplete="organization" maxlength="80" placeholder="Ej. CECyT 11 Wilfredo Massieu"></div></div>
+          <div class="entrada">${ico("door-open")}<input id="re" name="empresa" autocomplete="organization" maxlength="80" placeholder="Ej. tu escuela, empresa o equipo"></div></div>
         <label class="acepto"><input type="checkbox" name="acepto" required> <span>Leí y acepto los <a href="${NOM.urlAyuda("legal/terminos")}" data-ayuda="legal/terminos">Términos</a> y el <a href="${NOM.urlAyuda("legal/privacidad")}" data-ayuda="legal/privacidad">Aviso de privacidad</a> (<a href="${NOM.urlAyuda("legal/privacidad-corto")}" data-ayuda="legal/privacidad-corto">resumen</a>).</span></label>
         <button class="btn primario ancho" type="submit">Crear cuenta</button>
         <p class="suave chico" style="text-align:center">Tu contraseña se guarda protegida: nadie puede verla, ni quien administra NOM.</p>

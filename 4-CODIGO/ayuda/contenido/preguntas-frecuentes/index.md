@@ -119,7 +119,7 @@ La copia propia de NOM, comprimida. Ver [El formato .nom](ayuda:office/formato-n
 ## La app
 
 ### 28. ¿Por qué no está en la Play Store? ¿Es seguro instalarla? {#p28}
-Es un proyecto escolar; se descarga desde GitHub, con el código a la vista y siempre firmada con la
+Por ahora se descarga desde GitHub, con el código a la vista y siempre firmada con la
 misma llave. Ver [Instalar la app](ayuda:empezar/instalar-android).
 
 ### 29. ¿Para qué pide cada permiso? {#p29}

@@ -24,7 +24,7 @@ version: 2026-11-13
 
 - En la red del salón la conexión no va cifrada (ver [Conexión sin cifrar](ayuda:cuentas/conexion-sin-cifrar)).
 - Quien administra el servidor puede leer los espacios que no son de extremo a extremo.
-- Es un proyecto escolar sin auditoría externa.
+- NOM todavía no ha tenido una auditoría de seguridad externa.
 
 ## Reportar una falla
 

@@ -35,7 +35,7 @@ VERSION = "0.14.2"
 # Datos del responsable y contacto (un solo lugar). G.2: el equipo todavía no crea el correo del
 # proyecto; mientras, el contacto es por GitHub (reportes y avisos privados de seguridad).
 CONTACTO = {
-    "responsable": "Equipo 6 «WACK», grupo 5IM7 del CECyT 9 «Juan de Dios Bátiz» del IPN",
+    "responsable": "WACK, el equipo que desarrolla y opera NOM (Ciudad de México)",
     "correo": None,
     "reportes": REPO + "/issues",
     "seguridad": REPO + "/security/advisories/new",
@@ -324,7 +324,7 @@ def pagina(ruta, titulo, descripcion, contenido, secciones, actual=None, migas=(
     pie = (f'<footer class="pie"><nav aria-label="Legal"><a href="{inicio}">Ayuda</a> · <a href="{relativo(ruta, ruta_de(LEGAL, "privacidad"))}">Privacidad</a> · '
            f'<a href="{relativo(ruta, ruta_de(LEGAL, "terminos"))}">Términos</a> · <a href="{relativo(ruta, ruta_de(LEGAL, "licencias"))}">Licencias</a> · '
            f'<a href="{relativo(ruta, ruta_de(LEGAL, "seguridad"))}">Seguridad</a> · <a href="{relativo(ruta, ruta_de(LEGAL, "accesibilidad"))}">Accesibilidad</a></nav>'
-           f'<p>NOM es un proyecto escolar del equipo WACK (CECyT 9, IPN). Software libre bajo la GPL-3.0 · <a href="{REPO}" target="_blank" rel="noopener">Código en GitHub</a></p></footer>')
+           f'<p>NOM es de WACK. Software libre bajo la GPL-3.0 · <a href="{REPO}" target="_blank" rel="noopener">Código en GitHub</a></p></footer>')
     return f"""<!doctype html>
 <html lang="es">
 <head>

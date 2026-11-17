@@ -6,10 +6,9 @@ aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-13
 version: 2026-11-13
 ---
-**Responsable**: el equipo 6 «WACK» del grupo 5IM7 del CECyT 9 del IPN (Ciudad de México), que opera
-NOM como proyecto escolar.
+**Responsable**: WACK (Ciudad de México), el equipo que desarrolla y opera NOM.
 
-**Datos que tratamos**: tu nombre de usuario (y, si la das, tu escuela o grupo), la huella de tu
+**Datos que tratamos**: tu nombre de usuario (y, si la das, tu escuela, empresa o grupo), la huella de tu
 contraseña, tus preferencias, tus sesiones, los espacios y documentos que creas o compartes y quién
 escribió cada parte. No pedimos correo, nombre real, teléfono ni fecha de nacimiento, y no tratamos
 datos sensibles.

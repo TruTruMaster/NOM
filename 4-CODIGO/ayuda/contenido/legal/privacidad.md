@@ -6,18 +6,17 @@ aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-13
 version: 2026-11-13
 ---
-!> **Proyecto escolar.** Este texto lo redactó el equipo con base en la Ley Federal de Protección de Datos Personales en Posesión de los Particulares publicada en el Diario Oficial de la Federación el 20 de marzo de 2025 (en vigor desde el 21 de marzo de 2025). No es asesoría legal: está pendiente la revisión del profesor y del texto vigente en el DOF.
+!> Este texto se redactó con base en la Ley Federal de Protección de Datos Personales en Posesión de los Particulares publicada en el Diario Oficial de la Federación el 20 de marzo de 2025 (en vigor desde el 21 de marzo de 2025). Todavía no lo ha revisado un abogado.
 
 ## 1. Quién es el responsable {#responsable}
 
-El responsable del tratamiento de tus datos personales es el **equipo 6 «WACK»** del grupo 5IM7
-del CECyT 9 «Juan de Dios Bátiz» del Instituto Politécnico Nacional, en la Ciudad de México, que
-desarrolla y opera NOM como proyecto escolar. Domicilio para oír y recibir notificaciones: el
+El responsable del tratamiento de tus datos personales es **WACK**, el equipo que desarrolla y
+opera NOM, en la Ciudad de México. Domicilio para oír y recibir notificaciones: el
 medio de contacto de la sección [Cómo ejercer tus derechos](#derechos).
 
 Este aviso aplica a la nube de NOM ([www.nom.qd.je](https://www.nom.qd.je), también en [nomcolab.dpdns.org](https://nomcolab.dpdns.org)), a la versión en Azure y a
 la app de Android. Una computadora o un teléfono que comparte en un salón **lo opera quien lo
-enciende** (la escuela, el maestro o un alumno): es esa persona quien responde por lo que se guarda
+enciende** (una escuela, una oficina o cualquier persona): es esa persona quien responde por lo que se guarda
 en su equipo.
 
 ## 2. Qué datos personales tratamos {#datos}

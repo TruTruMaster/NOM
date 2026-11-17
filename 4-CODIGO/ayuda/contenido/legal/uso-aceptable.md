@@ -6,7 +6,7 @@ aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-13
 version: 2026-11-13
 ---
-NOM es un lugar de trabajo escolar y de equipo. No está permitido:
+NOM es un lugar de trabajo en equipo. No está permitido:
 
 - Nada ilegal, ni compartir contenido que viole derechos de autor de otros.
 - **Acoso, amenazas, burlas o discriminación** hacia cualquier persona (también en comentarios, chat y nombres).

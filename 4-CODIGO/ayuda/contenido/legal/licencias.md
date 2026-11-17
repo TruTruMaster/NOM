@@ -8,7 +8,7 @@ version: 2026-11-13
 ---
 ## NOM
 
-Copyright © 2026 equipo 6 «WACK» (5IM7, CECyT 9, IPN).
+Copyright © 2026 WACK.
 
 NOM es **software libre**: puedes redistribuirlo y modificarlo según los términos de la
 **Licencia Pública General de GNU, versión 3** (GPL-3.0), publicada por la Free Software Foundation.

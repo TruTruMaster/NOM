@@ -11,7 +11,7 @@ en Android. Hasta **50 personas conectadas a la vez** por espacio.
   versión trae su SHA-256 y la huella del certificado de firma, para comprobar que es la original.
 - **Sin Internet:** una computadora (o un teléfono) del salón comparte en el mismo Wi-Fi.
 
-Equipo 6 "WACK" · CECyT 9 · 5IM7
+WACK
 
 > **Si lo bajaste de GitHub:** las carpetas `2-PAGINA-Servidor/` y `3-APP-Android/` no vienen (son
 > programas ya compilados). El APK está en Releases; el servidor se compila con
