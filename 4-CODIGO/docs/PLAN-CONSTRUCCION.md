@@ -713,6 +713,10 @@ sesión anterior: `./desplegar.sh roles` para las columnas nuevas de usuarios.
 
 ## Orden recomendado para la siguiente sesión
 
+**Desde el 17 de noviembre de 2026 (tarde):** leer primero `docs/RELEVO-ESTADO-Y-PENDIENTES.md` (qué está
+confirmado contra Office real, qué solo se escribió, qué falta construir de Word, Excel y PowerPoint y cómo
+emparejarlo con lo que NOM ya tenía). Lo de abajo es lo de antes.
+
 **Desde el 16 de noviembre de 2026 (tarde):** la 0.15.0 a la 0.15.4 (fase 22, paridad con Office real) quedaron
 publicadas. Lo que sigue de esa fase, en este orden: líneas de tendencia, barras de error y tabla de datos de las
 gráficas (lo más flojo de `comparar_real.py x04-graficas.xlsx`), matrices dinámicas, LET y LAMBDA en el motor de fórmulas, secciones y
