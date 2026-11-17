@@ -127,6 +127,106 @@
       let t = tabla();
       const crudo = (c, f) => (t ? t["c:" + F().ref(c, f)] : "") || "";
       const prop = (p, c, f) => (t ? t[p + ":" + F().ref(c, f)] : undefined);
+      // ------------------------------------------------------------ protección (como Excel): de la hoja y del libro
+      // Hoja protegida: las celdas bloqueadas (todas, salvo las que se desbloquearon: pr «u») no se cambian; lo demás solo
+      // si la protección lo deja (dar formato, ancho de columnas, alto de filas, insertar, ordenar, filtrar). Las fórmulas
+      // ocultas (pr «h») no se ven en la barra. Libro con la estructura protegida: no se agregan, quitan, mueven ni
+      // renombran hojas. Quitar la protección pide su contraseña (js/cifrado-office.js), como Excel.
+      const protHoja = () => (t && t.prot && typeof t.prot === "object" ? t.prot : null);
+      const libroProt = () => { const p = doc().valor("_doc", "libroProt"); return p && p.estructura ? p : null; };
+      const celdaLibre = (ref) => String((t && t["pr:" + ref]) || "").includes("u");
+      const formulaOculta = (c, f) => !!protHoja() && String(prop("pr", c, f) || "").includes("h");
+      function noSePuede(que) { aviso(que + " La hoja está protegida: quita la protección desde el menú de la hoja.", { tipo: "aviso", ms: 4500 }); return false; }
+      function permitido(campos) {
+        const pr = protHoja();
+        if (!pr) return true;
+        const per = new Set(pr.permite || []);
+        for (const k of Object.keys(campos)) {
+          if (k === "prot" || k === "fijasF" || k === "fijasC" || k === "vistaPropia") continue;
+          const i = k.indexOf(":"), pre = i > 0 ? k.slice(0, i) : k, ref = i > 0 ? k.slice(i + 1) : "";
+          if (/^[A-Z]{1,3}\d+$/.test(ref)) {
+            if (pre === "pr") return noSePuede("No se puede bloquear ni desbloquear celdas.");
+            if (pre === "c" || pre === "fa") { if (!celdaLibre(ref)) return noSePuede(`La celda ${ref} está bloqueada.`); continue; }
+            if (!celdaLibre(ref) && !per.has("formatCells")) return noSePuede("No se puede dar formato a las celdas bloqueadas.");
+            continue;
+          }
+          if (pre === "aw" || pre === "ow" || pre === "ap") { if (!per.has("formatColumns")) return noSePuede("No se puede cambiar el ancho de las columnas."); continue; }
+          if (pre === "ah" || pre === "oh") { if (!per.has("formatRows")) return noSePuede("No se puede cambiar el alto de las filas."); continue; }
+          if (pre === "filas") { if (!per.has("insertRows")) return noSePuede("No se pueden insertar filas."); continue; }
+          if (pre === "cols") { if (!per.has("insertColumns")) return noSePuede("No se pueden insertar columnas."); continue; }
+          if (pre === "vistaComun") { if (!per.has("sort") && !per.has("autoFilter")) return noSePuede("No se puede ordenar ni filtrar para todos."); continue; }
+          if (pre === "m") return noSePuede("No se pueden combinar ni separar celdas.");
+          if (pre === "cf" || pre === "dv") return noSePuede("No se pueden cambiar reglas de formato ni de validación.");
+          if (pre === "nombre") { if (libroProt()) return avisoLibro(); continue; }
+        }
+        return true;
+      }
+      function avisoLibro() { aviso("La estructura del libro está protegida: no se agregan, quitan, mueven ni renombran hojas. Quita la protección del libro desde el menú de una hoja.", { tipo: "aviso", ms: 4500 }); return false; }
+      /** Escribe en la hoja actual si la protección lo deja. */
+      function cambiarT(campos, opc) { if (!t || !permitido(campos)) return false; doc().cambiar(t.id, campos, opc); return true; }
+      /** Pide la contraseña de una protección y dice si es la buena (sin contraseña: sí). */
+      function claveBuena(p, titulo) {
+        return new Promise((ok) => {
+          if (!p || !(p.hash || p.viejo)) return ok(true);
+          NOM.pedirTexto(titulo, { etiqueta: "Contraseña", tipo: "password", si: "Aceptar" }).then((c) => {
+            if (c == null) return ok(false);
+            const bien = NOM.cifradoOffice && NOM.cifradoOffice.contrasenaValida(p, c);
+            if (!bien) aviso("Esa no es la contraseña", { tipo: "error" });
+            ok(!!bien);
+          });
+        });
+      }
+      const PERMISOS = [["formatCells", "Dar formato a celdas"], ["formatColumns", "Cambiar el ancho de columnas"], ["formatRows", "Cambiar el alto de filas"], ["insertColumns", "Insertar columnas"],
+        ["insertRows", "Insertar filas"], ["insertHyperlinks", "Insertar vínculos"], ["deleteColumns", "Eliminar columnas"], ["deleteRows", "Eliminar filas"], ["sort", "Ordenar"], ["autoFilter", "Usar el filtro"]];
+      function protegerHoja() {
+        if (!t) return;
+        const cuerpo = html(`<form class="col" autocomplete="off"><p class="suave">Como en Excel: las celdas bloqueadas (todas, salvo las que desbloquees desde Formato) no se pueden cambiar. No es secreto: evita cambios por accidente.</p>
+          <div class="campo"><label for="ph-c">Contraseña para quitar la protección (opcional)</label><div class="entrada"><input id="ph-c" type="password" data-c maxlength="255" autocomplete="new-password"></div></div>
+          <p class="etiqueta">Dejar que cualquiera pueda:</p>${PERMISOS.map(([k, n]) => `<label class="fila"><input type="checkbox" data-per="${k}"> ${esc(n)}</label>`).join("")}</form>`);
+        const pie = html(`<div style="display:contents"><span class="crece"></span><button class="btn" type="button" data-no>Cancelar</button><button class="btn primario" type="button" data-si>Proteger hoja</button></div>`);
+        const h = NOM.hoja({ titulo: "Proteger hoja", icono: "lock", cuerpo, pie });
+        $("[data-no]", pie).onclick = () => h.cerrar();
+        $("[data-si]", pie).onclick = () => {
+          const clave = $("[data-c]", cuerpo).value, permite = $$("[data-per]", cuerpo).filter((x) => x.checked).map((x) => x.dataset.per);
+          const prot = { p: clave && NOM.cifradoOffice ? NOM.cifradoOffice.nuevaProteccion(clave, false) : {} };
+          if (permite.length) prot.permite = permite;
+          prot.objetos = true; prot.escenarios = true;
+          doc().cambiar(t.id, { prot });
+          h.cerrar(); aviso("Hoja protegida", { tipo: "ok" }); render();
+        };
+      }
+      async function desprotegerHoja() {
+        const pr = protHoja();
+        if (!pr || !(await claveBuena(pr.p, "Desproteger hoja"))) return;
+        doc().cambiar(t.id, { prot: null });
+        aviso("La hoja ya no está protegida", { tipo: "ok" }); render();
+      }
+      async function protegerLibro() {
+        const lp = libroProt();
+        if (lp) {
+          if (!(await claveBuena(lp.p, "Desproteger el libro"))) return;
+          doc().cambiar("_doc", { libroProt: null });
+          return aviso("El libro ya no está protegido", { tipo: "ok" });
+        }
+        const c = await NOM.pedirTexto("Proteger la estructura del libro", { etiqueta: "Contraseña para quitarla (opcional)", tipo: "password", si: "Proteger" });
+        if (c == null) return;
+        doc().cambiar("_doc", { libroProt: { p: c && NOM.cifradoOffice ? NOM.cifradoOffice.nuevaProteccion(c, false) : {}, estructura: true } });
+        aviso("Estructura del libro protegida", { tipo: "ok" });
+      }
+      /** Bloquear o desbloquear las celdas elegidas, y ocultar o mostrar sus fórmulas (para cuando la hoja se proteja). */
+      function protegerCeldas(que) {
+        if (!t) return;
+        if (protHoja()) return noSePuede("No se puede bloquear ni desbloquear celdas.");
+        const r = rango(), campos = {}, ref0 = F().ref(r.c1, r.f1), v0 = String(t["pr:" + ref0] || "");
+        const quitar = que === "u" ? v0.includes("u") : v0.includes("h");
+        for (let f = r.f1; f <= r.f2; f++) for (let c = r.c1; c <= r.c2; c++) {
+          const ref = F().ref(c, f), v = String(t["pr:" + ref] || "");
+          const nv = quitar ? v.replace(que, "") : v.includes(que) ? v : v + que;
+          campos["pr:" + ref] = nv || null;
+        }
+        doc().cambiar(t.id, campos);
+        aviso(que === "u" ? (quitar ? "Celdas bloqueadas" : "Celdas desbloqueadas: se podrán cambiar con la hoja protegida") : quitar ? "Fórmulas visibles" : "Fórmulas ocultas al proteger la hoja", { tipo: "ok" });
+      }
       const nombreHoja = () => (t ? F().nombreDeHoja(doc(), t) : "Hoja1");
       const evaluar = () => F().evaluadorDeTabla(doc(), t || { filas: 30, cols: 10 });
       const rango = () => {
@@ -224,8 +324,8 @@
         const b = e.target.closest("[data-b]");
         if (!b) return;
         if (b.dataset.b === "quitar") guardarVista(null);
-        else if (b.dataset.b === "todos" && t && !ed.soloLectura) { doc().cambiar(t.id, { vistaComun: Object.assign({}, vistaPropia()) }); delete vistas[ed.pagina]; NOM.guardar(claveVista(), vistas); aviso("Listo: es el filtro de todos", { tipo: "ok" }); }
-        else if (b.dataset.b === "quitar-todos" && t && !ed.soloLectura) doc().cambiar(t.id, { vistaComun: null });
+        else if (b.dataset.b === "todos" && t && !ed.soloLectura) { cambiarT({ vistaComun: Object.assign({}, vistaPropia()) }); delete vistas[ed.pagina]; NOM.guardar(claveVista(), vistas); aviso("Listo: es el filtro de todos", { tipo: "ok" }); }
+        else if (b.dataset.b === "quitar-todos" && t && !ed.soloLectura) cambiarT({ vistaComun: null });
       });
       /** Cambia la vista propia (a partir de la que se ve, propia o de todos). */
       function cambiarVista(fn) {
@@ -253,7 +353,7 @@
             if ((v == null ? null : v) !== (actual == null ? null : actual)) campos[p + ":" + F().ref(k, destino)] = v == null ? null : v;
           }
         });
-        if (Object.keys(campos).length) doc().cambiar(t.id, campos, { meta: { o: "r" } });
+        if (Object.keys(campos).length) cambiarT(campos, { meta: { o: "r" } });
         aviso("Filas ordenadas para todos. Ctrl+Z para deshacer", { tipo: "ok" });
       }
       function dialogoFiltro(c) {
@@ -287,7 +387,7 @@
       }
 
       // ------------------------------------------------------------ 4.3 fijar filas y columnas (para todos)
-      function fijar(campos) { if (!ed.soloLectura && t) doc().cambiar(t.id, campos); }
+      function fijar(campos) { if (!ed.soloLectura && t) cambiarT(campos); }
       function aplicarFijas() {
         if (!t) return;
         const ff = Math.max(0, t.fijasF || 0), fc = Math.max(0, t.fijasC || 0);
@@ -812,7 +912,8 @@
       let ultimoEv = null;
       /** Lo que va en la barra de fórmulas: en una celda a la que llega un derrame, la fórmula de origen en gris (como Excel). */
       function textoBarra(c, f) {
-        const v = crudo(c, f);
+        // (fórmula oculta en una hoja protegida: como Excel, la barra queda vacía)
+        const v = formulaOculta(c, f) && String(crudo(c, f))[0] === "=" ? "" : crudo(c, f);
         let fantasma = "";
         if (v === "" && t) { const ev = ultimoEv || evaluar(), o = ev.origen ? ev.origen(c, f) : null; if (o) fantasma = crudo(o.c, o.f); }
         fx.placeholder = fantasma;
@@ -1021,6 +1122,7 @@
       }
       function tablaDePagina(p) { return doc().deLaPagina(p).find((x) => x.tipo === "tabla") || null; }
       function nuevaHoja() {
+        if (libroProt()) return avisoLibro();
         fijarNombres();
         const nombre = nombreNuevo();
         ed.pagina = ed.nuevaPagina(ed.pagina);
@@ -1030,6 +1132,7 @@
       }
       const nombreValido = (n) => n && n.length <= 31 && !/[\\/?*[\]:]/.test(n);
       async function renombrarHoja(p) {
+        if (libroProt()) return avisoLibro();
         const tb = tablaDePagina(p);
         if (!tb) return;
         const viejo = F().nombreDeHoja(doc(), tb);
@@ -1049,6 +1152,7 @@
         });
       }
       function duplicarHoja(p) {
+        if (libroProt()) return avisoLibro();
         const tb = tablaDePagina(p);
         if (!tb) return;
         fijarNombres();
@@ -1065,6 +1169,7 @@
         ed.pagina = np; sel = { c: 0, f: 0 }; ancla = null; render();
       }
       function moverHoja(p, d) {
+        if (libroProt()) return avisoLibro();
         const pags = doc().paginas().slice(), i = pags.indexOf(p);
         if (i + d < 0 || i + d >= pags.length) return;
         fijarNombres();
@@ -1072,6 +1177,7 @@
         doc().cambiar("_doc", { paginas: pags });
       }
       async function eliminarHoja(p) {
+        if (libroProt()) return avisoLibro();
         const pags = doc().paginas();
         if (pags.length <= 1) return aviso("Un libro necesita al menos una hoja", { tipo: "info" });
         const tb = tablaDePagina(p);
@@ -1096,7 +1202,10 @@
           { texto: "Mover a la derecha", corto: "Mover →", icono: "chevron-right", off: i >= pags.length - 1, fn: () => moverHoja(p, 1) },
           { texto: "Eliminar hoja", corto: "Eliminar", icono: "trash-2", off: pags.length <= 1, fn: () => eliminarHoja(p) },
           { texto: "Nueva hoja", corto: "Nueva", icono: "plus", fn: nuevaHoja },
-        ];
+          // protección, como en Excel (Revisar > Proteger hoja / Proteger libro)
+          p === ed.pagina && protHoja() ? { texto: "Desproteger hoja…", corto: "Desproteger", icono: "lock-open", fn: desprotegerHoja } : p === ed.pagina ? { texto: "Proteger hoja…", corto: "Proteger", icono: "lock", fn: protegerHoja } : null,
+          { texto: libroProt() ? "Desproteger el libro…" : "Proteger la estructura del libro…", corto: "Libro", icono: libroProt() ? "lock-open" : "lock", fn: protegerLibro },
+        ].filter(Boolean);
       }
       function menuHoja(anc, p) {
         NOM.menu(anc, [{ titulo: anc.textContent.trim() }, ...accionesHoja(p).filter((x) => !x.off)]);
@@ -1203,7 +1312,7 @@
         if (!Object.keys(campos).length) return true;
         if (f >= (t.filas || 30) - 1) campos.filas = (t.filas || 30) + 10;
         if (c >= (t.cols || 10) - 1) campos.cols = (t.cols || 10) + 2;
-        doc().cambiar(t.id, campos, opc);
+        cambiarT(campos, opc);
         return true;
       }
       /** Moverse por la vista (con filtro u orden, la fila de abajo es la que se ve abajo). Salta las combinadas. */
@@ -1228,6 +1337,7 @@
       }
       function abrirEditor(inicial, conservar) {
         if (ed.soloLectura || !t) return;
+        if (protHoja() && !celdaLibre(F().ref(sel.c, sel.f))) { noSePuede(`La celda ${F().ref(sel.c, sel.f)} está bloqueada.`); return; }
         cerrarEditor(false);
         const td = celda(sel.c, sel.f);
         if (!td) return;
@@ -1402,7 +1512,7 @@
         if (ed.soloLectura || !t) return;
         const r = rango(), campos = {};
         cadaCelda(r, (c, f, ref) => { if (crudo(c, f)) campos["c:" + ref] = ""; });
-        if (Object.keys(campos).length) doc().cambiar(t.id, campos);
+        if (Object.keys(campos).length) cambiarT(campos);
       }
       async function escribirPortapapeles(texto) {
         try { await navigator.clipboard.writeText(texto); }
@@ -1504,7 +1614,7 @@
         }
         if (maxF > (t.filas || 30)) campos.filas = maxF;
         if (maxC > (t.cols || 10)) campos.cols = maxC;
-        doc().cambiar(t.id, campos, { meta: { o: "p", g: NOM.idCorto() + Date.now().toString(36), gn: p.texto.length } });
+        cambiarT(campos, { meta: { o: "p", g: NOM.idCorto() + Date.now().toString(36), gn: p.texto.length } });
         ancla = { c: dest.c1, f: dest.f1 }; sel = { c: dest.c1 + ancho0 * veces[1] - 1, f: dest.f1 + alto0 * veces[0] - 1 };
         if (ancla.c === sel.c && ancla.f === sel.f) ancla = null;
         marcarCopiado();
@@ -1524,7 +1634,7 @@
         if (maxF > (t.filas || 30)) campos.filas = maxF;
         if (maxC > (t.cols || 10)) campos.cols = maxC;
         // 3.1 Lo pegado cuenta aparte de lo tecleado en la bitácora (sin guardar el texto).
-        doc().cambiar(t.id, campos, { meta: { o: "p", g: NOM.idCorto() + Date.now().toString(36), gn: Array.from(texto).length } });
+        cambiarT(campos, { meta: { o: "p", g: NOM.idCorto() + Date.now().toString(36), gn: Array.from(texto).length } });
       }
 
       // ------------------------------------------------------------ 8.1 cuadrito de relleno y Ctrl+D / Ctrl+R
@@ -1600,7 +1710,7 @@
         }
         const dz = destinoRelleno(r, dir, n);
         if (dz) { campos.filas = Math.max(t.filas || 30, dz.f2 + 2); campos.cols = Math.max(t.cols || 10, dz.c2 + 2); }
-        doc().cambiar(t.id, campos);
+        cambiarT(campos);
         if (dz) { ancla = { c: Math.min(r.c1, dz.c1), f: Math.min(r.f1, dz.f1) }; sel = { c: Math.max(r.c2, dz.c2), f: Math.max(r.f2, dz.f2) }; pintarSeleccion(); }
       }
       /** Ctrl+D (abajo) y Ctrl+R (derecha): copia la primera fila o columna del rango en las demás. */
@@ -1672,7 +1782,7 @@
           campos.vistaComun = vc;
         }
         doc().lote(() => {
-          doc().cambiar(t.id, campos, { meta: { o: "r" } });
+          cambiarT(campos, { meta: { o: "r" } });
           // Las fórmulas de las otras hojas que apuntan a esta.
           F().hojasDe(doc()).forEach((h) => {
             if (h.id === t.id) return;
@@ -1737,9 +1847,9 @@
           lienzoMedida.font = `${t["n:" + ref] ? 850 : 500} ${tl * 1.333}px Nunito, sans-serif`;
           max = Math.max(max, lienzoMedida.measureText(F().aplicarFormato(ev.valor(c, f), t["f:" + ref])).width + 22);
         }
-        doc().cambiar(t.id, { ["aw:" + F().colLetra(c)]: Math.min(600, Math.ceil(max)) });
+        cambiarT({ ["aw:" + F().colLetra(c)]: Math.min(600, Math.ceil(max)) });
       }
-      function ajustarAlto(f) { if (t) doc().cambiar(t.id, { ["ah:" + (f + 1)]: null }); }
+      function ajustarAlto(f) { if (t) cambiarT({ ["ah:" + (f + 1)]: null }); }
       async function pedirMedida(titulo, actual, def, min, max) {
         const v = await NOM.pedirTexto(titulo, { etiqueta: `En pixeles (normal: ${def})`, valor: String(actual), si: "Aplicar", max: 4 });
         if (v == null) return null;
@@ -1752,14 +1862,14 @@
         if (w == null) return;
         const campos = {};
         for (let c = r.c1; c <= r.c2; c++) campos["aw:" + F().colLetra(c)] = w === ANCHO ? null : w;
-        doc().cambiar(t.id, campos);
+        cambiarT(campos);
       }
       async function altoFilas() {
         const r = rango(), h = await pedirMedida("Alto de fila", alto(r.f1) || ALTO, ALTO, 18, 400);
         if (h == null) return;
         const campos = {};
         for (let f = r.f1; f <= r.f2; f++) campos["ah:" + (f + 1)] = h === ALTO ? null : h;
-        doc().cambiar(t.id, campos);
+        cambiarT(campos);
       }
       rej.addEventListener("pointerdown", () => { colTab = null; }, true);
       rej.addEventListener("pointerdown", (e) => {
@@ -1779,8 +1889,8 @@
         redim.el.onpointerup = () => {
           const x = redim; redim = null;
           x.el.onpointermove = x.el.onpointerup = null;
-          if (x.c != null && x.w && x.w !== x.w0) doc().cambiar(t.id, { ["aw:" + F().colLetra(x.c)]: x.w });
-          if (x.f != null && x.h && x.h !== x.h0) doc().cambiar(t.id, { ["ah:" + (x.f + 1)]: x.h });
+          if (x.c != null && x.w && x.w !== x.w0) cambiarT({ ["aw:" + F().colLetra(x.c)]: x.w });
+          if (x.f != null && x.h && x.h !== x.h0) cambiarT({ ["ah:" + (x.f + 1)]: x.h });
         };
       }, true);
       rej.addEventListener("dblclick", (e) => {
@@ -1878,28 +1988,28 @@
         if (ed.soloLectura || !t) return;
         const r = rango(), valor = !t[k + ":" + F().ref(sel.c, sel.f)], campos = {};
         cadaCelda(r, (c, f, ref) => (campos[k + ":" + ref] = valor || null));
-        doc().cambiar(t.id, campos);
+        cambiarT(campos);
       }
       /** Pone una propiedad (k) en todo el rango; null la quita. */
       function ponerEnRango(k, valor) {
         if (ed.soloLectura || !t) return;
         const campos = {};
         cadaCelda(rango(), (c, f, ref) => (campos[k + ":" + ref] = valor == null || valor === "" ? null : valor));
-        doc().cambiar(t.id, campos);
+        cambiarT(campos);
       }
       const colorCeldas = (color) => ponerEnRango("k", color);
       const rellenoCeldas = (color) => {
         if (ed.soloLectura || !t) return;
         const campos = {};
         cadaCelda(rango(), (c, f, ref) => { campos["r:" + ref] = color || null; if (t["rx:" + ref]) campos["rx:" + ref] = null; });
-        doc().cambiar(t.id, campos);
+        cambiarT(campos);
       };
       const formatoNumero = (cod) => ponerEnRango("f", cod === "General" ? null : cod);
       const alinear = (a) => {
         if (ed.soloLectura || !t) return;
         const campos = {};
         cadaCelda(rango(), (c, f, ref) => { campos["al:" + ref] = a || null; Object.assign(campos, sinAlineacionXl(ref)); });
-        doc().cambiar(t.id, campos);
+        cambiarT(campos);
       };
       /** La alineación de Excel sin su parte horizontal (rellenar, justificar, distribuido…) ni su sangría. */
       function sinAlineacionXl(ref) {
@@ -1912,7 +2022,7 @@
         if (ed.soloLectura || !t) return;
         const ev = evaluar(), campos = {};
         cadaCelda(rango(), (c, f, ref) => { const v = ev.valor(c, f); if (!F().esNum(v) && v !== "") return; campos["f:" + ref] = F().cambiarDecimales(t["f:" + ref], delta, v); });
-        if (Object.keys(campos).length) doc().cambiar(t.id, campos);
+        if (Object.keys(campos).length) cambiarT(campos);
       }
       function alternarAjuste() {
         if (!t) return;
@@ -1932,7 +2042,7 @@
           b = [...new Set(b.split(""))].sort().join("");
           if (b !== viejo) { campos["bd:" + ref] = b || null; if (t["bx:" + ref]) campos["bx:" + ref] = null; }
         });
-        doc().cambiar(t.id, campos);
+        cambiarT(campos);
       }
       function combinar() {
         if (ed.soloLectura || !t) return;
@@ -1940,7 +2050,7 @@
         if (t["m:" + tl] || (r.c1 === r.c2 && r.f1 === r.f2)) {
           // Separar: la combinada donde está la celda activa.
           const k = t["m:" + tl] ? "m:" + tl : cubiertas.has(F().ref(sel.c, sel.f)) ? "m:" + cubiertas.get(F().ref(sel.c, sel.f)) : null;
-          if (k) { doc().cambiar(t.id, { [k]: null }); aviso("Celdas separadas", { tipo: "ok", ms: 1500 }); }
+          if (k) { cambiarT({ [k]: null }); aviso("Celdas separadas", { tipo: "ok", ms: 1500 }); }
           else aviso("Elige varias celdas para combinarlas", { tipo: "info" });
           return;
         }
@@ -1949,7 +2059,7 @@
         const campos = { ["m:" + tl]: `${r.c2 - r.c1 + 1}x${r.f2 - r.f1 + 1}`, ["al:" + tl]: t["al:" + tl] || "centro" };
         // Combinadas que se enciman con esta: se quitan.
         for (const k in t) if (k.startsWith("m:") && t[k] && k !== "m:" + tl) { const p = F().parseRef(k.slice(2)), m = medida(t[k]); if (p && m && !(p.c > r.c2 || p.c + m[0] - 1 < r.c1 || p.f > r.f2 || p.f + m[1] - 1 < r.f1)) campos[k] = null; }
-        doc().cambiar(t.id, campos);
+        cambiarT(campos);
         ancla = null; sel = { c: r.c1, f: r.f1 };
         if (otras) aviso("Al combinar solo se ve lo de la primera celda (lo demás se conserva escondido)", { tipo: "info", ms: 4000 });
       }
@@ -1958,7 +2068,7 @@
         if (ed.soloLectura || !t) return;
         const campos = {};
         cadaCelda(rango(), (c, f, ref) => FORMATO.forEach((k) => { if (t[k + ":" + ref] != null) campos[k + ":" + ref] = null; }));
-        if (Object.keys(campos).length) doc().cambiar(t.id, campos);
+        if (Object.keys(campos).length) cambiarT(campos);
       }
       function menuFormatoNumero(anc) {
         const ev = evaluar(), v = ev.valor(sel.c, sel.f), actual = t["f:" + F().ref(sel.c, sel.f)] || "General";
@@ -2015,7 +2125,7 @@
             campos["tl:" + rf] = tam === 10.5 ? null : tam;
             campos["aj:" + rf] = aj || null;
           });
-          doc().cambiar(t.id, campos);
+          cambiarT(campos);
           h.cerrar();
         };
       }
@@ -2051,14 +2161,14 @@
           $("[data-op]", cuerpo).value = rep ? "<" : "="; $("[data-v1]", cuerpo).value = rep ? "6" : "10";
           color = rep ? "#C00000" : "#1D7A4C"; fondo = rep ? "#F4CCCC" : "#D9EAD3"; muestra();
         }));
-        cuerpo.addEventListener("click", (e) => { const q = e.target.closest("[data-quitar]"); if (q) { doc().cambiar(t.id, { [q.dataset.quitar]: null }); h.cerrar(); setTimeout(dialogoCondicional, 50); } });
+        cuerpo.addEventListener("click", (e) => { const q = e.target.closest("[data-quitar]"); if (q) { cambiarT({ [q.dataset.quitar]: null }); h.cerrar(); setTimeout(dialogoCondicional, 50); } });
         $("[data-no]", pie).onclick = () => h.cerrar();
         $("[data-si]", pie).onclick = (e) => {
           e.preventDefault();
           const rg = $("[data-rango]", cuerpo).value.trim().toUpperCase().replace(/\$/g, "");
           if (!G().rango(rg)) return aviso("Escribe las celdas como B2:B40", { tipo: "aviso" });
           const op = $("[data-op]", cuerpo).value;
-          doc().cambiar(t.id, { ["cf:" + NOM.idCorto()]: { rango: rg.includes(":") ? rg : rg + ":" + rg, op, v1: $("[data-v1]", cuerpo).value.trim(), v2: $("[data-v2]", cuerpo).value.trim(), color, fondo, negrita: $("[data-neg]", cuerpo).checked || null } });
+          cambiarT({ ["cf:" + NOM.idCorto()]: { rango: rg.includes(":") ? rg : rg + ":" + rg, op, v1: $("[data-v1]", cuerpo).value.trim(), v2: $("[data-v2]", cuerpo).value.trim(), color, fondo, negrita: $("[data-neg]", cuerpo).checked || null } });
           h.cerrar();
           aviso("Regla agregada: se aplica sola cuando cambian los valores", { tipo: "ok" });
         };
@@ -2079,7 +2189,7 @@
         ver();
         $$("[data-tipo]", cuerpo).forEach((b) => (b.onclick = () => { tipo = b.dataset.tipo; ver(); }));
         $("[data-no]", pie).onclick = () => h.cerrar();
-        const q = $("[data-quitar]", pie); if (q) q.onclick = () => { doc().cambiar(t.id, { [actual.id]: null }); h.cerrar(); };
+        const q = $("[data-quitar]", pie); if (q) q.onclick = () => { cambiarT({ [actual.id]: null }); h.cerrar(); };
         $("[data-si]", pie).onclick = (e) => {
           e.preventDefault();
           const rg = $("[data-rango]", cuerpo).value.trim().toUpperCase().replace(/\$/g, "");
@@ -2089,7 +2199,7 @@
             regla.valores = $("[data-valores]", cuerpo).value.split(/[\n,]/).map((x) => x.trim()).filter(Boolean).slice(0, 200);
             if (!regla.valores.length) return aviso("Escribe al menos una opción", { tipo: "aviso" });
           } else { regla.min = $("[data-min]", cuerpo).value.trim(); regla.max = $("[data-max]", cuerpo).value.trim(); }
-          doc().cambiar(t.id, { [actual ? actual.id : "dv:" + NOM.idCorto()]: regla });
+          cambiarT({ [actual ? actual.id : "dv:" + NOM.idCorto()]: regla });
           h.cerrar();
         };
       }
@@ -2193,7 +2303,7 @@
         const formulas = $("[data-formulas]", panel).checked, campos = {};
         let n = 0;
         hallazgos.forEach((h) => { const v = String(crudo(h.c, h.f)); if (v.startsWith("=") && !formulas) return; const nv = reemplazo(v); if (nv !== v) { campos["c:" + h.ref] = nv; n++; } });
-        if (n) doc().cambiar(t.id, campos);
+        if (n) cambiarT(campos);
         aviso(`${n} celda(s) reemplazada(s)`, { tipo: "ok" });
         setTimeout(calcular, 30);
       }
@@ -2230,7 +2340,9 @@
             { texto: "Bordes", icono: "grid-3x3", sub: [{ texto: "Todos", icono: "grid-3x3", fn: () => bordes("todos") }, { texto: "Contorno", icono: "square", fn: () => bordes("contorno") }, { texto: "Abajo", icono: "arrow-down", fn: () => bordes("abajo") }, { texto: "Sin bordes", icono: "x", fn: () => bordes("ninguno") }] },
             { texto: "Combinar", icono: "table-cells-merge", fn: combinar },
             { texto: "Ajustar texto", corto: "Ajustar", icono: "wrap-text", marcado: !!(t && t["aj:" + ref]), fn: alternarAjuste },
-            { texto: "Formato de celdas…", corto: "Todo…", icono: "settings", fn: dialogoFormato }] },
+            { texto: "Formato de celdas…", corto: "Todo…", icono: "settings", fn: dialogoFormato },
+            { texto: String((t && t["pr:" + ref]) || "").includes("u") ? "Bloquear celdas" : "Desbloquear celdas", corto: "Bloqueo", icono: "lock", fn: () => protegerCeldas("u") },
+            { texto: String((t && t["pr:" + ref]) || "").includes("h") ? "Mostrar la fórmula" : "Ocultar la fórmula", corto: "Ocultar", icono: "eye-off", fn: () => protegerCeldas("h") }] },
           { texto: "Más", icono: "more-horizontal", sub: [
             { texto: "Cortar", icono: "scissors", off: lect, fn: () => copiarRango(true) },
             { texto: "Pegar", icono: "clipboard-paste", off: lect, fn: () => pegarRango("todo") },
@@ -2358,8 +2470,8 @@
           { titulo: "Hoja" },
           { texto: "Ancho de columna…", icono: "move-horizontal", fn: anchoColumnas },
           { texto: "Alto de fila…", icono: "move-vertical", fn: altoFilas },
-          { texto: "Agregar 10 filas al final", icono: "rows-3", fn: () => t && doc().cambiar(t.id, { filas: (t.filas || 30) + 10 }) },
-          { texto: "Agregar 2 columnas", icono: "columns-3", fn: () => t && doc().cambiar(t.id, { cols: (t.cols || 10) + 2 }) },
+          { texto: "Agregar 10 filas al final", icono: "rows-3", fn: () => t && cambiarT({ filas: (t.filas || 30) + 10 }) },
+          { texto: "Agregar 2 columnas", icono: "columns-3", fn: () => t && cambiarT({ cols: (t.cols || 10) + 2 }) },
           { texto: "Cambiar el nombre de la hoja", icono: "pencil", fn: () => renombrarHoja(ed.pagina) },
         ].filter((x) => !(ed.soloLectura && x.fn))) },
       ];

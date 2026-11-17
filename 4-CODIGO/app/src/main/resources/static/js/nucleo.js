@@ -216,11 +216,12 @@
     opc = opc || {};
     return new Promise((ok) => {
       const cuerpo = html(`<form class="col"><div class="campo"><label for="pt">${esc(opc.etiqueta || "Nombre")}</label>
-        <div class="entrada"><input id="pt" autocomplete="off" maxlength="${opc.max || 120}" value="${esc(opc.valor || "")}" placeholder="${esc(opc.ph || "")}" autofocus></div></div></form>`);
+        <div class="entrada"><input id="pt"${opc.tipo === "password" ? ' type="password" autocomplete="new-password"' : ' autocomplete="off"'} maxlength="${opc.max || 120}" value="${esc(opc.valor || "")}" placeholder="${esc(opc.ph || "")}" autofocus></div></div></form>`);
       const pie = html(`<div style="display:contents"><button class="btn" data-no type="button">Cancelar</button><button class="btn primario" data-si>${esc(opc.si || "Guardar")}</button></div>`);
       let resuelto = false;
       const h = hoja({ titulo, cuerpo, pie, alCerrar: () => { if (!resuelto) ok(null); } });
-      const enviar = (e) => { e && e.preventDefault(); resuelto = true; ok($("input", cuerpo).value.trim()); h.cerrar(); };
+      // (una contraseña va tal cual: sus espacios también cuentan)
+      const enviar = (e) => { e && e.preventDefault(); resuelto = true; const v = $("input", cuerpo).value; ok(opc.tipo === "password" ? v : v.trim()); h.cerrar(); };
       cuerpo.onsubmit = enviar;
       $("[data-si]", pie).onclick = enviar;
       $("[data-no]", pie).onclick = () => h.cerrar();

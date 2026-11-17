@@ -466,5 +466,63 @@
     return escribirCFB(Object.assign({ EncryptionInfo: info, EncryptedPackage: paquete }, espaciosDeDatos()));
   }
 
-  NOM.cifradoOffice = { cifrado, descifrar, cifrar, leerCFB, escribirCFB, esCFB, prueba: { sha1, sha512, hmac, cbc, ecbDescifrar, expandir, cifrarBloque, descifrarBloque, hashContrasena } };
+  // ------------------------------------------------------------ protección de edición (no cifra: pide contraseña para cambiar)
+  // MS-OFFCRYPTO 2.4.2.4: H0 = H(sal + contraseña en UTF-16), Hn = H(Hn-1 + vuelta) — la vuelta va DESPUÉS (al revés que al
+  // cifrar). Excel (hoja, libro, «contraseña para modificar») y PowerPoint usan la contraseña tal cual; Word primero la pasa
+  // por su clave vieja de 32 bits (ECMA-376 parte 4, 2.15.1.28) escrita en hexadecimal con los bytes al revés.
+  const ALG_SID = { 4: "SHA1", 12: "SHA256", 13: "SHA384", 14: "SHA512" };
+  function hashProteccion(contrasena, alg, sal, vueltas) {
+    const h0 = HASHES[String(alg || "SHA512").replace(/-/g, "").toUpperCase()];
+    if (!h0) return null;
+    let h = h0.f(unir(sal, utf16(contrasena)));
+    const buf = new Uint8Array(h.length + 4), dv = new DataView(buf.buffer);
+    for (let i = 0; i < vueltas; i++) { buf.set(h, 0); dv.setUint32(h.length, i, true); h = h0.f(buf); }
+    return h;
+  }
+  const CODIGO_INICIAL = [0xE1F0, 0x1D0F, 0xCC9C, 0x84C0, 0x110C, 0x0E10, 0xF1CE, 0x313E, 0x1872, 0xE139, 0xD40F, 0x84F9, 0x280C, 0xA96A, 0x4EC3];
+  const MATRIZ = [[0xAEFC, 0x4DD9, 0x9BB2, 0x2745, 0x4E8A, 0x9D14, 0x2A09], [0x7B61, 0xF6C2, 0xFDA5, 0xEB6B, 0xC6F7, 0x9DCF, 0x2BBF], [0x4563, 0x8AC6, 0x05AD, 0x0B5A, 0x16B4, 0x2D68, 0x5AD0],
+    [0x0375, 0x06EA, 0x0DD4, 0x1BA8, 0x3750, 0x6EA0, 0xDD40], [0xD849, 0xA0B3, 0x5147, 0xA28E, 0x553D, 0xAA7A, 0x44D5], [0x6F45, 0xDE8A, 0xAD35, 0x4A4B, 0x9496, 0x390D, 0x721A],
+    [0xEB23, 0xC667, 0x9CEF, 0x29FF, 0x53FE, 0xA7FC, 0x5FD9], [0x47D3, 0x8FA6, 0x0F6D, 0x1EDA, 0x3DB4, 0x7B68, 0xF6D0], [0xB861, 0x60E3, 0xC1C6, 0x93AD, 0x377B, 0x6EF6, 0xDDEC],
+    [0x45A0, 0x8B40, 0x06A1, 0x0D42, 0x1A84, 0x3508, 0x6A10], [0xAA51, 0x4483, 0x8906, 0x022D, 0x045A, 0x08B4, 0x1168], [0x76B4, 0xED68, 0xCAF1, 0x85C3, 0x1BA7, 0x374E, 0x6E9C],
+    [0x3730, 0x6E60, 0xDCC0, 0xA9A1, 0x4363, 0x86C6, 0x1DAD], [0x3331, 0x6662, 0xCCC4, 0x89A9, 0x0373, 0x06E6, 0x0DCC], [0x1021, 0x2042, 0x4084, 0x8108, 0x1231, 0x2462, 0x48C4]];
+  /** La clave vieja de 16 bits de Excel y Word (MS-OFFCRYPTO 2.3.7.1): también es el «password» de hoja de Excel 97. */
+  function claveVieja16(contrasena) {
+    const b = [...contrasena.slice(0, 15)].map((ch) => { const c = ch.charCodeAt(0); return (c & 0xff) || (c >> 8); });
+    let v = 0;
+    if (b.length) {
+      for (let i = b.length - 1; i >= 0; i--) { v = ((v >> 14) & 1) | ((v << 1) & 0x7fff); v ^= b[i]; }
+      v = ((v >> 14) & 1) | ((v << 1) & 0x7fff); v ^= b.length; v ^= 0xCE4B;
+    }
+    return v & 0xffff;
+  }
+  /** La clave vieja de 32 bits de Word, en hexadecimal con los bytes al revés (como la hashea Word). */
+  function claveWord(contrasena) {
+    if (!contrasena) return "";
+    const b = [...contrasena.slice(0, 15)].map((ch) => { const c = ch.charCodeAt(0); return (c & 0xff) || (c >> 8); });
+    let alta = CODIGO_INICIAL[b.length - 1];
+    b.forEach((x, i) => { const fila = 15 - b.length + i; for (let bit = 0; bit < 7; bit++) if (x & (1 << bit)) alta ^= MATRIZ[fila][bit]; });
+    const baja = claveVieja16(contrasena), k = ((alta & 0xffff) << 16) | baja;
+    return [k & 0xff, (k >>> 8) & 0xff, (k >>> 16) & 0xff, (k >>> 24) & 0xff].map((x) => x.toString(16).toUpperCase().padStart(2, "0")).join("");
+  }
+  /**
+   * ¿La contraseña es la de esta protección? p: { alg | sid, hash (base64), sal (base64), vueltas, word: true si es de Word,
+   * viejo: "CC1A" (la de 16 bits de Excel) }. Sin hash (protección sin contraseña): cualquiera sirve.
+   */
+  function contrasenaValida(p, contrasena) {
+    if (!p) return true;
+    if (p.viejo) return claveVieja16(contrasena).toString(16).toUpperCase().padStart(4, "0") === String(p.viejo).toUpperCase().padStart(4, "0");
+    if (!p.hash) return true;
+    const alg = p.alg || ALG_SID[+p.sid] || "SHA512";
+    const h = hashProteccion(p.word ? claveWord(contrasena) : contrasena, alg, b64(p.sal || ""), +p.vueltas || 0);
+    return !!h && a64(h) === p.hash;
+  }
+  /** Una protección nueva (como la escribe Office 365): SHA-512 con sal y 100 000 vueltas. */
+  function nuevaProteccion(contrasena, word) {
+    if (!contrasena) return {};
+    const sal = aleatorio(16), h = hashProteccion(word ? claveWord(contrasena) : contrasena, "SHA512", sal, 100000);
+    return { alg: "SHA-512", hash: a64(h), sal: a64(sal), vueltas: 100000, word: word || undefined };
+  }
+
+  NOM.cifradoOffice = { cifrado, descifrar, cifrar, leerCFB, escribirCFB, esCFB, contrasenaValida, nuevaProteccion,
+    prueba: { sha1, sha512, hmac, cbc, ecbDescifrar, expandir, cifrarBloque, descifrarBloque, hashContrasena, hashProteccion, claveWord, claveVieja16 } };
 })(typeof window !== "undefined" ? window : globalThis);

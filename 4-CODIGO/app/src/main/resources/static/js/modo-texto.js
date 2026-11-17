@@ -602,7 +602,7 @@
       ctx.yo = (NOM.api.usuario() || {}).id || null;
       ctx.propietario = !!ed.esPropietario;
       /** 7: con el modo sugerencia, lo que se escribe o se borra queda propuesto, no aplicado. */
-      let modoSug = false;
+      let modoSug = !!ed.forzarSugerencias;   // (protección de Word «solo cambios marcados»)
       const yoSug = () => { const u = NOM.api.usuario() || {}; return { u: u.id || "", n: u.nombre || "", c: u.color || "#1D7A4C" }; };
       let vista = pref.vista || (movil ? "continua" : "paginas");
       let zoom = pref.zoom || 1;
@@ -620,6 +620,7 @@
       </div>`);
       ed.lienzo.append(raiz);
       ed.lienzo.classList.add("con-wd");
+      if (modoSug) raiz.classList.add("sugiriendo");
       const zona = $("[data-zona]", raiz), hoja = $("[data-hoja]", raiz), cuerpo = $("[data-cuerpo]", raiz);
       const capaPaginas = $("[data-paginas]", raiz), capaCursores = $("[data-cursores]", raiz), barraEstado = $("[data-estado]", raiz);
 
@@ -1511,6 +1512,8 @@
         comando(() => { borrarSugerido(visPintado.slice(a, f), "sug-" + pasoN, "comando"); return { sel: [f, f] }; });
       }
       function alternarSugerencias(si) {
+        // (Word «solo cambios marcados»: mientras el documento esté protegido así, todo queda como sugerencia)
+        if (ed.forzarSugerencias && (si === false || (si == null && modoSug))) { aviso("El documento está protegido: lo que cambies queda como sugerencia hasta que se quite la protección.", { tipo: "info", ms: 4200 }); return; }
         modoSug = si == null ? !modoSug : !!si;
         raiz.classList.toggle("sugiriendo", modoSug);
         aviso(modoSug ? "Modo sugerencia: lo que escribas o borres queda propuesto; el equipo lo acepta o lo rechaza en Comentarios." : "Modo sugerencia apagado", { tipo: "info", ms: 3200 });

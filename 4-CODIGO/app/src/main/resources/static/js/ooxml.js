@@ -209,6 +209,51 @@
     pie: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer",
     nucleo: "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" };
   const EMU = 9525;   // 1 px a 96 ppp
+  /**
+   * La protección de edición de un elemento de Office (Word documentProtection/writeProtection, Excel sheetProtection,
+   * workbookProtection y fileSharing, PowerPoint modifyVerifier): con qué se hashea la contraseña y su hash, para
+   * comprobarla después (js/cifrado-office.js). `word`: la de «restringir edición» de Word pasa antes por su clave vieja.
+   */
+  function proteccionDe(el, word, prefijo) {
+    if (!el) return null;
+    const a = (k) => { for (const n of [prefijo ? prefijo + k[0].toUpperCase() + k.slice(1) : k, k]) { const v = el.getAttribute(n) || el.getAttribute("w:" + n) || el.getAttributeNS("http://schemas.openxmlformats.org/wordprocessingml/2006/main", n); if (v) return v; } return null; };
+    const p = {};
+    if (a("hashValue")) { p.alg = a("algorithmName"); p.hash = a("hashValue"); p.sal = a("saltValue"); p.vueltas = +(a("spinCount") || 0); }
+    else if (a("hash") || a("hashData")) { p.sid = +(a("cryptAlgorithmSid") || 4); p.hash = a("hash") || a("hashData"); p.sal = a("salt") || a("saltData"); p.vueltas = +(a("cryptSpinCount") || a("spinCount") || 0); }
+    else if (a("password")) p.viejo = a("password");
+    if (word && p.hash) p.word = true;
+    return Object.keys(p).length ? p : {};
+  }
+  // Lo que una hoja protegida de Excel puede dejar hacer (en el archivo, «0» = permitido; sin el atributo: no se puede).
+  const PERMISOS_HOJA = ["formatCells", "formatColumns", "formatRows", "insertColumns", "insertRows", "insertHyperlinks", "deleteColumns", "deleteRows", "sort", "autoFilter", "pivotTables"];
+  /** La protección de una hoja de Excel (sheetProtection): { p (contraseña), permite: [...], sinSelBloq, sinSelLibre, objetos, escenarios }. */
+  function protHojaDe(sp) {
+    const si = (k) => /^(1|true)$/.test(sp.getAttribute(k) || ""), no = (k) => /^(0|false)$/.test(sp.getAttribute(k) || "");
+    const r = { p: proteccionDe(sp, false) || {} }, permite = PERMISOS_HOJA.filter(no);
+    if (permite.length) r.permite = permite;
+    if (si("selectLockedCells")) r.sinSelBloq = true;
+    if (si("selectUnlockedCells")) r.sinSelLibre = true;
+    if (si("objects")) r.objetos = true;
+    if (si("scenarios")) r.escenarios = true;
+    return r;
+  }
+  function xmlProtHoja(pr) {
+    const p = pr.p || {}, a = [];
+    if (p.hash) a.push(`algorithmName="${x(p.alg || "SHA-512")}" hashValue="${x(p.hash)}" saltValue="${x(p.sal || "")}" spinCount="${+p.vueltas || 100000}"`);
+    else if (p.viejo) a.push(`password="${x(p.viejo)}"`);
+    a.push('sheet="1"');
+    if (pr.objetos) a.push('objects="1"');
+    if (pr.escenarios) a.push('scenarios="1"');
+    (pr.permite || []).filter((k) => PERMISOS_HOJA.includes(k)).forEach((k) => a.push(`${k}="0"`));
+    if (pr.sinSelBloq) a.push('selectLockedCells="1"');
+    if (pr.sinSelLibre) a.push('selectUnlockedCells="1"');
+    return `<sheetProtection ${a.join(" ")}/>`;
+  }
+  /** «Marcado como final» (Word y PowerPoint): la propiedad _MarkAsFinal del archivo. */
+  async function marcadoFinal(z) {
+    const c = await z.texto("docProps/custom.xml");
+    return !!c && /name="_MarkAsFinal"[^>]*>\s*<vt:bool>\s*(true|1)\s*<\/vt:bool>/i.test(c);
+  }
   /** Color de DrawingML con los cambios de Office (tint y shade en RGB lineal; lumMod, lumOff, satMod y hueMod en HSL)
       con los colores de un tema dado ({ dk1, lt1, accent1… } en hexadecimal). Lo usan las gráficas de Word. */
   function colorConTema(fill, tema) {
@@ -2311,6 +2356,20 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     }
     const docCampos = {};
     if (Object.keys(formato).length) docCampos.formato = formato;
+    // Protección de Word: «restringir edición» (solo lectura, comentarios, cambios marcados o formularios), «contraseña para
+    // modificar» con «abrir como de solo lectura» recomendado, y «marcar como final». La contraseña no se guarda: solo su hash.
+    {
+      const st = await z.texto("word/settings.xml");
+      if (st) {
+        const x = P(st), dp = x.getElementsByTagNameNS(W, "documentProtection")[0], wp = x.getElementsByTagNameNS(W, "writeProtection")[0];
+        const enf = dp && /^(1|true|on)$/.test(dp.getAttributeNS(W, "enforcement") || dp.getAttribute("w:enforcement") || "");
+        const ed = dp && (dp.getAttributeNS(W, "edit") || dp.getAttribute("w:edit"));
+        const tipo = { readOnly: "lectura", comments: "comentarios", trackedChanges: "cambios", forms: "formularios" }[ed];
+        if (enf && tipo) docCampos.proteccion = { tipo, p: proteccionDe(dp, true) };
+        if (wp) docCampos.modificar = { recomendada: /^(1|true|on)$/.test(wp.getAttributeNS(W, "recommended") || wp.getAttribute("w:recommended") || "") || undefined, p: proteccionDe(wp, false) };
+      }
+      if (await marcadoFinal(z)) docCampos.final = true;
+    }
     {
       const enc = await zona("headerReference"), pie = await zona("footerReference");
       if (enc && enc.texto) { docCampos.encabezado = enc.texto; if (enc.alin !== "izq") docCampos.encAlin = enc.alin; }
@@ -2429,7 +2488,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
   const valorCf = (v) => { const n = F().calcularLiteral(String(v == null ? "" : v).trim()); return F().esNum(n) ? String(+n) : `"${String(v == null ? "" : v).replace(/"/g, '""')}"`; };
 
   // ---- piezas que comparten "desde cero" y "a partir del original"
-  const CELDA_FMT = ["n", "i", "u", "k", "tl", "r", "bd", "f", "al", "aj"];
+  const CELDA_FMT = ["n", "i", "u", "k", "tl", "r", "bd", "f", "al", "aj", "pr"];
   const quitaAttr = (attrs, nombre) => attrs.replace(new RegExp("\\s+" + nombre.replace(/[.:]/g, "\\$&") + "\\s*=\\s*(\"[^\"]*\"|'[^']*')", "g"), "");
   const mismoValor = (a, b) => { const n = (v) => (v == null || v === "" || v === false ? null : v); a = n(a); b = n(b); return a === b || (typeof a === "object" && typeof b === "object" && a && b && NOM.origen.estable(a) === NOM.origen.estable(b)); };
 
@@ -2472,9 +2531,12 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       const nid = numId(t["f:" + ref] || (esFecha ? "dd/mm/yyyy" : null));
       const al = t["al:" + ref], aj = !!t["aj:" + ref], m = !!t["m:" + ref];
       const alin = al || aj || m ? `<alignment${al ? ` horizontal="${ALIN[al] || "general"}"` : ""}${m ? ' vertical="center"' : ""}${aj ? ' wrapText="1"' : ""}/>` : "";
-      const kx = [fid, rid, bid, nid, alin].join("|");
-      if (kx === "0|0|0|0|") return 0;
-      return registrar("xf", kx, xfs, `<xf numFmtId="${nid}" fontId="${fid}" fillId="${rid}" borderId="${bid}" xfId="0"${fid ? ' applyFont="1"' : ""}${rid ? ' applyFill="1"' : ""}${bid ? ' applyBorder="1"' : ""}${nid ? ' applyNumberFormat="1"' : ""}${alin ? ' applyAlignment="1">' + alin + "</xf>" : "/>"}`);
+      // (protección de la celda: sin bloquear y fórmula oculta, para cuando la hoja se protege)
+      const pr = String(t["pr:" + ref] || ""), prot = pr ? `<protection${pr.includes("u") ? ' locked="0"' : ""}${pr.includes("h") ? ' hidden="1"' : ""}/>` : "";
+      const kx = [fid, rid, bid, nid, alin, prot].join("|");
+      if (kx === "0|0|0|0||") return 0;
+      const dentro = alin + prot;
+      return registrar("xf", kx, xfs, `<xf numFmtId="${nid}" fontId="${fid}" fillId="${rid}" borderId="${bid}" xfId="0"${fid ? ' applyFont="1"' : ""}${rid ? ' applyFill="1"' : ""}${bid ? ' applyBorder="1"' : ""}${nid ? ' applyNumberFormat="1"' : ""}${alin ? ' applyAlignment="1"' : ""}${prot ? ' applyProtection="1"' : ""}${dentro ? ">" + dentro + "</xf>" : "/>"}`);
     }
     /**
      * Estilo a partir del que tenía la celda en el archivo original (sOrig): solo se toca lo que la
@@ -2503,11 +2565,18 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         if (camb.has("aj")) { a = quitaAttr(a, "wrapText"); if (t["aj:" + ref]) a += ' wrapText="1"'; }
         alin = a; aplica.applyAlignment = 1;
       }
-      if (fontId === xf.fontId && fillId === xf.fillId && borderId === xf.borderId && numFmtId === xf.numFmtId && alin === xf.alin) return sOrig;
+      let otros = xf.otros || "";
+      if (camb.has("pr")) {
+        const pr = String(t["pr:" + ref] || "");
+        otros = otros.replace(/<protection\b[^>]*\/>|<protection\b[^>]*>[\s\S]*?<\/protection>/g, "");
+        if (pr) otros = `<protection${pr.includes("u") ? ' locked="0"' : ""}${pr.includes("h") ? ' hidden="1"' : ""}/>` + otros;
+        aplica.applyProtection = 1;
+      }
+      if (fontId === xf.fontId && fillId === xf.fillId && borderId === xf.borderId && numFmtId === xf.numFmtId && alin === xf.alin && otros === (xf.otros || "")) return sOrig;
       let attrs = xf.attrs;
       ["numFmtId", "fontId", "fillId", "borderId", ...Object.keys(aplica)].forEach((k) => { attrs = quitaAttr(attrs, k); });
       attrs = ` numFmtId="${numFmtId}" fontId="${fontId}" fillId="${fillId}" borderId="${borderId}"` + attrs + Object.keys(aplica).map((k) => ` ${k}="1"`).join("");
-      const dentro = (alin && alin.trim() ? `<alignment${alin}/>` : "") + (xf.otros || "");
+      const dentro = (alin && alin.trim() ? `<alignment${alin}/>` : "") + otros;
       return registrar("xf", attrs + "|" + dentro, xfs, dentro ? `<xf${attrs}>${dentro}</xf>` : `<xf${attrs}/>`);
     }
     function dxf(rg) {
@@ -2812,7 +2881,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
   function parcharHoja(xml, base, t, fab, ev) {
     const O = NOM.origen;
     const celdas = new Map(), filasAlto = new Set(), colsCamb = new Set();
-    let cM = false, cPane = false, cCf = false, cDv = false;
+    let cM = false, cPane = false, cCf = false, cDv = false, cProt = false;
     const llaves = new Set(Object.keys(base));
     Object.keys(t).forEach((k) => llaves.add(k));
     llaves.forEach((k) => {
@@ -2827,8 +2896,9 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         else if (p === "cf") cCf = true;
         else if (p === "dv") cDv = true;
       } else if (k === "fijasF" || k === "fijasC") cPane = true;
+      else if (k === "prot") cProt = true;
     });
-    if (!celdas.size && !filasAlto.size && !colsCamb.size && !cM && !cPane && !cCf && !cDv) return null;
+    if (!celdas.size && !filasAlto.size && !colsCamb.size && !cM && !cPane && !cCf && !cDv && !cProt) return null;
     // Matrices dinámicas: si la hoja cambió, lo que derrama cada fórmula se vuelve a escribir con sus valores de hoy
     // (y se borra lo que ya no alcanza); la fórmula, si cambió el tamaño de lo que derrama (su «ref»).
     if (celdas.size && ev.derrame) {
@@ -2973,6 +3043,8 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       Object.keys(t).filter((k) => k.startsWith("dv:") && tiene(t[k]) && !mismoValor(base[k], t[k])).forEach((k) => { const v = fab.validacion(t[k]); if (v) lista.push(pf(v)); });
       S.pon("dataValidations", lista.length ? pf(`<dataValidations count="${lista.length}">`) + lista.join("") + pf("</dataValidations>") : "");
     }
+    // la protección de la hoja (se puso, se cambió o se quitó aquí)
+    if (cProt) S.pon("sheetProtection", t.prot && typeof t.prot === "object" ? pf(xmlProtHoja(t.prot)) : "");
     return S.aplicar();
   }
 
@@ -3013,7 +3085,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     const combinadas = fab.combinadas(t);
     const reglas = Object.keys(t).filter((k) => k.startsWith("cf:")).map((k) => fab.regla(t[k])).join("");
     const validaciones = Object.keys(t).filter((k) => k.startsWith("dv:")).map((k) => fab.validacion(t[k])).filter(Boolean);
-    return XML + `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetViews>${vista}</sheetViews><sheetFormatPr defaultColWidth="16.43" defaultRowHeight="15"/>${cols ? `<cols>${cols}</cols>` : ""}<sheetData>${filas}</sheetData>${combinadas.length ? `<mergeCells count="${combinadas.length}">${combinadas.join("")}</mergeCells>` : ""}${reglas}${validaciones.length ? `<dataValidations count="${validaciones.length}">${validaciones.join("")}</dataValidations>` : ""}<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>${dibujo || ""}</worksheet>`;
+    return XML + `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetViews>${vista}</sheetViews><sheetFormatPr defaultColWidth="16.43" defaultRowHeight="15"/>${cols ? `<cols>${cols}</cols>` : ""}<sheetData>${filas}</sheetData>${t.prot && typeof t.prot === "object" ? xmlProtHoja(t.prot) : ""}${combinadas.length ? `<mergeCells count="${combinadas.length}">${combinadas.join("")}</mergeCells>` : ""}${reglas}${validaciones.length ? `<dataValidations count="${validaciones.length}">${validaciones.join("")}</dataValidations>` : ""}<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>${dibujo || ""}</worksheet>`;
   }
   const CT_HOJA = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
   const CT_DIBUJO = "application/vnd.openxmlformats-officedocument.drawing+xml", CT_GRAFICA = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
@@ -3176,7 +3248,25 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
   async function leerXlsx(archivo) {
     if (archivo.size > 30 * 1024 * 1024) throw new Error("El archivo pesa más de 30 MB");
     const u8 = new Uint8Array(await archivo.arrayBuffer());
-    return Object.assign(modeloXlsx(NOM.origen.abrirZip(u8)), { archivo: u8 });
+    const z = NOM.origen.abrirZip(u8), r = Object.assign(modeloXlsx(z), { archivo: u8 });
+    // lo del libro: estructura protegida (no agregar, quitar, mover ni renombrar hojas), contraseña para modificar con
+    // «se recomienda abrir como de solo lectura», y marcado como final
+    const doc = {}, wb = z.texto("xl/workbook.xml");
+    if (wb) {
+      const x = new DOMParser().parseFromString(wb, "application/xml");
+      const wp = x.getElementsByTagNameNS("*", "workbookProtection")[0], fs = x.getElementsByTagNameNS("*", "fileSharing")[0];
+      const si = (n, k) => /^(1|true)$/.test(n.getAttribute(k) || "");
+      if (wp && (si(wp, "lockStructure") || si(wp, "lockWindows"))) doc.libroProt = { p: proteccionDe(wp, false, "workbook") || {}, estructura: si(wp, "lockStructure") || undefined, ventanas: si(wp, "lockWindows") || undefined };
+      if (fs && (fs.getAttribute("hashValue") || fs.getAttribute("reservationPassword") || si(fs, "readOnlyRecommended"))) {
+        const p = proteccionDe(fs, false) || {};
+        if (!p.hash && fs.getAttribute("reservationPassword")) p.viejo = fs.getAttribute("reservationPassword");
+        doc.modificar = { recomendada: si(fs, "readOnlyRecommended") || undefined, p };
+      }
+    }
+    const c = z.texto("docProps/custom.xml");
+    if (c && /name="_MarkAsFinal"[^>]*>\s*<vt:bool>\s*(true|1)\s*<\/vt:bool>/i.test(c)) doc.final = true;
+    if (Object.keys(doc).length) r.doc = doc;
+    return r;
   }
   /**
    * Lo que NOM-COLAB entiende de un libro de Excel ya abierto (z = el .zip). Síncrono: también lo usa
@@ -3190,8 +3280,9 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
   // 1 la primera · 2 formato de números y medidas de Excel · 3 tinte exacto de Excel, colores indexados, bordes
   // con su estilo y color, y los estilos de tabla (los que Excel trae de fábrica y los del libro) · 4 alineación
   // completa, tramas, degradados y diagonales · 5 matrices dinámicas: lo derramado no se guarda como valores
-  // sueltos (fa: guarda el lugar que derramaba), {1,2;3,4} con sus separadores, A1#, «@» y LAMBDA sin «_xlpm.».
-  const VERSION_XL = 5;
+  // sueltos (fa: guarda el lugar que derramaba), {1,2;3,4} con sus separadores, A1#, «@» y LAMBDA sin «_xlpm.» ·
+  // 6 protección: la de cada hoja (prot), la de cada celda (pr: «u» sin bloquear, «h» fórmula oculta) y la del libro.
+  const VERSION_XL = 6;
   function modeloXlsx(z, version) {
     const V = version || VERSION_XL;
     const P = (t) => new DOMParser().parseFromString(t, "application/xml");
@@ -3272,8 +3363,8 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     })() : []).filter(Boolean).join(";"));
     const bordes = todos(hijo(est.documentElement, "borders"), "border").map((b) => ["top", "bottom", "left", "right"].map((l, k) => (hijo(b, l) && at(hijo(b, l), "style") ? "abid"[k] : "")).join(""));
     const xfs = todos(hijo(est.documentElement, "cellXfs"), "xf").map((xf) => {
-      const al = hijo(xf, "alignment");
-      return { num: +at(xf, "numFmtId") || 0, fuente: fuentes[+at(xf, "fontId") || 0] || {}, relleno: rellenoDe(+at(xf, "fillId") || 0) || null, rx: rellenosX[+at(xf, "fillId") || 0] || null, borde: bordes[+at(xf, "borderId") || 0] || "", bx: bordesX[+at(xf, "borderId") || 0] || "", al: al ? { left: "izq", center: "centro", centerContinuous: "centro", right: "der" }[at(al, "horizontal")] || null : null, aj: al ? at(al, "wrapText") === "1" : false,
+      const al = hijo(xf, "alignment"), pt = V >= 6 ? hijo(xf, "protection") : null;
+      return { pr: pt ? (/^(0|false)$/.test(at(pt, "locked") || "") ? "u" : "") + (/^(1|true)$/.test(at(pt, "hidden") || "") ? "h" : "") : "", num: +at(xf, "numFmtId") || 0, fuente: fuentes[+at(xf, "fontId") || 0] || {}, relleno: rellenoDe(+at(xf, "fillId") || 0) || null, rx: rellenosX[+at(xf, "fillId") || 0] || null, borde: bordes[+at(xf, "borderId") || 0] || "", bx: bordesX[+at(xf, "borderId") || 0] || "", al: al ? { left: "izq", center: "centro", centerContinuous: "centro", right: "der" }[at(al, "horizontal")] || null : null, aj: al ? at(al, "wrapText") === "1" : false,
         // (versión 4: lo demás de la alineación de Excel —rellenar, justificar, distribuido, centrar en la selección,
         // vertical, giro del texto, sangría y reducir hasta ajustar— para pintarlo como Excel)
         ax: V >= 4 && al ? (() => {
@@ -3906,6 +3997,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
             if (V >= 3 && s.bx) campos["bx:" + R] = s.bx;
             if (V >= 4 && s.ax) campos["ax:" + R] = s.ax;
             if (V >= 4 && s.rx) campos["rx:" + R] = s.rx;
+            if (V >= 6 && s.pr) campos["pr:" + R] = s.pr;
             if (s.al) campos["al:" + R] = s.al;
             if (s.aj) campos["aj:" + R] = true;
           }
@@ -3926,6 +4018,8 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         const min = +at(c, "min"), max = Math.min(+at(c, "max"), MAX_C);
         for (let k = min; k <= max && k - min < MAX_C; k++) campos["ow:" + F().colLetra(k - 1)] = true;
       });
+      // (versión 6) la protección de la hoja: el hash de su contraseña y lo que deja hacer
+      if (V >= 6) { const sp = todos(doc, "sheetProtection")[0]; if (sp && /^(1|true)$/.test(at(sp, "sheet") || "")) campos.prot = protHojaDe(sp); }
       const pane = todos(doc, "pane")[0];
       if (pane && at(pane, "state") === "frozen") { if (+at(pane, "ySplit")) campos.fijasF = +at(pane, "ySplit"); if (+at(pane, "xSplit")) campos.fijasC = +at(pane, "xSplit"); }
       todos(doc, "dataValidation").forEach((dv, k) => {
@@ -5293,6 +5387,12 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       return h;
     }
     const bloques = [], paginas = [], docCampos = { tamDiapo };
+    // contraseña para modificar (p:modifyVerifier) y marcada como final: se abre para ver hasta que se escriba o se decida editar
+    {
+      const mv = todos(P(pres), "modifyVerifier")[0];
+      if (mv) docCampos.modificar = { p: proteccionDe(mv, false) || {} };
+      if (await marcadoFinal(z)) docCampos.final = true;
+    }
     let aproximado = false, n = 0;
     for (const s of ids) {
       const ruta = s.destino, xml = await z.texto(ruta);
@@ -5779,5 +5879,89 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
     return { archivo: u8, paginas, bloques, doc: docCampos, aviso: aproximado ? "Algunos objetos de PowerPoint (videos o imágenes de otro formato) no se ven aquí, pero se conservan: al descargar en PowerPoint salen completos" : null };
   }
 
-  NOM.ooxml = { zip, docx, xlsx, pptx, formulaExcel, crc32, leerDocx, leerXlsx, leerPptx, modeloXlsx, huellasDocx, huellasPptx, parcialesPptx, abrirZip, usarOrigen: true };
+  /**
+   * La protección de Office en lo que se descarga, como está AHORA en el documento: «restringir edición» y «contraseña
+   * para modificar» de Word (settings.xml), estructura protegida y «contraseña para modificar» de Excel (workbook.xml),
+   * «contraseña para modificar» de PowerPoint (presentation.xml) y «marcado como final» (docProps/custom.xml). Lo que se
+   * quitó aquí se quita del archivo; lo que se puso, se escribe como lo escribe Office 365. Si no cambia nada, el archivo
+   * sale igual. (La protección de cada hoja de Excel va con la hoja, en parcharHoja.)
+   */
+  function conProteccion(u8, doc, tipo) {
+    let z;
+    try { z = NOM.origen.abrirZip(u8); } catch (e) { return u8; }
+    const v = (k) => doc.valor("_doc", k);
+    const cambios = new Map();
+    const cripto = (p, w) => (p && p.hash ? ` ${w}cryptProviderType="rsaAES" ${w}cryptAlgorithmClass="hash" ${w}cryptAlgorithmType="typeAny" ${w}cryptAlgorithmSid="${p.sid || 14}" ${w}cryptSpinCount="${+p.vueltas || 100000}" ${w}hash="${x(p.hash)}" ${w}salt="${x(p.sal || "")}"` : "");
+    const conHash = (p, pre) => (p && p.hash ? ` ${pre ? pre + "AlgorithmName" : "algorithmName"}="${x(p.alg || "SHA-512")}" ${pre ? pre + "HashValue" : "hashValue"}="${x(p.hash)}" ${pre ? pre + "SaltValue" : "saltValue"}="${x(p.sal || "")}" ${pre ? pre + "SpinCount" : "spinCount"}="${+p.vueltas || 100000}"` : "");
+    const quita = (s, tag) => s.replace(new RegExp(`<${tag}\\b[^>]*/>|<${tag}\\b[^>]*>[\\s\\S]*?</${tag.replace(":", "\\:")}>`, "g"), "");
+    if (tipo === "docx") {
+      const st = z.texto("word/settings.xml");
+      if (st) {
+        let s = quita(quita(st, "w:documentProtection"), "w:writeProtection");
+        const pr = v("proteccion"), mod = v("modificar");
+        const ED = { lectura: "readOnly", comentarios: "comments", cambios: "trackedChanges", formularios: "forms" };
+        if (mod && (mod.recomendada || (mod.p && mod.p.hash))) s = s.replace(/(<w:settings\b[^>]*>)/, `$1<w:writeProtection${mod.recomendada ? ' w:recommended="1"' : ""}${cripto(mod.p, "w:")}/>`);
+        if (pr && ED[pr.tipo]) {
+          const el = `<w:documentProtection w:edit="${ED[pr.tipo]}" w:enforcement="1"${cripto(pr.p, "w:")}/>`;
+          s = /<w:defaultTabStop\b/.test(s) ? s.replace(/<w:defaultTabStop\b/, el + "<w:defaultTabStop") : s.replace(/<\/w:settings>/, el + "</w:settings>");
+        }
+        if (s !== st) cambios.set("word/settings.xml", s);
+      }
+    } else if (tipo === "xlsx") {
+      const wb = z.texto("xl/workbook.xml");
+      if (wb) {
+        let s = quita(quita(wb, "workbookProtection"), "fileSharing");
+        const lp = v("libroProt"), mod = v("modificar");
+        if (mod && (mod.recomendada || (mod.p && (mod.p.hash || mod.p.viejo)))) {
+          const el = `<fileSharing${mod.recomendada ? ' readOnlyRecommended="1"' : ""}${mod.p && mod.p.viejo ? ` reservationPassword="${x(mod.p.viejo)}"` : conHash(mod.p)}/>`;
+          s = /<fileVersion\b[^>]*\/>/.test(s) ? s.replace(/(<fileVersion\b[^>]*\/>)/, "$1" + el) : s.replace(/(<workbook\b[^>]*>)/, "$1" + el);
+        }
+        if (lp && (lp.estructura || lp.ventanas)) {
+          const el = `<workbookProtection${conHash(lp.p, "workbook")}${lp.p && lp.p.viejo ? ` workbookPassword="${x(lp.p.viejo)}"` : ""}${lp.estructura ? ' lockStructure="1"' : ""}${lp.ventanas ? ' lockWindows="1"' : ""}/>`;
+          s = /<bookViews\b/.test(s) ? s.replace(/<bookViews\b/, el + "<bookViews") : s.replace(/<sheets\b/, el + "<sheets");
+        }
+        if (s !== wb) cambios.set("xl/workbook.xml", s);
+      }
+    } else if (tipo === "pptx") {
+      const pr0 = z.texto("ppt/presentation.xml");
+      if (pr0) {
+        let s = quita(pr0, "p:modifyVerifier");
+        const mod = v("modificar");
+        if (mod && mod.p && mod.p.hash) {
+          const p = mod.p, el = `<p:modifyVerifier cryptProviderType="rsaAES" cryptAlgorithmClass="hash" cryptAlgorithmType="typeAny" cryptAlgorithmSid="${p.sid || 14}" spinCount="${+p.vueltas || 100000}" saltData="${x(p.sal || "")}" hashData="${x(p.hash)}"/>`;
+          s = /<p:extLst>/.test(s) ? s.replace(/<p:extLst>(?![\s\S]*<p:extLst>)/, el + "<p:extLst>") : s.replace(/<\/p:presentation>/, el + "</p:presentation>");
+        }
+        if (s !== pr0) cambios.set("ppt/presentation.xml", s);
+      }
+    }
+    // marcado como final (Word, Excel y PowerPoint): la propiedad _MarkAsFinal de docProps/custom.xml
+    {
+      const fin = !!v("final"), cu = z.texto("docProps/custom.xml"), tiene = !!cu && /name="_MarkAsFinal"/.test(cu);
+      const marcado = tiene && /name="_MarkAsFinal"[^>]*>\s*<vt:bool>\s*(true|1)\s*<\/vt:bool>/i.test(cu);
+      if (fin !== marcado) {
+        if (!fin && cu) cambios.set("docProps/custom.xml", cu.replace(/<property\b[^>]*name="_MarkAsFinal"[^>]*>[\s\S]*?<\/property>/, ""));
+        else if (fin && cu) {
+          const ids = [...cu.matchAll(/pid="(\d+)"/g)].map((m) => +m[1]), pid = Math.max(1, ...ids) + 1;
+          cambios.set("docProps/custom.xml", cu.replace(/<\/Properties>/, `<property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="${pid}" name="_MarkAsFinal"><vt:bool>true</vt:bool></property></Properties>`));
+        } else if (fin) {
+          cambios.set("docProps/custom.xml", XML + `<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2" name="_MarkAsFinal"><vt:bool>true</vt:bool></property></Properties>`);
+          const ct = z.texto("[Content_Types].xml"), rl = z.texto("_rels/.rels");
+          if (ct && !/PartName="\/docProps\/custom\.xml"/.test(ct)) cambios.set("[Content_Types].xml", ct.replace(/<\/Types>/, '<Override PartName="/docProps/custom.xml" ContentType="application/vnd.openxmlformats-officedocument.custom-properties+xml"/></Types>'));
+          if (rl && !/docProps\/custom\.xml/.test(rl)) cambios.set("_rels/.rels", rl.replace(/<\/Relationships>/, '<Relationship Id="rIdNomFinal" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties" Target="docProps/custom.xml"/></Relationships>'));
+        }
+      }
+    }
+    if (!cambios.size) return u8;
+    const sale = [];
+    for (const nm of z.nombres()) {
+      if (cambios.has(nm)) { sale.push({ nombre: nm, datos: cambios.get(nm) }); cambios.delete(nm); continue; }
+      const e = z.entradas.get(nm);
+      if (e && e.metodo === 8) sale.push({ nombre: nm, crudo: { datos: e.datos, crc: e.crc, tam: e.tam } });
+      else sale.push({ nombre: nm, datos: z.bytes(nm) || new Uint8Array(0) });
+    }
+    for (const [nm, d] of cambios) sale.push({ nombre: nm, datos: d });
+    return zip(sale);
+  }
+
+  NOM.ooxml = { zip, docx, xlsx, pptx, formulaExcel, crc32, leerDocx, leerXlsx, leerPptx, modeloXlsx, huellasDocx, huellasPptx, parcialesPptx, abrirZip, conProteccion, usarOrigen: true };
 })();

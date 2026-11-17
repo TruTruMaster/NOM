@@ -516,9 +516,9 @@ ${formas.join("\n")}
     switch (formato) {
       case "nom": descargarBytes(base + ".nom", "application/octet-stream", aNomBytes(doc)); return null;
       // (con opc.contrasena, el archivo sale protegido con contraseña como lo hace Office: hay que escribirla para abrirlo)
-      case "docx": descargarBytes(base + ".docx", MIME.docx, conContrasena(NOM.ooxml.docx(doc), opc)); return hayLibres(doc, ["conector"]) ? "Las flechas no se incluyen en Word" : null;
-      case "xlsx": descargarBytes(base + ".xlsx", MIME.xlsx, conContrasena(NOM.ooxml.xlsx(doc), opc)); return null;
-      case "pptx": descargarBytes(base + ".pptx", MIME.pptx, conContrasena(NOM.ooxml.pptx(doc, (doc.valor("_doc", "modo") || "") === "DIAGRAMA" || opcTipo === "DIAGRAMA"), opc)); return null;
+      case "docx": descargarBytes(base + ".docx", MIME.docx, paraOffice(NOM.ooxml.docx(doc), doc, "docx", opc)); return hayLibres(doc, ["conector"]) ? "Las flechas no se incluyen en Word" : null;
+      case "xlsx": descargarBytes(base + ".xlsx", MIME.xlsx, paraOffice(NOM.ooxml.xlsx(doc), doc, "xlsx", opc)); return null;
+      case "pptx": descargarBytes(base + ".pptx", MIME.pptx, paraOffice(NOM.ooxml.pptx(doc, (doc.valor("_doc", "modo") || "") === "DIAGRAMA" || opcTipo === "DIAGRAMA"), doc, "pptx", opc)); return null;
       case "png": {
         const s = aSvg(doc, pagina);
         if (!s) throw new Error("Esta página no tiene figuras para exportar");
@@ -639,6 +639,9 @@ ${formas.join("\n")}
   }
   /** Lo que se descarga para Office, con contraseña si se pidió (Agile, como Office 365). */
   const conContrasena = (bytes, opc) => (opc && opc.contrasena && NOM.cifradoOffice ? NOM.cifradoOffice.cifrar(bytes, opc.contrasena) : bytes);
+  /** Lo que se descarga para Office: con su protección de edición como está ahora (ooxml.conProteccion) y, si se pidió,
+      con contraseña para abrir. */
+  const paraOffice = (bytes, doc, tipo, opc) => conContrasena(NOM.ooxml.conProteccion ? NOM.ooxml.conProteccion(bytes, doc, tipo) : bytes, opc);
 
   async function importar(archivo, opc) {
     const nombre = archivo.name.replace(/\.[^.]+$/, "");
@@ -756,7 +759,10 @@ ${formas.join("\n")}
     const r = await NOM.ooxml.leerXlsx(archivo);
     const paginas = r.hojas.map((_, i) => "p" + (i + 1));
     const bloques = r.hojas.map((h, i) => Object.assign({ id: "hoja-" + paginas[i], tipo: "tabla", pagina: paginas[i], orden: 0, x: 40, y: 40, w: 880, h: 300 }, h.campos));
-    return { nombre, modo: "HOJA", ops: conOrigen("xlsx", nombre, "HOJA", comoOps(bloques, paginas), r.archivo), aviso: r.aviso };
+    const ops = comoOps(bloques, paginas);
+    // (lo del libro: estructura protegida, contraseña para modificar, marcado como final)
+    if (r.doc) ops.push(...NOM.DocCRDT.partir([{ id: "imp:doc", bloque: "_doc", campos: r.doc, t: 2, n: "importar" }]));
+    return { nombre, modo: "HOJA", ops: conOrigen("xlsx", nombre, "HOJA", ops, r.archivo), aviso: r.aviso };
   }
   /** PowerPoint (.pptx) → presentación (lo arma ooxml.leerPptx). */
   async function importarPptx(archivo, nombre) {

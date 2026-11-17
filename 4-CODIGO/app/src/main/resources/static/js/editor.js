@@ -58,6 +58,117 @@
     ed.cambiosVisita = datos.cambios || null;
     if (!enLocal) NOM.anotarReciente({ id: docId, nombre: (datos.documento || {}).nombre, modo: (datos.documento || {}).modo }, ed.espacio);
 
+    // ------------------------------------------------------------ protección de Office (Word, Excel y PowerPoint)
+    // Como en Office: «restringir edición» de Word (solo lectura, solo comentarios, solo cambios marcados, solo
+    // formularios), «marcar como final», «contraseña para modificar» y «se recomienda abrir como de solo lectura». Quitar
+    // la protección pide su contraseña y es para todos; la contraseña para modificar la escribe cada quien en su equipo.
+    // (No es seguridad: es para no cambiar algo por accidente, igual que en Office.)
+    ed.permisoLectura = ed.soloLectura;
+    const PROT_TIPOS = { lectura: "solo lectura", comentarios: "solo comentarios", cambios: "solo cambios marcados", formularios: "solo rellenar formularios" };
+    const llaveDesbloqueo = "nom.modificar." + docId;
+    function estadoProteccion() {
+      const pr = doc.valor("_doc", "proteccion"), fin = doc.valor("_doc", "final"), mod = doc.valor("_doc", "modificar");
+      let libre = false;
+      try { libre = sessionStorage.getItem(llaveDesbloqueo) === "1"; } catch (e) { libre = false; }
+      return { pr: pr && PROT_TIPOS[pr.tipo] ? pr : null, fin: !!fin, mod: mod && mod.p && (mod.p.hash || mod.p.viejo) && !libre ? mod : null, recomendada: !!(mod && mod.recomendada && !libre) };
+    }
+    /** Lo que Office no deja hacer ahora: «lectura», «comentarios», «formularios», «final», «modificar», «recomendada» o null. */
+    function bloqueoOffice() {
+      const e = estadoProteccion();
+      if (e.pr && e.pr.tipo !== "cambios") return e.pr.tipo;
+      if (e.fin) return "final";
+      if (e.mod) return "modificar";
+      if (e.recomendada) return "recomendada";
+      return null;
+    }
+    function aplicarProteccion(remontar) {
+      const b = ed.permisoLectura ? null : bloqueoOffice(), antes = ed.soloLectura;
+      const e = estadoProteccion();
+      ed.bloqueoOffice = b;
+      ed.soloLectura = ed.permisoLectura || !!b;
+      ed.soloComentarios = b === "comentarios";
+      ed.forzarSugerencias = !ed.permisoLectura && !!(e.pr && e.pr.tipo === "cambios");
+      // (con «solo comentarios» se guardan comentarios: el documento sí manda cambios, el texto no se deja tocar)
+      doc.opc.soloLectura = ed.permisoLectura || (!!b && b !== "comentarios");
+      vista.classList.toggle("lectura", ed.soloLectura);
+      nombre.readOnly = ed.soloLectura;
+      if (remontar && ed.modo && (antes !== ed.soloLectura || ed.modo === "TEXTO")) montar(ed.modo, true);
+      pintarAvisos();
+    }
+    /** Un cambio de la protección (quitarla, editar algo final): se manda aunque ahora el documento esté en solo lectura. */
+    function cambiarProtegido(campos, texto) {
+      if (ed.permisoLectura) return;
+      const antes = doc.opc.soloLectura;
+      doc.opc.soloLectura = false;
+      doc.cambiar("_doc", campos, { deshacible: false });
+      doc.opc.soloLectura = antes;
+      aplicarProteccion(true);
+      if (texto) aviso(texto, { tipo: "ok" });
+    }
+    /** Pide una contraseña y la comprueba contra la protección `p`. Resuelve true si es la buena. */
+    function pedirClaveProteccion(titulo, texto, p) {
+      return new Promise((ok) => {
+        if (!p || !(p.hash || p.viejo)) return ok(true);
+        const cuerpo = html(`<form class="col" autocomplete="off"><p class="suave">${esc(texto)}</p><div class="campo"><label for="prot-c">Contraseña</label><div class="entrada"><input id="prot-c" type="password" data-c maxlength="255" autocomplete="off"></div></div><p class="chico" data-err role="alert" style="color:var(--peligro, #B42318)" hidden></p></form>`);
+        const pie = html(`<div style="display:contents"><span class="crece"></span><button class="btn" type="button" data-no>Cancelar</button><button class="btn primario" type="button" data-si>Aceptar</button></div>`);
+        let listo = false;
+        const h = hoja({ titulo, icono: "lock", cuerpo, pie, alCerrar: () => { if (!listo) { listo = true; ok(false); } } });
+        const input = $("[data-c]", cuerpo), err = $("[data-err]", cuerpo), si = $("[data-si]", pie);
+        const probar = () => {
+          if (!input.value) return input.focus();
+          si.disabled = true; si.textContent = "Comprobando…";
+          setTimeout(() => {
+            const bien = NOM.cifradoOffice && NOM.cifradoOffice.contrasenaValida(p, input.value);
+            si.disabled = false; si.textContent = "Aceptar";
+            if (!bien) { err.textContent = "Esa no es la contraseña."; err.hidden = false; input.select(); return; }
+            listo = true; h.cerrar(); ok(true);
+          }, 30);
+        };
+        si.onclick = probar; $("[data-no]", pie).onclick = () => h.cerrar();
+        cuerpo.onsubmit = (ev) => { ev.preventDefault(); probar(); };
+        setTimeout(() => input.focus(), 60);
+      });
+    }
+    async function quitarProteccion() {
+      const pr = doc.valor("_doc", "proteccion");
+      if (!pr) return;
+      if (await pedirClaveProteccion("Quitar la protección", "Escribe la contraseña con la que se protegió el documento.", pr.p)) cambiarProtegido({ proteccion: null }, "Protección quitada");
+    }
+    async function desbloquearModificar() {
+      const mod = doc.valor("_doc", "modificar");
+      if (!mod) return;
+      if (await pedirClaveProteccion("Contraseña para modificar", "El autor pidió contraseña para hacer cambios. Sin ella puedes leerlo.", mod.p)) {
+        try { sessionStorage.setItem(llaveDesbloqueo, "1"); } catch (e) { /* sin almacenamiento: solo para esta vista */ }
+        aplicarProteccion(true);
+        aviso("Ya puedes editar", { tipo: "ok" });
+      }
+    }
+    /** Proteger desde aquí: restringir edición (Word), marcar como final y contraseña para modificar (Word, Excel y PowerPoint). */
+    function dialogoProteger() {
+      const esTexto = tipo === "TEXTO", pr = doc.valor("_doc", "proteccion"), mod = doc.valor("_doc", "modificar");
+      const cuerpo = html(`<form class="col" autocomplete="off">
+        ${esTexto ? `<div class="campo"><label for="pr-tipo">Restringir la edición</label><div class="entrada"><select id="pr-tipo" data-tipo><option value="">Sin restricción</option>${Object.keys(PROT_TIPOS).map((k) => `<option value="${k}"${pr && pr.tipo === k ? " selected" : ""}>${esc(PROT_TIPOS[k][0].toUpperCase() + PROT_TIPOS[k].slice(1))}</option>`).join("")}</select></div></div>` : ""}
+        <label class="fila"><input type="checkbox" data-final${doc.valor("_doc", "final") ? " checked" : ""}> Marcar como final (para que no se cambie por accidente)</label>
+        <label class="fila"><input type="checkbox" data-solo${mod && mod.recomendada ? " checked" : ""}> Recomendar abrirlo solo para leer</label>
+        <div class="campo"><label for="pr-c1">Contraseña (para quitar la restricción o para modificar)</label><div class="entrada"><input id="pr-c1" type="password" data-c1 maxlength="255" autocomplete="new-password"></div></div>
+        <label class="fila"><input type="checkbox" data-modif${mod && mod.p && mod.p.hash ? " checked" : ""}> Pedir esta contraseña para modificarlo</label>
+        <p class="suave chico">Como en Office: protege contra cambios por accidente, no es secreto. Al descargarlo para Word, Excel o PowerPoint, la protección va en el archivo.</p></form>`);
+      const pie = html(`<div style="display:contents"><span class="crece"></span><button class="btn" type="button" data-no>Cancelar</button><button class="btn primario" type="button" data-si>Aplicar</button></div>`);
+      const h = hoja({ titulo: "Proteger", icono: "lock", cuerpo, pie });
+      $("[data-no]", pie).onclick = () => h.cerrar();
+      $("[data-si]", pie).onclick = () => {
+        const C = NOM.cifradoOffice, clave = $("[data-c1]", cuerpo).value, t = esTexto ? $("[data-tipo]", cuerpo).value : "";
+        const campos = { final: $("[data-final]", cuerpo).checked || null };
+        if (esTexto) campos.proteccion = t ? { tipo: t, p: clave && C ? C.nuevaProteccion(clave, true) : (pr && pr.tipo === t ? pr.p : {}) } : null;
+        const quiereModif = $("[data-modif]", cuerpo).checked, recomienda = $("[data-solo]", cuerpo).checked;
+        if (quiereModif && !clave && !(mod && mod.p && mod.p.hash)) { aviso("Escribe la contraseña para modificar", { tipo: "error" }); return; }
+        campos.modificar = quiereModif || recomienda ? { recomendada: recomienda || undefined, p: quiereModif ? (clave && C ? C.nuevaProteccion(clave, false) : mod.p) : {} } : null;
+        h.cerrar();
+        // (quien protege no se queda bloqueado por su propia contraseña para modificar)
+        if (campos.modificar) { try { sessionStorage.setItem(llaveDesbloqueo, "1"); } catch (e) { /* sin almacenamiento */ } }
+        cambiarProtegido(campos, "Protección aplicada");
+      };
+    }
     const doc = new NOM.DocCRDT(docId, datos.estado, {
       meta, soloLectura: ed.soloLectura, local: enLocal,
       alCambiar: (cambios, origen) => alCambiar(cambios, origen),
@@ -144,7 +255,8 @@
       const items = ed.soloLectura ? [
         { html: `<span class="ed-lectura-aviso">${ico("eye", "ico-s")} Solo puedes ver: también buscar y descargar</span>` },
         "->",
-        ...deModo.filter((it) => it && it.id === "buscar"),
+        // (con «solo comentarios» de Word también se comenta)
+        ...deModo.filter((it) => it && (it.id === "buscar" || (ed.soloComentarios && it.id === "comentar"))),
         ...comunes,
       ] : [
         { id: "deshacer", icono: "undo-2", micro: "Deshacer|Revierte tu último cambio; los demás lo verán.|Ctrl+Z", fn: () => ed.deshacer(), off: () => !doc.puedeDeshacer() },
@@ -189,6 +301,7 @@
       const docCambio = cambios.find((c) => c.bloque === "_doc");
       if (docCambio) {
         if ("nombre" in docCambio.campos) pintarNombre();
+        if (["proteccion", "final", "modificar", "libroProt"].some((k) => k in docCambio.campos)) aplicarProteccion(true);
       }
       if (ed.modoApi && ed.modoApi.cambios) ed.modoApi.cambios(cambios, origen);
       if (NOM.comentarios) NOM.comentarios.cambios(ed, cambios);
@@ -322,8 +435,11 @@
       if (p === "NINGUNO") { location.hash = "#/"; return; }
       ed.permiso = p;
       const antes = ed.soloLectura;
-      ed.soloLectura = p === "LECTURA";
-      doc.opc.soloLectura = ed.soloLectura;
+      ed.permisoLectura = p === "LECTURA";
+      // (con permiso de editar, la protección de Office del archivo puede seguir dejándolo solo para ver)
+      const bq = ed.permisoLectura ? null : bloqueoOffice();
+      ed.soloLectura = ed.permisoLectura || !!bq;
+      doc.opc.soloLectura = ed.permisoLectura || (!!bq && bq !== "comentarios");
       vista.classList.toggle("lectura", ed.soloLectura);
       nombre.readOnly = ed.soloLectura;
       if (antes !== ed.soloLectura) { aviso(ed.soloLectura ? "Ahora solo puedes ver este documento" : "Ahora puedes editar", { tipo: "info" }); montar(ed.modo, true); }
@@ -420,6 +536,12 @@
       if (ed.ramasAbiertas > 0 && !ed.previa) {
         l.push(`<div class="banda rama">${ico("git-branch", "ico-s")}<span class="crece">Este documento tiene <b>${ed.ramasAbiertas === 1 ? "una rama" : ed.ramasAbiertas + " ramas"}</b>: ${ed.ramasAbiertas === 1 ? "una versión" : "versiones"} que alguien editó sin conexión mientras otros lo cambiaban.</span><button class="btn chico" data-a="ver-ramas">Ramas (${ed.ramasAbiertas})</button></div>`);
       }
+      // Protección de Office (lo que trae el archivo, o lo que se puso aquí)
+      const pe = estadoProteccion();
+      if (!ed.previa && pe.pr) l.push(`<div class="banda aviso">${ico("lock", "ico-s")}<span class="crece">Edición restringida: <b>${esc(PROT_TIPOS[pe.pr.tipo])}</b>.${pe.pr.tipo === "cambios" ? " Lo que escribas queda como sugerencia." : pe.pr.tipo === "comentarios" ? " Puedes comentar, pero no cambiar el texto." : " Para cambiar el documento hay que quitar la protección."}</span>${ed.permisoLectura ? "" : `<button class="btn chico" data-a="quitar-prot">${ico("lock-open", "ico-s")} Quitar la protección</button>`}</div>`);
+      if (!ed.previa && pe.fin) l.push(`<div class="banda info">${ico("circle-check", "ico-s")}<span class="crece"><b>Marcado como final:</b> el autor lo dejó así para que no se cambie.</span>${ed.permisoLectura ? "" : `<button class="btn chico" data-a="editar-final">Editar de todos modos</button>`}</div>`);
+      if (!ed.previa && pe.mod) l.push(`<div class="banda aviso">${ico("lock", "ico-s")}<span class="crece">Este archivo pide <b>contraseña para modificarlo</b>. Sin ella puedes leerlo.</span>${ed.permisoLectura ? "" : `<button class="btn chico primario" data-a="modificar-clave">Escribir la contraseña</button>`}</div>`);
+      else if (!ed.previa && pe.recomendada) l.push(`<div class="banda info">${ico("eye", "ico-s")}<span class="crece">El autor recomienda abrirlo <b>solo para leer</b>.</span>${ed.permisoLectura ? "" : `<button class="btn chico" data-a="modificar-editar">Editar</button>`}</div>`);
       const c = ed.cambiosVisita;
       if (c && c.personas && c.personas.length && !ed.previa) {
         l.push(`<div class="banda cambios">${ico("history", "ico-s")}<span class="crece">Cambios de <b>${esc(listaNombres(c.personas))}</b> ${esc(desdeCuando(c.desde))}${ed.resaltando ? " · resaltados" : ""}.</span>
@@ -428,6 +550,10 @@
       cont.innerHTML = l.join("");
       const b = (a) => $(`[data-a="${a}"]`, cont);
       if (b("subir-destino")) b("subir-destino").onclick = subirDestino;
+      if (b("quitar-prot")) b("quitar-prot").onclick = () => quitarProteccion();
+      if (b("editar-final")) b("editar-final").onclick = () => cambiarProtegido({ final: null }, "Ya no está marcado como final");
+      if (b("modificar-clave")) b("modificar-clave").onclick = () => desbloquearModificar();
+      if (b("modificar-editar")) b("modificar-editar").onclick = () => { try { sessionStorage.setItem(llaveDesbloqueo, "1"); } catch (e) { /* sin almacenamiento */ } aplicarProteccion(true); };
       if (b("ver-ramas")) b("ver-ramas").onclick = () => NOM.ramas.lista(docId);
       if (b("rama-comparar")) b("rama-comparar").onclick = () => NOM.ramas.comparar(docId, (r) => { location.hash = "#/doc/" + r.original; });
       if (b("rama-fusionar")) b("rama-fusionar").onclick = () => NOM.ramas.comparar(docId, (r) => { location.hash = "#/doc/" + r.original; });
@@ -727,6 +853,7 @@
       descargarOffice,
       { texto: "Descargar copia (.nom)", icono: "download", fn: () => NOM.formatos.exportar(doc, "nom", nombre.value || "documento") },
       { texto: "Descargar en otro formato (PDF y más)…", icono: "file-down", fn: exportar },
+      ...(tipo === "DIAGRAMA" ? [] : [{ texto: "Proteger (como en Office)…", icono: "lock", fn: dialogoProteger }]),
       ...(api.token() ? [{ texto: "Subir a un espacio", icono: "upload", fn: () => { doc.guardarYa(); NOM.vistaEspacios.subirLocal(docId); } }]
         : [{ texto: "Crear cuenta para compartirlo", icono: "user-plus", fn: () => { doc.guardarYa(); NOM.app.irACuentas("registro"); } }]),
       { texto: "Modo enfoque (solo tu contenido)", icono: "scan-eye", atajo: "Ctrl+.", fn: () => enfoque(true) },
@@ -741,6 +868,7 @@
       { texto: "Historial y actividad", icono: "history", fn: historial },
       descargarOffice,
       { texto: "Descargar en otro formato (PDF y más)…", icono: "file-down", fn: exportar },
+      ...(ed.permisoLectura || tipo === "DIAGRAMA" ? [] : [{ texto: "Proteger (como en Office)…", icono: "lock", fn: dialogoProteger }]),
       { texto: "Modo enfoque (solo tu contenido)", icono: "scan-eye", atajo: "Ctrl+.", fn: () => enfoque(true) },
       "-",
       { texto: "Invitar o ver miembros", icono: "user-plus", fn: () => NOM.vistaEspacios.accesos(ed.espacio) },
@@ -850,6 +978,8 @@
     };
 
     // ------------------------------------------------------------ arranque
+    // (la protección de Office del archivo decide si se abre para editar o solo para ver)
+    aplicarProteccion(false);
     montar(tipo);
     pintarAvisos();
     if (ed.cambiosVisita) setTimeout(() => resaltarCambios(true), 300);

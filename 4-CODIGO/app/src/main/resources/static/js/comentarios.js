@@ -7,6 +7,8 @@
    En el texto, el modo sugerencia propone cambios que el equipo acepta o rechaza desde aquí. */
 (function () {
   "use strict";
+  // (con «solo comentarios» —protección de Word— se comenta aunque el texto no se pueda cambiar)
+  const sinComentar = (ed) => ed.soloLectura && !ed.soloComentarios;
   const NOM = window.NOM;
   const { esc, ico, html, $, $$, aviso, avatar, haceCuanto } = NOM;
   const api = () => NOM.api;
@@ -91,7 +93,7 @@
     const lateral = $("[data-lateral]", ed.vista);
     if (abierto(ed) && !enfoque) { cerrar(); return; }
     lateral.innerHTML = `<div class="cajon comentarios-cajon"><div class="cajon-cab"><h3>${ico("message-square", "ico-s")} Comentarios</h3>
-      ${ed.soloLectura ? "" : `<button class="btn chico" data-nuevo>${ico("plus", "ico-s")} Comentar</button>`}<button class="icono-btn" data-cerrar aria-label="Cerrar comentarios">${ico("x")}</button></div>
+      ${sinComentar(ed) ? "" : `<button class="btn chico" data-nuevo>${ico("plus", "ico-s")} Comentar</button>`}<button class="icono-btn" data-cerrar aria-label="Cerrar comentarios">${ico("x")}</button></div>
       <div class="cajon-cuerpo" data-lista></div></div>`;
     panel = { ed, cont: lateral.firstElementChild, enfoque: enfoque || null };
     // 8.5 Con los nombres de los miembros se resaltan las @menciones.
@@ -117,8 +119,8 @@
     const tarjeta = (h) => `<article class="hilo${h.resuelto ? " resuelto" : ""}${panel.enfoque === h.id ? " enfocado" : ""}" data-h="${esc(h.id)}">
       ${h.ancla && h.ancla.cita ? `<button class="hilo-cita" data-ir title="Ir a lo comentado">${ico("quote", "ico-s")}<span class="recorta">${esc(h.ancla.cita)}</span></button>` : ""}
       ${[h].concat(h.respuestas).map((c) => `<div class="hilo-msj" data-c="${esc(c.id)}">${avatar({ nombre: c.autor, color: c.color })}<div class="crece"><b>${esc(c.autor)}</b> <small class="suave">${esc(haceCuanto(c.t || 0))}</small>
-        <p>${conMenciones(ed, c.texto)}</p></div>${puedeBorrar(ed, c) && !ed.soloLectura ? `<button class="icono-btn chico" data-borrar aria-label="Eliminar">${ico("trash-2", "ico-s")}</button>` : ""}</div>`).join("")}
-      ${ed.soloLectura ? "" : `<div class="fila hilo-acc">${h.resuelto ? `<button class="btn chico" data-reabrir>Reabrir</button>` : `<button class="btn chico" data-responder>${ico("reply", "ico-s")} Responder</button><button class="btn chico" data-resolver>${ico("check", "ico-s")} Resuelto</button>`}</div>
+        <p>${conMenciones(ed, c.texto)}</p></div>${puedeBorrar(ed, c) && !sinComentar(ed) ? `<button class="icono-btn chico" data-borrar aria-label="Eliminar">${ico("trash-2", "ico-s")}</button>` : ""}</div>`).join("")}
+      ${sinComentar(ed) ? "" : `<div class="fila hilo-acc">${h.resuelto ? `<button class="btn chico" data-reabrir>Reabrir</button>` : `<button class="btn chico" data-responder>${ico("reply", "ico-s")} Responder</button><button class="btn chico" data-resolver>${ico("check", "ico-s")} Resuelto</button>`}</div>
         <form class="hilo-resp" data-resp hidden><textarea name="texto" rows="2" placeholder="Tu respuesta…" maxlength="2000"></textarea><button class="btn chico primario">Enviar</button></form>`}
     </article>`;
     const tSug = (g, i) => `<article class="hilo sugerencia" data-s="${i}"><div class="hilo-msj">${avatar({ nombre: g.autor.n, color: g.autor.c })}<div class="crece"><b>${esc(g.autor.n)}</b> <small class="suave">${g.tipo === "insertar" ? "propone agregar" : "propone borrar"}</small>
@@ -189,7 +191,7 @@
   /** Comentar lo elegido (texto, celda, figura o diapositiva). */
   function nuevo(ed) {
     if (ed.local) return aviso("Los comentarios necesitan un espacio (con cuenta)", { tipo: "info" });
-    if (ed.soloLectura) return aviso("Tu permiso es solo para ver: no puedes comentar", { tipo: "info" });
+    if (sinComentar(ed)) return aviso("Tu permiso es solo para ver: no puedes comentar", { tipo: "info" });
     const m = ed.modoApi && ed.modoApi.comentarios;
     const ancla = m && m.ancla ? m.ancla() : null;
     if (!ancla) return aviso("Elige primero el texto, la celda o la figura que quieres comentar", { tipo: "info", ms: 3200 });
