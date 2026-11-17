@@ -2222,6 +2222,9 @@
         htmlDiapo: () => htmlDiapositiva(doc(), ed.pagina, null),
         motor: (el, lista, escala) => motorDiapositiva(el, doc(), ed.pagina, escala, { lista }),
         bloqueEnEditor: (id) => $(`[data-escena] .bl[data-id="${CSS.escape(id)}"]`, raiz),
+        paginas: () => doc().paginas(),
+        tituloDiapo: (pg) => { const t = doc().deLaPagina(pg).filter((b) => b.tipo === "texto").sort((a, b) => (a.y || 0) - (b.y || 0)).map((b) => NOM.diapo.textoPlano(b.html) || "").find((x) => x.trim()) || "Diapositiva"; return t.length > 40 ? t.slice(0, 39) + "…" : t; },
+        ponerAccion: (id, a) => doc().cambiar(id, { accion: a || null }),
       };
       this._ctxAnim = ctxAnim;
       /** 8.3 Las trayectorias del bloque elegido, punteadas sobre la diapositiva (verde donde empieza y rojo donde acaba). */
@@ -2418,6 +2421,7 @@
         { texto: "Panel de animación", icono: "list-ordered", fn: () => NOM.animPanel && NOM.animPanel.panel(this._ctxAnim), claves: "animaciones animar orden linea tiempo intervalos" },
         { texto: "Agregar animación a lo elegido", icono: "star", fn: () => NOM.animPanel && NOM.animPanel.agregar(this._ctxAnim), claves: "animar entrada salida enfasis efecto powerpoint" },
         { texto: "Dibujar una trayectoria de animación", icono: "route", fn: () => NOM.animPanel && NOM.animPanel.dibujarTrayectoria(this._ctxAnim), claves: "animar movimiento camino trayectoria personalizada" },
+        { texto: "Acción al hacer clic (vínculo a otra diapositiva o página web)", icono: "mouse-pointer-click", fn: () => NOM.animPanel && NOM.animPanel.accion(this._ctxAnim), claves: "vinculo hipervinculo enlace boton accion ir a diapositiva" },
         { texto: "Copiar animación", icono: "paintbrush", fn: () => NOM.animPanel && NOM.animPanel.copiar(this._ctxAnim), claves: "copiar animacion pincel" },
         { texto: "Pegar animación en lo elegido", icono: "clipboard-paste", fn: () => NOM.animPanel && NOM.animPanel.pegar(this._ctxAnim), claves: "pegar animacion pincel" },
         { texto: "Diseño (tema, fondo y tamaño)", icono: "palette", fn: () => { const b = document.querySelector('[aria-label="Diseño"]'); if (b) b.click(); }, claves: "tema fondo tamaño 4:3 cartel" },
@@ -2498,7 +2502,7 @@
       // Varias animaciones del mismo bloque en el mismo paso (entrada y énfasis…) van juntas.
       const st = s && s.anim.length ? `animation-name:${s.anim.map((x) => `a-${x.tipo}-${x.efecto}`).join(",")};animation-duration:${s.anim.map((x) => x.dur + "ms").join(",")};animation-delay:${s.anim.map((x) => x.t + "ms").join(",")};animation-fill-mode:both;animation-timing-function:cubic-bezier(.2,.8,.2,1);` : "";
       // (el texto de PowerPoint no se recorta en el borde de su cuadro: PowerPoint lo deja salir)
-      return `<div class="bl${clasesBloque(b)}${s && s.anim.length ? " animando" : ""}" data-id="${esc(b.id)}" style="${estiloBloque(b)}overflow:${b.tipo === "forma" || b.ppt || b.office ? "visible" : "hidden"};${st}">${contenido(b)}</div>`;
+      return `<div class="bl${clasesBloque(b)}${s && s.anim.length ? " animando" : ""}${b.accion ? " con-accion" : ""}" data-id="${esc(b.id)}" style="${estiloBloque(b)}overflow:${b.tipo === "forma" || b.ppt || b.office ? "visible" : "hidden"};${st}">${contenido(b)}</div>`;
     }).join("");
   }
 
@@ -2622,6 +2626,22 @@
       if (i < pags().length - 1) { i++; pintar(); } else salir();
     }
     function retroceder() { if (i > 0) { i--; pintar(true, false); } }
+    let vistaAntes = null;
+    /** Lo que hace un vínculo o botón de acción al tocarlo. false: no hace nada (el clic sigue su camino). */
+    function irAccion(a) {
+      const ir = (k) => { if (k < 0 || k >= pags().length) return false; vistaAntes = i; i = k; pintar(); return true; };
+      switch (a.tipo) {
+        case "sig": return i < pags().length - 1 ? ir(i + 1) : (salir(), true);
+        case "ant": return ir(i - 1);
+        case "primera": return ir(0);
+        case "ultima": return ir(pags().length - 1);
+        case "volver": return vistaAntes != null ? ir(vistaAntes) : ir(i - 1);
+        case "fin": salir(); return true;
+        case "diapo": return ir(pags().indexOf(a.pagina));
+        case "url": if (/^(https?:|mailto:)/i.test(a.url || "")) { window.open(a.url, "_blank", "noopener"); return true; } return false;
+        default: return false;
+      }
+    }
 
     // ---- 8.3 puntero láser y pluma
     let herramienta = null, trazos = [], trazo = null, puntero = null, colorPluma = "#F2385A";
@@ -2699,6 +2719,9 @@
       // una figura que desencadena animaciones (como en PowerPoint): el clic la anima en vez de avanzar
       const fig = e.target.closest(".bl[data-id]");
       if (fig && motor && motor.esDisparador(fig.dataset.id) && d.contains(fig)) { motor.disparar(fig.dataset.id); return; }
+      // un vínculo o botón de acción (como en PowerPoint): ir a otra diapositiva, a la siguiente, a una página web…
+      const acc = fig && d.contains(fig) && (doc.bloque(fig.dataset.id) || {}).accion;
+      if (acc && irAccion(acc)) return;
       (e.clientX < innerWidth / 3 ? retroceder : avanzar)();
     });
     // Deslizar con el dedo: a la izquierda avanza, a la derecha regresa (si no se está dibujando).

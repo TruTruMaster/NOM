@@ -157,7 +157,14 @@ Leer al empezar la siguiente sesión, junto con `RELEVO-17NOV-LISTA-OFFICE.md` (
    Descubrir, Destello, Cubo, Galería, Caída, Cortinas, Curvatura) y el panel de transiciones (galería, opciones, duración,
    aplicar a todas, avance automático). **Transformar (morph)**: emparejar por forma y texto como PowerPoint (por objeto,
    palabra y letra) y medirlo (p08 diapositiva 36 y a03 152–154).
-4. Medios en diapositivas (video y audio con `cmd` playFrom/togglePause, marcadores), compilación de gráficas y SmartArt
+4. **Vínculos y botones de acción hechos (17-nov, noche)**: `a:hlinkClick` del cNvPr de cada figura → `bloque.accion`
+   (`sig`, `ant`, `primera`, `ultima`, `volver`, `fin`, `diapo` con su página, `url` http/https/mailto); al presentar,
+   tocar la figura lo hace; se escribe como PowerPoint en las dos rutas (desde cero y con el original: `conVinculo`
+   cambia el vínculo de la figura reescrita, sin quitar los que NOM no entiende, como abrir un archivo o una macro).
+   Cuadro «Acción al hacer clic» en el menú Animación, la ruedita (Animación › Vínculo) y la paleta. Probado ida y vuelta
+   (importar lo exportado) con los tres tipos. Arreglo de paso: en la ruta con origen, las relaciones externas nuevas
+   salían sin `TargetMode="External"`. Falta: vínculos dentro del texto (a:rPr/hlinkClick), «al pasar el mouse»
+   (hlinkMouseOver), abrir otro archivo o programa, y sonidos de acción. **Sigue de este punto:** medios en diapositivas (video y audio con `cmd` playFrom/togglePause, marcadores), compilación de gráficas y SmartArt
    por serie/categoría/nivel, botones de acción y vínculos a diapositivas, sonidos de efectos y transiciones.
 5. Texto estático de PowerPoint ~2 px más arriba que en PowerPoint (medido en un cuadro de texto Arial 54 negrita: tinta
    en 284 contra 288 px a 1280 de ancho): revisar la posición del primer renglón (esto sube todos los efectos de texto).

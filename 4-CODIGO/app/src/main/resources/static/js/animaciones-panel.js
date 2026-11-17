@@ -503,6 +503,42 @@
     capa.addEventListener("pointercancel", () => { pts = null; cerrar(); });
   }
 
+  // ------------------------------------------------------------ acción al hacer clic (vínculos y botones de acción)
+  const ACCIONES = [["", "Nada"], ["sig", "Ir a la siguiente diapositiva"], ["ant", "Ir a la anterior"], ["primera", "Ir a la primera"], ["ultima", "Ir a la última"],
+    ["volver", "Volver a la última vista"], ["fin", "Terminar la presentación"], ["diapo", "Ir a la diapositiva…"], ["url", "Abrir una página web o un correo…"]];
+  /** Qué pasa al tocar el bloque elegido al presentar (como «Acción» e «Hipervínculo» de PowerPoint). */
+  function accion(ctx) {
+    const id = ctx.seleccion();
+    if (!id) { aviso("Elige primero un bloque de la diapositiva", { tipo: "aviso" }); return; }
+    const a = (ctx.doc().bloque(id) || {}).accion || {};
+    const pags = ctx.paginas();
+    const cuerpo = html(`<div class="col ao-opc"><p class="suave chico" style="font-weight:400">Al presentar, tocar este bloque hace lo que elijas aquí en vez de avanzar. Se guarda en el .pptx como un vínculo de PowerPoint.</p>
+      <label class="ao-campo"><span>Al hacer clic</span><select data-f="tipo">${ACCIONES.map(([v, t]) => `<option value="${v}" ${(a.tipo || "") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+      <label class="ao-campo" data-si-diapo><span>Diapositiva</span><select data-f="pagina">${pags.map((pg, k) => `<option value="${esc(pg)}" ${a.pagina === pg ? "selected" : ""}>${k + 1}. ${esc(ctx.tituloDiapo(pg))}</option>`).join("")}</select></label>
+      <label class="ao-campo" data-si-url><span>Dirección</span><input data-f="url" type="url" inputmode="url" placeholder="https://… o mailto:…" value="${esc(a.url || "")}" style="flex:1 1 220px"></label></div>`);
+    const pie = html(`<div style="display:contents"><span class="crece"></span><button class="btn" type="button" data-no>Cancelar</button><button class="btn primario" type="button" data-si>Guardar</button></div>`);
+    const h = NOM.hoja({ titulo: "Acción al hacer clic · " + ctx.nombreBloque(id), icono: "mouse-pointer-click", cuerpo, pie });
+    const f = (n) => $(`[data-f="${n}"]`, cuerpo);
+    const ver = () => { $("[data-si-diapo]", cuerpo).hidden = f("tipo").value !== "diapo"; $("[data-si-url]", cuerpo).hidden = f("tipo").value !== "url"; };
+    ver();
+    f("tipo").onchange = ver;
+    $("[data-no]", pie).onclick = () => h.cerrar();
+    $("[data-si]", pie).onclick = () => {
+      const t = f("tipo").value;
+      let nueva = t ? { tipo: t } : null;
+      if (t === "diapo") nueva.pagina = f("pagina").value;
+      if (t === "url") {
+        let u = f("url").value.trim();
+        if (u && !/^[a-z]+:/i.test(u)) u = (/@/.test(u) && !/\//.test(u) ? "mailto:" : "https://") + u;
+        if (!/^(https?:\/\/|mailto:)./i.test(u)) { aviso("Escribe una dirección que empiece con https:// o mailto:", { tipo: "aviso" }); return; }
+        nueva.url = u;
+      }
+      if (!ctx.soloLectura()) ctx.ponerAccion(id, nueva);
+      h.cerrar();
+      aviso(nueva ? "Acción guardada: se usa al presentar" : "Acción quitada", { tipo: "ok", ms: 1800 });
+    };
+  }
+
   // ------------------------------------------------------------ menú y ruedita
   /** Lo que se puede hacer con las animaciones del bloque elegido (para el menú y la ruedita). */
   function acciones(ctx, plano) {
@@ -518,6 +554,7 @@
       items.push({ texto: "Copiar animación", corto: "Copiar", icono: "paintbrush", off: !l.some((x) => x.id === id), fn: () => copiar(ctx) });
       items.push({ texto: "Pegar animación", corto: "Pegar", icono: "clipboard-paste", off: !(NOM._animCopiada && NOM._animCopiada.length), fn: () => pegar(ctx) });
       items.push({ texto: "Quitar las animaciones de esto", corto: "Quitar", icono: "x", off: !l.some((x) => x.id === id), fn: () => quitar(ctx) });
+      items.push({ texto: "Acción al hacer clic (vínculo)…", corto: "Vínculo", icono: "mouse-pointer-click", fn: () => accion(ctx) });
     }
     items.push({ texto: "Panel de animación…", corto: "Panel", icono: "list-ordered", fn: () => panel(ctx) });
     return items;
@@ -628,5 +665,5 @@
     if (ctx.soloLectura()) { $("[data-si]", pie).disabled = true; $("[data-todas]", pie).disabled = true; }
   }
 
-  NOM.animPanel = { transiciones, galeria, opciones, panel, agregar, copiar, pegar, quitar, dibujarTrayectoria, acciones, menu, rueda, catalogo, categorias, unidades, tiempos };
+  NOM.animPanel = { transiciones, accion, galeria, opciones, panel, agregar, copiar, pegar, quitar, dibujarTrayectoria, acciones, menu, rueda, catalogo, categorias, unidades, tiempos };
 })();

@@ -4721,10 +4721,31 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         });
         return { parrafos: ps, lineas: lineas.filter((v) => v < b.h - 2) };
       };
+      /** El vínculo o la acción al hacer clic de un bloque (a:hlinkClick, con su relación), como lo escribe PowerPoint. */
+      const accionXml = (b) => {
+        const a = b.accion;
+        if (!a || esDiagrama) return "";
+        const J = { sig: "nextslide", ant: "previousslide", primera: "firstslide", ultima: "lastslide", fin: "endshow", volver: "lastslideviewed" };
+        if (J[a.tipo]) return `<a:hlinkClick r:id="" action="ppaction://hlinkshowjump?jump=${J[a.tipo]}"/>`;
+        const rid = "rIdAcc" + (rels.length + 1);
+        if (a.tipo === "url" && /^(https?:|mailto:)/i.test(a.url || "")) { rels.push({ id: rid, tipo: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink", destino: a.url, externo: true }); return `<a:hlinkClick r:id="${rid}"/>`; }
+        if (a.tipo === "diapo") {
+          let dest = null;
+          if (!O) { const k = paginas.indexOf(a.pagina); if (k >= 0) dest = `slide${k + 1}.xml`; }
+          else { const os = doc.valor("_doc", "os:" + a.pagina); if (os) dest = os.slice(os.lastIndexOf("/") + 1); }
+          if (!dest) return "";
+          rels.push({ id: rid, tipo: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide", destino: dest });
+          return `<a:hlinkClick r:id="${rid}" action="ppaction://hlinksldjump"/>`;
+        }
+        return "";
+      };
       const figurasL = bs.map((b) => {
         if (O && O.genera && !O.genera(b)) return "";
         heredar = (O && O.hereda && O.hereda(b)) || false;
-        try { return figura1(b); } finally { heredar = false; }
+        let f;
+        try { f = figura1(b); } finally { heredar = false; }
+        const hx = f ? accionXml(b) : "";
+        return hx ? f.replace(/<p:cNvPr\b([^>]*?)\/>/, `<p:cNvPr$1>${hx}</p:cNvPr>`) : f;
       });
       function figura1(b) {
         const nid = id++;
@@ -5018,6 +5039,23 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
          * su p:spPr y su a:bodyPr (el modelo no guarda nada de eso: solo dónde está).
          */
         const NV = { sp: "nvSpPr", pic: "nvPicPr", cxnSp: "nvCxnSpPr", graphicFrame: "nvGraphicFramePr" };
+        /**
+         * El vínculo (a:hlinkClick) de una figura que se reescribe con su identidad original: el de NOM. El del original
+         * se quita si es de los que NOM entiende (la persona lo cambió o lo quitó); los demás (abrir un archivo, una
+         * macro) se quedan como venían.
+         */
+        const conVinculo = (res, fig, b) => {
+          const cn = res && /<p:cNvPr\b[^>]*?(?:\/>|>[\s\S]*?<\/p:cNvPr>)/.exec(res);
+          if (!cn) return res;
+          const nuevo = (/<p:cNvPr\b[^>]*?>([\s\S]*?)<\/p:cNvPr>/.exec(fig || "") || [])[1] || "";
+          const hl = b.accion ? (/<a:hlinkClick\b[^>]*?\/>/.exec(nuevo) || [])[0] || "" : "";
+          const viejo = /<a:hlinkClick\b[^>]*?(?:\/>|>[\s\S]*?<\/a:hlinkClick>)/.exec(cn[0]);
+          const entiende = viejo && (/hlinkshowjump|hlinksldjump/.test(viejo[0]) || !/\saction="/.test(viejo[0]) || /\saction=""/.test(viejo[0]));
+          let c = cn[0];
+          if (viejo && (hl || entiende)) c = c.replace(viejo[0], "");
+          if (hl) c = /^<p:cNvPr\b[^>]*\/>$/.test(c) ? c.replace(/\/>$/, `>${hl}</p:cNvPr>`) : c.replace(/^(<p:cNvPr\b[^>]*?)>/, `$1>${hl}`);
+          return c === cn[0] ? res : res.slice(0, cn.index) + c + res.slice(cn.index + cn[0].length);
+        };
         const conIdentidad = (el, fig, b) => {
           const nl = O.local(el.n), nv = NV[nl];
           if (!nv || !fig || !fig.startsWith("<p:" + nl + ">")) return fig;
@@ -5059,7 +5097,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
               t = conFormatoPptx(xs.slice(us[k].i, us[k].f), f, f.tTam ? Math.round((f.tTam / 1.333) * esc.k * 100) : 0);
               if (t && md === "fmt+geo") t = conGeo(t, b);
             }
-            sale.push(t != null ? t : unoAUno(k) ? conIdentidad(us[k], figDe.get(b.id) || "", b) : figDe.get(b.id) || "");
+            sale.push(t != null ? t : unoAUno(k) ? conVinculo(conIdentidad(us[k], figDe.get(b.id) || "", b), figDe.get(b.id) || "", b) : figDe.get(b.id) || "");
           });
           sueltas(us.length);
           const arbolNuevo = sale.join("");
@@ -5095,7 +5133,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
           const acV = tms.find((tm) => tm.ac && tm.queda === "");
           if (acV) { for (let k = ps2.length - 1; k >= 0; k--) if (ps2[k][0] >= acV.ac.i && ps2[k][1] <= acV.ac.f) ps2.splice(k, 1); ps2.push([acV.ac.i, acV.ac.f, ""]); }
         }
-        r.rels.filter((q) => q.tipo !== T.diseno).forEach((q) => { if (!mismas || cF) pq.agregaRel(ruta0, q.id, q.tipo, q.destino); });
+        r.rels.filter((q) => q.tipo !== T.diseno).forEach((q) => { if (!mismas || cF) pq.agregaRel(ruta0, q.id, q.tipo, q.destino, q.externo); });
         if (cF) { const bg = O.hijoXml(xs, "bg", cSld.ci, cSld.cf); ps2.push(bg ? [bg.i, bg.f, r.fondo] : [cSld.ci, cSld.ci, r.fondo]); }
         const hsS = O.hijosXml(xs, raiz.ci, raiz.cf);
         const trEl = hsS.find((h) => O.local(h.n) === "transition") || hsS.find((h) => O.local(h.n) === "AlternateContent" && /<p:transition\b/.test(xs.slice(h.i, h.f)));
@@ -5266,10 +5304,26 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       partes.forEach((p) => { if (p === "..") r.pop(); else if (p && p !== ".") r.push(p); });
       return r.join("/");
     };
+    /**
+     * La acción al hacer clic de una figura (a:hlinkClick en su cNvPr), como la guarda NOM en el bloque:
+     * { tipo: "sig" | "ant" | "primera" | "ultima" | "fin" | "volver" } (saltos de la presentación), { tipo: "diapo", ruta }
+     * (otra diapositiva; la ruta se cambia por la página al terminar) o { tipo: "url", url } (página web o correo).
+     */
+    function accionDe(el, rels) {
+      const nv = hs(el).find((c) => /^nv/.test(c.localName)), cNv = nv && h1(nv, "cNvPr"), hl = cNv && h1(cNv, "hlinkClick");
+      if (!hl) return null;
+      const act = at(hl, "action") || "", rid = hl.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id") || at(hl, "r:id") || "";
+      const salto = /jump=(\w+)/.exec(act);
+      if (/hlinkshowjump/.test(act) && salto) return { tipo: { nextslide: "sig", previousslide: "ant", firstslide: "primera", lastslide: "ultima", endshow: "fin", lastslideviewed: "volver" }[salto[1].toLowerCase()] || "sig" };
+      const rel = rid && rels[rid];
+      if (/hlinksldjump/.test(act)) return rel ? { tipo: "diapo", ruta: rel.destino } : null;
+      if (!act && rel && rel.externo && /^(https?:|mailto:)/i.test(rel.bruto || "")) return { tipo: "url", url: rel.bruto };
+      return null;
+    }
     async function relsDe(ruta) {
       const t = await z.texto(carpeta(ruta) + "_rels/" + ruta.slice(ruta.lastIndexOf("/") + 1) + ".rels");
       const m = {};
-      if (t) todos(P(t), "Relationship").forEach((r) => (m[at(r, "Id")] = { destino: resolver(ruta, at(r, "Target")), tipo: at(r, "Type") || "", externo: at(r, "TargetMode") === "External" }));
+      if (t) todos(P(t), "Relationship").forEach((r) => (m[at(r, "Id")] = { destino: resolver(ruta, at(r, "Target")), tipo: at(r, "Type") || "", externo: at(r, "TargetMode") === "External", bruto: at(r, "Target") || "" }));
       return m;
     }
     const docP = P(pres);
@@ -6214,7 +6268,14 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       }
       const arbol = todos(sld, "spTree")[0];
       const hijosArbol = hs(arbol);
-      for (let i2 = 0; i2 < hijosArbol.length; i2++) { oxActual = i2; await elemento(hijosArbol[i2], null); }
+      for (let i2 = 0; i2 < hijosArbol.length; i2++) {
+        oxActual = i2;
+        const k0 = bloques.length;
+        await elemento(hijosArbol[i2], null);
+        // acción al hacer clic (vínculo o botón de acción de PowerPoint): para todo lo que salió de esta figura
+        const acc = accionDe(hijosArbol[i2], rels);
+        if (acc) for (let k = k0; k < bloques.length; k++) bloques[k].accion = acc;
+      }
       oxActual = null;
       // Animaciones de PowerPoint (p:timing): cada efecto con su árbol tal cual, apuntando a los bloques de NOM
       // (una figura agrupada son varios bloques con el mismo «ox»). Los colores del tema se resuelven aquí.
@@ -6289,6 +6350,9 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
         }
       }
     }
+    // los vínculos a otra diapositiva apuntan a su página de NOM
+    const paginaDeRuta = new Map(paginas.map((pg) => [docCampos["os:" + pg], pg]));
+    bloques.forEach((b) => { if (b.accion && b.accion.ruta) { const pg = paginaDeRuta.get(b.accion.ruta); if (pg) b.accion = { tipo: "diapo", pagina: pg }; else delete b.accion; } });
     if (!paginas.length) throw new Error("La presentación no tiene diapositivas que se puedan leer");
     return { archivo: u8, paginas, bloques, doc: docCampos, aviso: aproximado ? "Algunos objetos de PowerPoint (videos o imágenes de otro formato) no se ven aquí, pero se conservan: al descargar en PowerPoint salen completos" : null };
   }

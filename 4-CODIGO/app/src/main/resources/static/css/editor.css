@@ -1383,3 +1383,5 @@
 .ao-tray circle { stroke: var(--sup); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .ao-tray circle.ini { fill: var(--ok); }
 .ao-tray circle.fin { fill: var(--error); }
+/* al presentar, lo que tiene un vínculo o acción se ve tocable */
+.reproductor .bl.con-accion, .proyector .bl.con-accion { cursor: pointer; }
