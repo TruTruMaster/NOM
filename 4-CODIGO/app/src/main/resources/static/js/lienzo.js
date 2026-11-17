@@ -2191,14 +2191,16 @@
       $("[data-x]", notas).onclick = () => alternarNotas(false);
       function pintarNotas() { if (!notas.hidden && document.activeElement !== area) area.value = doc().valor("_doc", "nota:" + ed.pagina) || ""; }
       function alternarNotas(si) { notas.hidden = si == null ? !notas.hidden : !si; pintarNotas(); if (!notas.hidden && matchMedia("(hover: hover)").matches) area.focus(); ed.refrescarHerramientas(); }
-      const TRANS = [["", "Sin transición"], ["desvanecer", "Desvanecer"], ["deslizar", "Deslizar"], ["empujar", "Empujar hacia arriba"], ["zoom", "Acercar"]];
+      // Transición de una diapositiva: el panel como el de PowerPoint (animaciones-panel.js). Se guarda en
+      // "transOffice:<página>" (la de NOM de antes, "trans:<página>", se borra al elegir una).
+      const ctxTrans = {
+        doc: () => doc(), paginas: () => doc().paginas(), soloLectura: () => !!ed.soloLectura, T: () => tamDoc(doc()),
+        estiloDiapo: (p) => (NOM.diapo ? NOM.diapo.estiloDiapo(doc(), p) : ""), htmlDiapo: (p) => htmlDiapositiva(doc(), p, null),
+        guardar: (p, tr, todas) => doc().cambiar("_doc", Object.fromEntries((todas ? doc().paginas() : [p]).flatMap((x) => [["transOffice:" + x, tr ? Object.assign({}, tr) : null], ["trans:" + x, null]]))),
+      };
+      this._ctxTrans = ctxTrans;
       function menuTransicion(anc, p) {
-        p = p || ed.pagina;
-        const actual = doc().valor("_doc", "trans:" + p) || "";
-        const elegir = (v, todas) => doc().cambiar("_doc", Object.fromEntries((todas ? doc().paginas() : [p]).map((x) => ["trans:" + x, v || null])));
-        const items = [{ titulo: "Al llegar a la diapositiva…" }, ...TRANS.map(([v, t]) => ({ texto: t, marcado: v === actual, fn: () => elegir(v) })), "-", { texto: "Usar la misma en todas", icono: "copy", fn: () => elegir(actual, true) }];
-        if (anc) NOM.menu(anc, items);
-        else NOM.rueda.abrir(innerWidth / 2, innerHeight / 2, TRANS.map(([v, t]) => ({ texto: t, icono: v ? "blend" : "x", marcado: v === actual, fn: () => elegir(v) })).concat([{ texto: "En todas", icono: "copy", fn: () => elegir(actual, true) }]), { titulo: "Transición", modo: "clic" });
+        if (NOM.animPanel) NOM.animPanel.transiciones(ctxTrans, p || ed.pagina);
       }
       // ---- 8.3 animaciones: la lista ordenada de la diapositiva ("anim:<página>" en _doc)
       const listaAnim = () => listaAnimaciones(doc(), ed.pagina, bloquesPresentables(doc(), ed.pagina)).map((x) => Object.assign({}, x));
@@ -2358,7 +2360,7 @@
         { etq: true, id: "insertar", icono: "plus-square", micro: "Insertar|Tabla, gráfica, íconos y ecuación.", fn: (e, b) => menuInsertar(b) },
         "|",
         { etq: true, id: "diseno", icono: "palette", micro: "Diseño|Tema, fondo y tamaño de las diapositivas.", fn: (e, b) => menuDiseno(b), off: () => ed.soloLectura },
-        { etq: true, id: "transicion", icono: "blend", micro: "Transición|Cómo entra esta diapositiva al presentar.", fn: (e, b) => menuTransicion(b) },
+        { etq: true, id: "transicion", icono: "blend", micro: "Transición|Las de PowerPoint (Transformar, Empujar, Cubo, Cortinas…), su duración y cuándo pasar a la siguiente.", fn: (e, b) => menuTransicion(b) },
         { etq: true, id: "animacion", icono: "star", micro: "Animación|Los efectos de PowerPoint: entrada, énfasis, salida y trayectorias, con sus opciones y el panel de animación.", fn: (e, b) => menuAnimacion(b) },
         "|",
         { id: "color", icono: "palette", micro: "Color|Cambia el color de las figuras seleccionadas.", fn: (e, b) => menuColor(lienzo, b), off: () => !lienzo.seleccion() },
@@ -2391,6 +2393,7 @@
         { texto: "Modo presentador", icono: "sticky-note", fn: () => presentar(NOM.editorActual, { presentador: true }), claves: "presentar notas orador" },
         { texto: "Presentar en otra pantalla (proyector)", icono: "cast", fn: () => presentar(NOM.editorActual, { presentador: true, proyectar: true }), claves: "proyector pantalla telefono" },
         { texto: "Capas", icono: "layers", fn: () => this._lienzo.capas.abrir(), claves: "ocultar bloquear orden" },
+        { texto: "Transición de esta diapositiva", icono: "blend", fn: () => NOM.animPanel && NOM.animPanel.transiciones(this._ctxTrans, NOM.editorActual.pagina), claves: "transicion desvanecer empujar transformar morph avanzar automatico" },
         { texto: "Panel de animación", icono: "list-ordered", fn: () => NOM.animPanel && NOM.animPanel.panel(this._ctxAnim), claves: "animaciones animar orden linea tiempo intervalos" },
         { texto: "Agregar animación a lo elegido", icono: "star", fn: () => NOM.animPanel && NOM.animPanel.agregar(this._ctxAnim), claves: "animar entrada salida enfasis efecto powerpoint" },
         { texto: "Dibujar una trayectoria de animación", icono: "route", fn: () => NOM.animPanel && NOM.animPanel.dibujarTrayectoria(this._ctxAnim), claves: "animar movimiento camino trayectoria personalizada" },

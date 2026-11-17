@@ -531,5 +531,96 @@
     NOM.rueda.abrir(x == null ? innerWidth / 2 : x, y == null ? innerHeight / 2 : y, items, { titulo: "Animación", modo: "clic" });
   }
 
-  NOM.animPanel = { galeria, opciones, panel, agregar, copiar, pegar, quitar, dibujarTrayectoria, acciones, menu, rueda, catalogo, categorias, unidades, tiempos };
+  // ------------------------------------------------------------ transiciones (como la pestaña Transiciones de PowerPoint)
+  /**
+   * La transición de la diapositiva p: galería, opciones del efecto, duración, cómo se avanza y aplicar a todas.
+   * ctx: { doc(), paginas(), soloLectura(), T(), estiloDiapo(p), htmlDiapo(p), guardar(p, tr | null, todas) }
+   */
+  function transiciones(ctx, p) {
+    const TO = NOM.transOffice;
+    if (!TO || !TO.CATALOGO) return;
+    const pags = ctx.paginas(), i = pags.indexOf(p);
+    const actual = ctx.doc().valor("_doc", "transOffice:" + p) || TO.deLegado(ctx.doc().valor("_doc", "trans:" + p)) || null;
+    const pos = TO.buscar(actual) || { e: 0, v: 0 };
+    let e = pos.e, v = pos.v;
+    let dur = actual && actual.t !== "corte0" ? +actual.dur || TO.CATALOGO[e][4] : TO.CATALOGO[e][4];
+    const cats = [...new Set(TO.CATALOGO.map((x) => x[1]))];
+    const cuerpo = html(`<div class="col ao-trans">
+      <div class="ao-prev" data-prev aria-label="Vista previa"></div>
+      <div class="ao-cats" data-cats style="max-height:34vh"></div>
+      <div class="ao-tab">
+        <label class="ao-campo" data-opc-fila><span>Opciones del efecto</span><select data-f="var"></select></label>
+        <label class="ao-campo"><span>Duración</span><input data-f="dur" type="number" min="0.01" max="60" step="0.25"> s</label>
+        <div class="ao-campo"><span>Avanzar a la siguiente</span>
+          <label class="ao-check"><input data-f="clic" type="checkbox" ${actual && actual.sinClic ? "" : "checked"}> Al hacer clic</label>
+          <label class="ao-check"><input data-f="auto" type="checkbox" ${actual && actual.advTm != null ? "checked" : ""}> Después de</label>
+          <input data-f="advTm" type="number" min="0" max="3600" step="0.5" value="${actual && actual.advTm != null ? seg2(actual.advTm) : "5"}" aria-label="Segundos para avanzar solo"> s</div>
+      </div></div>`);
+    const pie = html(`<div style="display:contents"><button class="btn" type="button" data-ver>${ico("play", "ico-s")} Vista previa</button><button class="btn" type="button" data-todas>${ico("copy", "ico-s")} Aplicar a todas</button><span class="crece"></span><button class="btn" type="button" data-no>Cancelar</button><button class="btn primario" type="button" data-si>Guardar</button></div>`);
+    const h = NOM.hoja({ titulo: `Transición de la diapositiva ${i + 1}`, icono: "blend", cuerpo, pie, ancha: true, alCerrar: () => { if (juego) juego.saltar(); } });
+    const f = (n) => $(`[data-f="${n}"]`, cuerpo);
+    let juego = null;
+    function pintar() {
+      $("[data-cats]", cuerpo).innerHTML = cats.map((c) => `<section><h3 class="ao-cat">${esc(c)}</h3><div class="ao-efs">${TO.CATALOGO.map((x, k) => [x, k]).filter(([x]) => x[1] === c).map(([x, k]) =>
+        `<button type="button" class="ao-ef" data-e="${k}" aria-pressed="${k === e}">${ico(k === 0 ? "x" : "blend", "ico-s")}<span>${esc(x[0])}</span></button>`).join("")}</div></section>`).join("");
+      const vs = TO.CATALOGO[e][3];
+      $("[data-opc-fila]", cuerpo).hidden = vs.length < 2;
+      f("var").innerHTML = vs.map((x, k) => `<option value="${k}" ${k === v ? "selected" : ""}>${esc(x[0])}</option>`).join("");
+      const sinDur = e === 0 || TO.deVariante(TO.CATALOGO[e], v).t === "cut";
+      f("dur").disabled = sinDur;
+      f("dur").value = sinDur ? "" : seg2(dur);
+      f("advTm").disabled = !f("auto").checked;
+    }
+    pintar();
+    /** La transición con lo que dice el cuadro (null si no hay nada). */
+    function armar() {
+      const base = TO.deVariante(TO.CATALOGO[e], v);
+      const tr = Object.assign({}, base);
+      if (e === 0) tr.t = "corte0";
+      if (!f("dur").disabled) tr.dur = Math.max(10, Math.round((parseFloat(f("dur").value) || seg2(base.dur)) * 1000));
+      else tr.dur = tr.t === "cut" && tr.a.thruBlk ? base.dur : 0;
+      if (f("auto").checked) tr.advTm = Math.max(0, Math.round((parseFloat(f("advTm").value) || 0) * 1000));
+      if (!f("clic").checked) tr.sinClic = true;
+      // el sonido que traía del archivo se queda
+      if (actual && actual.snd) { tr.snd = actual.snd; if (actual.sndFin) tr.sndFin = true; }
+      if (tr.t === "corte0" && tr.advTm == null && !tr.sinClic) return null;
+      return tr;
+    }
+    function vista() {
+      const cont = $("[data-prev]", cuerpo), T = ctx.T(), w = cont.clientWidth || 300, k = w / T.w;
+      if (juego) juego.saltar();
+      cont.style.height = Math.round(T.h * k) + "px";
+      cont.innerHTML = `<div class="ao-prev-diapo diapo-mini" style="${ctx.estiloDiapo(p)};width:${T.w}px;height:${T.h}px;transform:scale(${k})"></div>`;
+      const d = cont.firstChild;
+      d.innerHTML = ctx.htmlDiapo(p);
+      return { d, T };
+    }
+    function jugar() {
+      const { d, T } = vista(), tr = armar();
+      if (!tr) return;
+      const ant = pags[i - 1];
+      const fondo = ant ? (/background:([^;]+);/.exec(ctx.estiloDiapo(ant)) || [])[1] : "#000";
+      juego = TO.jugar(d, { html: ant ? ctx.htmlDiapo(ant) : "", fondo: fondo || "#fff" }, tr, T);
+    }
+    requestAnimationFrame(vista);
+    cuerpo.addEventListener("click", (ev) => {
+      const b = ev.target.closest("[data-e]");
+      if (!b) return;
+      e = +b.dataset.e; v = 0; dur = TO.CATALOGO[e][4] || dur;
+      pintar(); jugar();
+    });
+    cuerpo.addEventListener("change", (ev) => {
+      if (ev.target === f("var")) { v = +f("var").value; pintar(); jugar(); }
+      else if (ev.target === f("dur")) dur = Math.round((parseFloat(f("dur").value) || 0) * 1000) || dur;
+      else pintar();
+    });
+    $("[data-ver]", pie).onclick = jugar;
+    $("[data-no]", pie).onclick = () => h.cerrar();
+    const guardar = (todas) => { if (!ctx.soloLectura()) ctx.guardar(p, armar(), todas); h.cerrar(); if (todas) aviso("La misma transición en todas las diapositivas", { tipo: "ok", ms: 1800 }); };
+    $("[data-si]", pie).onclick = () => guardar(false);
+    $("[data-todas]", pie).onclick = () => guardar(true);
+    if (ctx.soloLectura()) { $("[data-si]", pie).disabled = true; $("[data-todas]", pie).disabled = true; }
+  }
+
+  NOM.animPanel = { transiciones, galeria, opciones, panel, agregar, copiar, pegar, quitar, dibujarTrayectoria, acciones, menu, rueda, catalogo, categorias, unidades, tiempos };
 })();

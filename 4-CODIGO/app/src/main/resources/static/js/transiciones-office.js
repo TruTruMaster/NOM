@@ -559,5 +559,91 @@
     return `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice${nsReq} Requires="${requiere}"><p:transition spd="${spd}"${requiere === "p14" ? "" : durA}${requiere === "p14" && dur ? ` p14:dur="${dur}"` : ""}${avance}>${ef}</p:transition></mc:Choice><mc:Fallback>${respaldo}</mc:Fallback></mc:AlternateContent>`;
   }
 
-  NOM.transOffice = { leer, jugar, deLegado, nombre, NOMBRES, mascaraCampo, xml };
+  // ================================================================== catálogo (la galería de PowerPoint 2024)
+  // Cada variante con el elemento y los atributos que escribe PowerPoint (a03-transiciones: la pidió una por una a
+  // PowerPoint y se leyó lo que guardó). Las direcciones se nombran como las nombra PowerPoint en su código (PushLeft:
+  // la nueva entra moviéndose hacia la izquierda). [nombre, categoría, t, variantes [[etiqueta, atributos, t propio]], ms]
+  // (la duración con la que empieza cada una no se midió: es la de siempre de PowerPoint, aproximada)
+  const D4 = [["Hacia la izquierda", {}], ["Hacia arriba", { dir: "u" }], ["Hacia la derecha", { dir: "r" }], ["Hacia abajo", { dir: "d" }]];
+  const D8 = D4.concat([["Izquierda y arriba", { dir: "lu" }], ["Derecha y arriba", { dir: "ru" }], ["Izquierda y abajo", { dir: "ld" }], ["Derecha y abajo", { dir: "rd" }]]);
+  const LR = [["Izquierda", { dir: "l" }], ["Derecha", { dir: "r" }]];
+  const HV = [["Horizontal", {}], ["Vertical", { dir: "vert" }]];
+  const INV = (p) => [["Izquierda", { prst: p }], ["Derecha", { prst: p, invX: "1" }]];
+  const CATALOGO = [
+    ["Ninguna", "Sutil", "corte0", [["", {}]], 0],
+    ["Transformar", "Sutil", "morph", [["Objetos", { option: "byObject" }], ["Palabras", { option: "byWord" }], ["Caracteres", { option: "byChar" }]], 2000],
+    ["Desvanecer", "Sutil", "fade", [["Suavemente", {}], ["A través de negro", { thruBlk: "1" }]], 700],
+    ["Empujar", "Sutil", "push", D4, 1000],
+    ["Barrido", "Sutil", "wipe", D4, 1000],
+    ["Dividir", "Sutil", "split", [["Horizontal hacia fuera", {}], ["Horizontal hacia dentro", { dir: "in" }], ["Vertical hacia fuera", { orient: "vert" }], ["Vertical hacia dentro", { orient: "vert", dir: "in" }]], 1500],
+    ["Revelar", "Sutil", "reveal", [["Suave, izquierda", {}], ["Suave, derecha", { dir: "r" }], ["A través de negro, izquierda", { thruBlk: "1" }], ["A través de negro, derecha", { thruBlk: "1", dir: "r" }]], 2000],
+    ["Cortar", "Sutil", "cut", [["Normal", {}], ["A través de negro", { thruBlk: "1" }]], 0],
+    ["Barras aleatorias", "Sutil", "randomBar", HV, 1000],
+    ["Forma", "Sutil", "circle", [["Círculo", {}, "circle"], ["Rombo", {}, "diamond"], ["Más", {}, "plus"], ["Hacia dentro", { dir: "in" }, "zoom"], ["Hacia fuera", {}, "zoom"]], 2000],
+    ["Descubrir", "Sutil", "pull", D8, 1000],
+    ["Cubrir", "Sutil", "cover", D8, 1000],
+    ["Destello", "Sutil", "flash", [["", {}]], 1000],
+    ["Caída", "Llamativo", "prst:fallOver", INV("fallOver"), 2000],
+    ["Cortina lateral", "Llamativo", "prst:drape", INV("drape"), 2000],
+    ["Cortinas", "Llamativo", "prst:curtains", [["", { prst: "curtains" }]], 2000],
+    ["Viento", "Llamativo", "prst:wind", [["Derecha", { prst: "wind" }], ["Izquierda", { prst: "wind", invX: "1" }]], 2000],
+    ["Prestigio", "Llamativo", "prst:prestige", [["", { prst: "prestige" }]], 2000],
+    ["Fractura", "Llamativo", "prst:fracture", [["", { prst: "fracture" }]], 2000],
+    ["Aplastar", "Llamativo", "prst:crush", [["", { prst: "crush" }]], 2000],
+    ["Despegar", "Llamativo", "prst:peelOff", INV("peelOff"), 2000],
+    ["Curvatura de página", "Llamativo", "prst:pageCurlDouble", [["Doble, izquierda", { prst: "pageCurlDouble" }], ["Doble, derecha", { prst: "pageCurlDouble", invX: "1" }], ["Sencilla, izquierda", { prst: "pageCurlSingle" }, "prst:pageCurlSingle"], ["Sencilla, derecha", { prst: "pageCurlSingle", invX: "1" }, "prst:pageCurlSingle"]], 2000],
+    ["Avión", "Llamativo", "prst:airplane", [["Derecha", { prst: "airplane" }], ["Izquierda", { prst: "airplane", invX: "1" }]], 2000],
+    ["Origami", "Llamativo", "prst:origami", [["Derecha", { prst: "origami" }], ["Izquierda", { prst: "origami", invX: "1" }]], 2000],
+    ["Disolver", "Llamativo", "dissolve", [["", {}]], 1000],
+    ["Cuadros bicolores", "Llamativo", "checker", [["A lo ancho", {}], ["Hacia abajo", { dir: "vert" }]], 1000],
+    ["Persianas", "Llamativo", "blinds", HV, 1000],
+    ["Reloj", "Llamativo", "wheel", [["Como las manecillas", { spokes: "1" }], ["Al revés de las manecillas", { spokes: "1" }, "wheelReverse"], ["Cuña", {}, "wedge"]], 2000],
+    ["Onda", "Llamativo", "ripple", [["Desde el centro", {}], ["Derecha y arriba", { dir: "ru" }], ["Izquierda y arriba", { dir: "lu" }], ["Izquierda y abajo", { dir: "ld" }], ["Derecha y abajo", { dir: "rd" }]], 1400],
+    ["Panal", "Llamativo", "honeycomb", [["", {}]], 2000],
+    ["Brillo", "Llamativo", "glitter", [["Rombos, izquierda", { dir: "r" }], ["Rombos, arriba", { dir: "d" }], ["Rombos, derecha", {}], ["Rombos, abajo", { dir: "u" }], ["Hexágonos, izquierda", { dir: "r", pattern: "hexagon" }], ["Hexágonos, arriba", { dir: "d", pattern: "hexagon" }], ["Hexágonos, derecha", { pattern: "hexagon" }], ["Hexágonos, abajo", { dir: "u", pattern: "hexagon" }]], 2000],
+    ["Vórtice", "Llamativo", "vortex", D4, 2000],
+    ["Triturar", "Llamativo", "shred", [["Tiras hacia dentro", {}], ["Tiras hacia fuera", { dir: "out" }], ["Partículas hacia dentro", { pattern: "rectangle" }], ["Partículas hacia fuera", { pattern: "rectangle", dir: "out" }]], 2000],
+    ["Cambiar", "Llamativo", "switch", LR, 1250],
+    ["Voltear", "Llamativo", "flip", LR, 1250],
+    ["Galería", "Llamativo", "gallery", LR, 1600],
+    ["Cubo", "Llamativo", "prism", D4, 1000],
+    ["Puertas", "Llamativo", "doors", [["Vertical", { dir: "vert" }], ["Horizontal", {}]], 1400],
+    ["Cuadro", "Llamativo", "prism", D4.map(([e, a]) => [e, Object.assign({}, a, { isInverted: "1" })]), 1000],
+    ["Peine", "Llamativo", "comb", HV, 1000],
+    ["Zoom", "Llamativo", "warp", [["Hacia dentro", { dir: "in" }], ["Hacia fuera", {}], ["Zoom y girar", {}, "newsflash"]], 1000],
+    ["Aleatoria", "Llamativo", "random", [["", {}]], 2000],
+    ["Rueda", "Llamativo", "wheel", [["1 radio", { spokes: "1" }], ["2 radios", { spokes: "2" }], ["3 radios", { spokes: "3" }], ["4 radios", {}], ["8 radios", { spokes: "8" }]], 2000],
+    ["Barras diagonales", "Llamativo", "strips", [["Izquierda y arriba", {}], ["Derecha y arriba", { dir: "ru" }], ["Izquierda y abajo", { dir: "ld" }], ["Derecha y abajo", { dir: "rd" }]], 1000],
+    ["Desplazamiento", "Contenido dinámico", "pan", D4, 1600],
+    ["Noria", "Contenido dinámico", "ferris", LR, 2000],
+    ["Cinta transportadora", "Contenido dinámico", "conveyor", LR, 2000],
+    ["Girar", "Contenido dinámico", "prism", D4.map(([e, a]) => [e, Object.assign({}, a, { isContent: "1" })]), 1000],
+    ["Ventana", "Contenido dinámico", "window", [["Vertical", { dir: "vert" }], ["Horizontal", {}]], 1000],
+    ["Órbita", "Contenido dinámico", "prism", D4.map(([e, a]) => [e, Object.assign({}, a, { isContent: "1", isInverted: "1" })]), 1000],
+    ["Atravesar volando", "Contenido dinámico", "flythrough", [["Hacia dentro", {}], ["Hacia fuera", { dir: "out" }], ["Hacia dentro con rebote", { hasBounce: "1" }], ["Hacia fuera con rebote", { dir: "out", hasBounce: "1" }]], 800],
+  ];
+  /** La transición de una variante del catálogo: { t, a, dur }. */
+  const deVariante = (e, v) => ({ t: (e[3][v] && e[3][v][2]) || e[2], a: Object.assign({}, (e[3][v] || [])[1] || {}), dur: e[4] });
+  /** Atributos que cuentan para saber qué variante es (los de duración y sonido no). */
+  const igualA = (a, b) => { const k = new Set([...Object.keys(a || {}), ...Object.keys(b || {})]); for (const x of k) if (String((a || {})[x] || "") !== String((b || {})[x] || "")) return false; return true; };
+  /** En qué entrada y variante del catálogo está una transición: { e (índice), v } o null. */
+  function buscar(tr) {
+    if (!tr) return { e: 0, v: 0 };
+    for (let i = 0; i < CATALOGO.length; i++) {
+      const e = CATALOGO[i];
+      for (let v = 0; v < e[3].length; v++) { const d = deVariante(e, v); if (d.t === tr.t && igualA(d.a, tr.a)) return { e: i, v }; }
+    }
+    // (lo que no está tal cual —un atributo de más— se busca solo por el tipo)
+    const i = CATALOGO.findIndex((e) => e[2] === tr.t || e[3].some((v) => v[2] === tr.t));
+    return i < 0 ? null : { e: i, v: 0 };
+  }
+  /** Nombre para mostrar: «Empujar (hacia arriba)». */
+  function nombreCompleto(tr) {
+    const r = buscar(tr);
+    if (!r) return nombre(tr);
+    const e = CATALOGO[r.e], et = e[3][r.v] && e[3][r.v][0];
+    return e[0] + (et && e[3].length > 1 ? ` (${et.charAt(0).toLowerCase() + et.slice(1)})` : "");
+  }
+
+  NOM.transOffice = { leer, jugar, deLegado, nombre, nombreCompleto, NOMBRES, mascaraCampo, xml, CATALOGO, deVariante, buscar };
 })();

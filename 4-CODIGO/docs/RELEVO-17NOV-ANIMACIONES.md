@@ -146,7 +146,12 @@ Leer al empezar la siguiente sesión, junto con `RELEVO-17NOV-LISTA-OFFICE.md` (
      Barras diagonales 3, Dividir vertical hacia dentro, Rueda por radios, Arrastrar 4, Rotar vertical, Zoom desde el
      centro de la diapositiva); «Desplazar hacia fuera» se puede derivar de la entrada (el tav 0 con # de la entrada es
      el tav 1 sin # de la salida).
-3. Calibrar transiciones con `transiciones_real.py` (empezar por Empujar, Barrido, Dividir, Revelar, Barras, Forma, Cubrir,
+3. **Panel de transiciones hecho (17-nov, noche)**: `NOM.animPanel.transiciones(ctxTrans, p)` con el catálogo
+   `NOM.transOffice.CATALOGO` (151 variantes tal como las escribió PowerPoint en a03, en Sutil / Llamativo / Contenido
+   dinámico; `buscar` y `nombreCompleto` reconocen una transición importada), opciones del efecto, duración, avanzar al
+   hacer clic y/o después de n s, aplicar a todas, vista previa desde la diapositiva anterior; en el botón Transición,
+   la ruedita de la miniatura y la paleta. Prueba de humo en el navegador con a03: bien. Las duraciones con que
+   empieza cada transición son las de PowerPoint de memoria, sin medir. **Sigue de este punto:** calibrar transiciones con `transiciones_real.py` (empezar por Empujar, Barrido, Dividir, Revelar, Barras, Forma, Cubrir,
    Descubrir, Destello, Cubo, Galería, Caída, Cortinas, Curvatura) y el panel de transiciones (galería, opciones, duración,
    aplicar a todas, avance automático). **Transformar (morph)**: emparejar por forma y texto como PowerPoint (por objeto,
    palabra y letra) y medirlo (p08 diapositiva 36 y a03 152–154).

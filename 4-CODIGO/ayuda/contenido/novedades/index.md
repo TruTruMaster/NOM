@@ -23,6 +23,10 @@ version: 0.16.0
   texto y gráficos) en su lugar de la hoja con el texto alrededor como lo acomoda Word.
 - **SmartArt** con el dibujo y los colores de PowerPoint (antes algunos salían con letra blanca sobre
   blanco) y los que no traen dibujo, acomodados con su diseño.
+- **Animaciones y transiciones como en PowerPoint:** se reproducen como en PowerPoint (medido contra sus
+  videos), y ahora también se crean y se editan igual: los mismos efectos con sus opciones, el panel de
+  animación con línea de tiempo, copiar animación, trayectorias dibujadas y el panel de transiciones.
+  Lo que armes se guarda en el .pptx como lo escribe PowerPoint.
 - **Gráficas:** líneas de tendencia con su ecuación y R², barras de error y tabla de datos.
 - **Fórmulas:** matrices dinámicas (los resultados se derraman a las celdas vecinas), `LET` y `LAMBDA`.
 - **Accesibilidad:** el alto contraste del sistema cambia los colores de la interfaz, «reducir
