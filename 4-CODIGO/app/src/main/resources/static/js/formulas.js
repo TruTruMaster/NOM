@@ -1095,7 +1095,7 @@
     "ELEGIRCOLS", "ELEGIRFILAS", "ENCOL", "ENFILA", "AJUSTARFILAS", "AJUSTARCOLS", "EXPANDIR", "DIVIDIRTEXTO", "BYROW", "BYCOL", "MAP", "REDUCE",
     "SCAN", "MAKEARRAY", "ESTIMACION.LINEAL", "ESTIMACION.LOGARITMICA", "CRECIMIENTO", "MODA.VARIOS"]);
   /** Funciones que trabajan con la referencia y no con su valor (las resuelve el evaluador). */
-  const DE_REFERENCIA = new Set(["FILA", "COLUMNA", "FILAS", "COLUMNAS", "INDIRECTO", "DESREF"]);
+  const DE_REFERENCIA = new Set(["FILA", "COLUMNA", "FILAS", "COLUMNAS", "INDIRECTO", "DESREF", "ESFORMULA"]);
   DE_REFERENCIA.forEach((n) => { FUNCS[n] = () => E("#VALOR!"); });
   const ALIAS = {
     SUM: "SUMA", AVERAGE: "PROMEDIO", COUNT: "CONTAR", COUNTA: "CONTARA", COUNTBLANK: "CONTAR.BLANCO", PRODUCT: "PRODUCTO", SUMPRODUCT: "SUMAPRODUCTO",
@@ -2025,9 +2025,10 @@
       return nr;
     },
   });
-  Object.assign(FUNCS, { USDOLLAR: (a) => FUNCS.MONEDA(a), ENCONTRARB: (a) => FUNCS.ENCONTRAR(a), HALLARB: (a) => FUNCS.HALLAR(a), REEMPLAZARB: (a) => FUNCS.REEMPLAZAR(a) });
+  // (ESFORMULA la resuelve el evaluador: necesita la celda, no su valor)
+  Object.assign(FUNCS, { ESFORMULA: () => false, USDOLLAR: (a) => FUNCS.MONEDA(a), ENCONTRARB: (a) => FUNCS.ENCONTRAR(a), HALLARB: (a) => FUNCS.HALLAR(a), REEMPLAZARB: (a) => FUNCS.REEMPLAZAR(a) });
   Object.assign(ALIAS, {
-    LOOKUP: "BUSCAR", NUMBERVALUE: "VALOR.NUMERO", "VALOR.NÚMERO": "VALOR.NUMERO", VALUETOTEXT: "VALORATEXTO", ARRAYTOTEXT: "MATRIZATEXTO", ENCODEURL: "URLCODIF", ASC: "ASC", DBCS: "DBCS",
+    ISFORMULA: "ESFORMULA", "ESFÓRMULA": "ESFORMULA", LOOKUP: "BUSCAR", NUMBERVALUE: "VALOR.NUMERO", "VALOR.NÚMERO": "VALOR.NUMERO", VALUETOTEXT: "VALORATEXTO", ARRAYTOTEXT: "MATRIZATEXTO", ENCODEURL: "URLCODIF", ASC: "ASC", DBCS: "DBCS",
     FINDB: "ENCONTRARB", SEARCHB: "HALLARB", REPLACEB: "REEMPLAZARB", USDOLLAR: "USDOLLAR",
     COMPLEX: "COMPLEJO", IMAGINARY: "IMAGINARIO", IMREAL: "IM.REAL", IMABS: "IM.ABS", IMARGUMENT: "IM.ANGULO", "IM.ÁNGULO": "IM.ANGULO", IMCONJUGATE: "IM.CONJUGADA",
     IMCOS: "IM.COS", IMSIN: "IM.SENO", IMCOSH: "IM.COSH", IMSINH: "IM.SENOH", IMTAN: "IM.TAN", IMCOT: "IM.COT", IMSEC: "IM.SEC", IMCSC: "IM.CSC", IMSECH: "IM.SECH", IMCSCH: "IM.CSCH",
@@ -2054,6 +2055,7 @@
   // (18-nov-2026: los nombres con dígitos y los de Excel 2010 en adelante, con _xlfn.)
   Object.assign(INGLES, { "ACOT": "_xlfn.ACOT", "ACOTH": "_xlfn.ACOTH", "COT": "_xlfn.COT", "COTH": "_xlfn.COTH", "CSC": "_xlfn.CSC", "CSCH": "_xlfn.CSCH", "SEC": "_xlfn.SEC", "SECH": "_xlfn.SECH", "MULTIPLO.SUPERIOR.EXACTO": "_xlfn.CEILING.PRECISE", "MULTIPLO.INFERIOR.EXACTO": "_xlfn.FLOOR.PRECISE", "MULTIPLO.SUPERIOR.ISO": "_xlfn.ISO.CEILING", "COMBINA": "_xlfn.COMBINA", "PERMUTACIONES.A": "_xlfn.PERMUTATIONA", "SUMAX2MENOSY2": "SUMX2MY2", "SUMAX2MASY2": "SUMX2PY2", "SUMAXMENOSY2": "SUMXMY2", "DIAS.LAB.INTL": "_xlfn.NETWORKDAYS.INTL", "DIA.LAB.INTL": "_xlfn.WORKDAY.INTL", "COEFICIENTE.ASIMETRIA.P": "_xlfn.SKEW.P", "FI": "_xlfn.PHI", "GAUSS": "_xlfn.GAUSS", "GAMMA": "_xlfn.GAMMA", "GAMMA.LN.EXACTO": "_xlfn.GAMMALN.PRECISE", "FUN.ERROR.EXACTO": "_xlfn.ERF.PRECISE", "FUN.ERROR.COMPL.EXACTO": "_xlfn.ERFC.PRECISE", "DISTR.NORM.N": "_xlfn.NORM.DIST", "DISTR.NORM.ESTAND.N": "_xlfn.NORM.S.DIST", "INV.NORM": "_xlfn.NORM.INV", "INV.NORM.ESTAND": "_xlfn.NORM.S.INV", "DISTR.EXP.N": "_xlfn.EXPON.DIST", "DISTR.BINOM.N": "_xlfn.BINOM.DIST", "POISSON.DIST": "_xlfn.POISSON.DIST", "DISTR.GAMMA.N": "_xlfn.GAMMA.DIST", "INV.GAMMA": "_xlfn.GAMMA.INV", "DISTR.CHICUAD": "_xlfn.CHISQ.DIST", "DISTR.CHICUAD.CD": "_xlfn.CHISQ.DIST.RT", "INV.CHICUAD": "_xlfn.CHISQ.INV", "INV.CHICUAD.CD": "_xlfn.CHISQ.INV.RT", "DISTR.T.N": "_xlfn.T.DIST", "DISTR.T.2C": "_xlfn.T.DIST.2T", "DISTR.T.CD": "_xlfn.T.DIST.RT", "INV.T": "_xlfn.T.INV", "INV.T.2C": "_xlfn.T.INV.2T", "DISTR.F.N": "_xlfn.F.DIST", "DISTR.F.CD": "_xlfn.F.DIST.RT", "INV.F": "_xlfn.F.INV", "INV.F.CD": "_xlfn.F.INV.RT", "DISTR.BETA.N": "_xlfn.BETA.DIST", "INV.BETA.N": "_xlfn.BETA.INV", "INTERVALO.CONFIANZA.NORM": "_xlfn.CONFIDENCE.NORM", "INTERVALO.CONFIANZA.T": "_xlfn.CONFIDENCE.T", "PERCENTIL.EXC": "_xlfn.PERCENTILE.EXC", "CUARTIL.EXC": "_xlfn.QUARTILE.EXC", "P.DURACION": "_xlfn.PDURATION", "RRI": "_xlfn.RRI", "BIN.A.HEX": "BIN2HEX", "BIN.A.OCT": "BIN2OCT", "HEX.A.BIN": "HEX2BIN", "HEX.A.OCT": "HEX2OCT", "OCT.A.BIN": "OCT2BIN", "OCT.A.HEX": "OCT2HEX", "BIT.Y": "_xlfn.BITAND", "BIT.O": "_xlfn.BITOR", "BIT.XO": "_xlfn.BITXOR", "BIT.DESPLIZQDA": "_xlfn.BITLSHIFT", "BIT.DESPLDCHA": "_xlfn.BITRSHIFT" });
   Object.assign(INGLES, { "BUSCAR": "LOOKUP", "VALOR.NUMERO": "_xlfn.NUMBERVALUE", "VALORATEXTO": "_xlfn.VALUETOTEXT", "MATRIZATEXTO": "_xlfn.ARRAYTOTEXT", "URLCODIF": "_xlfn.ENCODEURL", "ENCONTRARB": "FINDB", "HALLARB": "SEARCHB", "REEMPLAZARB": "REPLACEB", "COMPLEJO": "COMPLEX", "IMAGINARIO": "IMAGINARY", "IM.REAL": "IMREAL", "IM.ABS": "IMABS", "IM.ANGULO": "IMARGUMENT", "IM.CONJUGADA": "IMCONJUGATE", "IM.COS": "IMCOS", "IM.SENO": "IMSIN", "IM.COSH": "_xlfn.IMCOSH", "IM.SENOH": "_xlfn.IMSINH", "IM.TAN": "_xlfn.IMTAN", "IM.COT": "_xlfn.IMCOT", "IM.SEC": "_xlfn.IMSEC", "IM.CSC": "_xlfn.IMCSC", "IM.SECH": "_xlfn.IMSECH", "IM.CSCH": "_xlfn.IMCSCH", "IM.EXP": "IMEXP", "IM.LN": "IMLN", "IM.LOG10": "IMLOG10", "IM.LOG2": "IMLOG2", "IM.RAIZ2": "IMSQRT", "IM.POT": "IMPOWER", "IM.DIV": "IMDIV", "IM.SUSTR": "IMSUB", "IM.SUM": "IMSUM", "IM.PRODUCT": "IMPRODUCT", "DISTR.BINOM.SERIE": "_xlfn.BINOM.DIST.RANGE", "INV.BINOM": "_xlfn.BINOM.INV", "DISTR.HIPERGEOM.N": "_xlfn.HYPGEOM.DIST", "DISTR.HIPERGEOM": "HYPGEOMDIST", "NEGBINOM.DIST": "_xlfn.NEGBINOM.DIST", "DISTR.LOGNORM": "_xlfn.LOGNORM.DIST", "INV.LOGNORM": "_xlfn.LOGNORM.INV", "DISTR.LOG.NORM": "LOGNORMDIST", "DISTR.LOG.INV": "LOGINV", "DISTR.WEIBULL": "_xlfn.WEIBULL.DIST", "DIST.WEIBULL": "WEIBULL", "PRUEBA.T.N": "_xlfn.T.TEST", "PRUEBA.T": "TTEST", "PRUEBA.F.N": "_xlfn.F.TEST", "PRUEBA.F": "FTEST", "PRUEBA.CHICUAD": "_xlfn.CHISQ.TEST", "PRUEBA.CHI": "CHITEST", "PRUEBA.Z.N": "_xlfn.Z.TEST", "PRUEBA.Z": "ZTEST", "MODA.VARIOS": "_xlfn.MODE.MULT", "RANGO.PERCENTIL.INC": "_xlfn.PERCENTRANK.INC", "RANGO.PERCENTIL.EXC": "_xlfn.PERCENTRANK.EXC", "RANGO.PERCENTIL": "PERCENTRANK", "PROBABILIDAD": "PROB", "ERROR.TIPICO.XY": "STEYX", "ESTIMACION.LINEAL": "LINEST", "ESTIMACION.LOGARITMICA": "LOGEST", "CRECIMIENTO": "GROWTH", "PAGO.INT.ENTRE": "CUMIPMT", "PAGO.PRINC.ENTRE": "CUMPRINC", "CUPON.DIAS.L1": "COUPDAYBS", "CUPON.DIAS": "COUPDAYS", "CUPON.DIAS.L2": "COUPDAYSNC", "CUPON.FECHA.L2": "COUPNCD", "CUPON.FECHA.L1": "COUPPCD", "CUPON.NUM": "COUPNUM", "PRECIO": "PRICE", "RENDTO": "YIELD", "DURACION": "DURATION", "DURACION.MODIF": "MDURATION", "TASA.DESC": "DISC", "TASA.INT": "INTRATE", "PRECIO.DESCUENTO": "PRICEDISC", "CANTIDAD.RECIBIDA": "RECEIVED", "RENDTO.DESC": "YIELDDISC", "PRECIO.VENCIMIENTO": "PRICEMAT", "RENDTO.VENCTO": "YIELDMAT", "INT.ACUM": "ACCRINT", "INT.ACUM.V": "ACCRINTM", "LETRA.DE.TES.PRECIO": "TBILLPRICE", "LETRA.DE.TES.RENDTO": "TBILLYIELD", "LETRA.DE.TES.EQV.A.BONO": "TBILLEQ", "AMORTIZ.LIN": "AMORLINC", "AMORTIZ.PROGRE": "AMORDEGRC" });
+  Object.assign(INGLES, { ESFORMULA: "_xlfn.ISFORMULA" });
   Object.assign(INGLES, { SUBTOTALES: "SUBTOTAL", AGREGAR: "_xlfn.AGGREGATE", COINCIDIRX: "_xlfn.XMATCH", CONVERTIR: "CONVERT", "DEC.A.BIN": "DEC2BIN", "DEC.A.OCT": "DEC2OCT",
     "DEC.A.HEX": "DEC2HEX", "BIN.A.DEC": "BIN2DEC", "OCT.A.DEC": "OCT2DEC", "HEX.A.DEC": "HEX2DEC", "NUMERO.ARABE": "_xlfn.ARABIC", BASE: "_xlfn.BASE" });
   Object.assign(INGLES, { DIAS360: "DAYS360", "ISO.NUM.DE.SEMANA": "_xlfn.ISOWEEKNUM", "SI.ND": "_xlfn.IFNA", CAMBIAR: "_xlfn.SWITCH", XO: "_xlfn.XOR", N: "N", T: "T",
@@ -2384,7 +2386,8 @@
     "LETRA.DE.TES.RENDTO": ["liquidación; vencimiento; precio", "Rendimiento de una letra del Tesoro."],
     "LETRA.DE.TES.EQV.A.BONO": ["liquidación; vencimiento; descuento", "Rendimiento equivalente a un bono."],
     "AMORTIZ.LIN": ["costo; compra; primer_período; residual; período; tasa; [base]", "Depreciación lineal (sistema francés)."],
-    "AMORTIZ.PROGRE": ["costo; compra; primer_período; residual; período; tasa; [base]", "Depreciación degresiva (sistema francés)."]
+    "AMORTIZ.PROGRE": ["costo; compra; primer_período; residual; período; tasa; [base]", "Depreciación degresiva (sistema francés)."],
+    "ESFORMULA": ["referencia", "VERDADERO si la celda tiene una fórmula."]
   };
 
   function num(v) {
@@ -2805,6 +2808,14 @@
           const v = expr(); toma(")");
           if (!Array.isArray(v)) return 1;
           return nombre === "FILAS" ? filasDe(v) : colsDe(v);
+        }
+        if (nombre === "ESFORMULA") {
+          // ¿la celda tiene una fórmula? (se mira lo que tiene escrito, no su valor)
+          const r = refSola();
+          if (!r) throw E("#VALOR!");
+          toma(")");
+          const hh = hojaDe(r.hoja, h), c = cajaDeRef(r), raw = hh && hh.obtener ? hh.obtener(c.c1, c.f1) : "";
+          return typeof raw === "string" && raw.trim().startsWith("=");
         }
         if (nombre === "INDIRECTO") {
           const t = texto(expr()).trim(); resto();

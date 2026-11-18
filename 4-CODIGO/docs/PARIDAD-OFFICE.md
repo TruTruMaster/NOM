@@ -104,25 +104,17 @@ w06 84.5 %, w07 91.2 %, w08 94.3 %, w09 77.3 %, w10 34.0 %, w11 100 %, w12 77.8 
 | Vista | Saltos de página, diseño de página, cuadrícula, encabezados, zoom, inmovilizar, macros, celda de enfoque, modo oscuro | Inmovilizar (fijar filas y columnas): sí; cuadrícula como la del archivo. Vista de saltos, de diseño, celda de enfoque y macros: no |
 | VBA, Python en Excel, Power Query (M), Power Pivot y DAX, cubos | | No |
 
-**Funciones.** NOM tiene **230** (con sus nombres en español y en inglés), con matrices dinámicas, `LET` y `LAMBDA`.
-Comprobadas contra **Excel 2024 real** (18-nov, `funciones_excel.py`: Excel escribe cada fórmula con `Formula2`, calcula y
-devuelve el valor o el error exacto): **183 de 183** fórmulas iguales (antes se comparaba contra LibreOffice).
-De las 261 que enumera el inventario tiene 118:
-
-| Categoría (lista del inventario) | NOM | Faltan |
-|---|---|---|
-| Destacadas | 10 / 10 | — |
-| Fecha y hora | 22 / 25 | `NETWORKDAYS.INTL`, `WORKDAY.INTL`, `YEARFRAC` |
-| Lógicas (con `AND`, `BYROW`, `BYCOL`) | 17 / 19 | `TRUE()`, `FALSE()` como funciones (los valores sí) |
-| Búsqueda (lista cortada) | 5 / 6 | `AREAS` |
-| Matemáticas (lista cortada) | 24 / 38 | `ACOSH`, `ACOT`, `ACOTH`, `ASINH`, `ATANH`, `CEILING.PRECISE`, `COMBINA`, `COT`, `COTH`, `CSC`, `CSCH`, `SUMX2MY2`, `SUMX2PY2`, `SUMXMY2` |
-| Estadística (lista cortada) | 13 / 30 | `BETA.*`, `BINOM.*`, `CHISQ.*`, `CONFIDENCE.*`, `DEVSQ`, `EXPON.DIST`, `F.*` |
-| Compatibilidad | 12 / 41 | las distribuciones viejas (`NORMDIST`, `TDIST`, `CHIDIST`…) |
-| Ingeniería (lista cortada) | 1 / 11 | `BESSEL*`, `BIN2HEX`, `BIN2OCT`, `BIT*` |
-| Base de datos | 0 / 12 | `DSUM`, `DAVERAGE`, `DCOUNT`… |
-| Cubo | 0 / 7 | todas (necesitan un modelo de datos) |
-| Financieras (las de Excel) | 10 / 51 | las de bonos, cupones, depreciación (`DB`, `DDB`, `SYD`, `VDB`), `XIRR`, `XNPV`… |
-| Sueltas | 4 / 11 | `GETPIVOTDATA`, `GROUPBY`, `PIVOTBY`, `IMAGE`, `TRIMRANGE`, `REGEXEXTRACT`, `TRANSLATE` |
+**Funciones.** NOM tiene **453** (con sus nombres en español y en inglés), con matrices dinámicas, `LET` y `LAMBDA`
+(18-nov: +223). La lista de Excel 2024 sale del propio Excel (la biblioteca de tipos de `WorksheetFunction`, 416
+funciones, `windows/lista_funciones.py`): de esas faltan solo las de idiomas de doble byte o tailandés (`BAHTTEXT`,
+`THAI*`, `PHONETIC`), las que piden un servicio externo (`RTD`, `WEBSERVICE`, `FILTERXML`, `STOCKHISTORY`, `FIELDVALUE`),
+`FORECAST.ETS*` (4), `ODDFPRICE`/`ODDFYIELD`/`ODDLPRICE`/`ODDLYIELD`, `ISFORMULA` y `IMAGE`.
+Comprobadas contra **Excel 2024 real** (`funciones_excel.py`: Excel escribe cada fórmula con `Formula2`, calcula y
+devuelve el valor o el error exacto): **496 de 497** fórmulas iguales. La que no: `BESSELJ` con x ≥ 8 (Excel se aparta
+del valor exacto en ~5e-7 y no se encontró su método; NOM da el exacto). Las funciones iterativas (`TIR`, `TIR.NO.PER`,
+`TASA`) se comparan con la precisión que Excel documenta (1e-8).
+No existen en Excel 2024 (son de Microsoft 365; dan `#NAME?` en la PC de prueba, así que no hay contra qué compararlas):
+`REGEXTEST`, `REGEXEXTRACT`, `REGEXREPLACE`, `GROUPBY`, `PIVOTBY`, `TRIMRANGE`, `PERCENTOF`, `TRANSLATE`, `DETECTLANGUAGE`.
 
 Medido contra Excel 2024 real: texto de las celdas 100 % en los nueve libros; altos de fila 100 % salvo una fila de
 x01 (99.4 %); cada gráfica 92-98 % de parecido.
