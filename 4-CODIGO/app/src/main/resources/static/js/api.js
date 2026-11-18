@@ -120,7 +120,10 @@
     if (tok) cab.Authorization = "Bearer " + tok;
     let r;
     try {
-      r = await fetch(base + ruta, { method: metodo, headers: cab, body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo, (k, v) => (k.startsWith("_") ? undefined : v)), signal: ctl.signal });
+      // (las llaves «_…» del cuerpo son de este equipo, como _llaveDoc: no salen. Las de DENTRO de los datos sí: antes se
+      // quitaban todas y un documento perdía lo que la importación guarda así, como el color «_c» de una animación)
+      const enviar = cuerpo;
+      r = await fetch(base + ruta, { method: metodo, headers: cab, body: enviar === undefined ? undefined : JSON.stringify(enviar, function (k, v) { return this === enviar && k.startsWith("_") ? undefined : v; }), signal: ctl.signal });
     } catch (e) {
       marcarRed(false);
       throw new ErrorApi(0, null);

@@ -24,15 +24,21 @@
   // ------------------------------------------------------------ base64 y huellas
   function aB64(u) { let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
   function deB64(s) { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
-  /** JSON con las llaves en orden: dos objetos iguales dan siempre el mismo texto. */
-  function estable(v) {
+  /** JSON con las llaves en orden: dos objetos iguales dan siempre el mismo texto. sinDerivados: sin las llaves que
+      empiezan con «_» (lo que la importación calcula de paso, como el color ya resuelto «_c» de una animación). */
+  function estable(v, sinDerivados) {
     if (v === null || typeof v !== "object") return v === undefined ? "null" : JSON.stringify(v);
-    if (Array.isArray(v)) return "[" + v.map(estable).join(",") + "]";
-    return "{" + Object.keys(v).filter((k) => v[k] !== undefined).sort().map((k) => JSON.stringify(k) + ":" + estable(v[k])).join(",") + "}";
+    if (Array.isArray(v)) return "[" + v.map((x) => estable(x, sinDerivados)).join(",") + "]";
+    return "{" + Object.keys(v).filter((k) => v[k] !== undefined && !(sinDerivados && k.charCodeAt(0) === 95)).sort().map((k) => JSON.stringify(k) + ":" + estable(v[k], sinDerivados)).join(",") + "}";
   }
-  /** Huella corta de cualquier valor (para saber si algo cambió desde que se importó). */
+  /**
+   * Huella corta de cualquier valor (para saber si algo cambió desde que se importó). No cuenta lo derivado («_…»):
+   * eso no lo cambia nadie, y hasta la 0.16.0 el servidor no lo guardaba (api.js lo quitaba de todo lo que mandaba):
+   * la diapositiva parecía cambiada y al descargar se volvía a escribir en vez de salir idéntica del original. (Lo
+   * importado antes de este arreglo guardó sus huellas con lo derivado: esas diapositivas se siguen escribiendo de nuevo.)
+   */
   function huella(v) {
-    const b = enc.encode(typeof v === "string" ? v : estable(v));
+    const b = enc.encode(typeof v === "string" ? v : estable(v, true));
     let h = 0x811C9DC5;
     for (let i = 0; i < b.length; i++) { h ^= b[i]; h = Math.imul(h, 0x01000193); }
     return b.length.toString(36) + "." + (h >>> 0).toString(36) + "." + C().crc32(b).toString(36);
