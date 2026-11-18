@@ -168,7 +168,8 @@
   const desescapar = (s) => s.replace(/&(lt|gt|amp|quot|apos|#x?[0-9a-fA-F]+);/g, (m, k) => ({ lt: "<", gt: ">", amp: "&", quot: '"', apos: "'" }[k] || String.fromCodePoint(k[1] === "x" || k[1] === "X" ? parseInt(k.slice(2), 16) : parseInt(k.slice(1), 10))));
 
   // ------------------------------------------------------------ el archivo de origen dentro del documento
-  const BLOQUE = "_origen", TROZO = 240000, MAX_ORIGEN = 14 * 1024 * 1024;
+  // (el original va al almacén de binarios del servidor: binarios.js; sin almacén, los de más de 14 MB no se guardan)
+  const BLOQUE = "_origen", TROZO = 240000, MAX_ORIGEN = 48 * 1024 * 1024, MAX_SIN_ALMACEN = 14 * 1024 * 1024;
   /** Sube cuando cambia lo que el importador saca de un archivo (las huellas viejas dejan de valer). */
   const VERSION_IMPORTADOR = 1;
   const YA_COMPRIMIDO = /\.(png|jpe?g|gif|webp|mp4|m4a|mp3|wmv|avi|zip|odttf)$/i;
@@ -315,7 +316,10 @@
   /** Los bytes del archivo original, o null. */
   function bytesDe(doc) {
     const b = doc.estado && doc.estado.bloques && doc.estado.bloques[BLOQUE];
-    if (!b || !b.n || !doc.vivo(BLOQUE)) return null;
+    if (!b || !doc.vivo(BLOQUE)) return null;
+    // en el almacén de binarios (binarios.js): solo si ya está en la memoria (precargar antes de exportar)
+    if (b.bin && typeof b.bin.v === "string" && b.bin.v) return NOM.binarios ? NOM.binarios.bytesYa(b.bin.v) : null;
+    if (!b.n) return null;
     const n = +b.n.v || 0;
     let s = "";
     for (let i = 0; i < n; i++) { const p = b["p" + i]; if (!p || typeof p.v !== "string") return null; s += p.v; }
@@ -324,10 +328,16 @@
   /** El original abierto: { fmt, h (huellas), iv, zip, archivo } o null si el documento no vino de Office. */
   function leer(doc) {
     const b = doc.estado && doc.estado.bloques && doc.estado.bloques[BLOQUE];
-    if (!b || !b.n || !doc.vivo(BLOQUE)) return null;
-    const clave = (b.n.v || 0) + ":" + (b.tam ? b.tam.v : 0) + ":" + (b.p0 ? b.p0.t + "@" + b.p0.n : "");
+    const bin = b && b.bin && typeof b.bin.v === "string" && b.bin.v ? b.bin.v : null;
+    if (!b || !(b.n || bin) || !doc.vivo(BLOQUE)) return null;
+    const clave = bin ? "bin:" + bin : (b.n.v || 0) + ":" + (b.tam ? b.tam.v : 0) + ":" + (b.p0 ? b.p0.t + "@" + b.p0.n : "");
     if (doc._origen && doc._origen.clave === clave) return doc._origen.valor;
     let valor = null;
+    // en el almacén y todavía no en la memoria: se pide y, mientras llega, no hay original (no se guarda ese «no»)
+    if (bin && NOM.binarios && !NOM.binarios.bytesYa(bin)) {
+      NOM.binarios.bytes(bin).catch(() => {});
+      return null;
+    }
     try {
       const u = bytesDe(doc);
       if (u) {
@@ -343,6 +353,6 @@
   const quitarOp = () => ({ bloque: BLOQUE, campos: { eliminado: true } });
 
   NOM.paquete = { empacar, desempacar, esPaquete, aB64, deB64 };
-  NOM.origen = { BLOQUE, MAX_ORIGEN, VERSION_IMPORTADOR, crearOps, sacarDatos, meterDatos, abrirZip, leer, bytesDe, huellaBytes, huella, estable, hijosXml, hijoXml, attr, finEtiqueta, local, desescapar, quitarOp, YA_COMPRIMIDO };
+  NOM.origen = { BLOQUE, MAX_ORIGEN, MAX_SIN_ALMACEN, VERSION_IMPORTADOR, crearOps, sacarDatos, meterDatos, abrirZip, leer, bytesDe, huellaBytes, huella, estable, hijosXml, hijoXml, attr, finEtiqueta, local, desescapar, quitarOp, YA_COMPRIMIDO };
   if (typeof module !== "undefined" && module.exports) module.exports = { paquete: NOM.paquete, origen: NOM.origen };
 })();

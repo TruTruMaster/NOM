@@ -21,6 +21,8 @@
     try {
       r = await NOM.api.get("/api/ver/" + encodeURIComponent(token), undefined, { sin401: true, ms: 15000 });
       if (llave && NOM.e2e) { r.estado = await NOM.e2e.estadoConLlave(llave, r.estado); r.documento.nombre = await NOM.e2e.valorConLlave(llave, r.documento.nombre); }
+      // imágenes y medios del almacén de binarios: por la ruta del enlace (sin sesión) y con la llave del documento
+      if (NOM.binarios) NOM.binarios.contexto({ ver: token, llave: llave ? NOM.binarios.llaveDeTexto(llave) : null });
       // El nombre del espacio va cifrado con la llave del espacio, que este enlace no trae.
       if (/^e2e:/.test(String(r.espacio || ""))) r.espacio = "";
     }

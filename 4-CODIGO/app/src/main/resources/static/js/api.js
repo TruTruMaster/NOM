@@ -147,6 +147,33 @@
   ["get", "post", "put", "delete"].forEach((m) => {
     api[m] = (ruta, cuerpo, opc) => api.pedir(m.toUpperCase(), ruta, m === "get" || m === "delete" ? undefined : (cuerpo === undefined ? {} : cuerpo), opc);
   });
+  /**
+   * Bytes crudos (el almacén de binarios): PUT manda `bytes` tal cual y devuelve el JSON de la respuesta; GET devuelve
+   * los bytes (Uint8Array). Sin cifrado de extremo a extremo aquí: lo de un espacio cifrado ya viene cifrado (binarios.js).
+   */
+  api.binario = async function (metodo, ruta, bytes, opc) {
+    opc = opc || {};
+    const base = api.servidor();
+    if (empaquetada && !base) throw new ErrorApi(0, { error: "Primero elige dónde trabaja tu equipo" });
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), opc.ms || 180000);
+    const cab = {};
+    if (bytes) cab["Content-Type"] = "application/octet-stream";
+    const tok = opc.sinSesion ? null : api.token();
+    if (tok) cab.Authorization = "Bearer " + tok;
+    let r;
+    try { r = await fetch(base + ruta, { method: metodo, headers: cab, body: bytes || undefined, signal: ctl.signal }); }
+    catch (e) { marcarRed(false); throw new ErrorApi(0, null); }
+    finally { clearTimeout(t); }
+    marcarRed(true);
+    if (!r.ok) {
+      let datos = null;
+      try { datos = JSON.parse(await r.text()); } catch (e) { datos = null; }
+      throw new ErrorApi(r.status, datos);
+    }
+    if (metodo === "GET") return new Uint8Array(await r.arrayBuffer());
+    try { return JSON.parse(await r.text()); } catch (e) { return null; }
+  };
 
   /**
    * Canal en vivo (EventSource). No admite cabeceras, así que se identifica en la dirección; para

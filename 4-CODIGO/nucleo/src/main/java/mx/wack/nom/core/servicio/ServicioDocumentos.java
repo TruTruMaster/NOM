@@ -199,6 +199,11 @@ public class ServicioDocumentos {
 
     public void contarChat(java.util.function.ToLongFunction<String> f) { this.bytesChat = f == null ? id -> 0 : f; }
 
+    /** Almacén de binarios (imágenes, el Office original…): lo que ocupa cada espacio cuenta en la cuota de su propietario. */
+    private volatile java.util.function.ToLongFunction<String> bytesBinarios = id -> 0;
+
+    public void contarBinarios(java.util.function.ToLongFunction<String> f) { this.bytesBinarios = f == null ? id -> 0 : f; }
+
     /** Para el chat: no deja subir mas si el propietario del espacio ya lleno su cuota. */
     public void revisarCuotaDe(Espacio e) { revisarCuota(e); }
 
@@ -218,6 +223,7 @@ public class ServicioDocumentos {
                 for (Version v : repo.historial(d.id)) total += v.bytes;
             }
             total += bytesChat.applyAsLong(e.id);
+            total += bytesBinarios.applyAsLong(e.id);
         }
         usoCache.put(propietarioId, new long[] { total, ahora });
         return total;
@@ -244,11 +250,14 @@ public class ServicioDocumentos {
             }
             long chat = bytesChat.applyAsLong(e.id);
             b += chat;
+            long bin = bytesBinarios.applyAsLong(e.id);
+            b += bin;
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", e.id);
             m.put("nombre", e.nombre);
             m.put("bytes", b);
             m.put("chat", chat);
+            m.put("binarios", bin);
             m.put("documentos", n);
             lista.add(m);
             total += b;
@@ -1777,7 +1786,8 @@ public class ServicioDocumentos {
     }
 
     /** Lo que ve quien abre el enlace: el documento en solo lectura, sin comentarios, partes ni notas del orador. */
-    public Map<String, Object> verPublico(String token) {
+    /** El documento de un enlace para ver (o error si ya no sirve). */
+    public Documento docDeEnlaceVer(String token) {
         Documento d = null;
         if (token != null && token.length() >= 20) {
             for (Espacio e : espacios.todos()) {
@@ -1788,6 +1798,54 @@ public class ServicioDocumentos {
             }
         }
         if (d == null) throw new ErrorNom(ErrorNom.NO_EXISTE, "Este enlace ya no sirve: el propietario lo quitó o el documento ya no existe");
+        return d;
+    }
+
+    /** El documento de un código de proyector vigente (o error). */
+    public Documento docDeProyeccion(String codigo) {
+        return requerir(proyeccionVigente(codigo).docId);
+    }
+
+    /** ¿Lo que se le muestra a quien mira (con el enlace o en el proyector: sin el original de Office, comentarios ni
+        notas) usa ese binario? */
+    public boolean muestraBinario(Documento d, boolean proyeccion, String huella) {
+        EstadoDocumento copia;
+        synchronized (candado(d.id)) { copia = repo.estado(d.id).copia(); }
+        paraMirar(copia, !proyeccion);
+        Set<String> s = new HashSet<>();
+        refsBinarios(copia, s);
+        return s.contains(huella);
+    }
+
+    /** Las huellas de los binarios que usan los documentos del espacio: su estado, sus versiones y la papelera. */
+    public Set<String> binariosUsados(String espacioId) {
+        Set<String> s = new HashSet<>();
+        for (Documento d : repo.delEspacio(espacioId)) {
+            synchronized (candado(d.id)) { refsBinarios(repo.estado(d.id), s); }
+            for (Version v : repo.historial(d.id)) {
+                try { refsEn(repo.fotoVersion(d.id, v.numero), s); } catch (RuntimeException e) { /* una versión ilegible no borra nada */ }
+            }
+        }
+        return s;
+    }
+
+    static final java.util.regex.Pattern REF_BIN = java.util.regex.Pattern.compile("nom:bin/([0-9a-f]{64})");
+
+    private static void refsBinarios(EstadoDocumento est, Set<String> s) {
+        if (est == null) return;
+        est.bloques.values().forEach(campos -> campos.values().forEach(r -> refsEn(r == null ? null : r.v, s)));
+    }
+
+    private static void refsEn(Object v, Set<String> s) {
+        if (v instanceof CharSequence cs) {
+            if (cs.length() >= 72 && cs.toString().contains("nom:bin/")) { var m = REF_BIN.matcher(cs); while (m.find()) s.add(m.group(1)); }
+        } else if (v instanceof Map<?, ?> m) m.values().forEach(x -> refsEn(x, s));
+        else if (v instanceof Iterable<?> it) it.forEach(x -> refsEn(x, s));
+        else if (v instanceof Registro r) refsEn(r.v, s);
+    }
+
+    public Map<String, Object> verPublico(String token) {
+        Documento d = docDeEnlaceVer(token);
         EstadoDocumento copia;
         synchronized (candado(d.id)) { copia = repo.estado(d.id).copia(); }
         // (también sin el archivo de Office original: trae sus propios comentarios, notas y datos del autor)

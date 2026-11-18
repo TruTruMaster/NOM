@@ -58,13 +58,13 @@
     }
     // (la dirección va entre comillas simples: este estilo se escribe dentro de un style="…" con comillas dobles)
     if (f.tipo === "imagen" && f.src && (f.ajuste === "estirar" || f.ajuste === "mosaico")) {
-      const u = urlCss(f.src);
+      const u = urlCss(NOM.srcBin ? NOM.srcBin(f.src) : f.src);
       const px = (v, d) => (isFinite(+v) && +v > 0 ? Math.round(+v * 100) / 100 : d) + "px";
       return f.ajuste === "estirar" ? `#fff url('${u}') 0 0 / 100% 100% no-repeat` : `#fff url('${u}') ${px(f.tx, 0)} ${px(f.ty, 0)} / ${px(f.tw, 48)} ${px(f.th, 48)} repeat`;
     }
     if (f.tipo === "degradado") return `linear-gradient(${+f.angulo || 135}deg, ${f.c1 || "#FFFFFF"}, ${f.c2 || "#CFE0FF"})`;
     if (f.tipo === "rayas") return `repeating-linear-gradient(${f.color || "#FFFDF5"} 0 31px, ${f.linea || "#D7E3F4"} 31px 32px)`;
-    if (f.tipo === "imagen" && f.src) return `${f.ajuste === "ajustar" ? "#000" : "#fff"} url('${urlCss(f.src)}') center / ${f.ajuste === "ajustar" ? "contain" : "cover"} no-repeat`;
+    if (f.tipo === "imagen" && f.src) return `${f.ajuste === "ajustar" ? "#000" : "#fff"} url('${urlCss(NOM.srcBin ? NOM.srcBin(f.src) : f.src)}') center / ${f.ajuste === "ajustar" ? "contain" : "cover"} no-repeat`;
     if (f.tipo === "color") return f.color || "#FFFFFF";
     return "";
   }

@@ -729,7 +729,7 @@
             const w = (bl && bl.w) || e.w || 320;
             // 8.2 Recorte, giro, pie de imagen numerado y texto alrededor (cuadrado a la izquierda o derecha).
             const pie = bl && bl.pie ? `<span class="wd-img-pie"><b>Figura ${numeroFigura(o.dataset.id)}.</b> ${esc(bl.pie)}</span>` : "";
-            o.innerHTML = `<span class="wd-img-caja"><img src="${esc(src)}" alt="${esc((bl && bl.alt) || "")}" draggable="false" style="width:${+w}px"></span>${pie}${ed.soloLectura ? "" : '<span class="wd-tirador" data-tirador title="Arrastra para cambiar el tamaño"></span>'}`;
+            o.innerHTML = `<span class="wd-img-caja"><img src="${esc(NOM.srcBin ? NOM.srcBin(src) : src)}" alt="${esc((bl && bl.alt) || "")}" draggable="false" style="width:${+w}px"></span>${pie}${ed.soloLectura ? "" : '<span class="wd-tirador" data-tirador title="Arrastra para cambiar el tamaño"></span>'}`;
             if (bl && (bl.recorte || +bl.rot)) acomodarImagen($(".wd-img-caja", o), +w, bl.recorte, +bl.rot || 0);
             if (bl && bl.fl && +bl.w > 0) {
               // anclada como en Word: su lugar en la hoja y el texto apartado se calculan al paginar (ver «lo que flota»)
@@ -934,7 +934,7 @@
         const it = sec().item(id), ref = it && it.e && it.e.ref, b = ref ? doc().bloque(ref) : null;
         if (!b) return;
         const r = Object.assign({ iz: 0, d: 0, s: 0, i: 0 }, b.recorte || {});
-        const cuerpoH = html(`<form class="col"><div class="wd-recorte-vista"><span class="wd-img-caja"><img src="${esc(b.src)}" alt=""></span></div>
+        const cuerpoH = html(`<form class="col"><div class="wd-recorte-vista"><span class="wd-img-caja"><img src="${esc(NOM.srcBin ? NOM.srcBin(b.src) : b.src)}" alt=""></span></div>
           ${[["s", "Arriba"], ["i", "Abajo"], ["iz", "Izquierda"], ["d", "Derecha"]].map(([k, t]) => `<div class="lz-desl"><span>${t}</span><input type="range" min="0" max="45" step="1" value="${Math.round(r[k] * 100)}" data-k="${k}"><output>${Math.round(r[k] * 100)}%</output></div>`).join("")}</form>`);
         const pie = html(`<div style="display:contents"><button class="btn" type="button" data-quitar>Sin recorte</button><span class="crece"></span><button class="btn" type="button" data-no>Cancelar</button><button class="btn primario" data-si>Recortar</button></div>`);
         const h = NOM.hoja({ titulo: "Recortar imagen", icono: "image", cuerpo: cuerpoH, pie });
@@ -1894,7 +1894,8 @@
           if (x.m != null) st.push(`padding-left:${iz}px;text-indent:-${fr}px`);
           const marca = x.m != null ? `<span class="wd-cel-marca" style="min-width:${fr}px">${esc(String(x.m))}</span>` : "";
           const runs = (x.r || []).map((t) => {
-            if (t.img) { const w0 = Math.max(4, Math.min(2000, +t.w || 40)), h0 = Math.max(4, Math.min(3000, +t.h || +t.w || 40)); return IMG_OK.test(t.img) ? `<img class="wd-cel-img" src="${t.img}" alt="" style="width:${w0}px;aspect-ratio:${w0} / ${h0};height:auto">` : ""; }
+            if (t.img) { const w0 = Math.max(4, Math.min(2000, +t.w || 40)), h0 = Math.max(4, Math.min(3000, +t.h || +t.w || 40)); const esRef = NOM.binarios && NOM.binarios.esRef(t.img);
+              return IMG_OK.test(t.img) || esRef ? `<img class="wd-cel-img" src="${esRef ? NOM.esc(NOM.srcBin(t.img)) : t.img}" alt="" style="width:${w0}px;aspect-ratio:${w0} / ${h0};height:auto">` : ""; }
             return envolver(String(t.x || ""), t.a || {});
           }).join("");
           return `<div class="wd-cel-p"${st.length ? ` style="${st.join(";")}"` : ""}>${marca}${runs || "<br>"}</div>`;
@@ -3149,7 +3150,7 @@
           if (e.nums && zonaNum === zona) slots[alNum] += (slots[alNum] ? "&emsp;" : "") + esc(textoNumero(n + e.inicio - 1, numPaginas + e.inicio - 1, e.fmt));
           return `<div class="wd-${zona === "enc" ? "enc" : "pie"}">${extra || ""}<span class="izq">${slots.izq}</span><span class="centro">${slots.centro}</span><span class="der">${slots.der}</span></div>`;
         };
-        const logo = e.logo && e.logo.src ? `<img class="wd-logo" src="${esc(e.logo.src)}" alt="" style="height:${Math.min(80, +e.logo.alto || 36)}px">` : "";
+        const logo = e.logo && e.logo.src ? `<img class="wd-logo" src="${esc(NOM.srcBin ? NOM.srcBin(e.logo.src) : e.logo.src)}" alt="" style="height:${Math.min(80, +e.logo.alto || 36)}px">` : "";
         const estiloEP = `font-family:${esc(fb.fuente ? cssFuente(fb.fuente) : "Calibri, Carlito, sans-serif")};font-size:${Math.min(12, +fb.tam || 11)}pt`;
         // Borde de página (de Word): a su distancia del canto de la hoja, o pegado al texto.
         const bp = pg.borde && /^(solid|double|dotted|dashed)$/.test(pg.borde.e) && /^#[0-9a-fA-F]{6}$/.test(pg.borde.c) ? pg.borde : null;

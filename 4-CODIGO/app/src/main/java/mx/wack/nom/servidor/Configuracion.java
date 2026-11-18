@@ -65,6 +65,14 @@ public class Configuracion {
         return s;
     }
 
+    /** Almacén de binarios (imágenes, el Office original; después video y audio): tope por archivo NOM_BINARIOS_MAX_MB. */
+    @Bean
+    public mx.wack.nom.core.servicio.ServicioBinarios servicioBinarios(ServicioEspacios espacios, ServicioDocumentos documentos,
+                                                                     mx.wack.nom.core.almacen.RepositorioBinarios repo,
+                                                                     @Value("${nom.binarios.max-mb:48}") long maxMb) {
+        return new mx.wack.nom.core.servicio.ServicioBinarios(espacios, documentos, repo, maxMb * 1024 * 1024);
+    }
+
     @Bean
     public CodecJson codecJson(AlmacenJson almacen) {
         return new CodecJson() {

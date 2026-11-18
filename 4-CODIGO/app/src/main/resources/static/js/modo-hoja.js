@@ -746,7 +746,7 @@
           if (d.tipo === "imagen") {
             const rc = d.recorte || [0, 0, 0, 0], kw = 1 / Math.max(0.01, 1 - rc[0] - rc[2]), kh = 1 / Math.max(0.01, 1 - rc[1] - rc[3]);
             const bordeI = d.linea && d.linea.c ? `outline:${Math.max(0.5, (d.linea.w || 0.75) * (96 / 72))}px solid ${esc(d.linea.c)};outline-offset:-${Math.max(0.25, ((d.linea.w || 0.75) * (96 / 72)) / 2)}px;` : "";
-            return `<div class="xl-dib" style="${st}overflow:hidden;${bordeI}"><img src="${esc(d.src)}" alt="" style="position:absolute;left:${-rc[0] * kw * 100}%;top:${-rc[1] * kh * 100}%;width:${kw * 100}%;height:${kh * 100}%;max-width:none"></div>`;
+            return `<div class="xl-dib" style="${st}overflow:hidden;${bordeI}"><img src="${esc(NOM.srcBin ? NOM.srcBin(d.src) : d.src)}" alt="" style="position:absolute;left:${-rc[0] * kw * 100}%;top:${-rc[1] * kh * 100}%;width:${kw * 100}%;height:${kh * 100}%;max-width:none"></div>`;
           }
           if (d.tipo === "grafica" && NOM.graficaOffice) {
             let s2 = "";

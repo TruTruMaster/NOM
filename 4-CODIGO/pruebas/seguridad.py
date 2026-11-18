@@ -980,6 +980,38 @@ try:
     c17 = crudo17("PUT", "/api/cuentas/preferencias", {"tema": "auto", "autoguardadoMin": 5, "versionesConservar": 1, "calidad": "alta"}, tk["alumno2"])
     prueba("17.5 …los mensajes propios sí llegan («Se conservan entre 5 y 200 versiones»)", [400, True], [c17[0], "200 versiones" in c17[1]])
 
+    # 18. Almacén de binarios (imágenes y el Office original fuera del documento: ServicioBinarios)
+    import hashlib as _h
+    def rb(m, u, datos=None, t=None):
+        h = {"Content-Type": "application/octet-stream"}
+        if t: h["Authorization"] = "Bearer " + t
+        q = urllib.request.Request(B + u, method=m, data=datos, headers=h)
+        try:
+            with urllib.request.urlopen(q, timeout=30) as x: return x.status, x.read(), {k.lower(): v for k, v in x.headers.items()}
+        except urllib.error.HTTPError as e: return e.code, b"", {}
+    bin18 = secrets.token_bytes(200000); h18 = _h.sha256(bin18).hexdigest()
+    prueba("18.1 Quien edita sube un binario (con su huella)", 200, rb("PUT", f"/api/espacios/{esp}/binarios/{h18}", bin18, tok["editora"])[0])
+    prueba("18.1 Una huella que no coincide con lo que llega: 400", 400, rb("PUT", f"/api/espacios/{esp}/binarios/{'1' * 64}", bin18, tok["editora"])[0])
+    prueba("18.1 Quien solo ve no sube", 403, rb("PUT", f"/api/espacios/{esp}/binarios/{_h.sha256(b'otro').hexdigest()}", b"otro", tok["lectora"])[0])
+    prueba("18.1 Alguien ajeno al espacio no sube", 403, rb("PUT", f"/api/espacios/{esp}/binarios/{_h.sha256(b'ajeno').hexdigest()}", b"ajeno", tok["ajena"])[0])
+    prueba("18.1 Sin sesión no se sube", 401, rb("PUT", f"/api/espacios/{esp}/binarios/{_h.sha256(b'x').hexdigest()}", b"x")[0])
+    c18, b18, k18 = rb("GET", f"/api/espacios/{esp}/binarios/{h18}.png", t=tok["lectora"])
+    prueba("18.2 Quien solo ve lo baja idéntico, como archivo y con caché privada", [200, True, True, True], [c18, b18 == bin18, "private" in k18.get("cache-control", ""), "attachment" in k18.get("content-disposition", "")])
+    prueba("18.2 Alguien ajeno no lo baja", 403, rb("GET", f"/api/espacios/{esp}/binarios/{h18}", t=tok["ajena"])[0])
+    prueba("18.2 Sin sesión no se baja", 401, rb("GET", f"/api/espacios/{esp}/binarios/{h18}")[0])
+    prueba("18.2 Una huella que es una ruta (..%2F) no sale de la carpeta del espacio", 400, rb("GET", f"/api/espacios/{esp}/binarios/..%2F..%2Fnom-db", t=tok["duena"])[0])
+    f18 = (r("POST", f"/api/espacios/{esp}/binarios/faltan", {"huellas": [h18, "2" * 64]}, tok["editora"])[1] or {}).get("faltan", [])
+    prueba("18.3 «Faltan»: solo lo que el espacio no tiene", [False, True], [h18 in f18, "2" * 64 in f18])
+    # el enlace para ver solo entrega lo que su documento muestra
+    en18 = (r("POST", f"/api/documentos/{doc}/enlace-ver", {}, tok["duena"])[1] or {}).get("enlace", "")
+    prueba("18.4 Con el enlace para ver, un binario que el documento no usa: 404", 404, rb("GET", f"/api/ver/{en18}/binarios/{h18}")[0] if en18 else 0)
+    r("POST", f"/api/documentos/{doc}/ops", {"cliente": "s18", "dispositivo": "prueba", "ops": [{"id": "s18:1", "bloque": "img18", "campos": {"tipo": "imagen", "src": f"nom:bin/{h18}.png"}, "t": 18, "n": "s18"}]}, tok["duena"])
+    time.sleep(1)
+    prueba("18.4 …y uno que sí usa, sí (sin sesión)", 200, rb("GET", f"/api/ver/{en18}/binarios/{h18}")[0] if en18 else 0)
+    prueba("18.4 Un enlace inventado no entrega nada", 404, rb("GET", f"/api/ver/{'x' * 32}/binarios/{h18}")[0])
+    alm18 = r("GET", "/api/cuentas/almacenamiento", t=tok["duena"])[1] or {}
+    prueba("18.5 Cuenta en lo que usa la propietaria del espacio", True, any(e.get("id") == esp and e.get("binarios", 0) >= 200000 for e in alm18.get("espacios", [])))
+
     # 3.6 Entrega con fecha límite
     edoc = r("POST", f"/api/espacios/{salon}/documentos", {"nombre": "Tarea 1", "modo": "TEXTO", "ops": []}, tk["alumno1"])[1]["id"]
     prueba("3.6 Un editor no fija la fecha de entrega", 403, r("PUT", f"/api/documentos/{edoc}/entrega", {"limite": int(time.time() * 1000) + 3600_000}, tk["alumno1"])[0])

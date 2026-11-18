@@ -150,7 +150,7 @@
   const COLOR_SVG = /^(#[0-9A-Fa-f]{6}|rgba\(\d+,\d+,\d+,[\d.]+\))$/;
   function pinturaValida(pt) {
     if (!pt || typeof pt !== "object") return false;
-    if (pt.tipo === "img") return typeof pt.src === "string" && /^(data:image\/|blob:|\/api\/)/.test(pt.src);
+    if (pt.tipo === "img") return typeof pt.src === "string" && (/^(data:image\/|blob:|\/api\/)/.test(pt.src) || !!(NOM.binarios && NOM.binarios.esRef(pt.src)));
     if (pt.tipo === "trama") return !!(NOM.geomOffice && NOM.geomOffice.trama(pt.prst, 1)) && /^#[0-9A-Fa-f]{6}$/.test(pt.fg || "") && /^#[0-9A-Fa-f]{6}$/.test(pt.bg || "");
     if (pt.tipo === "lin" || pt.tipo === "rad") return Array.isArray(pt.paradas) && pt.paradas.length >= 2 && pt.paradas.every((q) => Array.isArray(q) && isFinite(q[0]) && COLOR_SVG.test(q[1]));
     return false;
@@ -162,7 +162,7 @@
       const pp = Math.max(0.25, Math.min(4, +pt.pp || 0.75)), lado = n2(pp * 8);
       return `<pattern id="${esc(id)}" patternUnits="userSpaceOnUse" x="0" y="0" width="${lado}" height="${lado}"><rect width="${lado}" height="${lado}" fill="${esc(pt.bg)}"/><path d="${NOM.geomOffice.trama(pt.prst, pp)}" fill="${esc(pt.fg)}"/></pattern>`;
     }
-    if (pt.tipo === "img") return `<pattern id="${esc(id)}" patternUnits="userSpaceOnUse" x="0" y="0" width="${n2(w)}" height="${n2(h)}"><image href="${esc(pt.src)}" x="0" y="0" width="${n2(w)}" height="${n2(h)}" preserveAspectRatio="none"/></pattern>`;
+    if (pt.tipo === "img") return `<pattern id="${esc(id)}" patternUnits="userSpaceOnUse" x="0" y="0" width="${n2(w)}" height="${n2(h)}"><image href="${esc(NOM.srcBin ? NOM.srcBin(pt.src) : pt.src)}" x="0" y="0" width="${n2(w)}" height="${n2(h)}" preserveAspectRatio="none"/></pattern>`;
     if (pt.tipo === "lin") {
       // como PowerPoint: el ángulo va en el sentido de las agujas del reloj y el degradado cubre toda la forma
       const a = ((+pt.ang || 0) * Math.PI) / 180, cx = w / 2, cy = h / 2, L = (Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a))) / 2;
@@ -393,10 +393,10 @@
       // El recorte se dibuja con la imagen completa más grande, desplazada dentro del marco.
       const fw = Math.max(0.05, 1 - (+r.iz || 0) - (+r.d || 0)), fh = Math.max(0.05, 1 - (+r.s || 0) - (+r.i || 0));
       s.push(`position:absolute;max-width:none;width:${(100 / fw).toFixed(3)}%;height:${(100 / fh).toFixed(3)}%;left:${(-(+r.iz || 0) / fw * 100).toFixed(3)}%;top:${(-(+r.s || 0) / fh * 100).toFixed(3)}%;object-fit:fill`);
-      return `<div class="libre-imagen-marco" style="${marco.join(";")}"><img class="libre-imagen" src="${esc(b.src)}" alt="${esc(b.alt || "")}" draggable="false" style="${s.join(";")}"></div>`;
+      return `<div class="libre-imagen-marco" style="${marco.join(";")}"><img class="libre-imagen" src="${esc(NOM.srcBin ? NOM.srcBin(b.src) : b.src)}" alt="${esc(b.alt || "")}" draggable="false" style="${s.join(";")}"></div>`;
     }
-    if (b.mascara) return `<div class="libre-imagen-marco" style="${marco.join(";")}"><img class="libre-imagen" src="${esc(b.src)}" alt="${esc(b.alt || "")}" draggable="false" style="object-fit:cover;border-radius:0;${s.join(";")}"></div>`;
-    return `<img class="libre-imagen" src="${esc(b.src)}" alt="${esc(b.alt || "")}" draggable="false" style="${marco.concat(s).join(";")}">`;
+    if (b.mascara) return `<div class="libre-imagen-marco" style="${marco.join(";")}"><img class="libre-imagen" src="${esc(NOM.srcBin ? NOM.srcBin(b.src) : b.src)}" alt="${esc(b.alt || "")}" draggable="false" style="object-fit:cover;border-radius:0;${s.join(";")}"></div>`;
+    return `<img class="libre-imagen" src="${esc(NOM.srcBin ? NOM.srcBin(b.src) : b.src)}" alt="${esc(b.alt || "")}" draggable="false" style="${marco.concat(s).join(";")}">`;
   }
   /**
    * El dibujo de un ícono: el de la biblioteca local si se conoce, o el guardado pero limpio (solo

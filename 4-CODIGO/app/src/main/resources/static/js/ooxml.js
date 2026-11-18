@@ -64,13 +64,24 @@
 
   /** data:image/png;base64,... → { bytes, ext, w, h } (solo PNG y JPEG; otros se omiten). */
   function imagen(src) {
-    const m = /^data:image\/(png|jpeg|jpg);base64,(.+)$/i.exec(src || "");
-    if (!m) return null;
-    const bin = atob(m[2]), bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const ext = m[1].toLowerCase() === "png" ? "png" : "jpeg";
+    let bytes, ext;
+    if (NOM.binarios && NOM.binarios.esRef(src)) {
+      // del almacén de binarios (ya precargado antes de exportar): se reconoce por sus primeros bytes
+      bytes = NOM.binarios.bytesYa(src);
+      if (!bytes || bytes.length < 24) return null;
+      if (bytes[0] === 0x89 && bytes[1] === 0x50) ext = "png";
+      else if (bytes[0] === 0xFF && bytes[1] === 0xD8) ext = "jpeg";
+      else return null;
+    } else {
+      const m = /^data:image\/(png|jpeg|jpg);base64,(.+)$/i.exec(src || "");
+      if (!m) return null;
+      const bin = atob(m[2]);
+      bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      ext = m[1].toLowerCase() === "png" ? "png" : "jpeg";
+    }
     let w = 800, h = 600;
-    if (ext === "png") { const v = new DataView(bytes.buffer); w = v.getUint32(16); h = v.getUint32(20); }
+    if (ext === "png") { const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength); w = v.getUint32(16); h = v.getUint32(20); }
     else {
       for (let i = 2; i < bytes.length - 9;) {
         if (bytes[i] !== 0xFF) { i++; continue; }
