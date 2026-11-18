@@ -769,7 +769,18 @@
         let s1 = "";
         const A = [];
         for (const t of p.tramos) {
-          if (t.e) { if (!["imagen", "objeto", "nota"].includes(t.e.tipo) || t.e.pie) return null; s1 += OBJ; A.push(null); continue; }
+          if (t.e) {
+            // un marcador no es texto en el original (va aparte y se queda donde estaba); un campo que vino del archivo es
+            // el texto de su resultado (el que está entre «separate» y «end»): así el párrafo se parcha y no se reescribe
+            if (t.e.tipo === "marcador") continue;
+            if (t.e.tipo === "campo" && t.e.orig) {
+              const v = NOM.campos ? NOM.campos.textoVisible(t.e, { idioma: doc.valor("_doc", "idioma") }) : String(t.e.res || "");
+              for (let k = 0; k < v.length; k++) A.push(t.e.a || {});
+              s1 += v; continue;
+            }
+            if (!["imagen", "objeto", "nota"].includes(t.e.tipo) || t.e.pie) return null;
+            s1 += OBJ; A.push(null); continue;
+          }
           const a = t.a || {};
           if (a.sug || a.sugBorrar) return null;
           for (let k = 0; k < t.x.length; k++) A.push(a);
@@ -2388,7 +2399,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       const nombre = (/^=/.test(codigo) ? "=" : (codigo.split(" ")[0] || "")).toUpperCase();
       if (!CAMPOS_VIVOS.has(nombre) || texto == null || tramos.slice(f.ini, r0).some((t) => t.e)) return;   // se queda como su texto
       tramos.length = f.ini;
-      tramos.push({ e: { tipo: "campo", instr: codigo, res: texto, a: Object.assign({}, (resTr[0] && resTr[0].a) || f.a || {}), idioma: f.idioma || undefined }, a: {} });
+      tramos.push({ e: { tipo: "campo", instr: codigo, res: texto, a: Object.assign({}, (resTr[0] && resTr[0].a) || f.a || {}), idioma: f.idioma || undefined, orig: true }, a: {} });
     }
     const ESTILO_POR_NOMBRE = (nm) => (/^heading 1$|^título 1$/.test(nm) ? "h1" : /^heading 2$|^título 2$/.test(nm) ? "h2" : /^heading [3-9]$|^título [3-9]$/.test(nm) ? "h3"
       : nm === "title" || nm === "título" ? "titulo" : nm === "subtitle" || nm === "subtítulo" ? "subtitulo" : /quote|cita/.test(nm) ? "cita" : null);

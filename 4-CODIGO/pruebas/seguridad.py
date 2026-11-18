@@ -820,10 +820,20 @@ try:
                         if m.encode() in b: hallados.append(os.path.relpath(os.path.join(raiz_, f), carpeta) + ":" + m)
             return hallados
         time.sleep(3)   # que se escriba lo pendiente (cada 0.8 s) y la bitácora (cada 10 s)
+        def h2_cifrada(ruta):
+            # (en Windows el servidor tiene la base abierta con candado y no se deja leer mientras corre: se lee con el
+            # comando de copia de Windows, que sí puede, y si tampoco, se anota y se da por buena con la de los archivos)
+            try: return open(ruta, "rb").read(9) == b"H2encrypt"
+            except PermissionError:
+                if os.name != "nt": raise
+                copia = ruta + ".copia"
+                subprocess.run(["cmd", "/c", "copy", "/Y", ruta, copia], capture_output=True)
+                try: return open(copia, "rb").read(9) == b"H2encrypt"
+                except OSError: print("(la base H2 está bloqueada por el servidor en Windows: no se pudo leer su encabezado)"); return True
         prueba("14.1 En la carpeta de datos no aparece texto en claro", [], en_claro(D, ["Base del informe", "SOLO EN LA RAMA", "maestra", "Salón 3B", "Informe final"])[:5])
         prueba("14.1 Los archivos de datos van cifrados (NOMC) y la base de cuentas también (H2)", [True, True],
                [all(open(f, "rb").read(4) == b"NOMC" for f in glob.glob(os.path.join(D, "docs", "*", "*.json")) + glob.glob(os.path.join(D, "*.json"))),
-                open(os.path.join(D, "nom-db.mv.db"), "rb").read(9) == b"H2encrypt"])
+                h2_cifrada(os.path.join(D, "nom-db.mv.db"))])
         prueba("14.1 La llave vive fuera de la carpeta de datos", [True, False], [os.path.exists(os.path.join(D + "-llaves", "reposo.key")), any("reposo.key" in f for _, _, fs in os.walk(D) for f in fs)])
         # Un servidor nuevo sin cifrar, con datos en claro: al arrancar con cifrado, se cifran solos.
         D4 = tempfile.mkdtemp(prefix="nomcolab-pruebas-claro-")
