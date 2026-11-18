@@ -1,6 +1,9 @@
 # Relevo general: qué está confirmado, qué no y qué falta construir (17 de noviembre de 2026, noche)
 
-Este es el relevo para la siguiente sesión. **Leerlo primero**, junto con `PLAN-CONSTRUCCION.md` (fases y marcas),
+> **Desde la noche del 17-nov, leer primero `RELEVO-17NOV-NOCHE.md`** (lo ya corregido y comprobado, y lo que falta,
+> en corto). Este documento conserva el detalle.
+
+Este es el relevo para la siguiente sesión. **Leerlo**, junto con `PLAN-CONSTRUCCION.md` (fases y marcas),
 `LOG.md` (entradas 71 a 80), `RELEVO-17NOV-ANIMACIONES.md` (detalle de PowerPoint), `RELEVO-17NOV-LISTA-OFFICE.md`
 (detalle de Word, Excel, contraseñas, tablas), `PARIDAD-OFFICE-REAL.md` (cómo se mide contra Office real) y
 `PLAN-MEDIOS.md` (video y audio). Aquí no se repite el detalle técnico: se dice **qué está probado de verdad, qué solo

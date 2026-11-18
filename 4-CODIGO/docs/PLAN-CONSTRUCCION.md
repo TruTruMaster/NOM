@@ -738,6 +738,9 @@ sesión anterior: `./desplegar.sh roles` para las columnas nuevas de usuarios.
 
 ## Orden recomendado para la siguiente sesión
 
+**Desde el 17 de noviembre de 2026 (noche):** leer primero `docs/RELEVO-17NOV-NOCHE.md` (lo ya corregido y comprobado y
+lo que falta, en corto) y luego `docs/RELEVO-ESTADO-Y-PENDIENTES.md`.
+
 **Desde el 17 de noviembre de 2026 (tarde):** leer primero `docs/RELEVO-ESTADO-Y-PENDIENTES.md` (qué está
 confirmado contra Office real, qué solo se escribió, qué falta construir de Word, Excel y PowerPoint y cómo
 emparejarlo con lo que NOM ya tenía). Lo de abajo es lo de antes.
