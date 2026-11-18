@@ -12,9 +12,9 @@ espacio, hasta 48 MB por archivo). **En pantalla**, casi todo se ve como en Offi
 
 | Programa | Todavía no se ve igual en el editor |
 |---|---|
-| Word | La división automática de palabras con guion, los tabuladores con puntos guía (los índices), las tablas flotantes con el texto alrededor, las imágenes EMF y WMF, los campos que Word actualiza solo (fecha, referencias cruzadas, índice: se ve el último valor guardado) y los controles de formulario (casilla, lista, fecha) |
-| Excel | Los minigráficos, las segmentaciones, los comentarios con hilo de Excel 365, las imágenes EMF y WMF y las gráficas 3D que no son de columnas ni circulares. Las tablas dinámicas se ven como en Excel, pero todavía no se crean ni se cambian sus campos |
-| PowerPoint | La transición Transformar (Morph) todavía no se mueve exactamente como en PowerPoint, los efectos 3D de las formas, los modelos 3D y las imágenes EMF y WMF. El texto puede quedar 1 o 2 píxeles más arriba |
+| Word | La división automática de palabras con guion, los tabuladores con puntos guía (los índices), las tablas flotantes con el texto alrededor, las notas al final y los controles de formulario (casilla, lista, fecha). Las letras dentro de una imagen EMF o WMF usan las de tu equipo |
+| Excel | Los minigráficos, las segmentaciones, los comentarios con hilo de Excel 365 y las gráficas 3D que no son de columnas ni circulares. Las tablas dinámicas se ven como en Excel, pero todavía no se crean ni se cambian sus campos |
+| PowerPoint | La transición Transformar (Morph) todavía no se mueve exactamente como en PowerPoint, los efectos 3D de las formas y los modelos 3D. El texto puede quedar 1 o 2 píxeles más arriba |
 
 Las letras de Office se cambian por letras de NOM que miden exactamente lo mismo (NOM CAL para Calibri,
 NOM AR para Arial, NOM TI para Times New Roman y 29 más), así que el texto corta en el mismo lugar que en

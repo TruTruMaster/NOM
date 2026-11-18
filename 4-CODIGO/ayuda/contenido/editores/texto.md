@@ -3,8 +3,8 @@ titulo: El editor de texto
 descripcion: Como un procesador de textos, letra por letra con tu equipo.
 orden: 10
 aplica: Navegador, App Android, Teléfono que comparte
-actualizado: 2026-11-13
-version: 0.13.0
+actualizado: 2026-11-18
+version: 0.17.0
 ---
 Varias personas escriben a la vez, **hasta en la misma palabra**, y todos ven lo mismo.
 
@@ -19,6 +19,11 @@ Varias personas escriben a la vez, **hasta en la misma palabra**, y todos ven lo
 - **Página**: tamaño, márgenes en cm, encabezado y pie con número de página.
 - **Citas en APA**: fuentes con autollenado por DOI, ISBN o dirección web, cita «(Autor, año)» y
   lista de referencias. Panel **Investigar** (Wikipedia, libros y artículos) y fichas de trabajo.
+- **Campos de Word** (fecha, número de página, «Figura 1» con SEQ, referencias a un marcador y a su página, IF,
+  fórmulas, propiedades del documento): se ve su último valor, como en Word; **Actualizar campos** (F9, en
+  **Insertar**, en la ruedita → **Más** o en la paleta) los calcula otra vez para todos los del documento; **Alt+F9**
+  muestra sus códigos; **Insertar → Campo (como en Word)** pone uno nuevo con su código.
+- **Imágenes EMF y WMF** y las ecuaciones viejas de Word (Editor de ecuaciones, MathType) se ven como en Word.
 - **Buscar y reemplazar** (Ctrl+F).
 - Pegar un enlace sobre texto seleccionado lo convierte en vínculo.
 

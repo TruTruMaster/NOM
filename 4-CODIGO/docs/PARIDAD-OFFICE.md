@@ -64,7 +64,7 @@ archivo de Office se muestra (y se conserva al descargar), pero no se crea ni se
 | Inicio · Edición | Buscar, reemplazar, seleccionar | Sí |
 | Insertar · Páginas | Portada, página en blanco, salto | Salto sí; portada de la galería no («Armar reporte» hace la suya) |
 | Insertar · Tablas | Insertar, dibujar, convertir, Excel incrustado | Insertar, combinar, bordes, rellenos, encabezado, anchos: sí; estilos de tabla de Word se ven; dibujar, convertir texto↔tabla y Excel incrustado: no |
-| Insertar · Ilustraciones | Imágenes, formas, iconos, 3D, SmartArt, gráfico, captura | Imágenes sí (recortar, girar, texto alrededor, pie, texto alternativo). Formas, SmartArt y gráficos **se ven**; insertarlos en un texto: no. Iconos, modelos 3D y captura: no. EMF/WMF: no se ven |
+| Insertar · Ilustraciones | Imágenes, formas, iconos, 3D, SmartArt, gráfico, captura | Imágenes sí (recortar, girar, texto alrededor, pie, texto alternativo). Formas, SmartArt y gráficos **se ven**; insertarlos en un texto: no. Iconos, modelos 3D y captura: no. **EMF/WMF: sí** (18-nov: `js/emf.js`; 535 metarchivos del corpus contra cómo los muestra Word real, `metarchivos_real.py`: parecido 96.2 %, 88.5 % en lo dibujado; las ecuaciones viejas y los objetos incrustados se ven con su vista previa; falta: las letras dentro del dibujo usan las del equipo) |
 | Insertar · Vínculos y comentarios | Vínculo, marcador, referencia cruzada, comentario | Vínculo y comentario sí; marcador y referencia cruzada no |
 | Insertar · Encabezado y pie | Encabezado, pie, número de página | Sí (primera página distinta, «1 de 5», por sección al importar) |
 | Insertar · Texto | Cuadro de texto, WordArt, letra capital, firma, fecha, objeto | Fecha (fija) e insertar el contenido de otro Word: sí. Cuadros de texto y letra capital **se ven**; WordArt, firma y objetos: no |
@@ -77,7 +77,7 @@ archivo de Office se muestra (y se conserva al descargar), pero no se crea ni se
 | Revisar | Ortografía, Editor, contar palabras, accesibilidad, traducir, idioma, comentarios, control de cambios, comparar, proteger | Contar palabras, comentarios y proteger: sí. **Control de cambios: a medias** (NOM tiene su modo sugerencia con aceptar y rechazar; los cambios marcados de un Word se muestran ya aplicados, sin sus marcas). Comparar, traducir, idioma y Editor: no |
 | Vista | Lectura, diseño de impresión, web, esquema, borrador, regla, cuadrícula, panel de navegación, zoom, ventanas, macros | Páginas o continuo, panel de esquema (títulos), zoom, modo enfoque: sí. Lectura, borrador, regla, cuadrícula y ventanas: no. Macros: no |
 | Formato de imagen (contextual) | Recortar, ajustar, estilos, ajuste del texto, girar, tamaño | Recortar, girar, ajuste del texto, tamaño, texto alternativo: sí; estilos y correcciones de imagen: no (los filtros están en presentaciones) |
-| Campos (los «75») | Insertar, actualizar, ver código | Se ve el último valor que guardó Word en todos. `PAGE`, `NUMPAGES`, `SECTIONPAGES` se calculan; `TOC` se escribe al descargar; `HYPERLINK` son vínculos. Actualizar `DATE`, `REF`, `SEQ`, `PAGEREF`, `MERGEFIELD`, `IF`, `=`, etc.: no |
+| Campos (los «75») | Insertar, actualizar, ver código | **Sí** (18-nov, `js/campos.js`): como Word, se ve el último valor (fecha y hora al día) y **Actualizar campos (F9)** calcula `DATE`/`TIME`/`CREATEDATE`/`SAVEDATE` con `\@`, `SEQ` (`\c \r \h \s`), `REF`, `PAGEREF` (`\p`), `PAGE`, `NUMPAGES`, `IF`, `=` (fórmulas y funciones, `\#`), `\*` (ROMAN, ALPHABETIC, CardText, OrdText, Ordinal, DollarText, Upper, Lower, Caps, FirstCap), `AUTHOR`, `TITLE`, `SUBJECT`, `DOCPROPERTY`, `STYLEREF`, `FILENAME`, `NUMWORDS`; **55 de 55 iguales a Word 2024** (`campos_real.py`). Ver códigos (Alt+F9) e insertar campo: sí. Falta: `MERGEFIELD` con el origen de datos de Word, `NOTEREF`, `TOC` actualizable, índice (`XE`/`INDEX`) |
 | Controles de contenido y formularios | Casilla, lista, fecha, texto | Se conservan y su texto se edita; como formulario: no |
 | VBA, modo seguro, automatización | | No |
 
@@ -105,6 +105,8 @@ w06 84.5 %, w07 91.2 %, w08 94.3 %, w09 77.3 %, w10 34.0 %, w11 100 %, w12 77.8 
 | VBA, Python en Excel, Power Query (M), Power Pivot y DAX, cubos | | No |
 
 **Funciones.** NOM tiene **230** (con sus nombres en español y en inglés), con matrices dinámicas, `LET` y `LAMBDA`.
+Comprobadas contra **Excel 2024 real** (18-nov, `funciones_excel.py`: Excel escribe cada fórmula con `Formula2`, calcula y
+devuelve el valor o el error exacto): **183 de 183** fórmulas iguales (antes se comparaba contra LibreOffice).
 De las 261 que enumera el inventario tiene 118:
 
 | Categoría (lista del inventario) | NOM | Faltan |

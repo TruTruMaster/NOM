@@ -19,6 +19,13 @@ version: 0.17.0
 - **Copiar o mover** un documento a otro espacio se lleva sus imágenes. Lo que ya ningún documento usa (ni sus
   versiones ni la papelera) se borra solo a los 30 días, y lo que ocupa cuenta en el espacio de tu cuenta.
 - Si la red se corta justo al crear o subir un documento, al reintentar **ya no queda dos veces**.
+- **Campos de Word que se actualizan, como en Word:** la fecha, el número de página, los títulos numerados
+  («Figura 1», «Tabla II»), las referencias a un marcador y a su página, las condiciones (IF), las fórmulas (=) y las
+  propiedades del documento. Se ve su último valor y **Actualizar campos (F9)** los calcula otra vez; Alt+F9 muestra
+  sus códigos; **Insertar → Campo** pone uno nuevo. Comprobado contra Word 2024: los 55 campos de prueba dan lo mismo.
+- **Imágenes EMF y WMF** (los dibujos de Windows) se ven, también las **ecuaciones viejas** de Word (Editor de
+  ecuaciones 3.0 y MathType) y los **objetos incrustados** con su vista previa, como en Word. Al descargar sale el
+  archivo original, idéntico.
 - **Arreglos:** el enlace para ver de un texto o una hoja muestra sus imágenes; un Word guardado como .nom y vuelto
   a abrir ya no reescribe al descargar los párrafos con ecuaciones (salen idénticos al original).
 

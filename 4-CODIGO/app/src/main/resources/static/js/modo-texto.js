@@ -1696,6 +1696,10 @@
         return pos;
       }
       this.textoApi = {
+        /** Campos de Word: actualizar (F9), ver códigos (Alt+F9), insertar uno. */
+        actualizarCampos: () => actualizarCampos(),
+        alternarCodigos: () => alternarCodigos(),
+        insertarCampo: () => insertarCampo(),
         /** Inserta texto con formato donde quedó el cursor (reemplaza lo elegido). */
         insertarTramos(tramos, meta) {
           if (ed.soloLectura) return false;
@@ -4620,6 +4624,8 @@
             { texto: "Borrar formato", icono: "remove-formatting", mantener: true, fn: con(borrarFormato) },
             { texto: "Tachado", icono: "strikethrough", marcado: !!a.s, mantener: true, fn: con(() => alternar("s")) },
             { texto: "Comentar", icono: "message-square", fn: con(() => NOM.comentarios && NOM.comentarios.nuevo(ed)) },
+            ...(cuerpo.querySelector(".wd-campo[data-obj]") ? [{ texto: "Actualizar campos", corto: "Campos", icono: "refresh-cw", fn: con(() => actualizarCampos()) },
+              { texto: verCodigos ? "Ver valores de campos" : "Ver códigos de campos", corto: "Códigos", icono: "code", fn: con(() => alternarCodigos()) }] : []),
             ctx.propietario ? { texto: "Asignar párrafo a…", corto: "Asignar", icono: "user-check", fn: con(() => asignarParrafos(parrafosDeSel(s))) }
               : { texto: modoSug ? "Apagar sugerencias" : "Sugerir cambios", corto: modoSug ? "Sin sugerir" : "Sugerir", icono: "pen-line", marcado: modoSug, fn: con(() => alternarSugerencias()) }] },
         ];
@@ -4787,6 +4793,11 @@
     herramientas() { return this._herr || []; },
     acciones() {
       const a = [];
+      if (this.textoApi && NOM.campos) {
+        a.push({ texto: "Actualizar campos (F9)", icono: "refresh-cw", fn: () => this.textoApi.actualizarCampos(), claves: "campos word fecha seq ref pageref numero pagina actualizar f9" });
+        a.push({ texto: "Ver los códigos de los campos (Alt+F9)", icono: "code", fn: () => this.textoApi.alternarCodigos(), claves: "campos codigos word alt f9" });
+        a.push({ texto: "Insertar un campo (como en Word)…", icono: "braces", fn: () => this.textoApi.insertarCampo(), claves: "campo word fecha page seq ref insertar" });
+      }
       if (NOM.citas && this.textoApi) {
         const ed = NOM.editorActual;
         a.push({ texto: "Investigar (Wikipedia, libros y artículos)", icono: "book-open", fn: () => NOM.citas.abrir(ed), claves: "buscar fuentes fichas citar wikipedia libros articulos investigacion" });
