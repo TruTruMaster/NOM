@@ -21,6 +21,10 @@ DATOS = {  # hoja de datos: columnas A a C
     "C1": "hola-mundo-fin", "C2": "Texto con  espacios", "C3": "abc", "C4": 46340.6076388889, "C5": "ñandú", "C6": True, "C7": "", "C8": "12",
     "E1": -1000, "E2": 300, "E3": 420, "E4": 680,
     "F1": 1, "F2": 3, "F3": 3, "F4": 5,
+    # base de datos (A20:C24) y criterios (E20:F21); flujos con fechas (G20:H24)
+    "A20": "Nombre", "B20": "Edad", "C20": "Pago", "A21": "Ana", "B21": 20, "C21": 100, "A22": "Beto", "B22": 35, "C22": 250, "A23": "Ceci", "B23": 28, "C23": 175, "A24": "Dani", "B24": 41, "C24": 90,
+    "E20": "Edad", "F20": "Pago", "E21": ">25", "F21": ">100",
+    "G20": -10000, "G21": 2750, "G22": 4250, "G23": 3250, "G24": 2750, "H20": 39448, "H21": 39508, "H22": 39751, "H23": 39859, "H24": 39904,
 }
 # (fórmula con nombres en inglés y comas). FECHA de referencia: 46340 = 14/11/2026 (sábado).
 CASOS = [
@@ -54,6 +58,35 @@ CASOS = [
     # referencias
     "ROW(A7)", "COLUMN(C5)", "ROWS(A1:B8)", "COLUMNS(A1:C8)", "ROW(B3:C9)", "ADDRESS(3,2)", "ADDRESS(3,2,4)", "ADDRESS(10,28,2)", "INDIRECT(\"A\"&2)", "SUM(INDIRECT(\"A1:A4\"))",
     "SUM(OFFSET(A1,1,0,3,1))", "OFFSET(A1,2,1)", "SUM(OFFSET(A1:A2,2,1))", "ROW()", "COLUMN()",
+    # 18-nov-2026: las que faltaban (matemáticas, fechas, estadística, bases de datos, financieras, ingeniería)
+    "ACOSH(2)", "ASINH(1.5)", "ATANH(0.5)", "ACOT(2)", "ACOTH(3)", "COT(0.7)", "COTH(0.7)", "CSC(0.7)", "CSCH(0.7)", "SEC(0.7)", "SECH(0.7)",
+    "CEILING.PRECISE(-4.3,2)", "FLOOR.PRECISE(-4.3,2)", "ISO.CEILING(4.3,2)", "COMBINA(4,3)", "PERMUTATIONA(3,2)", "FACTDOUBLE(7)", "FACTDOUBLE(8)",
+    "MULTINOMIAL(2,3,4)", "SERIESSUM(2,0,1,B1:B4)", "SQRTPI(2)", "SUMX2MY2(A1:A4,B1:B4)", "SUMX2PY2(A1:A4,B1:B4)", "SUMXMY2(A1:A4,B1:B4)",
+    "NETWORKDAYS.INTL(DATE(2026,11,1),DATE(2026,11,30),11)", "NETWORKDAYS.INTL(DATE(2026,11,1),DATE(2026,11,30),\"0000011\")", "NETWORKDAYS.INTL(DATE(2026,11,1),DATE(2026,11,30),7)",
+    "WORKDAY.INTL(DATE(2026,11,13),5,11)", "WORKDAY.INTL(DATE(2026,11,13),-4,\"1000001\")",
+    "YEARFRAC(DATE(2024,1,15),DATE(2026,11,14))", "YEARFRAC(DATE(2024,1,15),DATE(2026,11,14),1)", "YEARFRAC(DATE(2024,1,15),DATE(2026,11,14),2)",
+    "YEARFRAC(DATE(2024,1,15),DATE(2026,11,14),3)", "YEARFRAC(DATE(2024,1,31),DATE(2024,3,31),4)", "YEARFRAC(DATE(2026,2,28),DATE(2026,8,31),0)",
+    "DEVSQ(A1:A8)", "KURT(A1:A8)", "SKEW(A1:A8)", "SKEW.P(A1:A8)", "TRIMMEAN(A1:A8,0.25)", "STANDARDIZE(42,40,1.5)", "FISHER(0.75)", "FISHERINV(0.97)",
+    "PHI(0.75)", "GAUSS(1.5)", "GAMMA(2.5)", "GAMMA(-1.5)", "GAMMALN(10)", "GAMMALN.PRECISE(4.5)", "ERF(0.745)", "ERF(0.5,1.2)", "ERFC(1)", "ERF.PRECISE(-0.3)",
+    "NORM.DIST(42,40,1.5,TRUE)", "NORM.DIST(42,40,1.5,FALSE)", "NORM.S.DIST(1.333,TRUE)", "NORM.S.DIST(1.333,FALSE)", "NORM.INV(0.908789,40,1.5)", "NORM.S.INV(0.025)",
+    "EXPON.DIST(0.2,10,TRUE)", "EXPON.DIST(0.2,10,FALSE)", "BINOM.DIST(6,10,0.5,FALSE)", "BINOM.DIST(6,10,0.5,TRUE)", "POISSON.DIST(2,5,FALSE)", "POISSON.DIST(2,5,TRUE)",
+    "GAMMA.DIST(10.00001131,9,2,FALSE)", "GAMMA.DIST(10.00001131,9,2,TRUE)", "GAMMA.INV(0.068094,9,2)", "CHISQ.DIST(0.5,1,TRUE)", "CHISQ.DIST(2,3,FALSE)",
+    "CHISQ.DIST.RT(18.307,10)", "CHISQ.INV(0.93,1)", "CHISQ.INV.RT(0.050001,10)", "T.DIST(60,1,TRUE)", "T.DIST(8,3,FALSE)", "T.DIST.2T(1.959999998,60)",
+    "T.DIST.RT(1.959999998,60)", "T.INV(0.75,2)", "T.INV.2T(0.546449,60)", "F.DIST(15.2069,6,4,TRUE)", "F.DIST(15.2069,6,4,FALSE)", "F.DIST.RT(15.2069,6,4)",
+    "F.INV(0.01,6,4)", "F.INV.RT(0.01,6,4)", "BETA.DIST(2,8,10,TRUE,1,3)", "BETA.DIST(2,8,10,FALSE,1,3)", "BETA.INV(0.685470581,8,10,1,3)",
+    "CONFIDENCE.NORM(0.05,2.5,50)", "CONFIDENCE.T(0.05,1,50)", "PERCENTILE.EXC(A1:A8,0.25)", "QUARTILE.EXC(A1:A8,3)",
+    "NORMDIST(42,40,1.5,TRUE)", "NORMSDIST(1.333)", "NORMINV(0.908789,40,1.5)", "NORMSINV(0.908789)", "EXPONDIST(0.2,10,TRUE)", "BINOMDIST(6,10,0.5,FALSE)",
+    "CHIDIST(18.307,10)", "CHIINV(0.050001,10)", "TDIST(1.96,60,2)", "TDIST(1.96,60,1)", "TINV(0.05,60)", "FDIST(15.2069,6,4)", "FINV(0.01,6,4)", "CONFIDENCE(0.05,2.5,50)",
+    "GAMMADIST(10.00001131,9,2,TRUE)", "GAMMAINV(0.068094,9,2)", "BETADIST(2,8,10,1,3)", "BETAINV(0.685470581,8,10,1,3)",
+    "DSUM(A20:C24,\"Pago\",E20:E21)", "DAVERAGE(A20:C24,3,E20:E21)", "DCOUNT(A20:C24,\"Pago\",E20:F21)", "DCOUNTA(A20:C24,\"Nombre\",E20:E21)", "DMAX(A20:C24,\"Pago\",E20:E21)",
+    "DMIN(A20:C24,\"Pago\",E20:E21)", "DPRODUCT(A20:C24,\"Edad\",E20:E21)", "DGET(A20:C24,\"Nombre\",E20:F21)", "DSTDEV(A20:C24,\"Pago\",E20:E21)", "DSTDEVP(A20:C24,\"Pago\",E20:E21)",
+    "DVAR(A20:C24,\"Pago\",E20:E21)", "DVARP(A20:C24,\"Pago\",E20:E21)",
+    "SYD(30000,7500,10,1)", "SYD(30000,7500,10,10)", "DDB(2400,300,10,1)", "DDB(2400,300,10,8)", "DDB(2400,300,120,2,1.5)", "DB(1000000,100000,6,1,7)", "DB(1000000,100000,6,7,7)",
+    "DB(1000000,100000,6,3)", "VDB(2400,300,10,0,1)", "VDB(2400,300,10,6,10)", "VDB(2400,300,120,6,18,1.5)", "VDB(2400,300,10,0,0.875,1.5)",
+    "XNPV(0.09,G20:G24,H20:H24)", "XIRR(G20:G24,H20:H24)", "MIRR(E1:E4,0.1,0.12)", "PDURATION(0.025,2000,2200)", "RRI(96,10000,11000)", "FVSCHEDULE(1,{0.09,0.11,0.1})",
+    "ISPMT(0.1/12,1,36,8000000)", "DOLLARDE(1.02,16)", "DOLLARFR(1.125,16)",
+    "BIN2HEX(11111011,4)", "BIN2HEX(1110)", "BIN2OCT(1001,3)", "HEX2BIN(\"F\",8)", "HEX2OCT(\"3B4E\")", "OCT2BIN(3,3)", "OCT2HEX(100,4)", "HEX2BIN(\"FFFFFFFFFF\")",
+    "BITAND(13,25)", "BITOR(23,10)", "BITXOR(5,3)", "BITLSHIFT(4,2)", "BITRSHIFT(13,2)", "DELTA(5,4)", "DELTA(5,5)", "GESTEP(5,4)", "GESTEP(-4,-5)",
 ]
 WIN = os.environ.get("NOM_WINDOWS", "user@100.65.29.5")
 AQUI = Path(__file__).resolve().parent
@@ -84,14 +117,21 @@ JS = r"""
 """
 
 
-def igual(xl, nuestro):
+# Las que Excel resuelve iterando hasta su precisión documentada («0.000001 por ciento»): la tasa vale si difiere menos
+# de 1e-8 (Excel no publica su método y su resultado tampoco es la raíz exacta).
+ITERATIVAS = ("IRR(", "XIRR(", "RATE(")
+
+
+def igual(xl, nuestro, formula=""):
     """Excel (valor, error o texto de la celda) contra el valor de NOM."""
-    if "e" in xl: return "e" in nuestro and str(nuestro["e"]).upper() == xl["e"].upper()
+    ES = {"#VALOR!": "#VALUE!", "#¡VALOR!": "#VALUE!", "#NOMBRE?": "#NAME?", "#¿NOMBRE?": "#NAME?", "#NULO!": "#NULL!", "#¡NULO!": "#NULL!", "#¡DIV/0!": "#DIV/0!", "#¡REF!": "#REF!", "#¡NUM!": "#NUM!"}
+    if "e" in xl: return "e" in nuestro and ES.get(str(nuestro["e"]).upper(), str(nuestro["e"]).upper()) == xl["e"].upper()
     if "e" in nuestro: return False
     if "b" in xl: return "b" in nuestro and nuestro["b"] == xl["b"]
     if "n" in xl:
         if "n" not in nuestro: return False
         x = xl["n"]
+        if formula.startswith(ITERATIVAS): return abs(x - nuestro["n"]) <= 1e-8
         return abs(x - nuestro["n"]) <= 1e-9 * max(1.0, abs(x))
     return "t" in nuestro and nuestro["t"] == xl.get("t", "")
 
@@ -109,7 +149,7 @@ def main():
         nav.close()
     bien = mal = 0
     for f, xl, n in zip(CASOS, de_xl, nuestros):
-        if igual(xl, n):
+        if igual(xl, n, f):
             bien += 1
             if detalle: print(f"  ok   {f} = {xl.get('texto')}")
         else: mal += 1; print(f"  MAL  {f}: Excel = {xl}, NOM = {n}")
