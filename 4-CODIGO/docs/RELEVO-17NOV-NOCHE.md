@@ -1,5 +1,7 @@
 # Relevo del 17 de noviembre de 2026 (noche): lo que ya quedó corregido y lo que falta
 
+> **Desde la madrugada del 18-nov, leer primero `RELEVO-18NOV.md`** (la Pi apagada, lo hecho y lo que falta).
+
 **Leer este primero.** Es el relevo que manda desde la noche del 17-nov. El detalle (tablas de medición, la lista de
 emparejamiento de cada función, el orden por fases) sigue en `RELEVO-ESTADO-Y-PENDIENTES.md`; el inventario de Office
 contra NOM, en `PARIDAD-OFFICE.md`.

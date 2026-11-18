@@ -738,6 +738,10 @@ sesión anterior: `./desplegar.sh roles` para las columnas nuevas de usuarios.
 
 ## Orden recomendado para la siguiente sesión
 
+**Desde el 18 de noviembre de 2026 (madrugada):** leer primero `docs/RELEVO-18NOV.md` (la Raspberry quedó apagada
+tras probar el kernel con NVMe; lo comprobado para la 0.16.0; el almacén de binarios y el acomodo de Word como
+siguientes bloques).
+
 **Desde el 17 de noviembre de 2026 (noche):** leer primero `docs/RELEVO-17NOV-NOCHE.md` (lo ya corregido y comprobado y
 lo que falta, en corto) y luego `docs/RELEVO-ESTADO-Y-PENDIENTES.md`.
 
