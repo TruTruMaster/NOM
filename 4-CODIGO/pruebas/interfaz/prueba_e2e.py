@@ -107,6 +107,38 @@ def main():
             check("…y lo ve en la ventana del chat", "hola, esto es privado" in B.p.evaluate("() => document.querySelector('.chat-lista').innerText"), "")
             B.p.fill(".chat-escribir textarea", "respuesta de Beto"); B.p.keyboard.press("Enter"); B.p.wait_for_timeout(1500)
             check("Beto contesta desde el chat", "respuesta de Beto" in A.p.evaluate(f"() => NOM.api.get('/api/espacios/{e['id']}/chat').then(r => r.mensajes.map(m => m.texto).join('|'))"), "")
+            print("\n== Almacén de binarios en el espacio cifrado", flush=True)
+            r_img = A.p.evaluate("""async (espId) => {
+              const cv = document.createElement('canvas'); cv.width = 300; cv.height = 300; const g = cv.getContext('2d');
+              for (let i = 0; i < 4000; i++) { g.fillStyle = 'hsl(' + Math.floor(Math.random() * 360) + ',70%,50%)'; g.fillRect(Math.random() * 300, Math.random() * 300, 7, 7); }
+              const png = cv.toDataURL('image/png');
+              const ops = [{ id: 'e:1', bloque: 'img1', campos: { tipo: 'imagen', pagina: 'p1', x: 10, y: 10, w: 300, h: 300, src: png }, t: 1, n: 'e' }];
+              const d = await NOM.binarios.crearEnEspacio({ id: espId, e2e: true }, 'Con imagen cifrada', 'PRESENTACION', ops);
+              return { doc: d.id, png: png.slice(22, 80) };
+            }""", e["id"])
+            dimg = r_img["doc"]
+            A.p.goto(N.B + "/#/doc/" + dimg); A.p.wait_for_selector(".ed-herramientas", timeout=15000); A.p.wait_for_timeout(1500)
+            ref = A.p.evaluate("() => [...NOM.binarios.refsDoc(NOM.editorActual.doc)][0] || ''")
+            check("el documento cifrado lleva su imagen en el almacén (una referencia)", ref.startswith("nom:bin/"), ref)
+            st2 = json.dumps((N.api("GET", f"/api/documentos/{dimg}", None, a["token"])[1] or {}).get("estado", {}))
+            check("…el servidor no ve ni la referencia ni la imagen", "nom:bin/" not in st2 and r_img["png"] not in st2, st2[:160])
+            import hashlib, urllib.request
+            h = ref[8:72]
+            q = urllib.request.Request(N.B + f"/api/espacios/{e['id']}/binarios/{h}", headers={"Authorization": "Bearer " + a["token"], "User-Agent": "NOM-pruebas/1.0"})
+            crudo_bin = urllib.request.urlopen(q, timeout=30).read()
+            check("…y lo que guarda es la imagen cifrada (no un PNG; la huella es la de lo cifrado)", not crudo_bin.startswith(b"\x89PNG") and hashlib.sha256(crudo_bin).hexdigest() == h, crudo_bin[:8])
+            def imagen_visible(pg):
+                return pg.evaluate("() => [...document.querySelectorAll('img')].some((i) => (i.getAttribute('src') || '').startsWith('blob:') && i.naturalWidth > 100)")
+            check("Ana ve la imagen (descifrada en su equipo)", esperar(lambda: imagen_visible(A.p), 20), "")
+            B.p.goto(N.B + "/#/doc/" + dimg); B.p.wait_for_selector(".ed-herramientas", timeout=15000)
+            check("Beto también la ve (la baja cifrada y la descifra con la llave del documento)", esperar(lambda: imagen_visible(B.p), 25), "")
+            env = (N.api("POST", f"/api/documentos/{dimg}/enlace-ver", {}, a["token"])[1] or {}).get("enlace", "")
+            llave_doc = A.p.evaluate(f"() => NOM.e2e.llaveDocTexto('{dimg}')")
+            V = otro(A)
+            try:
+                V.p.goto(N.B + f"/#/ver/{env}~{llave_doc}"); V.p.wait_for_timeout(2500)
+                check("el enlace para ver (con la llave del documento, sin cuenta) muestra la imagen", esperar(lambda: imagen_visible(V.p), 25), "")
+            finally: V.cerrar()
             check("sin errores de JavaScript (Beto)", not B.errores, B.errores[:3])
         finally:
             B.cerrar()
