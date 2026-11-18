@@ -64,7 +64,10 @@ JS_RENGLONES = r"""
         parrafo = p; numPar = raiz === cuerpo ? kidsC.indexOf(p) : +(p && p.dataset.par) + 0.5;
         corte = p && p.dataset.clip != null ? +p.dataset.clip : null; pr = p ? p.getBoundingClientRect() : null; zz = p && pr ? pr.height / (p.offsetHeight || 1) || 1 : 1;
       }
-      const s = n.data;
+      // la llamada de una nota (su número volado): en Word es el carácter de control 2, que la verdad lee como un espacio;
+      // aquí cuenta igual (un solo carácter de control en el lugar de su primera letra)
+      const nota = n.parentElement.closest('.wd-nota[data-obj]');
+      const s = nota ? (n === (nota.__primerTexto = nota.__primerTexto || n) ? '\x02' + ''.padEnd(n.data.length - 1, '\x01') : ''.padEnd(n.data.length, '\x01')) : n.data;
       // lo que se VE: «Mayúsculas» de Word es text-transform (el texto del documento no cambia), como lo lee Word
       const tt = getComputedStyle(n.parentElement).textTransform;
       const ver = (c) => (tt === 'uppercase' ? c.toUpperCase() : tt === 'lowercase' ? c.toLowerCase() : c);
@@ -74,6 +77,7 @@ JS_RENGLONES = r"""
         const q = r.getClientRects(); if (!q.length) { i = j - 1; continue; }
         const b = q[q.length - 1];
         if (corte != null && pr && (b.top + b.bottom) / 2 - pr.top > corte * zz) { i = j - 1; continue; }
+        if (s[i] === '\x01') { i = j - 1; continue; }   // (el resto del número de una nota: no cuenta)
         letras.push({ c: ver(s.slice(i, j)), x: b.left, y: b.top, h: b.height, w: b.width, p: numPar });
         i = j - 1;
       }

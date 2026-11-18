@@ -426,6 +426,12 @@
     if (+a.esp) st += `letter-spacing:${+a.esp}pt;`;
     // elevado o bajado de Word (w:position): como Word, el renglón crece si hace falta
     if (+a.pos) st += `vertical-align:${+a.pos}pt;`;
+    // escala de caracteres de Word (w:w): las letras más anchas o angostas; cada palabra con su espacio va aparte para que
+    // el renglón se pueda cortar entre palabras, y su avance real se pone al pintar (ajustarEscalas)
+    if (+a.esc && +a.esc !== 100) {
+      const k = Math.max(0.01, +a.esc / 100);
+      h = h.split(/(?<= )/).map((pz) => `<span class="wd-escala" data-k="${k}" style="display:inline-block;white-space:pre;transform:scaleX(${k});transform-origin:0 0">${pz}</span>`).join("");
+    }
     if (st) h = `<span style="${esc(st)}">${h}</span>`;
     // texto oculto de Word (w:vanish): no se ve ni se imprime, como en Word; se conserva al descargar
     if (a.oc) h = `<span class="wd-oculto" style="display:none">${h}</span>`;
@@ -681,6 +687,7 @@
             elems.set(p.k, el);
             cache.set(p.k, h);
             llenarObjetos(el);
+            ajustarEscalas(el);
           }
           const actual = cuerpo.children[i];
           if (actual !== el) cuerpo.insertBefore(el, actual || null);
@@ -734,6 +741,10 @@
       let tMarcas = null;
       function programarMarcas() { clearTimeout(tMarcas); tMarcas = setTimeout(() => { if (resaltado) aplicarResaltado(); pintarComentarios(); }, 80); }
 
+      /** Escala de caracteres de Word: la palabra estirada ocupa en el renglón lo que mide estirada (margen a la derecha). */
+      function ajustarEscalas(raizEl) {
+        raizEl.querySelectorAll(".wd-escala").forEach((s) => { const k = +s.dataset.k || 1; s.style.marginRight = ""; s.style.marginRight = (s.offsetWidth * (k - 1)).toFixed(2) + "px"; });
+      }
       /** Lo que se dibuja dentro de los objetos (no forma parte del html del párrafo). */
       function llenarObjetos(raizEl) {
         const franjas = new Set();   // párrafos con formas de Word «arriba y abajo»: su franja aparta el texto
@@ -779,7 +790,8 @@
           else if (e.tipo === "nota") {
             const fin = !!(bl && bl.final);
             o.classList.toggle("final", fin);
-            o.innerHTML = `<sup>${(fin ? numerosFinales() : numerosNotas()).get(o.dataset.id) || "*"}</sup>`;
+            const num = (fin ? numerosFinales() : numerosNotas()).get(o.dataset.id);
+            o.innerHTML = `<sup>${num === "" ? "" : num || "*"}</sup>`;
             o.title = bl && bl.texto ? (fin ? "Nota al final: " : "Nota: ") + bl.texto : "Nota al pie (toca para escribirla)";
           }
           else if (e.tipo === "ecuacion") { o.innerHTML = NOM.ecuaciones ? NOM.ecuaciones.html((bl && bl.tex) || "", !!(bl && bl.bloque)) : esc((bl && bl.tex) || ""); o.classList.toggle("en-bloque", !!(bl && bl.bloque)); o.title = ed.soloLectura ? "" : "Toca para editar la ecuación"; }
@@ -858,7 +870,11 @@
         const m = new Map(), f = new Map();
         let n = 0, k = 0;
         // (las notas al final se numeran aparte, en números romanos chicos como Word: i, ii, iii…)
-        for (const it of visPintado) if (it.e && it.e.tipo === "nota") { if (esFinal(it)) f.set(it.id, romano(++k)); else m.set(it.id, ++n); }
+        for (const it of visPintado) if (it.e && it.e.tipo === "nota") {
+          const b = it.e.ref ? doc().bloque(it.e.ref) : null;
+          if (b && b.propia) { m.set(it.id, ""); continue; }   // marca propia: sin número (la marca va en el texto)
+          if (esFinal(it)) f.set(it.id, romano(++k)); else m.set(it.id, ++n);
+        }
         cacheNotas = { vis: visPintado, m, f };
         return m;
       }
@@ -3131,7 +3147,7 @@
         pags.forEach((q, i) => {
           const g = q.g, vacia = q.vacia || (e.primera && i === 0);
           const finI = finPag.get(i) || [];
-          const bloqueNotas = (q.notas.length ? `<div class="wd-notas" style="left:${g.m[2]}px;right:${g.m[3]}px;bottom:${g.m[1]}px">${q.notas.map((x) => `<div class="wd-nota-pie"><sup>${x.n}</sup> ${esc(x.texto)}</div>`).join("")}</div>` : "")
+          const bloqueNotas = (q.notas.length ? `<div class="wd-notas" style="left:${g.m[2]}px;right:${g.m[3]}px;bottom:${g.m[1]}px">${q.notas.map((x) => `<div class="wd-nota-pie">${x.n === "" ? "" : `<sup>${x.n}</sup> `}${esc(x.texto)}</div>`).join("")}</div>` : "")
             + (finI.length ? `<div class="wd-notas wd-notas-fin" style="left:${g.m[2]}px;right:${g.m[3]}px;top:${finI[0].y - 14}px">${finI.map((x) => `<div class="wd-nota-pie"><sup>${esc(x.n)}</sup> ${esc(x.texto)}</div>`).join("")}</div>` : "");
           // la línea entre columnas (Word: «línea entre columnas»), del alto de lo escrito en ellas
           const lineas = q.regiones.map((r) => r.cols.slice(1).map((c, k) => { const a = r.cols[k], x = g.m[2] + (a.x + a.w + c.x) / 2; return `<div class="wd-col-linea" style="left:${x.toFixed(2)}px;top:${(r.top - q.top).toFixed(2)}px;height:${Math.max(0, r.bajo - r.top).toFixed(2)}px"></div>`; }).join("")).join("");
@@ -3247,7 +3263,7 @@
           const vacia = e.primera && i === 0;
           const notas = notasPag[i] || [];
           const finI = notasFinPag[i] || [];
-          const bloqueNotas = (notas.length ? `<div class="wd-notas" style="left:${pg.m.iz}px;right:${pg.m.d}px;bottom:${pg.m.i}px">${notas.map((x) => `<div class="wd-nota-pie"><sup>${x.n}</sup> ${esc(x.texto)}</div>`).join("")}</div>` : "")
+          const bloqueNotas = (notas.length ? `<div class="wd-notas" style="left:${pg.m.iz}px;right:${pg.m.d}px;bottom:${pg.m.i}px">${notas.map((x) => `<div class="wd-nota-pie">${x.n === "" ? "" : `<sup>${x.n}</sup> `}${esc(x.texto)}</div>`).join("")}</div>` : "")
             + (finI.length ? `<div class="wd-notas wd-notas-fin" style="left:${pg.m.iz}px;right:${pg.m.d}px;top:${finI[0].y - 14}px">${finI.map((x) => `<div class="wd-nota-pie"><sup>${esc(x.n)}</sup> ${esc(x.texto)}</div>`).join("")}</div>` : "");
           h += `<div class="wd-pagina${bp && bp.hoja ? " con-borde" : ""}" style="top:${i * paso}px;${estiloEP}${bp && bp.hoja ? `;--bpe:${pg.m.s - dentroBorde >= 20 ? dentroBorde : 0}px;--bpp:${pg.m.i - dentroBorde >= 20 ? dentroBorde : 0}px` : ""}">${cajaBorde}${vacia ? "" : fila("enc", e.enc, e.encAl, i + 1, logo) + fila("pie", e.pie, e.pieAl, i + 1)}${bloqueNotas}${e.marca ? `<div class="wd-marca-agua">${esc(e.marca)}</div>` : ""}</div>`;
         }

@@ -426,6 +426,7 @@
       if (a.oc) r += "<w:vanish/>";
       if (hexW(a.color)) r += `<w:color w:val="${hexW(a.color)}"/>`;
       if (+a.esp) r += `<w:spacing w:val="${Math.round(+a.esp * 20)}"/>`;
+      if (+a.esc && +a.esc !== 100) r += `<w:w w:val="${Math.round(+a.esc)}"/>`;
       if (+a.pos) r += `<w:position w:val="${Math.round(+a.pos * 2)}"/>`;
       if (a.tam) r += `<w:sz w:val="${Math.round(a.tam * 2)}"/><w:szCs w:val="${Math.round(a.tam * 2)}"/>`;
       if (a.u) r += '<w:u w:val="single"/>';
@@ -1679,6 +1680,9 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       if (vs) a.vers = activo(vs);
       if (my) a.mayus = activo(my);
       if (es && val(es) != null) a.esp = Math.round((+val(es) / 20) * 100) / 100 || null;
+      // Escala de caracteres de Word (Fuente → Avanzado → Escala: 50 %, 150 %, 200 %…)
+      const ww = hijo(rpr, "w");
+      if (ww && val(ww) != null) a.esc = +val(ww) && +val(ww) !== 100 ? +val(ww) : null;
       // texto oculto (Word no lo muestra ni lo imprime) y elevado o bajado (w:position, en medios puntos)
       const vn = hijo(rpr, "vanish"), ps = val(hijo(rpr, "position"));
       if (vn) a.oc = activo(vn);
@@ -2326,7 +2330,9 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
               tramos.push({ e: Object.assign({ tipo: "objeto", que, oe: ordinal(c), txt: (await textoObjeto(c)) || undefined }, gOf || {}, fOf || {}), a: {} }); aproximado = true;
             } else if (cn === "footnoteReference") {
               const id = c.getAttributeNS(W, "id") || c.getAttribute("w:id");
-              tramos.push({ e: { tipo: "nota", texto: notasPie[id] || "", oe: ordinal(c) }, a: {} });
+              // (con marca propia —«*», †— Word no le pone número ni la cuenta: la marca es el texto que sigue)
+              const propia = ["1", "true", "on"].includes(c.getAttributeNS(W, "customMarkFollows") || c.getAttribute("w:customMarkFollows") || "");
+              tramos.push({ e: { tipo: "nota", texto: notasPie[id] || "", oe: ordinal(c), propia: propia || undefined }, a: {} });
             } else if (cn === "endnoteReference") {
               const id = c.getAttributeNS(W, "id") || c.getAttribute("w:id");
               tramos.push({ e: { tipo: "nota", final: true, texto: notasFin[id] || "", oe: ordinal(c) }, a: {} });
