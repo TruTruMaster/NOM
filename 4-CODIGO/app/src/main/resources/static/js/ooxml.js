@@ -1474,7 +1474,7 @@ ${ep("Footer", "footer", "", '<w:tabs><w:tab w:val="center" w:pos="4680"/><w:tab
 ${[...abstractos.entries()].map(([k, id]) => definicion(k, id)).join("")}
 <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num><w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>
 ${instancias.map((n) => `<w:num w:numId="${n.id}"><w:abstractNumId w:val="${n.abs}"/>${n.inicio != null ? `<w:lvlOverride w:ilvl="0"><w:startOverride w:val="${n.inicio}"/></w:lvlOverride>` : ""}</w:num>`).join("")}</w:numbering>`;
-    const ajustes = XML + `<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:defaultTabStop w:val="720"/><w:characterSpacingControl w:val="doNotCompress"/>${notas.length ? '<w:footnotePr><w:footnote w:id="-1"/><w:footnote w:id="0"/></w:footnotePr>' : ""}<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`;
+    const ajustes = XML + `<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:defaultTabStop w:val="720"/>${doc.valor("_doc", "guiones") ? `<w:autoHyphenation/><w:hyphenationZone w:val="${Math.round((+(doc.valor("_doc", "guiones") || {}).zona || 18) * 20)}"/>` : ""}<w:characterSpacingControl w:val="doNotCompress"/>${notas.length ? '<w:footnotePr><w:footnote w:id="-1"/><w:footnote w:id="0"/></w:footnotePr>' : ""}<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`;
     if (OGR) return OGR.ensamblar({ estilos, numeracion, notasXml, extras, refs, relsEnc, primera: ep2.primera && (hayEnc || hayPie), pgSz: `<w:pgSz w:w="${(hor ? TAM[1] : TAM[0]) * TWIP}" w:h="${(hor ? TAM[0] : TAM[1]) * TWIP}"${hor ? ' w:orient="landscape"' : ""}/>`, mv, m });
     const titulo = doc.valor("_doc", "nombre") || "Documento";
     // Sin fecha: el mismo documento da siempre exactamente el mismo archivo.
@@ -1719,6 +1719,8 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       if (!ppr) return r;
       const jc = val(hijo(ppr, "jc"));
       if (jc) r.jc = jc;
+      const sg = hijo(ppr, "suppressAutoHyphens");
+      if (sg) r.sinGuiones = !["0", "false", "off"].includes(val(sg) || "1");
       const ind = hijo(ppr, "ind");
       if (ind) {
         const g = (k) => { const v = at(ind, k); return v == null || v === "" || isNaN(+v) ? null : +v; };
@@ -2414,6 +2416,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         const e = ESTILO_POR_NOMBRE(defEstilo[id].nombre);
         if (e) { pa.estilo = e; break; }
       }
+      if (c.sinGuiones) pa.sinGuiones = true;
       if (c.num && c.num.id != null && c.num.id !== "0") {
         const lvl = +(c.num.lvl || 0), f = (formatoNum[c.num.id] || {})[lvl] || "bullet";
         // (un nivel con formato «none» no lleva marca: Word solo le da la sangría)
@@ -2869,6 +2872,13 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         const tipo = { readOnly: "lectura", comments: "comentarios", trackedChanges: "cambios", forms: "formularios" }[ed];
         if (enf && tipo) docCampos.proteccion = { tipo, p: proteccionDe(dp, true) };
         if (wp) docCampos.modificar = { recomendada: /^(1|true|on)$/.test(wp.getAttributeNS(W, "recommended") || wp.getAttribute("w:recommended") || "") || undefined, p: proteccionDe(wp, false) };
+        // «Guiones automáticos» de Word (Disposición → Guiones): la zona, el límite de guiones seguidos y las mayúsculas
+        const ah = x.getElementsByTagNameNS(W, "autoHyphenation")[0];
+        if (ah && !/^(0|false|off)$/.test(ah.getAttributeNS(W, "val") || ah.getAttribute("w:val") || "")) {
+          const vz = (n) => { const e = x.getElementsByTagNameNS(W, n)[0]; return e ? e.getAttributeNS(W, "val") || e.getAttribute("w:val") : null; };
+          const dc = x.getElementsByTagNameNS(W, "doNotHyphenateCaps")[0];
+          docCampos.guiones = { zona: +(vz("hyphenationZone") || 360) / 20, limite: +(vz("consecutiveHyphenLimit") || 0) || undefined, mayus: dc && !/^(0|false|off)$/.test(dc.getAttributeNS(W, "val") || dc.getAttribute("w:val") || "") ? false : undefined };
+        }
       }
       if (await marcadoFinal(z)) docCampos.final = true;
     }
@@ -6621,6 +6631,12 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
         if (pr && ED[pr.tipo]) {
           const el = `<w:documentProtection w:edit="${ED[pr.tipo]}" w:enforcement="1"${cripto(pr.p, "w:")}/>`;
           s = /<w:defaultTabStop\b/.test(s) ? s.replace(/<w:defaultTabStop\b/, el + "<w:defaultTabStop") : s.replace(/<\/w:settings>/, el + "</w:settings>");
+        }
+        // «Guiones automáticos»: solo se toca si cambió (si no, el archivo sale idéntico)
+        const tenia = /<w:autoHyphenation\b(?![^>]*w:val="(?:0|false|off)")[^>]*\/?>/.test(s), quiere = !!v("guiones");
+        if (tenia !== quiere) {
+          s = quita(s, "w:autoHyphenation");
+          if (quiere) s = /<w:defaultTabStop\b[^>]*\/>/.test(s) ? s.replace(/(<w:defaultTabStop\b[^>]*\/>)/, "$1<w:autoHyphenation/>") : s.replace(/(<w:settings\b[^>]*>)/, "$1<w:autoHyphenation/>");
         }
         if (s !== st) cambios.set("word/settings.xml", s);
       }

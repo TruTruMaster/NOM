@@ -324,6 +324,7 @@
         if (n.nodeType !== 1) continue;
         const tag = n.tagName;
         if (n.hasAttribute("data-obj")) { out.push({ c: OBJ, id: n.getAttribute("data-id"), a }); enParrafo++; continue; }
+        if (n.classList && n.classList.contains("wd-guion")) continue;   // (guion de pantalla: no es del documento)
         if (OMITIR.has(tag) || n.hidden || (n.style && n.style.display === "none")) continue;
         if (tag === "BR") { out.push({ c: SALTO, a, br: true }); enParrafo++; continue; }
         if (tag === "IMG") {
@@ -414,8 +415,10 @@
     return n + ".";
   }
 
+  /** División automática de palabras del documento que se está pintando ({ idioma, mayus } o null): js/guiones.js. */
+  let guionesPintar = null;
   function envolver(txt, a) {
-    let h = esc(txt).replace(/\u2028/g, "<br>");
+    let h = (guionesPintar && NOM.guiones ? NOM.guiones.marcar(txt, esc, guionesPintar) : esc(txt)).replace(/\u2028/g, "<br>");
     let st = "";
     if (a.color) st += `color:${a.color};`;
     if (a.fondo) st += `background-color:${a.fondo};`;
@@ -445,6 +448,8 @@
     if (a.sugBorrar) h = `<span class="wd-sugb" data-sugb="${esc(JSON.stringify(a.sugBorrar))}" style="--c:${esc(a.sugBorrar.c || "#C2372B")}" title="${esc((a.sugBorrar.n || "") + " propone borrarlo")}">${h}</span>`;
     return h;
   }
+  /** Los guiones automáticos del documento que se pinta ahora (los fija el editor al pintar): { idioma, mayus } o null. */
+  let guionesDocActual = () => null;
   const BLOQUE_OBJ = new Set(["tabla", "salto", "saltocol", "linea", "indice"]);
   function htmlObjeto(it) {
     const t = (it.e && it.e.tipo) || "x";
@@ -452,6 +457,8 @@
   }
   function htmlParrafo(vis, p) {
     const pa = S().attrs(p.mark);
+    const gDoc = guionesDocActual();
+    guionesPintar = gDoc && !pa.sinGuiones && NOM.guiones && NOM.guiones.listo(gDoc.idioma) ? gDoc : null;
     const tag = pa.estilo === "h1" || pa.estilo === "h2" || pa.estilo === "h3" ? pa.estilo : "p";
     let at = ` data-k="${esc(p.k)}"`, st = "";
     if (pa.estilo && tag === "p") at += ` data-estilo="${esc(pa.estilo)}"`;
@@ -666,13 +673,24 @@
 
       function actualizarPintado() { visPintado = sec().visibles(); psPintado = calcularParrafos(sec()); }
 
+      /** Guiones automáticos de Word de este documento ({ idioma, mayus } o null); si faltan los patrones, se cargan y se
+          vuelve a pintar. */
+      function configGuiones() {
+        const g = doc().valor("_doc", "guiones");
+        if (!g || !NOM.guiones || window.__sinGuiones) return null;
+        const conf = { idioma: doc().valor("_doc", "idioma") || "es-MX", mayus: g.mayus, zona: g.zona };
+        if (!NOM.guiones.listo(conf.idioma)) NOM.guiones.cargar(conf.idioma).then((ok) => { if (ok && cuerpo.isConnected) { cache.clear(); reconciliar(); } });
+        return conf;
+      }
       function reconciliar() {
         pintando = true;
+        const gConf = configGuiones();
+        guionesDocActual = () => gConf;
         // Texto suelto fuera de los párrafos (lo deja el navegador al reemplazar todo con Ctrl+A):
         // ya se leyó al modelo, así que se quita y se vuelve a pintar dentro de su párrafo.
         for (const n of [...cuerpo.childNodes]) if (n.nodeType !== 1) n.remove();
         actualizarPintado();
-        const vis = visPintado, ps = psPintado, vivos = new Set();
+        const vis = visPintado, ps = psPintado, vivos = new Set(), medir = [];
         for (let i = 0; i < ps.length; i++) {
           const p = ps[i];
           vivos.add(p.k);
@@ -687,11 +705,13 @@
             elems.set(p.k, el);
             cache.set(p.k, h);
             llenarObjetos(el);
-            ajustarEscalas(el);
+            medir.push(el);
           }
           const actual = cuerpo.children[i];
           if (actual !== el) cuerpo.insertBefore(el, actual || null);
         }
+        // (ya en la página, donde se pueden medir: el avance de la escala de caracteres y la zona de división de Word)
+        for (const el of medir) { ajustarEscalas(el); ajustarGuiones(el); }
         while (cuerpo.children.length > ps.length) cuerpo.lastElementChild.remove();
         for (const k of [...elems.keys()]) if (!vivos.has(k)) { elems.delete(k); cache.delete(k); }
         ajustarEspacios();
@@ -741,6 +761,58 @@
       let tMarcas = null;
       function programarMarcas() { clearTimeout(tMarcas); tMarcas = setTimeout(() => { if (resaltado) aplicarResaltado(); pintarComentarios(); }, 80); }
 
+      /**
+       * Zona de división de Word: una palabra se parte al final del renglón solo si, sin partirla, quedaría un hueco mayor
+       * que la zona entre la última palabra y el margen. Donde el navegador partió y el hueco sería menor, los guiones de
+       * esa palabra se apagan y se mide otra vez (el renglón se queda más corto y la palabra baja entera, como en Word).
+       */
+      function ajustarGuiones(el) {
+        const g0 = el.querySelector(".wd-guion");
+        if (!g0) return;
+        const conf = guionesDocActual();
+        const zonaPt = conf && conf.zona != null ? +conf.zona : 18;
+        const cs = getComputedStyle(el), caja = el.getBoundingClientRect(), k = caja.width / (el.offsetWidth || 1) || 1;
+        // (medido contra Word en w13-guiones: con la zona completa Word parte palabras que aquí no se partirían; con la mitad
+        // o menos coincide: 46.4 → 57.1 % de renglones idénticos)
+        const derecha = caja.right - (parseFloat(cs.paddingRight) || 0) * k, zona = zonaPt * (96 / 72) * k * (window.__zonaFactor != null ? window.__zonaFactor : 0.5);
+        const r = document.createRange();
+        const rectLetra = (n, i) => { r.setStart(n, i); r.setEnd(n, i + 1); const q = r.getClientRects(); return q.length ? q[q.length - 1] : null; };
+        const textoAntes = (g) => { let n = g.previousSibling; while (n && n.nodeType !== 3) n = n.lastChild || n.previousSibling; return n && n.nodeValue.length ? n : null; };
+        const textoDespues = (g) => { let n = g.nextSibling; while (n && n.nodeType !== 3) n = n.firstChild || n.nextSibling; return n && n.nodeValue.length ? n : null; };
+        for (let vuelta = 0; vuelta < 40; vuelta++) {
+          let cambio = false;
+          for (const g of el.querySelectorAll(".wd-guion")) {
+            const a = textoAntes(g), d = textoDespues(g);
+            if (!a || !d) continue;
+            const ra = rectLetra(a, a.nodeValue.length - 1), rd = rectLetra(d, 0);
+            if (!ra || !rd || rd.top < ra.bottom - 1) continue;   // aquí no se partió el renglón
+            // el principio de la palabra en ese renglón: hacia atrás hasta un espacio
+            let n = a, i = a.nodeValue.length - 1, x0 = ra.left;
+            for (let paso = 0; paso < 200 && n; paso++) {
+              const t = n.nodeValue;
+              let j = i;
+              while (j >= 0 && !/\s/.test(t[j])) j--;
+              if (j >= 0) { const q = rectLetra(n, j); x0 = q ? q.left : x0; break; }   // el espacio de antes: donde acaba la palabra anterior
+              const ant = textoAntes(n.parentElement && n.parentElement.classList.contains("wd-guion") ? n.parentElement : n);
+              if (!ant || ant === n) { x0 = (rectLetra(n, 0) || ra).left; break; }
+              const q = rectLetra(ant, ant.nodeValue.length - 1);
+              if (!q || q.top < ra.top - 1) { x0 = (rectLetra(n, 0) || ra).left; break; }   // la palabra empieza el renglón
+              n = ant; i = ant.nodeValue.length - 1;
+            }
+            if (derecha - x0 < zona) {
+              // sin partir quedaría un hueco menor que la zona: esta palabra no se parte (sus guiones se apagan)
+              let w = g;
+              while (w && w.previousSibling && (w.previousSibling.nodeType !== 3 || !/\s/.test(w.previousSibling.nodeValue))) w = w.previousSibling;
+              const quitar = [];
+              for (let y = w; y; y = y.nextSibling) { if (y.nodeType === 3 && /\s/.test(y.nodeValue)) break; if (y.nodeType === 1 && y.classList.contains("wd-guion")) quitar.push(y); }
+              quitar.forEach((q) => { q.classList.add("apagado"); q.textContent = ""; });
+              cambio = true;
+              break;
+            }
+          }
+          if (!cambio) break;
+        }
+      }
       /** Escala de caracteres de Word: la palabra estirada ocupa en el renglón lo que mide estirada (margen a la derecha). */
       function ajustarEscalas(raizEl) {
         raizEl.querySelectorAll(".wd-escala").forEach((s) => { const k = +s.dataset.k || 1; s.style.marginRight = ""; s.style.marginRight = (s.offsetWidth * (k - 1)).toFixed(2) + "px"; });
@@ -1043,6 +1115,7 @@
           for (let c = n.firstChild; c; c = c.nextSibling) {
             if (c.nodeType === 3) r.push(c);
             else if (c.nodeType === 1) {
+              if (c.classList.contains("wd-guion")) continue;   // (guion de pantalla: no cuenta)
               if (c.hasAttribute("data-obj") || c.tagName === "BR" || c.tagName === "IMG") r.push(c);
               else rec(c);
             }
@@ -1722,6 +1795,7 @@
       this.textoApi = {
         /** Campos de Word: actualizar (F9), ver códigos (Alt+F9), insertar uno. */
         actualizarCampos: () => actualizarCampos(),
+        alternarGuiones: () => alternarGuiones(),
         alternarCodigos: () => alternarCodigos(),
         insertarCampo: () => insertarCampo(),
         /** Inserta texto con formato donde quedó el cursor (reemplaza lo elegido). */
@@ -4399,9 +4473,18 @@
           { texto: pa.antes ? "Quitar espacio antes del párrafo" : "Agregar espacio antes del párrafo", icono: "arrow-up", fn: () => formatoParrafo({ antes: pa.antes ? null : 12 }) },
           { texto: pa.despues === 0 ? "Agregar espacio después del párrafo" : "Quitar espacio después del párrafo", icono: "arrow-down", fn: () => formatoParrafo({ despues: pa.despues === 0 ? null : 0 }) }]);
       }
+      /** «Guiones automáticos» de Word (Disposición → Guiones): parte las palabras al final del renglón. */
+      function alternarGuiones() {
+        if (ed.soloLectura) return;
+        const g = doc().valor("_doc", "guiones");
+        doc().cambiar("_doc", { guiones: g ? null : { zona: 18 } }, { origen: "comando" });
+        cache.clear(); reconciliar();
+        NOM.aviso(g ? "Sin guiones automáticos" : "Guiones automáticos: las palabras se parten al final del renglón, como en Word", { tipo: "ok" });
+      }
       function menuMas(b) {
         NOM.menu(b, [
           { titulo: "Formato" },
+          { texto: "Guiones automáticos (dividir palabras)", icono: "minus", marcado: !!doc().valor("_doc", "guiones"), fn: alternarGuiones },
           { texto: "Tachado", icono: "strikethrough", atajo: "Ctrl+Mayús+X", fn: () => alternar("s") },
           { texto: "Superíndice", icono: "superscript", atajo: "Ctrl+Mayús++", fn: () => formato({ va: attrsEnCursor().a.va === "sup" ? null : "sup" }) },
           { texto: "Subíndice", icono: "subscript", atajo: "Ctrl+=", fn: () => formato({ va: attrsEnCursor().a.va === "sub" ? null : "sub" }) },
@@ -4858,6 +4941,7 @@
     acciones() {
       const a = [];
       if (this.textoApi && NOM.campos) {
+        a.push({ texto: "Guiones automáticos (dividir palabras al final del renglón)", icono: "minus", fn: () => this.textoApi.alternarGuiones(), claves: "guiones dividir partir palabras silabas hyphenation word disposicion" });
         a.push({ texto: "Actualizar campos (F9)", icono: "refresh-cw", fn: () => this.textoApi.actualizarCampos(), claves: "campos word fecha seq ref pageref numero pagina actualizar f9" });
         a.push({ texto: "Ver los códigos de los campos (Alt+F9)", icono: "code", fn: () => this.textoApi.alternarCodigos(), claves: "campos codigos word alt f9" });
         a.push({ texto: "Insertar un campo (como en Word)…", icono: "braces", fn: () => this.textoApi.insertarCampo(), claves: "campo word fecha page seq ref insertar" });

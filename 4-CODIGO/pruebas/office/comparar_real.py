@@ -54,7 +54,8 @@ JS_RENGLONES = r"""
     const tw = document.createTreeWalker(raiz, NodeFilter.SHOW_TEXT, { acceptNode: (n) => {
       const e = n.parentElement;
       // (las marcas del editor de un salto de página o de columna no son texto del documento)
-      if (!e || e.closest('.wd-corte, [data-obj] .wd-ctl, .wd-salto, .wd-saltocol, script, style')) return NodeFilter.FILTER_REJECT;
+      // (el guion de pantalla de la división automática: en la verdad de Word no es una letra del renglón)
+      if (!e || e.closest('.wd-corte, [data-obj] .wd-ctl, .wd-salto, .wd-saltocol, .wd-guion, script, style')) return NodeFilter.FILTER_REJECT;
       const cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden') return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT; } });
     let n, parrafo = null, numPar = -1, corte = null, pr = null, zz = 1;
@@ -496,6 +497,8 @@ def main():
     c, esp = entrar()
     nav = N.Navegador(movil=a.movil)
     if not a.movil: nav.ctx.close(); nav.ctx = nav.b.new_context(viewport={"width": 1300, "height": 1150}); nav.p = nav.ctx.new_page(); nav.p.on("pageerror", lambda e: nav.errores.append(str(e)))
+    # (experimentos: NOM_EXPERIMENTO="window.__x = 1" se corre antes de cada página)
+    if os.environ.get("NOM_EXPERIMENTO"): nav.p.add_init_script(os.environ["NOM_EXPERIMENTO"])
     nav.entrar(c)
     nav.p.evaluate("() => { const t = NOM.leer('nom.texto', {}); t.vista = 'paginas'; t.zoom = 1; NOM.guardar && NOM.guardar('nom.texto', t); localStorage.setItem('nom.texto', JSON.stringify(t)); }")
     # los consejos de la primera vez tapan la página en las capturas: se dan por vistos
