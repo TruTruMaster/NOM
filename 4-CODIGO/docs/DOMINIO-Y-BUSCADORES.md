@@ -77,7 +77,7 @@ origen de respaldo de Cloudflare for SaaS; el nombre personalizado `www.nom.qd.j
 **GitHub:** el repositorio público `TruTruMaster/nom-qd-je` (Pages, dominio `nom.qd.je`) trae `index.html` y
 `404.html` que mandan a `https://www.nom.qd.je` con la misma ruta. **Pendiente:** el certificado de `nom.qd.je`
 (la API de Pages dice `https_enforced: false` y sin certificado); cuando GitHub lo emita, activar «Enforce HTTPS».
-Las dos páginas todavía dicen «NOM-COLAB»: cambiarlas a «NOM» al publicar la 0.16.0.
+Las dos páginas dicen «NOM» desde la 0.16.0 (18-nov).
 
 **Raspberry:** `doas sh ~/dominio-corto/dominio-corto.sh` (una vez) puso el túnel con
 `www.nom.qd.je`, `NOM_NUBE=https://nomcolab.dpdns.org` (los pases valen en los APK ya instalados) y la

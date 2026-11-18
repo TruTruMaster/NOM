@@ -83,9 +83,11 @@ manda al servidor ya no pierde las claves «_» de dentro de los datos). Nada pu
 1. **La Pi ya volvió** (0). Falta ver con una pantalla HDMI por qué se detuvo `b/`, decidir (arreglar `b/` o usar el
    de Alpine) y pasar los datos al NVMe (`SERVIDOR-PROPIO.md`, «El disco nuevo»). Cuidado: si la Pi se cae, la casa
    se queda sin DHCP ni DNS (0).
-2. **Publicar la 0.16.0**: ya pasó la regresión completa, la vuelta en PowerPoint real y el emulador, y la Pi ya está
-   encendida. Falta la prueba en el A55 (ya vinculado: aparece en `adb devices` por Wi-Fi). Pasos en
-   `RELEVO-17NOV-NOCHE.md` §4.1 (4 y 5).
+2. ~~Publicar la 0.16.0~~ **Hecho el 18-nov**: push a `main` (`98d6ffe`; el trabajo de Azure terminó bien, aunque la
+   aplicación de Azure sigue apagada), jar en la Pi (`https://www.nom.qd.je` da 0.16.0, interfaz 21; `humo.py` 34/34),
+   APK 0.16.0 (código 31) como release «latest» `v0.16.0` (la descarga fija responde), IndexNow (76 direcciones) y
+   las páginas de `nom-qd-je` dicen «NOM». Falta solo instalarla en el A55 (estando en la misma red que la laptop, o
+   con el botón «Descarga la app»).
 3. **Certificado de `nom.qd.je`**: con `bad_authz` dos veces y el DNS correcto, lo probable es el límite de Let's
    Encrypt para `qd.je` (al no estar en la lista de sufijos públicos, todos los subdominios de todos los usuarios de
    DigitalPlat cuentan como uno) o un bloqueo del dominio. Opciones: esperar y volver a intentar en unos días (quitar
