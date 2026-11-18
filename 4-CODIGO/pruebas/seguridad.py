@@ -706,11 +706,24 @@ try:
             e3 = (r3("POST", "/api/espacios", {"nombre": "Salón del teléfono" + SUFIJO}, tt)[1] or {}).get("id")
             d3 = (r3("POST", f"/api/espacios/{e3}/documentos", {"nombre": "Acta", "modo": "TEXTO", "ops": []}, tt)[1] or {}).get("id")
             r3("POST", f"/api/documentos/{d3}/ops", {"cliente": "tel1", "dispositivo": "prueba", "ops": [{"id": "tel1:1", "bloque": "cuerpo", "campos": {}, "t": 20, "n": "tel1", "s": {"k": "i", "iz": None, "x": "Acta de la reunión\n"}}]}, tt)
+            # un binario del almacén del teléfono que el documento usa (una imagen)
+            import hashlib as _h3
+            def rbin(base, m, u, datos=None, t=None):
+                h = {"Content-Type": "application/octet-stream"}
+                if t: h["Authorization"] = "Bearer " + t
+                try:
+                    with urllib.request.urlopen(urllib.request.Request(base + u, method=m, data=datos, headers=h), timeout=30) as x: return x.status, x.read()
+                except urllib.error.HTTPError as ex: return ex.code, b""
+            binT = secrets.token_bytes(150000); hT = _h3.sha256(binT).hexdigest()
+            rbin(B3, "PUT", f"/api/espacios/{e3}/binarios/{hT}", binT, tt)
+            r3("POST", f"/api/documentos/{d3}/ops", {"cliente": "tel1", "dispositivo": "prueba", "ops": [{"id": "tel1:img", "bloque": "img1", "campos": {"tipo": "imagen", "src": f"nom:bin/{hT}.png"}, "t": 21, "n": "tel1"}]}, tt)
             time.sleep(1.2)
             c1 = r3("PUT", f"/api/espacios/{e3}/sincronia", {"servidor": f"http://localhost:{PP}", "usuario": "maestra", "contrasena": CL}, tt)
             prueba("13.5 (antes) el espacio del teléfono se copia a la nube", [200, "ok"], [c1[0], (c1[1] or {}).get("estado")])
             nube_esp = next((x["id"] for x in (r("GET", "/api/espacios", t=tk["maestra"])[1] or []) if x["nombre"] == "Salón del teléfono" + SUFIJO), None)
             nube_doc = next((x["id"] for x in (r("GET", f"/api/espacios/{nube_esp}/documentos", t=tk["maestra"])[1] or []) if x["nombre"] == "Acta"), None) if nube_esp else None
+            cb = rbin(B, "GET", f"/api/espacios/{nube_esp}/binarios/{hT}", None, tk["maestra"]) if nube_esp else (0, b"")
+            prueba("13.5 …y la imagen del almacén que el documento usa también llega a la nube", [200, True], [cb[0], cb[1] == binT])
             puente.apagar()
             prueba("13.5 Sin red, la copia queda pendiente", "sin-red", (r3("POST", f"/api/espacios/{e3}/sincronia", {}, tt)[1] or {}).get("estado"))
             time.sleep(1.5)
@@ -732,7 +745,14 @@ try:
             prueba("13.5 Después, el original de la nube también llega al teléfono (aparte)", 2, len(r3("GET", f"/api/espacios/{e3}/documentos", t=tt)[1] or []))
             puente.apagar(); time.sleep(0.3); puente.prender()
             r3("POST", f"/api/documentos/{d3}/ops", {"cliente": "tel1", "dispositivo": "prueba", "ops": [{"id": "tel1:3", "bloque": "cuerpo", "campos": {}, "t": 300, "n": "tel1", "s": {"k": "i", "iz": None, "x": "OTRO "}}]}, tt)
+            # y al revés: una imagen que se pone en la nube llega al almacén del teléfono
+            binN = secrets.token_bytes(120000); hN = _h3.sha256(binN).hexdigest()
+            rbin(B, "PUT", f"/api/espacios/{nube_esp}/binarios/{hN}", binN, tk["maestra"])
+            r("POST", f"/api/documentos/{nube_doc}/ops", {"cliente": "nube1", "dispositivo": "prueba", "ops": [{"id": "nube1:img", "bloque": "imgN", "campos": {"tipo": "imagen", "src": f"nom:bin/{hN}.jpg"}, "t": 400, "n": "nube1"}]}, tk["maestra"])
+            time.sleep(1.2)
             c3 = r3("POST", f"/api/espacios/{e3}/sincronia", {}, tt)
+            cn = rbin(B3, "GET", f"/api/espacios/{e3}/binarios/{hN}", None, tt)
+            prueba("13.5 Una imagen que se pone en la nube llega al almacén del teléfono", [200, True], [cn[0], cn[1] == binN])
             prueba("13.5 Con conexión todo el tiempo, se junta como siempre (sin rama)", [200, 0], [c3[0], (c3[1] or {}).get("ramas")])
         finally:
             puente.apagar()

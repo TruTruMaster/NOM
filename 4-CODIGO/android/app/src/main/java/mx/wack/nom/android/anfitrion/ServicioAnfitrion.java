@@ -153,8 +153,10 @@ public class ServicioAnfitrion extends Service {
         ServicioFuentes fuentes = new ServicioFuentes(espacios, espaciosRepo, Json.YO, cifrado);
         // El almacén de binarios (imágenes y el Office original fuera del documento), como en la nube; tope por archivo
         // igual al del cuerpo de una petición del teléfono (40 MB).
-        mx.wack.nom.core.servicio.ServicioBinarios binarios = new mx.wack.nom.core.servicio.ServicioBinarios(espacios, documentos,
-                new RepositorioBinariosTelefono(new File(almacen.raiz(), "binarios")), 40L * 1024 * 1024);
+        RepositorioBinariosTelefono repoBinarios = new RepositorioBinariosTelefono(new File(almacen.raiz(), "binarios"));
+        mx.wack.nom.core.servicio.ServicioBinarios binarios = new mx.wack.nom.core.servicio.ServicioBinarios(espacios, documentos, repoBinarios, 40L * 1024 * 1024);
+        // la sincronía con la nube también lleva y trae lo del almacén
+        sincronia.usarBinarios(repoBinarios);
         http = new ServidorHttp(getAssets(), new ApiTelefono(cuentas, espacios, documentos, difusor, descubrimiento, nodo, sincronia, fuentes, pases, binarios));
         puerto = http.iniciar(8080);
         nodo.fijarPuerto(puerto);

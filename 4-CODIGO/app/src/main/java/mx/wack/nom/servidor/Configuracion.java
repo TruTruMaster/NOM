@@ -129,8 +129,12 @@ public class Configuracion {
     }
 
     @Bean
-    public ServicioSincronia servicioSincronia(ServicioEspacios espacios, ServicioDocumentos documentos, CodecJson json, NodoLocal nodo) {
-        return new ServicioSincronia(espacios, documentos, json, nodo);
+    public ServicioSincronia servicioSincronia(ServicioEspacios espacios, ServicioDocumentos documentos, CodecJson json, NodoLocal nodo,
+                                               mx.wack.nom.core.almacen.RepositorioBinarios binarios) {
+        ServicioSincronia s = new ServicioSincronia(espacios, documentos, json, nodo);
+        // lo que un documento sincronizado menciona del almacén de binarios también viaja
+        s.usarBinarios(binarios);
+        return s;
     }
 
     @Bean(initMethod = "iniciar", destroyMethod = "detener")
