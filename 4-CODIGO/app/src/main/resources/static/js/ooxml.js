@@ -62,26 +62,39 @@
     return (pagina ? [pagina] : pags).flatMap((p) => doc.deLaPagina(p));
   }
 
-  /** data:image/png;base64,... → { bytes, ext, w, h } (solo PNG y JPEG; otros se omiten). */
+  /** Qué imagen es, por sus primeros bytes: png, jpeg, gif, bmp, emf, wmf o null. */
+  function tipoImagen(b) {
+    if (!b || b.length < 24) return null;
+    if (b[0] === 0x89 && b[1] === 0x50) return "png";
+    if (b[0] === 0xFF && b[1] === 0xD8) return "jpeg";
+    if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return "gif";
+    if (b[0] === 0x42 && b[1] === 0x4D) return "bmp";
+    return NOM.emf ? NOM.emf.tipo(b) : null;
+  }
+  const MIME_IMG = { png: "image/png", jpeg: "image/jpeg", gif: "image/gif", bmp: "image/bmp", emf: "image/x-emf", wmf: "image/x-wmf" };
+  /** Una imagen del documento (data:…;base64 o del almacén) → { bytes, ext, w, h }: PNG, JPEG, GIF, BMP, EMF o WMF
+      (lo que Office guarda tal cual; un EMF o WMF importado sale idéntico). Otras se omiten. */
   function imagen(src) {
-    let bytes, ext;
+    let bytes;
     if (NOM.binarios && NOM.binarios.esRef(src)) {
-      // del almacén de binarios (ya precargado antes de exportar): se reconoce por sus primeros bytes
+      // del almacén de binarios (ya precargado antes de exportar)
       bytes = NOM.binarios.bytesYa(src);
-      if (!bytes || bytes.length < 24) return null;
-      if (bytes[0] === 0x89 && bytes[1] === 0x50) ext = "png";
-      else if (bytes[0] === 0xFF && bytes[1] === 0xD8) ext = "jpeg";
-      else return null;
     } else {
-      const m = /^data:image\/(png|jpeg|jpg);base64,(.+)$/i.exec(src || "");
+      const m = /^data:[a-z0-9.+\/-]+;base64,(.+)$/i.exec(src || "");
       if (!m) return null;
-      const bin = atob(m[2]);
+      const bin = atob(m[1]);
       bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      ext = m[1].toLowerCase() === "png" ? "png" : "jpeg";
     }
+    const ext = tipoImagen(bytes);
+    if (!ext) return null;
+    const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     let w = 800, h = 600;
-    if (ext === "png") { const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength); w = v.getUint32(16); h = v.getUint32(20); }
+    if (ext === "png") { w = v.getUint32(16); h = v.getUint32(20); }
+    else if (ext === "gif") { w = v.getUint16(6, true); h = v.getUint16(8, true); }
+    else if (ext === "bmp") { w = Math.abs(v.getInt32(18, true)); h = Math.abs(v.getInt32(22, true)); }
+    else if (ext === "emf") { const fw = v.getInt32(32, true) - v.getInt32(24, true), fh = v.getInt32(36, true) - v.getInt32(28, true); if (fw > 0 && fh > 0) { w = (fw / 2540) * 96; h = (fh / 2540) * 96; } }
+    else if (ext === "wmf") { if (v.getUint32(0, true) === 0x9AC6CDD7) { const k = v.getUint16(14, true) || 1440; w = (Math.abs(v.getInt16(10, true) - v.getInt16(6, true)) / k) * 96; h = (Math.abs(v.getInt16(12, true) - v.getInt16(8, true)) / k) * 96; } }
     else {
       for (let i = 2; i < bytes.length - 9;) {
         if (bytes[i] !== 0xFF) { i++; continue; }
@@ -90,7 +103,7 @@
         i += 2 + len;
       }
     }
-    return { bytes, ext, w, h };
+    return { bytes, ext, w: Math.max(1, Math.round(w)), h: Math.max(1, Math.round(h)) };
   }
 
   /** HTML de un párrafo (b, i, u, br) → tramos { t, b, i, u, br }. */
@@ -202,7 +215,7 @@
 
   const CT = (extra) => XML + `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
 <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>
-<Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/>${extra}</Types>`;
+<Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/><Default Extension="gif" ContentType="image/gif"/><Default Extension="bmp" ContentType="image/bmp"/><Default Extension="emf" ContentType="image/x-emf"/><Default Extension="wmf" ContentType="image/x-wmf"/>${extra}</Types>`;
   const RELS = (rels) => XML + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels.map((r, i) =>
     `<Relationship Id="${r.id || "rId" + (i + 1)}" Type="${r.tipo}" Target="${x(r.destino)}"${r.externo ? ' TargetMode="External"' : ""}/>`).join("")}</Relationships>`;
   const T = { doc: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument",
@@ -1185,7 +1198,7 @@
         rels.filter((r) => (r.tipo === T.img || r.tipo === T.enlace) && usadosEnCuerpo(r.id)).forEach((r) => pq.agregaRel(DOC, r.id, r.tipo, r.destino, r.externo));
         medios.filter((mm) => epCambio || !/media\/(logo|marca)\./.test(mm.nombre)).forEach((mm) => {
           pq.pon(mm.nombre.replace(/^word\//, carpeta), mm.datos);
-          pq.extension(mm.nombre.split(".").pop(), /png$/.test(mm.nombre) ? "image/png" : "image/jpeg");
+          pq.extension(mm.nombre.split(".").pop(), MIME_IMG[mm.nombre.split(".").pop()] || "image/png");
         });
         // ---- numeración nueva (listas hechas en NOM)
         if (instancias.length) {
@@ -1607,7 +1620,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       const b = await z.leer(ruta);
       if (!b) return null;
       const ext = (ruta.split(".").pop() || "").toLowerCase();
-      const mime = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp" }[ext];
+      const mime = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp", emf: "image/x-emf", wmf: "image/x-wmf", tif: "image/tiff", tiff: "image/tiff" }[ext];
       if (!mime) return null;
       let bin = "";
       for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
@@ -2269,6 +2282,18 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
                 const fOf = !gOf && /wordprocessingShape/.test(uri) ? await formaWord(c, w, h) : !gOf && /wordprocessingGroup|wordprocessingCanvas/.test(uri) ? await grupoWord(c, w, h) : null;
                 tramos.push({ e: Object.assign({ tipo: "objeto", que, oe: ordinal(c), txt: (await textoObjeto(c)) || undefined }, gOf || {}, fOf || {}), a: {} }); aproximado = true;
               }
+            } else if (cn === "object" && c.getElementsByTagNameNS("*", "imagedata")[0]) {
+              // Un objeto incrustado (ecuación del Editor de ecuaciones o de MathType, hoja de Excel, diapositiva…): Word
+              // muestra su vista previa (casi siempre un WMF o EMF); al descargar sale el objeto original completo.
+              const im = c.getElementsByTagNameNS("*", "imagedata")[0], forma = im.parentNode;
+              const rid = im.getAttribute("r:id") || im.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id");
+              const src = rid ? await imagenDe(rid) : null;
+              const est = (forma && forma.getAttribute && forma.getAttribute("style")) || "";
+              const med = (k) => { const m = new RegExp("(?:^|;)\\s*" + k + "\\s*:\\s*([\\d.]+)(pt|in|cm|mm|px)?", "i").exec(est); if (!m) return 0; const f = { pt: 96 / 72, in: 96, cm: 96 / 2.54, mm: 96 / 25.4, px: 1 }[(m[2] || "px").toLowerCase()]; return +m[1] * f; };
+              const w = med("width"), h = med("height");
+              const que = /Equation|MathType/i.test((c.getElementsByTagNameNS("*", "OLEObject")[0] || {}).getAttribute ? c.getElementsByTagNameNS("*", "OLEObject")[0].getAttribute("ProgID") || "" : "") ? "Ecuación" : "Objeto incrustado";
+              if (src && w > 0 && h > 0) tramos.push({ e: { tipo: "objeto", que, oe: ordinal(c), img: src, w: Math.round(w * 100) / 100, h: Math.round(h * 100) / 100 }, a: {} });
+              else { tramos.push({ e: { tipo: "objeto", que, oe: ordinal(c) }, a: {} }); aproximado = true; }
             } else if (cn === "AlternateContent" || cn === "object") {
               const que = cn === "object" ? "Objeto incrustado" : c.getElementsByTagNameNS("*", "txbxContent")[0] ? "Cuadro de texto" : /drawingml\/2006\/chart/.test(c.innerHTML || "") ? "Gráfico" : c.getElementsByTagNameNS("*", "relIds")[0] ? "SmartArt" : "Forma";
               const gOf = que === "Gráfico" ? await graficaWord(c) : null;
@@ -2560,6 +2585,8 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
             const r = [];
             for (const t of tramos) {
               if (t.e && t.e.tipo === "imagen" && t.e.src) { r.push({ img: t.e.src, w: Math.round(+t.e.w || 0), h: Math.round(+t.e.h || 0) }); complejo = true; }
+              // (un objeto incrustado —ecuación vieja, hoja…— se ve en la celda con su vista previa, como en Word)
+              else if (t.e && t.e.tipo === "objeto" && t.e.img) { r.push({ img: t.e.img, w: Math.round(+t.e.w || 0), h: Math.round(+t.e.h || 0) }); complejo = true; }
               else if (t.e) { if (t.e.txt) r.push({ x: String(t.e.txt), a: {} }); }
               else if (t.x) { r.push({ x: t.x, a: t.a || {} }); if (t.x.trim()) firmas.add(JSON.stringify(t.a || {})); }
             }
@@ -3889,7 +3916,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     const fuenteDml = (n) => (n === "+mn-lt" || n === "+mn-ea" ? fuentesDml.menor || "Calibri" : n === "+mj-lt" || n === "+mj-ea" ? fuentesDml.mayor || "Calibri" : n);
     const rutaRel = (desde, tg) => { const rt = String(tg || "").startsWith("/") ? tg.slice(1) : desde.replace(/[^/]+$/, "") + tg; return rt.split("/").reduce((a, x) => { if (x === "..") a.pop(); else if (x && x !== ".") a.push(x); return a; }, []).join("/"); };
     const relsDeParte = (ruta) => { const t2 = z.texto(ruta.replace(/([^/]+)$/, "_rels/$1.rels")), o = {}; if (t2) todos(P(t2), "Relationship").forEach((r) => (o[at(r, "Id")] = { tipo: at(r, "Type") || "", ruta: at(r, "TargetMode") === "External" ? null : rutaRel(ruta, at(r, "Target")) })); return o; };
-    const MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", bmp: "image/bmp", svg: "image/svg+xml", webp: "image/webp" };
+    const MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", bmp: "image/bmp", svg: "image/svg+xml", webp: "image/webp", emf: "image/x-emf", wmf: "image/x-wmf" };
     const dataUrlXl = (ruta) => {
       const b = ruta && z.bytes(ruta), ext = String(ruta || "").split(".").pop().toLowerCase();
       if (!b || !MIME[ext] || b.length > 8 * 1024 * 1024) return null;
@@ -5273,7 +5300,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         }
       }
       if (piezasP.length) pq.pon(PRES, aplicarPiezas(xp, piezasP));
-      medios.forEach((mm) => { pq.pon(mm.nombre, mm.datos); pq.extension(mm.nombre.split(".").pop(), /png$/.test(mm.nombre) ? "image/png" : "image/jpeg"); });
+      medios.forEach((mm) => { pq.pon(mm.nombre, mm.datos); pq.extension(mm.nombre.split(".").pop(), MIME_IMG[mm.nombre.split(".").pop()] || "image/png"); });
       graficas.forEach((gx, i) => { const nm = `ppt/charts/${pre}chart${i + 1}.xml`; pq.pon(nm, gx); pq.tipo(nm, "application/vnd.openxmlformats-officedocument.drawingml.chart+xml"); });
       return pq.zip();
     }
@@ -5684,7 +5711,7 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       if (medios.has(ruta)) return medios.get(ruta);
       const b = await z.leer(ruta);
       const ext = (ruta.split(".").pop() || "").toLowerCase();
-      const mime = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml" }[ext];
+      const mime = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml", bmp: "image/bmp", emf: "image/x-emf", wmf: "image/x-wmf" }[ext];
       let u = null;
       if (b && mime) { let bin = ""; for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); u = `data:${mime};base64,${btoa(bin)}`; }
       // Las fotos grandes se achican (máx. 1600 px) para que la presentación no pese de más.

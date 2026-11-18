@@ -790,6 +790,12 @@
             o.style.zIndex = e.libre && !e.detras && +e.z ? String(2 + +e.z) : "";
             o.title = e.grupo ? "Grupo de formas del archivo de Word. Aquí no se edita, pero al descargar en Word sale completo." : "Forma del archivo de Word. Aquí no se edita, pero al descargar en Word sale completa.";
           }
+          else if (e.tipo === "objeto" && e.img && +e.w > 0 && +e.h > 0) {
+            // objeto incrustado de Word (ecuación vieja, hoja, diapositiva…): su vista previa, como la muestra Word
+            o.innerHTML = `<img class="wd-obj-vista" src="${esc(NOM.srcBin ? NOM.srcBin(e.img) : e.img)}" alt="${esc(e.que || "Objeto")}" style="width:${+e.w}px;height:${+e.h}px;vertical-align:baseline" draggable="false">`;
+            o.classList.add("con-vista");
+            o.title = (e.que === "Ecuación" ? "Ecuación del archivo de Word" : "Objeto incrustado del archivo de Word") + ". Aquí no se edita, pero al descargar en Word sale completo.";
+          }
           else if (e.tipo === "objeto") {
             // Lo que aquí no se dibuja (cuadro de texto, SmartArt, gráfico): su texto sí se lee.
             o.innerHTML = e.txt ? `<span class="wd-obj-caja"><b>${esc(e.que || "Objeto")}</b><span>${esc(e.txt)}</span></span>` : `<span>${esc(e.que || "Objeto")}</span>`;
@@ -1895,7 +1901,9 @@
           const marca = x.m != null ? `<span class="wd-cel-marca" style="min-width:${fr}px">${esc(String(x.m))}</span>` : "";
           const runs = (x.r || []).map((t) => {
             if (t.img) { const w0 = Math.max(4, Math.min(2000, +t.w || 40)), h0 = Math.max(4, Math.min(3000, +t.h || +t.w || 40)); const esRef = NOM.binarios && NOM.binarios.esRef(t.img);
-              return IMG_OK.test(t.img) || esRef ? `<img class="wd-cel-img" src="${esRef ? NOM.esc(NOM.srcBin(t.img)) : t.img}" alt="" style="width:${w0}px;aspect-ratio:${w0} / ${h0};height:auto">` : ""; }
+              // (un EMF o WMF —la vista previa de una ecuación vieja u otro objeto— se dibuja convertido: emf.js)
+              const meta = NOM.emf && NOM.emf.esDatos(t.img);
+              return IMG_OK.test(t.img) || esRef || meta ? `<img class="wd-cel-img" src="${esRef || meta ? NOM.esc(NOM.srcBin(t.img)) : t.img}" alt="" style="width:${w0}px;aspect-ratio:${w0} / ${h0};height:auto">` : ""; }
             return envolver(String(t.x || ""), t.a || {});
           }).join("");
           return `<div class="wd-cel-p"${st.length ? ` style="${st.join(";")}"` : ""}>${marca}${runs || "<br>"}</div>`;

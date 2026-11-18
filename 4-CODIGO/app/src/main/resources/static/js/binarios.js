@@ -227,7 +227,11 @@
     const h = huellaDe(ref);
     const b = await bytes(ref, c);
     const v = mem.get(h) || recordar(h, b, mimeDe(ref));
-    if (!v.url) v.url = URL.createObjectURL(new Blob([v.bytes], { type: v.mime || mimeDe(ref) }));
+    if (!v.url) {
+      // un EMF o WMF (dibujos de Windows) se dibuja convertido a SVG (emf.js); el documento guarda el original
+      const meta = NOM.emf && NOM.emf.tipo(v.bytes) ? NOM.emf.aSvg(v.bytes) : null;
+      v.url = URL.createObjectURL(meta ? new Blob([meta.svg], { type: "image/svg+xml" }) : new Blob([v.bytes], { type: v.mime || mimeDe(ref) }));
+    }
     return v.url;
   }
   const urlYa = (ref) => { const v = mem.get(huellaDe(ref)); return v && v.url; };
@@ -242,14 +246,14 @@
    * la política de seguridad y deja un error en la consola) y el observador lo cambia por la imagen al llegar.
    */
   function paraSrc(v) {
-    if (!esRef(v)) return v;
+    if (!esRef(v)) return NOM.emf ? NOM.emf.paraVer(v) : v;
     const u = urlYa(v);
     if (u) return u;
     url(v).catch(() => {});
     return GIF + "#" + v;
   }
   /** Para lo que se descarga con la imagen dentro (HTML, Markdown, SVG): sus datos (ya precargados), no una URL local. */
-  const paraExportar = (v) => (esRef(v) ? datosYa(v) || "" : v);
+  const paraExportar = (v) => { const d = esRef(v) ? datosYa(v) || "" : v; return NOM.emf ? NOM.emf.paraVer(d) : d; };
 
   // ------------------------------------------------------------ recorrer valores
   /** Todas las referencias dentro de un valor (texto, lista u objeto). */
@@ -405,8 +409,16 @@
     });
     return { r, falta, refs: t.match(RE_EN) || [] };
   }
+  /** Un EMF o WMF que llegó como datos (data:image/x-emf…): se cambia por su dibujo en SVG. */
+  function metaEl(el) {
+    for (const a of ["src", "href"]) {
+      const v = el.getAttribute(a);
+      if (v && v.charCodeAt(0) === 100 && NOM.emf && NOM.emf.esDatos(v)) el.setAttribute(a, NOM.emf.paraVer(v));
+    }
+  }
   function resolverEl(el) {
     if (!el || el.nodeType !== 1 || !el.getAttribute) return;
+    metaEl(el);
     for (const a of ATRS.concat(["style"])) {
       const v = el.getAttribute(a);
       if (!v || v.indexOf(PRE) < 0) continue;
@@ -428,7 +440,7 @@
   function resolverTodo(raiz) {
     if (!raiz || !raiz.querySelectorAll) return;
     if (raiz.nodeType === 1) resolverEl(raiz);
-    raiz.querySelectorAll('[src*="nom:bin/"],[href*="nom:bin/"],[poster*="nom:bin/"],[style*="nom:bin/"]').forEach(resolverEl);
+    raiz.querySelectorAll('[src*="nom:bin/"],[href*="nom:bin/"],[poster*="nom:bin/"],[style*="nom:bin/"],[src^="data:image/x-"],[href^="data:image/x-"]').forEach(resolverEl);
     // (xlink:href de SVG viejos)
     raiz.querySelectorAll("image").forEach(resolverEl);
   }
@@ -437,8 +449,8 @@
     if (obs || typeof MutationObserver === "undefined" || !document.body) return;
     obs = new MutationObserver((ms) => {
       for (const m of ms) {
-        if (m.type === "attributes") { if (m.target && (m.target.getAttribute(m.attributeName) || "").indexOf(PRE) >= 0) resolverEl(m.target); }
-        else m.addedNodes.forEach((n) => { if (n.nodeType === 1 && (n.outerHTML || "").indexOf(PRE) >= 0) resolverTodo(n); });
+        if (m.type === "attributes") { const v = m.target && (m.target.getAttribute(m.attributeName) || ""); if (v && (v.indexOf(PRE) >= 0 || v.startsWith("data:image/x-"))) resolverEl(m.target); }
+        else m.addedNodes.forEach((n) => { if (n.nodeType !== 1) return; const t = n.outerHTML || ""; if (t.indexOf(PRE) >= 0 || t.indexOf("data:image/x-") >= 0) resolverTodo(n); });
       }
     });
     obs.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["src", "href", "style", "poster"] });
