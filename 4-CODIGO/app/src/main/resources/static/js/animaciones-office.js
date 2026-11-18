@@ -939,9 +939,14 @@
         if (tg < 0) return;
         // el clic que sigue en la misma secuencia (para «hasta el siguiente clic» y lo que pasa al siguiente clic)
         const sig = corriendo.find((q, qi) => qi > ci && q.g.seq === c.g.seq && !q.g.auto);
-        c.g.subs.forEach((s) => {
+        c.g.subs.forEach((s, si) => {
           const ts0 = tg - s.b;
           if (ts0 < 0) return;
+          // «después de la animación» con masterRel="nextClick" (atenuar, ocultar con el siguiente clic): PowerPoint lo
+          // aplica al empezar el SIGUIENTE bloque de la secuencia, sea «después de la anterior» o el siguiente clic
+          // (medido con su video: v03-atenuar); lo que va «con la anterior» está en el mismo bloque y no cuenta
+          const sigSub = c.g.subs[si + 1];
+          const kSig = sigSub && T >= c.inicio + sigSub.b ? c.inicio + sigSub.b : !sigSub && sig && T >= sig.inicio ? sig.inicio : null;
           s.efs.forEach((ef) => {
             let ts = ts0;
             if (ef.t.hastaClic && sig) ts = Math.min(ts, sig.inicio - c.inicio - s.b);
@@ -951,7 +956,7 @@
                 if (!bh.dest || (soloDest && bh.dest !== soloDest)) return;
                 let k = null;
                 if (bh.alFin && ts0 >= fin) k = c.inicio + s.b + fin;
-                else if (!bh.alFin && sig && T >= sig.inicio) k = sig.inicio;
+                else if (!bh.alFin && kSig != null) k = kSig;
                 if (k != null) activos.push({ bh, s: 1, u: null, ef, k: [ci, k, bh.orden] });
               });
             }

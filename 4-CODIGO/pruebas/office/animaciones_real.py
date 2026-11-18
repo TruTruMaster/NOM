@@ -172,7 +172,8 @@ def main():
             vals = []
             for j, f in enumerate(idx):
                 t = (ts[f] - ts[f0]) * 1000 + a.desfase
-                p.evaluate("(t) => { if (window.__motor) window.__motor.cuadro(0, t); }", t)
+                # el video de PowerPoint (CreateVideo) da cada clic en cuanto termina el paso anterior: igual aquí
+                p.evaluate("(t) => { const m = window.__motor; if (!m) return; const d = m.duraciones(); let k = 0; while (k < d.length - 1 && t > d[k]) { t -= d[k]; k++; } m.cuadro(k, t); }", t)
                 png = p.screenshot(clip={"x": 0, "y": 0, "width": 1280, "height": 720})
                 im = Image.open(__import__("io").BytesIO(png)).convert("RGB").resize((ANCHO, ALTO), Image.BOX)
                 b = np.asarray(im)

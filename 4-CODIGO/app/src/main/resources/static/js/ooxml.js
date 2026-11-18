@@ -3161,11 +3161,50 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
           return cr ? { nombre: n, crudo: cr } : { nombre: n, datos: d };
         }).filter((x) => x.crudo || x.datos != null);
         // [Content_Types].xml primero, como lo escribe Office
-        lista.sort((a, b) => (a.nombre === CTN ? -1 : 0) - (b.nombre === CTN ? -1 : 0));
-        return zip(lista);
+        const sale = nombresAscii(lista);
+        sale.sort((a, b) => (a.nombre === CTN ? -1 : 0) - (b.nombre === CTN ? -1 : 0));
+        return zip(sale);
       },
     };
     return P;
+  }
+  /**
+   * Open XML (OPC, ECMA-376 parte 2) pide los nombres de las partes en ASCII: lo demás va como %XX de UTF-8. Hay
+   * programas (LibreOffice) que guardan el nombre tal cual («media/Cortázar.wav») y entonces PowerPoint ya no abre el
+   * archivo ni el validador de Microsoft encuentra la parte. Al descargar se corrige: el nombre de la parte y cada
+   * referencia a ella (destinos de las relaciones y PartName de [Content_Types].xml). Lo que ya es ASCII no se toca.
+   */
+  function nombresAscii(lista) {
+    const cod = (s) => s.replace(/[^\x00-\x7f]+/g, (m) => encodeURIComponent(m));
+    const dec = (s) => { try { return decodeURIComponent(s); } catch (e) { return s; } };
+    const cambia = new Map();
+    lista.forEach((a) => { if (/[^\x00-\x7f]/.test(a.nombre)) cambia.set(a.nombre, cod(a.nombre)); });
+    if (!cambia.size) return lista;
+    const des = (s) => (NOM.origen && NOM.origen.desescapar ? NOM.origen.desescapar(s) : s.replace(/&amp;/g, "&"));
+    const resolver = (dir, destino) => {
+      if (destino.startsWith("/")) return destino.slice(1);
+      const b = dir ? dir.split("/").filter(Boolean) : [];
+      destino.split("/").forEach((s) => { if (s === "..") b.pop(); else if (s !== "." && s !== "") b.push(s); });
+      return b.join("/");
+    };
+    const td = new TextDecoder();
+    return lista.map((a) => {
+      const nombre = cambia.get(a.nombre) || a.nombre;
+      if (a.crudo || !(/\.rels$/.test(a.nombre) || a.nombre === "[Content_Types].xml")) return nombre === a.nombre ? a : Object.assign({}, a, { nombre });
+      let t = typeof a.datos === "string" ? a.datos : td.decode(a.datos);
+      const t0 = t;
+      if (a.nombre === "[Content_Types].xml") {
+        t = t.replace(/(\sPartName\s*=\s*")\/([^"]*)(")/g, (m, i, pn, f) => { const n = cambia.get(dec(des(pn))); return n ? i + "/" + n + f : m; });
+      } else {
+        // el directorio de la parte dueña de estas relaciones ("_rels/.rels" es la raíz del paquete)
+        const dir = a.nombre === "_rels/.rels" ? "" : a.nombre.replace(/_rels\/[^/]+\.rels$/, "");
+        t = t.replace(/(\sTarget\s*=\s*")([^"]*)(")/g, (m, i, tg, f) => {
+          const destino = dec(des(tg));
+          return cambia.has(resolver(dir, destino)) ? i + cod(destino).replace(/&/g, "&amp;") + f : m;
+        });
+      }
+      return t === t0 && nombre === a.nombre ? a : Object.assign({}, a, { nombre, datos: t });
+    });
   }
 
   /** Lo que hace falta del styles.xml de origen para agregarle estilos sin tocar los que ya tiene. */
@@ -5170,8 +5209,13 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         }
         if (cT) {
           const tras = typeof timingNuevo === "string" && timingNuevo[0] === "+" ? timingNuevo.slice(1) : "";
-          if (trEl) ps2.push([trEl.i, trEl.f, r.transicion + tras]);
-          else { const cm = hsS.find((h) => O.local(h.n) === "clrMapOvr"), pos = cm ? cm.f : cSld.f; ps2.push([pos, pos, r.transicion + tras]); }
+          // el sonido de la transición se queda si su relación sigue en esta diapositiva y es un audio (con «Aplicar a
+          // todas», el rId de otra diapositiva aquí puede ser una imagen: entonces no se escribe)
+          let trXml = r.transicion;
+          const to2 = NOM.transOffice ? doc.valor("_doc", "transOffice:" + p) : null;
+          if (to2 && to2.snd && to2.snd.rid && pq.rels(ruta0).some((q) => q.id === to2.snd.rid && /\/(audio|media)$/.test(q.tipo || ""))) trXml = NOM.transOffice.xml(to2, { snd: true });
+          if (trEl) ps2.push([trEl.i, trEl.f, trXml + tras]);
+          else { const cm = hsS.find((h) => O.local(h.n) === "clrMapOvr"), pos = cm ? cm.f : cSld.f; ps2.push([pos, pos, trXml + tras]); }
         }
         pq.pon(ruta0, aplicarPiezas(xs, ps2));
         if (cN) ponNota(ruta0, doc.valor("_doc", "nota:" + p) || "");

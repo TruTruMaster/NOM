@@ -531,12 +531,24 @@
    * La transición como la escribe PowerPoint 2016: las de 2010 en adelante (p14, p15, p159) van en mc:AlternateContent con
    * una de respaldo (desvanecer) para los programas que no las conocen, y la duración exacta en p14:dur.
    */
-  function xml(tr) {
+  /**
+   * El sonido de la transición (p:sndAc): «detener el sonido anterior» siempre se puede escribir; un sonido propio solo
+   * si quien llama comprobó que su relación (tr.snd.rid) sigue en la diapositiva (opc.snd), porque sin el archivo de
+   * origen no hay a qué apuntar y una referencia rota hace que PowerPoint pida reparar.
+   */
+  function sonidoXml(tr, opc) {
+    if (tr.sndFin && !tr.snd) return "<p:sndAc><p:endSnd/></p:sndAc>";
+    if (!(opc && opc.snd) || !tr.snd || !tr.snd.rid) return "";
+    return `<p:sndAc><p:stSnd${tr.snd.bucle ? ' loop="1"' : ""}><p:snd r:embed="${escA(tr.snd.rid)}"${tr.snd.nombre ? ` name="${escA(tr.snd.nombre)}"` : ""}/></p:stSnd></p:sndAc>`;
+  }
+  function xml(tr, opc) {
     if (!tr) return "";
+    const snd = sonidoXml(tr, opc);
     if (tr.t === "corte0") {
-      // sin efecto, pero con avance automático o sin avance con clic: la transición vacía lo guarda
-      if (tr.advTm == null && !tr.sinClic) return "";
-      return `<p:transition${tr.spd ? ` spd="${escA(tr.spd)}"` : ""}${tr.advTm != null ? ` advTm="${Math.round(+tr.advTm)}"` : ""}${tr.sinClic ? ' advClick="0"' : ""}/>`;
+      // sin efecto, pero con avance automático, sin avance con clic o con sonido: la transición vacía lo guarda
+      if (tr.advTm == null && !tr.sinClic && !snd) return "";
+      const at0 = `${tr.spd ? ` spd="${escA(tr.spd)}"` : ""}${tr.advTm != null ? ` advTm="${Math.round(+tr.advTm)}"` : ""}${tr.sinClic ? ' advClick="0"' : ""}`;
+      return snd ? `<p:transition${at0}>${snd}</p:transition>` : `<p:transition${at0}/>`;
     }
     const a = tr.a || {};
     const ats = Object.keys(a).filter((k) => a[k] != null && a[k] !== "").map((k) => ` ${k}="${escA(a[k])}"`).join("");
@@ -549,14 +561,14 @@
     const dur = Math.max(0, Math.round(+tr.dur || 0));
     const spd = dur <= 500 ? "fast" : dur <= 750 ? "med" : "slow";
     const avance = (tr.advTm != null ? ` advTm="${Math.round(+tr.advTm)}"` : "") + (tr.sinClic ? ' advClick="0"' : "");
-    const respaldo = `<p:transition spd="${spd}"${avance}>${BASE.has(tr.t) ? ef : "<p:fade/>"}</p:transition>`;
+    const respaldo = `<p:transition spd="${spd}"${avance}>${BASE.has(tr.t) ? ef : "<p:fade/>"}${snd}</p:transition>`;
     const conDur = dur && dur !== { fast: 500, med: 750, slow: 1000 }[spd];
     if (!req && !conDur) return respaldo;
     const ns = req === "p15" ? ` xmlns:p15="${P15}"` : req === "p159" ? ` xmlns:p159="${P159}"` : "";
     const durA = dur ? ` xmlns:p14="${P14}" p14:dur="${dur}"` : "";
     const requiere = req || "p14";
     const nsReq = requiere === "p14" ? ` xmlns:p14="${P14}"` : ns;
-    return `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice${nsReq} Requires="${requiere}"><p:transition spd="${spd}"${requiere === "p14" ? "" : durA}${requiere === "p14" && dur ? ` p14:dur="${dur}"` : ""}${avance}>${ef}</p:transition></mc:Choice><mc:Fallback>${respaldo}</mc:Fallback></mc:AlternateContent>`;
+    return `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice${nsReq} Requires="${requiere}"><p:transition spd="${spd}"${requiere === "p14" ? "" : durA}${requiere === "p14" && dur ? ` p14:dur="${dur}"` : ""}${avance}>${ef}${snd}</p:transition></mc:Choice><mc:Fallback>${respaldo}</mc:Fallback></mc:AlternateContent>`;
   }
 
   // ================================================================== catálogo (la galería de PowerPoint 2024)

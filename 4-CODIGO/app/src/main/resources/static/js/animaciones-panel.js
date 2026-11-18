@@ -637,8 +637,9 @@
       if (f("auto").checked) tr.advTm = Math.max(0, Math.round((parseFloat(f("advTm").value) || 0) * 1000));
       if (!f("clic").checked) tr.sinClic = true;
       // el sonido que traía del archivo se queda
-      if (actual && actual.snd) { tr.snd = actual.snd; if (actual.sndFin) tr.sndFin = true; }
-      if (tr.t === "corte0" && tr.advTm == null && !tr.sinClic) return null;
+      if (actual && actual.snd) tr.snd = actual.snd;
+      if (actual && actual.sndFin) tr.sndFin = true;   // «detener el sonido anterior» (no lleva archivo)
+      if (tr.t === "corte0" && tr.advTm == null && !tr.sinClic && !tr.snd && !tr.sndFin) return null;
       return tr;
     }
     function vista() {
