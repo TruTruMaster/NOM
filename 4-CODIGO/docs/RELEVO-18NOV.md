@@ -2,18 +2,25 @@
 
 **Leer este primero.** Sigue a `RELEVO-17NOV-NOCHE.md` (que queda como detalle de lo de antes).
 
-## 0. Urgente: la Raspberry está apagada y la página pública no contesta
+## 0. La Raspberry volvió (18-nov, 05:54) y por qué el A55 se quedó sin dirección
 
-- A las 23:11 del 17-nov se probó el kernel nuevo de la Pi con `kernel-min trial` (arranca **una sola vez** la ranura
-  `b/`). **La Pi no volvió** (sin red desde entonces; `https://www.nom.qd.je` da 530 de Cloudflare).
-- **Qué hacer:** desconectar la Pi y volver a conectarla. Arranca con el kernel de siempre (`a/`, 6.18.59-min), porque
-  `tryboot` es de una sola vez; NOM vuelve solo, con sus datos.
-- Después, para saber por qué se detuvo el nuevo: `doas cat /boot/boot-report.txt` (lo escribe a los 30 s y 2 min de
-  cada arranque; si el kernel nuevo llegó a arrancar, el del arranque bueno lo sobrescribe: copiarlo antes de 30 s
-  no es práctico) y conectar una pantalla HDMI a la Pi para ver dónde se detiene. Sospechas: el controlador NVMe
-  de ese disco (SK hynix 1c5c:1339) al iniciar el PCIe, o el árbol 6.18.64 de Raspberry Pi.
-- No se levantó un sustituto en la laptop: serviría otros datos y, al volver la Pi, la gente quedaría repartida entre
-  dos servidores con el mismo túnel (el defecto que se corrigió el 17-nov).
+- El dueño la desconectó y la volvió a conectar: arrancó con el kernel de siempre (`a/`, 6.18.59-min) y NOM, el túnel
+  y el vigía volvieron solos; `https://www.nom.qd.je` contesta 200 y los datos y respaldos están intactos. (El reloj
+  de la Pi está en EST: marca una hora más que la laptop.)
+- **El kernel de prueba (`b/`) no dejó ni una línea en los registros**: se detuvo antes de que arrancara el sistema,
+  lo que coincide con la sospecha de un bloqueo temprano (PCIe/NVMe). Para saber dónde se detiene hace falta una
+  pantalla HDMI en la Pi durante el arranque de prueba. Con el kernel de siempre el disco sí aparece en el bus PCIe
+  (`[1c5c:1339]`); solo falta el controlador (`/dev/nvme*` no existe).
+- **La Pi es el DHCP y el DNS de toda la casa** (Pi-hole; el módem no reparte direcciones). Mientras la Pi estuvo
+  colgada (de las 23:11 a las 05:54), quien se conectaba a la red no recibía dirección IPv4: eso le pasó al A55 al
+  salir del modo avión en el que lo había dejado por error `app_emulador.py` (ya corregido: por Wi-Fi no usa el
+  modo avión). Comprobado en las concesiones del Pi-hole: la laptop renovó a las 05:54:27 y el A55 recibió dirección
+  a las 05:55:24, un minuto después de que volvió la Pi; desde entonces la depuración inalámbrica conecta sola. Lo
+  que ya tenía dirección la conservó, pero sin DNS (el único que reparte el Pi-hole es la propia Pi), salvo los
+  equipos que usen uno propio.
+- **Antes de otra prueba de kernel**: avisar al dueño y hacerla cuando nadie necesite la red, o encender por un rato
+  el DHCP del módem (apagando el del Pi-hole). Pendiente: que un kernel de prueba que se cuelga vuelva solo al de
+  siempre (el vigilante de hardware no alcanza a encenderse si se detiene tan pronto).
 
 ## 1. Hecho en esta sesión (comprobado)
 
@@ -29,8 +36,9 @@
 | Emulador de Android (la app con lo último) | `app_emulador.py` **15/15** (texto y hoja en vivo, sin red y al volver), `rama_emulador.py` **6/6** (147 s sin red → rama), y el id del servidor del teléfono **no cambia** al cerrar la app a la fuerza (lo nuevo de la 0.16.0) |
 | Archivos «con todo» (idea del dueño) | `windows/hacer_todo.py`: `t01-todo-word.docx` (w01-w12, 126 págs.), `t02-todo-excel.xlsx` (33 hojas), `t03-todo-powerpoint.pptx` (188 diapositivas). Medidos: Excel **100 %** (7 326 celdas, 889 rellenos, anchos y altos; se arregló una referencia 3D con espacios que daba #REF!); Word 83.5 % de renglones idénticos y 121 de 126 páginas; **PowerPoint no entra** (ver 2) |
 
-Commits: `8a93bbe` (paneles en PowerPoint real) y `8c35ac4` (archivos «con todo», referencia 3D, pruebas). Nada
-publicado todavía (la Pi está apagada).
+Commits en `main`: `8a93bbe` (paneles en PowerPoint real), `8c35ac4` (archivos «con todo», referencia 3D, pruebas),
+`eb4902e` (este relevo), `c8f5e3f` (versión 0.16.0: interfaz 21, APK 31), `e6951bd` (pruebas) y `fb4be15` (lo que se
+manda al servidor ya no pierde las claves «_» de dentro de los datos). Nada publicado todavía.
 
 ## 2. Lo más importante que se descubrió
 
@@ -72,16 +80,20 @@ publicado todavía (la Pi está apagada).
 
 ## 4. Lo que falta (en orden)
 
-1. **Reiniciar la Pi a mano** (0). Luego: ver por qué se detuvo `b/`, decidir (arreglar `b/`, o usar el de Alpine) y
-   pasar los datos al NVMe (`SERVIDOR-PROPIO.md`, «El disco nuevo»).
-2. **Publicar la 0.16.0**: ya pasó la regresión completa, la vuelta en PowerPoint real y el emulador. Falta el A55
-   (activar *Depuración inalámbrica* y vincular) y la Pi encendida. Pasos en `RELEVO-17NOV-NOCHE.md` §4.1 (4 y 5).
+1. **La Pi ya volvió** (0). Falta ver con una pantalla HDMI por qué se detuvo `b/`, decidir (arreglar `b/` o usar el
+   de Alpine) y pasar los datos al NVMe (`SERVIDOR-PROPIO.md`, «El disco nuevo»). Cuidado: si la Pi se cae, la casa
+   se queda sin DHCP ni DNS (0).
+2. ~~Publicar la 0.16.0~~ **Hecho el 18-nov**: push a `main` (`98d6ffe`; el trabajo de Azure terminó bien, aunque la
+   aplicación de Azure sigue apagada), jar en la Pi (`https://www.nom.qd.je` da 0.16.0, interfaz 21; `humo.py` 34/34),
+   APK 0.16.0 (código 31) como release «latest» `v0.16.0` (la descarga fija responde), IndexNow (76 direcciones) y
+   las páginas de `nom-qd-je` dicen «NOM». Falta solo instalarla en el A55 (estando en la misma red que la laptop, o
+   con el botón «Descarga la app»).
 3. **Certificado de `nom.qd.je`**: con `bad_authz` dos veces y el DNS correcto, lo probable es el límite de Let's
    Encrypt para `qd.je` (al no estar en la lista de sufijos públicos, todos los subdominios de todos los usuarios de
    DigitalPlat cuentan como uno) o un bloqueo del dominio. Opciones: esperar y volver a intentar en unos días (quitar
    y poner el dominio), preguntar en el soporte de GitHub, o pedir a DigitalPlat que agregue `qd.je` a la lista de
    sufijos públicos. `https://www.nom.qd.je` (el principal) no depende de esto.
-4. **Almacén de binarios** (2.1): el siguiente bloque grande de construcción.
+4. **Almacén de binarios** (2.1): casi terminado en la rama `almacen-binarios` (ver 6).
 5. **Word: modelo de acomodo con datos** (2.2).
 6. Lo demás de `PARIDAD-OFFICE.md` y `RELEVO-ESTADO-Y-PENDIENTES.md` §5.
 
@@ -96,3 +108,32 @@ publicado todavía (la Pi está apagada).
 - `animaciones_real.py` ahora da los clics como el video de PowerPoint (al terminar el paso anterior).
 - Tres servidores de prueba a la vez: 8099 (regresión), 8097 (medir) y uno de experimentos con otra carpeta
   `static` (8096): así se prueba un cambio sin tocar el repositorio.
+
+## 6. Almacén de binarios (rama `almacen-binarios`, todavía sin unir a `main`)
+
+Las imágenes y el Office original (después también video y audio) van a un almacén por espacio; el documento solo
+guarda `nom:bin/<sha256>.<ext>`. Commits: `17bcdf3` (servidor y página), `c03e612` (unión con `main`), `4eb6ac4`
+(también en el teléfono que comparte), `f176cb5` (prueba de extremo a extremo) y `a2ffb9d` (la sincronía
+teléfono↔nube lleva y trae los binarios).
+
+| Qué | Resultado |
+|---|---|
+| `t03-todo-powerpoint.pptx` (10 MB) por la interfaz (`pruebas/office/almacen_binarios.py`) | 9/9: se crea (antes «superaría 25 MB»), las imágenes se ven, la descarga sale idéntica parte por parte a la de sin almacén, `.nom` de ida y vuelta, otra persona del espacio y el enlace para ver (sin cuenta) ven las imágenes |
+| Seguridad (`seguridad.py`, secciones 18 y 13.5) | 417/417: quién sube y quién baja, huella que no coincide, rutas, el enlace para ver solo entrega lo que su documento usa, la cuota cuenta los binarios; la sincronía sube al otro servidor lo que le falta y baja lo que falta aquí |
+| Espacio cifrado (`interfaz/prueba_e2e.py`) | 33/33: el servidor solo guarda la imagen cifrada (su huella es la de lo cifrado) y no ve ni la referencia; los miembros y el enlace con la llave del documento la ven |
+| Teléfono que comparte (emulador, APK de depuración de la rama) | La app sube una imagen (170 KB) al almacén del teléfono, el documento queda con la referencia y se baja idéntica |
+
+Falta antes de unirla (en orden):
+
+1. **Investigar primero**: `editar_real.py` en la rama dio 40/41 porque `ms-complex2010.docx`, al importarlo por la
+   interfaz, cayó en «Lo creaste sin conexión…» (se guardó para subirlo después). El servidor de pruebas corría de una
+   copia del jar (recompilar no lo interrumpía), así que lo más probable es un defecto de
+   `NOM.binarios.crearEnEspacio` con ese archivo. Repetir con solo ese archivo y ver qué petición falla.
+2. Copiar y mover documentos entre espacios copiando también sus binarios; programar la limpieza de los que nadie usa
+   (`ServicioBinarios.limpiar` ya existe).
+3. `t01-todo-word.docx` y `t02-todo-excel.xlsx` por el almacén; ayuda, novedades y `PLAN-MEDIOS.md`.
+4. Unir a `main` después de publicar la 0.16.0, como 0.17.0 (subir `INTERFAZ`: la página nueva necesita el servidor
+   nuevo).
+
+La copia de trabajo de la rama estaba en una carpeta temporal que se borra al apagar; los commits sí están en el
+repositorio. Para seguir: `git worktree prune` y `git worktree add <carpeta fuera de /tmp> almacen-binarios`.
