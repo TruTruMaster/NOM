@@ -204,7 +204,7 @@ def probar(pw, archivo, salida):
         faltan = sorted(k for k in po if k not in ps and k.lower() not in {x.lower() for x in ps} and k != "xl/calcchain.xml")
         anota(nombre, "las demás partes del archivo salen idénticas", not faltan and len(cambiaron) <= (6 if modo == "HOJA" else 3),
               f"{len(iguales)} de {len(po)} idénticas; cambiaron {cambiaron[:6]}" + (f"; FALTAN {faltan[:6]}" if faltan else ""))
-        if (Path.home() / ".dotnet" / "dotnet").exists():
+        if (Path.home() / ".dotnet" / ("dotnet.exe" if os.name == "nt" else "dotnet")).exists():
             v = subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "validar_openxml.py"), str(destino), "--corpus", str(archivo.parent)], capture_output=True, text=True)
             anota(nombre, "validador de Microsoft: sin errores nuevos", v.returncode == 0, (v.stdout.strip().splitlines() or [""])[-1][:200] if v.returncode == 0 else v.stdout.strip()[:300])
         # se abre en Office de verdad al final, junto con los demás (un solo viaje a la computadora con Windows)

@@ -1392,3 +1392,11 @@
 .wd-objeto.con-vista[data-obj] { display: inline; text-indent: 0; }
 .wd-objeto.con-vista[data-obj] > img.wd-obj-vista { display: inline; max-width: none; border: 0; padding: 0; margin: 0; }
 @media print { .wd-objeto.con-vista[data-obj] { display: inline; } }
+/* Campos de Word (fecha, número de página, SEQ, REF…): su valor, con la letra del texto; con Alt+F9, su código */
+.wd-obj.wd-campo { display: inline; text-indent: 0; }
+.wd-obj.wd-campo > .wd-campo-v { display: inline; padding: 0; margin: 0; border: 0; background: none; font: inherit; color: inherit; white-space: pre-wrap; }
+.wd-obj.wd-campo.codigo > .wd-campo-v { background: #e8e8ee; font-family: var(--mono, monospace); }
+.wd-obj.wd-campo:hover > .wd-campo-v { background: rgba(0, 0, 0, .06); }
+@media print { .wd-obj.wd-campo:hover > .wd-campo-v { background: none; } }
+/* Marcadores de Word (los que usa algún campo): no se ven */
+.wd-obj.wd-marcador { display: inline; width: 0; overflow: hidden; }

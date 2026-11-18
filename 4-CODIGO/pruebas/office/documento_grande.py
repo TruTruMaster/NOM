@@ -194,7 +194,7 @@ def main():
         r_w = office_abre.abrir([destino], "documento-grande").get(destino.name)
         anota("Word de verdad abre el Word descargado sin avisos ni reparar", office_abre.bien(r_w), json.dumps(r_w, ensure_ascii=False)[:200] if r_w else "sin la computadora con Windows")
         val = Path(__file__).resolve().parent / "validar_openxml.py"
-        if (Path.home() / ".dotnet" / "dotnet").exists():
+        if (Path.home() / ".dotnet" / ("dotnet.exe" if os.name == "nt" else "dotnet")).exists():
             v = subprocess.run([sys.executable, str(val), str(destino), "--corpus", str(archivo.parent)], capture_output=True, text=True)
             anota("validador de Microsoft: sin errores nuevos", v.returncode == 0, v.stdout.strip().splitlines()[-1] if v.stdout.strip() else v.stderr[-200:])
     errores = [e for e in A.errores + B.errores if "Content Security Policy" not in e]

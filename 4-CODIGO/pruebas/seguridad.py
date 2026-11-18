@@ -533,13 +533,24 @@ try:
             # Pases firmados con la llave de la nube (con openssl) para los casos que no se pueden pedir.
             priv = os.path.join(D + "-llaves", "pases-privada.p8")
             pem = os.path.join(D2, "llave.pem")
-            subprocess.run(["openssl", "pkey", "-inform", "DER", "-in", priv, "-out", pem], check=True, capture_output=True)
+            # (con la biblioteca cryptography de Python, que hay en Linux y en Windows; si no está, con openssl)
+            try:
+                from cryptography.hazmat.primitives import hashes as _hs, serialization as _se
+                from cryptography.hazmat.primitives.asymmetric import ec as _ec, rsa as _rsa, padding as _pd
+                _llave = _se.load_der_private_key(open(priv, "rb").read(), None)
+                def _firma(datos):
+                    if isinstance(_llave, _ec.EllipticCurvePrivateKey): return _llave.sign(datos, _ec.ECDSA(_hs.SHA256()))
+                    if isinstance(_llave, _rsa.RSAPrivateKey): return _llave.sign(datos, _pd.PKCS1v15(), _hs.SHA256())
+                    return _llave.sign(datos)
+            except ImportError:
+                subprocess.run(["openssl", "pkey", "-inform", "DER", "-in", priv, "-out", pem], check=True, capture_output=True)
+                def _firma(datos):
+                    fa = os.path.join(D2, "datos.bin"); open(fa, "wb").write(datos)
+                    return subprocess.run(["openssl", "dgst", "-sha256", "-sign", pem, fa], check=True, capture_output=True).stdout
             def firmar(c):
                 datos = json.dumps(c, separators=(",", ":")).encode()
-                fa = os.path.join(D2, "datos.bin"); open(fa, "wb").write(datos)
-                fi = subprocess.run(["openssl", "dgst", "-sha256", "-sign", pem, fa], check=True, capture_output=True).stdout
                 b64 = lambda x: base64.urlsafe_b64encode(x).decode().rstrip("=")
-                return b64(datos) + "." + b64(fi)
+                return b64(datos) + "." + b64(_firma(datos))
             ah = int(time.time() * 1000)
             base_pase = {"v": 1, "uid": "Prueba12345", "nombre": "firmado", "color": "#123456", "emitido": ah, "caduca": ah + 600_000, "nube": f"http://localhost:{P}", "nonce": "n0"}
             prueba("13.2 (control) un pase bien firmado a mano sí entra", 200, r2("POST", "/api/cuentas/pase/entrar", {"pase": firmar(base_pase)})[0])
@@ -801,7 +812,10 @@ try:
             for raiz_, _, fs in os.walk(carpeta):
                 for f in fs:
                     if f == "servidor.log": continue   # el registro de esta prueba (en la Pi va en /var/log)
-                    b = open(os.path.join(raiz_, f), "rb").read()
+                    # (en Windows, un archivo que el servidor tiene abierto con candado no se puede leer: ese se salta;
+                    # en Linux se leen todos)
+                    try: b = open(os.path.join(raiz_, f), "rb").read()
+                    except PermissionError: continue
                     for m in marcas:
                         if m.encode() in b: hallados.append(os.path.relpath(os.path.join(raiz_, f), carpeta) + ":" + m)
             return hallados

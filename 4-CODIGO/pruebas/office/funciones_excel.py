@@ -64,13 +64,11 @@ def con_excel(dir_tmp):
     import json
     ent = Path(dir_tmp) / "funciones-entrada.json"
     ent.write_text(json.dumps({"datos": DATOS, "casos": CASOS}, ensure_ascii=False), encoding="utf-8")
-    ssh = lambda c, **k: subprocess.run(["ssh", "-o", "BatchMode=yes", WIN, c], capture_output=True, text=True, errors="replace", **k)
-    ssh("mkdir nomoffice\\funciones 2>nul & echo.")
-    subprocess.run(["scp", "-q", str(ent), WIN + ":nomoffice/funciones/entrada.json"], check=True, timeout=120)
-    subprocess.run(["scp", "-q", str(AQUI / "windows/funciones_excel.py"), str(AQUI / "windows/comun.py"), WIN + ":nomoffice/"], check=True, timeout=120)
-    r = ssh("powershell -NoProfile -ExecutionPolicy Bypass -File nomoffice\\correr.ps1 funciones funciones_excel.py funciones\\entrada.json funciones\\salida.json", timeout=1800)
+    import remoto
+    remoto.subir([ent], "nomoffice/funciones")
+    r = remoto.correr_office("funciones", "funciones_excel.py", "funciones\\funciones-entrada.json", "funciones\\salida.json", timeout=1800)
     if "[fin 0]" not in r.stdout: sys.exit("Excel no terminó: " + (r.stdout + r.stderr)[-800:])
-    subprocess.run(["scp", "-q", WIN + ":nomoffice/funciones/salida.json", str(Path(dir_tmp) / "salida.json")], check=True, timeout=120)
+    remoto.bajar("nomoffice/funciones/salida.json", Path(dir_tmp) / "salida.json")
     return json.loads((Path(dir_tmp) / "salida.json").read_text(encoding="utf-8"))
 
 

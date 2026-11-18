@@ -403,6 +403,8 @@
     const FMT_NUM = { "1.": ["decimal", "%1."], "1)": ["decimal", "%1)"], "a.": ["lowerLetter", "%1."], "a)": ["lowerLetter", "%1)"], "A.": ["upperLetter", "%1."], "I.": ["upperRoman", "%1."], "i.": ["lowerRoman", "%1."] };
     const abstracto = (clave) => { if (!abstractos.has(clave)) abstractos.set(clave, abstractos.size + baseAbs); return abstractos.get(clave); };
     const nuevaInstancia = (clave, inicio) => { const id = baseNum + instancias.length; instancias.push({ id, abs: abstracto(clave), inicio }); return id; };
+    // Marcadores (los que usan los campos): un id por nombre
+    const marcadoresW = {};
     // 8.2 Notas al pie y figuras.
     const notas = [];
     let nFigura = 0;
@@ -1322,6 +1324,14 @@
             runs += `<w:r><w:rPr><w:rStyle w:val="RefNota"/></w:rPr><w:footnoteReference w:id="${baseNota + notas.length}"/></w:r>`;
           } else if (t.e.tipo === "ecuacion" && NOM.ecuaciones) {
             runs += t.e.bloque ? `<m:oMathPara>${NOM.ecuaciones.omml(t.e.tex || "")}</m:oMathPara>` : NOM.ecuaciones.omml(t.e.tex || "");
+          } else if (t.e.tipo === "campo") {
+            // campo de Word: { código | valor } como lo escribe Word (la fecha y la hora, con el valor de ahora)
+            const v = NOM.campos ? NOM.campos.textoVisible(t.e, { idioma: doc.valor("_doc", "idioma") }) : String(t.e.res || "");
+            const rp = rPr(t.e.a || {});
+            runs += `<w:r>${rp}<w:fldChar w:fldCharType="begin"/></w:r><w:r>${rp}<w:instrText xml:space="preserve"> ${x(t.e.instr || "")} </w:instrText></w:r><w:r>${rp}<w:fldChar w:fldCharType="separate"/></w:r>${v ? texto(v, t.e.a || {}) : ""}<w:r>${rp}<w:fldChar w:fldCharType="end"/></w:r>`;
+          } else if (t.e.tipo === "marcador" && t.e.nombre) {
+            if (marcadoresW[t.e.nombre] == null) marcadoresW[t.e.nombre] = 900000 + Object.keys(marcadoresW).length;
+            runs += t.e.lado === "fin" ? `<w:bookmarkEnd w:id="${marcadoresW[t.e.nombre]}"/>` : `<w:bookmarkStart w:id="${marcadoresW[t.e.nombre]}" w:name="${x(t.e.nombre)}"/>`;
           } else if (t.e.texto != null && t.e.tipo !== "tabla") runs += texto(String(t.e.texto), t.a || {});
           return;
         }
@@ -1545,6 +1555,11 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     let uEl = null;   // la unidad del cuerpo (párrafo o tabla de primer nivel) que se está leyendo
     const ordinal = (c) => (uEl ? c.localName + ":" + Array.prototype.indexOf.call(uEl.getElementsByTagNameNS("*", c.localName), c) : null);
     const xmlDoc = await z.texto("word/document.xml");
+    // Los marcadores que usa algún campo (REF, PAGEREF, NOTEREF): solo esos entran al texto (como marcas invisibles),
+    // para que «Actualizar campos» encuentre su texto y su página. Los demás (_GoBack, los del índice…) no hace falta.
+    const marcadoresUsados = new Set();
+    String(xmlDoc || "").replace(/(?:REF|PAGEREF|NOTEREF)\s+([A-Za-z_][\w]*)/g, (m, n) => { marcadoresUsados.add(n); return m; });
+    const nombreMarcador = {};   // id → nombre (bookmarkEnd solo trae el id)
     if (!xmlDoc) throw new Error("El archivo no parece un documento de Word (.docx)");
     const P = (t) => new DOMParser().parseFromString(t, "application/xml");
     const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -2309,6 +2324,20 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
               const id = c.getAttributeNS(W, "id") || c.getAttribute("w:id");
               tramos.push({ e: { tipo: "nota", texto: notasPie[id] || "", oe: ordinal(c) }, a: {} });
             } else if (cn === "sym") tramos.push({ x: String.fromCharCode(parseInt(c.getAttributeNS(W, "char") || c.getAttribute("w:char") || "20", 16) & 0xFFF), a });
+            else if (cn === "fldChar" && parrafo) {
+              // Campo de Word: { código | último valor }. Se guarda como campo (se ve su último valor, como en Word, y
+              // «Actualizar campos» lo calcula otra vez); los que NOM no calcula se quedan como texto.
+              const tipoF = c.getAttributeNS(W, "fldCharType") || c.getAttribute("w:fldCharType");
+              const pila = (parrafo._campos = parrafo._campos || []);
+              // (el idioma del campo es el de su texto: con él se escriben los meses y los números con letra)
+              const lg = rpr && hijo(rpr, "lang");
+              if (tipoF === "begin") pila.push({ instr: "", etapa: "instr", ini: tramos.length, a, idioma: (lg && (lg.getAttributeNS(W, "val") || lg.getAttribute("w:val"))) || null });
+              else if (tipoF === "separate" && pila.length) { const f = pila[pila.length - 1]; f.etapa = "res"; f.res0 = tramos.length; }
+              else if (tipoF === "end" && pila.length) cerrarCampo(pila, tramos);
+            } else if (cn === "instrText" && parrafo && parrafo._campos && parrafo._campos.length) {
+              const f = parrafo._campos[parrafo._campos.length - 1];
+              if (f.etapa === "instr") f.instr += c.textContent;
+            }
           }
         } else if (ln === "hyperlink") {
           const rid = r.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id") || r.getAttribute("r:id");
@@ -2317,8 +2346,36 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         } else if (ln === "oMath" || ln === "oMathPara") {
           const t = ommlATex(r).trim();
           if (t) tramos.push({ e: { tipo: "ecuacion", tex: t, bloque: ln === "oMathPara" || null, oe: ordinal(r) }, a: {} });
+        } else if (ln === "fldSimple" && parrafo) {
+          const ini = tramos.length, pila = (parrafo._campos = parrafo._campos || []);
+          pila.push({ instr: r.getAttributeNS(W, "instr") || r.getAttribute("w:instr") || "", etapa: "res", ini, res0: ini, a: base });
+          await runs(r, base, tramos, parrafo);
+          cerrarCampo(pila, tramos);
+        } else if (ln === "bookmarkStart") {
+          const nm = r.getAttributeNS(W, "name") || r.getAttribute("w:name"), id = r.getAttributeNS(W, "id") || r.getAttribute("w:id");
+          if (nm && marcadoresUsados.has(nm)) { nombreMarcador[id] = nm; tramos.push({ e: { tipo: "marcador", nombre: nm, lado: "ini" }, a: {} }); }
+        } else if (ln === "bookmarkEnd") {
+          const nm = nombreMarcador[r.getAttributeNS(W, "id") || r.getAttribute("w:id")];
+          if (nm) tramos.push({ e: { tipo: "marcador", nombre: nm, lado: "fin" }, a: {} });
         } else if (["ins", "smartTag", "fldSimple", "customXml", "sdt", "sdtContent", "bdo", "dir"].includes(ln)) await runs(r, base, tramos, parrafo);
       }
+    }
+    /** Los campos que NOM sabe calcular (los demás —índice, vínculos, XE…— se quedan como su texto). */
+    const CAMPOS_VIVOS = new Set(["DATE", "TIME", "CREATEDATE", "SAVEDATE", "PRINTDATE", "PAGE", "NUMPAGES", "SECTIONPAGES", "SECTION", "SEQ", "REF", "PAGEREF", "NOTEREF",
+      "IF", "=", "MERGEFIELD", "AUTHOR", "TITLE", "SUBJECT", "KEYWORDS", "COMMENTS", "FILENAME", "NUMWORDS", "NUMCHARS", "DOCPROPERTY", "LASTSAVEDBY", "QUOTE", "USERNAME", "USERINITIALS", "STYLEREF"]);
+    /** Termina el campo de arriba de la pila: su último valor (los tramos de su resultado) se vuelve un campo. */
+    function cerrarCampo(pila, tramos) {
+      const f = pila.pop();
+      const padre = pila[pila.length - 1];
+      const r0 = f.res0 != null ? f.res0 : tramos.length;
+      const resTr = tramos.slice(r0);
+      const texto = resTr.every((t) => !t.e) ? resTr.map((t) => t.x || "").join("") : null;
+      if (padre && padre.etapa === "instr") { padre.instr += texto || ""; tramos.length = f.ini; return; }   // dentro del código del de afuera
+      const codigo = f.instr.replace(/\s+/g, " ").trim();
+      const nombre = (/^=/.test(codigo) ? "=" : (codigo.split(" ")[0] || "")).toUpperCase();
+      if (!CAMPOS_VIVOS.has(nombre) || texto == null || tramos.slice(f.ini, r0).some((t) => t.e)) return;   // se queda como su texto
+      tramos.length = f.ini;
+      tramos.push({ e: { tipo: "campo", instr: codigo, res: texto, a: Object.assign({}, (resTr[0] && resTr[0].a) || f.a || {}), idioma: f.idioma || undefined }, a: {} });
     }
     const ESTILO_POR_NOMBRE = (nm) => (/^heading 1$|^título 1$/.test(nm) ? "h1" : /^heading 2$|^título 2$/.test(nm) ? "h2" : /^heading [3-9]$|^título [3-9]$/.test(nm) ? "h3"
       : nm === "title" || nm === "título" ? "titulo" : nm === "subtitle" || nm === "subtítulo" ? "subtitulo" : /quote|cita/.test(nm) ? "cita" : null);
@@ -2587,6 +2644,9 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
               if (t.e && t.e.tipo === "imagen" && t.e.src) { r.push({ img: t.e.src, w: Math.round(+t.e.w || 0), h: Math.round(+t.e.h || 0) }); complejo = true; }
               // (un objeto incrustado —ecuación vieja, hoja…— se ve en la celda con su vista previa, como en Word)
               else if (t.e && t.e.tipo === "objeto" && t.e.img) { r.push({ img: t.e.img, w: Math.round(+t.e.w || 0), h: Math.round(+t.e.h || 0) }); complejo = true; }
+              // (un campo dentro de una celda: su último valor, como texto)
+              else if (t.e && t.e.tipo === "campo") { r.push({ x: String(t.e.res || ""), a: t.e.a || {} }); }
+              else if (t.e && t.e.tipo === "marcador") { /* nada que ver */ }
               else if (t.e) { if (t.e.txt) r.push({ x: String(t.e.txt), a: {} }); }
               else if (t.x) { r.push({ x: t.x, a: t.a || {} }); if (t.x.trim()) firmas.add(JSON.stringify(t.a || {})); }
             }
@@ -2756,6 +2816,23 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       return { texto: texto.slice(0, 300), alin: usados === 1 ? ["izq", "centro", "der"][limpios.findIndex(Boolean)] : "izq", num };
     }
     const docCampos = {};
+    // Para los campos de Word (AUTHOR, TITLE, CREATEDATE, SAVEDATE…, y el formato de fecha del idioma): las propiedades
+    // del documento (docProps/core.xml y app.xml) y el idioma del texto (docDefaults).
+    try {
+      const props = {};
+      const core = await z.texto("docProps/core.xml");
+      if (core) {
+        const dc = P(core), tx = (ln) => { const n = dc.getElementsByTagNameNS("*", ln)[0]; return n ? n.textContent.trim() : ""; };
+        [["title", "titulo"], ["subject", "asunto"], ["creator", "autor"], ["keywords", "claves"], ["description", "comentarios"], ["lastModifiedBy", "modificoPor"],
+          ["created", "creado"], ["modified", "guardado"], ["lastPrinted", "impreso"], ["category", "categoria"]].forEach(([k, n]) => { const v = tx(k); if (v) props[n] = v; });
+      }
+      const app = await z.texto("docProps/app.xml");
+      if (app) { const da = P(app), tx = (ln) => { const n = da.getElementsByTagNameNS("*", ln)[0]; return n ? n.textContent.trim() : ""; }; ["Company", "Manager", "Template"].forEach((k) => { const v = tx(k); if (v) props[k.toLowerCase()] = v; }); }
+      const lang = rprDef && hijo(rprDef, "lang");
+      const idioma = lang && (lang.getAttributeNS(W, "val") || lang.getAttribute("w:val"));
+      if (Object.keys(props).length) docCampos.props = props;
+      if (idioma) docCampos.idioma = idioma;
+    } catch (e) { /* sin propiedades */ }
     if (Object.keys(formato).length) docCampos.formato = formato;
     // Protección de Word: «restringir edición» (solo lectura, comentarios, cambios marcados o formularios), «contraseña para
     // modificar» con «abrir como de solo lectura» recomendado, y «marcar como final». La contraseña no se guarda: solo su hash.

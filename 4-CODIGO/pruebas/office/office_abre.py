@@ -8,39 +8,28 @@ Manda todos los archivos de una vez (un solo paquete por SSH) a la computadora c
 windows/abrir_office.py en la sesión de escritorio: Word, Excel o PowerPoint abren cada uno CON sus avisos y se anota
 si pidieron reparar. Sin la computadora con Windows (o sin red), devuelve {} y quien llama decide.
 """
-import json, os, subprocess, tarfile, tempfile
+import json, sys, tempfile
+sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
 from pathlib import Path
 
-WIN = os.environ.get("NOM_WINDOWS", "user@100.65.29.5")
-AQUI = Path(__file__).resolve().parent
-
-
-def _ssh(cmd, timeout=3600):
-    return subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", WIN, cmd], capture_output=True, text=True, errors="replace", timeout=timeout)
+import remoto
 
 
 def disponible():
-    try: return _ssh("echo nom", timeout=30).stdout.strip() == "nom"
-    except Exception: return False
+    return remoto.disponible()
 
 
 def abrir(rutas, etiqueta="prueba"):
     rutas = [Path(r) for r in rutas if Path(r).suffix.lower() in (".docx", ".xlsx", ".pptx")]
-    if not rutas or not disponible(): return {}
-    carpeta = f"entrada\\abrir-{etiqueta}"
+    if not rutas or not remoto.disponible(): return {}
+    carpeta = f"nomoffice/entrada/abrir-{etiqueta}"
+    remoto.ejecutar(f"rmdir /S /Q {carpeta} 2>nul & echo.".replace("/", "\\"))
+    remoto.subir(rutas, carpeta)
+    r = remoto.correr_office(f"abrir-{etiqueta}", "abrir_office.py", f"entrada\\abrir-{etiqueta}")
+    if "[fin" not in r.stdout: return {}
     with tempfile.TemporaryDirectory() as d:
-        paquete = Path(d) / "ida.tar"
-        with tarfile.open(paquete, "w") as t:
-            for r in rutas: t.add(r, arcname=r.name)
-        _ssh(f"rmdir /S /Q nomoffice\\{carpeta} 2>nul & mkdir nomoffice\\{carpeta} & echo.")
-        subprocess.run(["scp", "-q", str(paquete), f"{WIN}:nomoffice/{carpeta.replace(chr(92), '/')}/ida.tar"], check=True, timeout=900)
-        subprocess.run(["scp", "-q", str(AQUI / "windows" / "abrir_office.py"), str(AQUI / "windows" / "comun.py"), WIN + ":nomoffice/"], check=True, timeout=120)
-        _ssh(f"cd nomoffice\\{carpeta} && tar -xf ida.tar && del ida.tar")
-        r = _ssh(f"powershell -NoProfile -ExecutionPolicy Bypass -File nomoffice\\correr.ps1 abrir-{etiqueta} abrir_office.py {carpeta}")
-        if "[fin" not in r.stdout: return {}
         sal = Path(d) / "resultado.json"
-        subprocess.run(["scp", "-q", f"{WIN}:nomoffice/{carpeta.replace(chr(92), '/')}/resultado.json", str(sal)], check=False, timeout=300)
-        if not sal.exists(): return {}
+        if not remoto.bajar(f"{carpeta}/resultado.json", sal): return {}
         return {x["archivo"]: x for x in json.loads(sal.read_text(encoding="utf-8"))}
 
 

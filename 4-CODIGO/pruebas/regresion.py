@@ -103,6 +103,8 @@ def pruebas(modo, out):
             ("office_raros", [PY, o("raros.py")], True, 120, None),
             ("funciones_excel", [PY, o("funciones_excel.py")], True, 120, None),
             ("almacen_binarios", [PY, o("almacen_binarios.py")], True, 200, None),
+            ("campos_word", [PY, o("campos_real.py")], True, 120, None),
+            ("metarchivos_word", [PY, o("metarchivos_real.py")], False, 300, None),
         ]
     return L
 
@@ -112,12 +114,19 @@ def main():
     ap.add_argument("modo", nargs="?", default="todo")
     ap.add_argument("--carriles", type=int, default=max(2, min(8, (os.cpu_count() or 4) // 2)))
     ap.add_argument("--solo", default="")
+    ap.add_argument("--sin-junit", action="store_true", help="sin las pruebas de Java (las corre quien compila el jar)")
     a = ap.parse_args()
     if not JAR.exists(): print("Falta el jar: cd 4-CODIGO/app && mvn -o -q package"); return 2
     out = CACHE / "registros" / datetime.now().strftime("%Y-%m-%d_%H%M"); (out / "capturas").mkdir(parents=True, exist_ok=True)
     res = out / "resumen.txt"
     lista = pruebas(a.modo, out)
+    # cada prueba con su carpeta de capturas (corren a la vez: con una sola se pisaban los archivos del mismo nombre)
+    cap = str(out / "capturas")
+    lista = [(n, [(x + os.sep + n) if x == cap else x for x in cmd], srv, seg, extra) for n, cmd, srv, seg, extra in lista]
+    for n, cmd, *_ in lista:
+        if any(x.startswith(cap + os.sep) for x in cmd): (out / "capturas" / n).mkdir(parents=True, exist_ok=True)
     if a.solo: lista = [x for x in lista if x[0] in a.solo.split(",")]
+    if a.sin_junit or not shutil.which("mvn"): lista = [x for x in lista if x[0] != "junit"]
     # las de Office necesitan el validador al final (lee lo que dejan ediciones.py y editar_real.py)
     validador = a.modo != "rapido" and not a.solo and (Path.home() / ".dotnet" / ("dotnet.exe" if WIN else "dotnet")).exists()
     lista.sort(key=lambda x: -x[3])

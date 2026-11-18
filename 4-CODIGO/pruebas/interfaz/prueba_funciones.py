@@ -70,7 +70,12 @@ class Pagina:
         return self.ev("(s) => { const e = [...document.querySelectorAll(s)].find(x => x.offsetParent || x.getClientRects().length) || null; if (!e) return null; e.scrollIntoView({block: e.tagName === 'TD' ? 'center' : 'nearest', inline: e.tagName === 'TD' ? 'center' : 'nearest'}); const r = e.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }", sel)
 
     def clic(self, sel, **k):
-        c = self.centro(sel)
+        # (espera a que aparezca: con varias pruebas a la vez la página tarda un poco más)
+        c = None
+        for _ in range(40):
+            c = self.centro(sel)
+            if c: break
+            self.t(250)
         if not c: raise AssertionError("no está: " + sel)
         self.p.mouse.click(c[0], c[1], **k); self.t(250)
 
@@ -94,10 +99,17 @@ class Pagina:
         self.p.mouse.click(*c); self.t(350)
 
     def boton(self, texto, dentro=".velo .hoja"):
-        c = self.ev("""([t, d]) => { const b = [...document.querySelectorAll(d + ' button, ' + d + ' a.btn, ' + d + ' [role=tab]')].find(x => x.offsetParent && x.textContent.trim().replace(/\\s+/g, ' ').startsWith(t));
-            if (!b) return null; const r = b.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }""", [texto, dentro])
+        c = None
+        for _ in range(40):
+            c = self._boton(texto, dentro)
+            if c: break
+            self.t(250)
         if not c: raise AssertionError(f"no hay botón «{texto}» en {dentro}")
         self.p.mouse.click(*c); self.t(400)
+
+    def _boton(self, texto, dentro):
+        return self.ev("""([t, d]) => { const b = [...document.querySelectorAll(d + ' button, ' + d + ' a.btn, ' + d + ' [role=tab]')].find(x => x.offsetParent && x.textContent.trim().replace(/\\s+/g, ' ').startsWith(t));
+            if (!b) return null; const r = b.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }""", [texto, dentro])
 
     def hoja_abierta(self):
         return self.ev("() => (document.querySelector('.velo .hoja h2') || {}).textContent || null")

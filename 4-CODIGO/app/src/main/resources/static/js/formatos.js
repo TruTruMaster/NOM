@@ -773,8 +773,12 @@ ${formas.join("\n")}
         }
         if (t.e.tipo === "tabla") { ops.push({ id: "imp:b" + ref, bloque: ref, campos: Object.assign({ tipo: "tabla", enTexto: true, filasTexto: t.e.filas, colsTexto: t.e.cols }, t.e.celdas), t: 1, n: "importar" }); return { e: { tipo: "tabla", ref } }; }
         if (t.e.tipo === "nota" || t.e.tipo === "ecuacion") { ops.push({ id: "imp:b" + ref, bloque: ref, campos: Object.assign({ enTexto: true }, t.e), t: 1, n: "importar" }); return { e: { tipo: t.e.tipo, ref } }; }
+        // campo de Word (su código y su último valor: «Actualizar campos» lo cambia) y marcador (donde empieza o
+        // termina; solo los que usa algún campo)
+        if (t.e.tipo === "campo") { ops.push({ id: "imp:b" + ref, bloque: ref, campos: limpio({ tipo: "campo", enTexto: true, instr: t.e.instr, res: t.e.res, a: limpio(t.e.a), idioma: t.e.idioma }), t: 1, n: "importar" }); return { e: { tipo: "campo", ref } }; }
+        if (t.e.tipo === "marcador") return { e: { tipo: "marcador", nombre: t.e.nombre, lado: t.e.lado } };
         // (un gráfico de Word lleva además su modelo de Office y su tamaño, para dibujarlo como Word)
-        return { e: limpio({ tipo: t.e.tipo, oe: t.e.oe, que: t.e.que, txt: t.e.txt, g: t.e.g, w: t.e.w, h: t.e.h, forma: t.e.forma, grupo: t.e.grupo, libre: t.e.libre, x: t.e.x, y: t.e.y, detras: t.e.detras, franja: t.e.franja, z: t.e.z, fl: t.e.fl }) };
+        return { e: limpio({ tipo: t.e.tipo, oe: t.e.oe, que: t.e.que, txt: t.e.txt, img: t.e.img, g: t.e.g, w: t.e.w, h: t.e.h, forma: t.e.forma, grupo: t.e.grupo, libre: t.e.libre, x: t.e.x, y: t.e.y, detras: t.e.detras, franja: t.e.franja, z: t.e.z, fl: t.e.fl }) };
       });
       ps.push({ tramos, a: limpio(p.pa) });
     });

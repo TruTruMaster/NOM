@@ -558,6 +558,23 @@
     return r;
   }
 
+  /** Los párrafos con cada elemento y su id (para los campos de Word: en qué orden van, dónde está cada marcador y en
+      qué página cae): [{ pa, items: [{ id, c, e, bl }] }]. */
+  function recorrido(doc) {
+    asegurarSecuencia(doc, true);
+    const sec = doc.secuencia(B), vis = sec.visibles(), r = [];
+    calcularParrafos(sec).forEach((p) => {
+      const items = [];
+      for (let i = p.ini; i < p.fin; i++) {
+        const it = vis[i];
+        if (it.e) items.push({ id: it.id, e: it.e, bl: it.e.ref ? doc.bloque(it.e.ref) : null });
+        else items.push({ id: it.id, c: it.c });
+      }
+      r.push({ pa: S().attrs(p.mark), items });
+    });
+    return r;
+  }
+
   // ------------------------------------------------------------ migración de documentos viejos
   /** Documentos de antes (un bloque por párrafo): se pasan a la secuencia con ids deterministas,
       así dos equipos que migran a la vez producen exactamente las mismas operaciones. */
@@ -790,6 +807,14 @@
             o.style.zIndex = e.libre && !e.detras && +e.z ? String(2 + +e.z) : "";
             o.title = e.grupo ? "Grupo de formas del archivo de Word. Aquí no se edita, pero al descargar en Word sale completo." : "Forma del archivo de Word. Aquí no se edita, pero al descargar en Word sale completa.";
           }
+          else if (e.tipo === "campo") {
+            // campo de Word: su último valor (la fecha y la hora, al día), con la letra de su texto; Alt+F9: su código
+            const txt = verCodigos ? `{ ${(bl && bl.instr) || ""} }` : NOM.campos ? NOM.campos.textoVisible(bl, { idioma: doc().valor("_doc", "idioma") }) : String((bl && bl.res) || "");
+            o.innerHTML = `<span class="wd-campo-v">${envolver(txt, (bl && bl.a) || {})}</span>`;
+            o.classList.toggle("codigo", verCodigos);
+            o.title = ed.soloLectura ? "" : `Campo de Word: ${(bl && bl.instr) || ""}. «Actualizar campos» (F9) lo calcula otra vez; Alt+F9 muestra los códigos.`;
+          }
+          else if (e.tipo === "marcador") { o.innerHTML = ""; o.dataset.marcador = e.nombre || ""; }
           else if (e.tipo === "objeto" && e.img && +e.w > 0 && +e.h > 0) {
             // objeto incrustado de Word (ecuación vieja, hoja, diapositiva…): su vista previa, como la muestra Word
             o.innerHTML = `<img class="wd-obj-vista" src="${esc(NOM.srcBin ? NOM.srcBin(e.img) : e.img)}" alt="${esc(e.que || "Objeto")}" style="width:${+e.w}px;height:${+e.h}px;vertical-align:baseline" draggable="false">`;
@@ -2433,6 +2458,7 @@
         if (mod && e.altKey && k === "v") { e.preventDefault(); if (brocha) aplicarBrocha(); return; }
         if (mod && (k === "f" || k === "h")) { e.preventDefault(); buscar(k === "h"); return; }
         if (e.shiftKey && e.key === "F3") { e.preventDefault(); cambiarMayusculas(); return; }
+        if (e.key === "F9" && !mod) { e.preventDefault(); if (e.altKey) alternarCodigos(); else actualizarCampos(); return; }
         if (e.key === "Tab" && !mod && !e.altKey) {
           e.preventDefault();
           const s = leerSel(), pa = S().attrs(psPintado[parrafoEn(s.ini)].mark);
@@ -4103,6 +4129,8 @@
             });
           });
           $$(".wd-imagen[data-obj]", cuerpo).forEach((o) => { const it = sec().item(o.dataset.id); if (it && it.e && it.e.ref === c.bloque) llenarObjetos(o.parentNode); });
+          // (un campo que alguien actualizó: su valor nuevo)
+          $$(".wd-campo[data-obj]", cuerpo).forEach((o) => { const it = sec().item(o.dataset.id); if (it && it.e && it.e.ref === c.bloque) llenarObjetos(o.parentNode); });
         });
         if (seq) programarRemoto(lista, origen);
       };
@@ -4226,6 +4254,43 @@
         p.addEventListener("pointerdown", (e) => e.preventDefault());
         p.addEventListener("click", (e) => { const b = e.target.closest("[data-s]"); if (!b) return; cerrar(); cuerpo.focus({ preventScroll: true }); ponerSel(s.a, s.f); insertarTexto(b.dataset.s); });
       }
+      // ------------------------------------------------------------ campos de Word (F9, Alt+F9)
+      let verCodigos = false;
+      /** Página en la que cae un elemento del texto (por su id), según la paginación de la vista. */
+      function paginaDeItem(id) {
+        const el = id ? $(`[data-id="${CSS.escape(id)}"]`, cuerpo) : null;
+        const pags = $$(".wd-pagina", ed.vista);
+        if (!el || !pags.length) return 1;
+        const y = el.getBoundingClientRect().top + 1;
+        let n = 1;
+        pags.forEach((pg, i) => { if (pg.getBoundingClientRect().top <= y) n = i + 1; });
+        return n;
+      }
+      /** «Actualizar campos» (F9): calcula todos los campos en el orden del documento y guarda los valores que cambian. */
+      function actualizarCampos() {
+        if (!NOM.campos) return;
+        sincronizar();
+        const ctx = NOM.campos.contexto(doc(), { paginaDe: paginaDeItem, paginas: $$(".wd-pagina", ed.vista).length || 1, nombre: (doc().valor("_doc", "nombre") || ""), usuario: ((NOM.api && NOM.api.usuario && NOM.api.usuario()) || {}).nombre || "" });
+        if (!ctx.campos.length) { NOM.aviso("Este documento no tiene campos de Word", { tipo: "info" }); return; }
+        let n = 0;
+        for (const { campo, valor } of NOM.campos.calcularTodos(ctx)) {
+          if (valor == null || !campo.ref || ed.soloLectura) continue;
+          const bl = doc().bloque(campo.ref) || {};
+          if (String(bl.res) !== String(valor)) { doc().cambiar(campo.ref, { res: valor }, { origen: "comando" }); n++; }
+        }
+        repintar();
+        NOM.aviso(n ? `Se actualizaron ${n} campo(s)` : "Los campos ya estaban al día", { tipo: "ok" });
+      }
+      /** Vuelve a dibujar los campos (con su valor o su código) y pagina otra vez (un número más largo mueve el texto). */
+      function repintar() { $$(".wd-campo[data-obj]", cuerpo).forEach((o) => llenarObjetos(o.parentNode)); programarPaginar(); }
+      function alternarCodigos() { verCodigos = !verCodigos; repintar(); }
+      /** Insertar un campo de Word con su código (Insertar → Campo…). */
+      async function insertarCampo() {
+        const instr = await NOM.pedirTexto("Insertar campo", { etiqueta: "Código del campo (como en Word)", ph: "PAGE  ·  SEQ Figura  ·  DATE \\@ dd/MM/yyyy", si: "Insertar" });
+        if (!instr || !NOM.campos) return;
+        const r = insertarEnLinea({ tipo: "campo", instr: instr.trim(), res: "", a: attrsEnCursor().a || {} });
+        if (r) actualizarCampos();
+      }
       function menuInsertar(b) {
         NOM.menu(b, [
           { titulo: "Insertar" },
@@ -4239,6 +4304,9 @@
           { texto: "Nota al pie…", icono: "superscript", fn: () => dialogoNota(null) },
           { texto: "Columnas (dos lado a lado)", icono: "columns-3", fn: () => insertarColumnas(2) },
           { texto: "Fecha de hoy", icono: "calendar", fn: () => insertarTexto(new Date().toLocaleDateString("es-MX", { dateStyle: "long" })) },
+          { texto: "Campo (como en Word)…", icono: "braces", fn: insertarCampo },
+          { texto: "Actualizar campos", icono: "refresh-cw", atajo: "F9", fn: actualizarCampos },
+          { texto: verCodigos ? "Ver los valores de los campos" : "Ver los códigos de los campos", icono: "code", atajo: "Alt+F9", fn: alternarCodigos },
           { texto: "Símbolo…", icono: "omega", fn: () => menuSimbolos(b) },
           "-",
           // Fase 9: citas y referencias en APA, y un reporte armado con las fichas.
@@ -4737,5 +4805,5 @@
     },
   };
 
-  NOM.textoRico = { parrafosDe, asegurarSecuencia, tokens, envolver, BLOQUE: B, cssFuente, cssBorde, FUENTES, altoFuente };
+  NOM.textoRico = { parrafosDe, recorrido, asegurarSecuencia, tokens, envolver, BLOQUE: B, cssFuente, cssBorde, FUENTES, altoFuente };
 })();

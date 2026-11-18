@@ -16,13 +16,13 @@ Salida: archivo, errores nuevos; código 1 si hay alguno.
 import os, re, subprocess, sys, glob
 AQUI = os.path.dirname(os.path.abspath(__file__))
 PROY = os.path.join(AQUI, "openxml")
-DOTNET = os.path.expanduser("~/.dotnet/dotnet")
+DOTNET = os.path.expanduser("~/.dotnet/dotnet" + (".exe" if os.name == "nt" else ""))
 BIN = os.path.expanduser("~/.cache/nom-pruebas/openxml-bin")
 EXT = (".docx", ".xlsx", ".pptx", ".docm", ".xlsm")
 CORPUS = [os.path.expanduser("~/.cache/nom-pruebas/corpus"), os.path.expanduser("~/.cache/nom-pruebas/corpus-web")]
 
 def compilar():
-    exe = os.path.join(BIN, "validador")
+    exe = os.path.join(BIN, "validador" + (".exe" if os.name == "nt" else ""))
     fuente = max(os.path.getmtime(os.path.join(PROY, f)) for f in os.listdir(PROY) if f.endswith((".cs", ".csproj")))
     if os.path.exists(exe) and os.path.getmtime(exe) > fuente: return exe
     env = dict(os.environ, DOTNET_CLI_TELEMETRY_OPTOUT="1", DOTNET_NOLOGO="1")
