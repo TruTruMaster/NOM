@@ -2,6 +2,22 @@
 
 Lo que cambió en cada versión, en corto (es la página «Novedades» de la ayuda; la escribe `4-CODIGO/ayuda/generar.py`). El diario completo, día por día, está en `LOG.md`.
 
+## 0.17.0 — noviembre de 2026
+
+- **Las imágenes y el archivo de Office original van aparte del documento** (un almacén por espacio): un
+  PowerPoint de 10 MB que antes pasaba del tope de 25 MB (pesaba 30 MB dentro de NOM) ahora entra y el documento
+  queda chico. La misma imagen usada en muchas diapositivas se guarda una sola vez. Al descargar sale igual que
+  antes, y ya no se pierde el original de los Office de más de 14 MB (hasta 48 MB por archivo).
+- Funciona con todo lo demás: **sin Internet** (lo importado se ve y se sube al volver la red), en los **espacios
+  cifrados** (las imágenes salen de tu equipo ya cifradas: el servidor no las puede ver), en el **teléfono que
+  comparte**, en la sincronía con la nube, en el **enlace para ver** y en el proyector, y dentro del **.nom** que
+  descargas (lleva las imágenes, para abrirlo en cualquier lado).
+- **Copiar o mover** un documento a otro espacio se lleva sus imágenes. Lo que ya ningún documento usa (ni sus
+  versiones ni la papelera) se borra solo a los 30 días, y lo que ocupa cuenta en el espacio de tu cuenta.
+- Si la red se corta justo al crear o subir un documento, al reintentar **ya no queda dos veces**.
+- **Arreglos:** el enlace para ver de un texto o una hoja muestra sus imágenes; un Word guardado como .nom y vuelto
+  a abrir ya no reescribe al descargar los párrafos con ecuaciones (salen idénticos al original).
+
 ## 0.16.0 — noviembre de 2026
 
 - **Se llama NOM.** Antes NOM-COLAB. La dirección principal es **www.nom.qd.je**; la de antes

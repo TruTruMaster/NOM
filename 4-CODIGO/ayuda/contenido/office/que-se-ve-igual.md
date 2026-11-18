@@ -3,11 +3,11 @@ titulo: Qué se ve igual que en Office y qué todavía no
 descripcion: Lo que el editor todavía no dibuja como Word o Excel (al descargar sale completo).
 orden: 30
 aplica: Navegador, App Android, Teléfono que comparte
-actualizado: 2026-11-17
-version: 0.16.0
+actualizado: 2026-11-18
+version: 0.17.0
 ---
-Al descargar, lo que no tocaste sale idéntico al original (si el archivo pesa hasta 14 MB; si pesa más,
-NOM no guarda el original dentro y lo avisa al importarlo). **En pantalla**, casi todo se ve como en Office
+Al descargar, lo que no tocaste sale idéntico al original (el original se guarda aparte, en el almacén del
+espacio, hasta 48 MB por archivo). **En pantalla**, casi todo se ve como en Office
 (se mide contra Word, Excel y PowerPoint 2024 de verdad); lo que todavía no:
 
 | Programa | Todavía no se ve igual en el editor |

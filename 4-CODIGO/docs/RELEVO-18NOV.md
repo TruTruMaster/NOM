@@ -157,8 +157,8 @@ Hecho y comprobado (servidor de pruebas 8099 con el jar de la rama):
   la prueba busca la hoja con imágenes y mira dentro del marco; y un defecto **anterior al almacén**: tras un `.nom`, un
   párrafo con ecuación salía regenerado (un campo `null` del objeto se perdía y cambiaba la huella): `ooxml.js`
   `mismoGrupo` (las huellas ya no cuentan los campos vacíos y las viejas siguen valiendo).
-- t03 por el almacén se lanzó al final y no se alcanzó a ver el resultado: repetirlo
-  (`almacen_binarios.py` sin argumentos).
+- t03 por el almacén: **9/9** (29.4 MB sin almacén → documento y versiones 0.5 MB + binarios 17.8 MB; descarga y
+  `.nom` idénticos; otra persona y el enlace para ver ven las 84 imágenes).
 
 Falta para unirla a `main` como 0.17.0: ayuda (`4-CODIGO/ayuda/contenido`, `generar.py`), novedades (`CAMBIOS.md`),
 `PLAN-MEDIOS.md` (fase 2 hecha), subir versión a 0.17.0 (APK 32) e **INTERFAZ a 22** (`Version.java`, `nucleo.js`,

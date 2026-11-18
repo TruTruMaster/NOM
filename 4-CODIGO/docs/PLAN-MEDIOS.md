@@ -51,7 +51,11 @@ Decidido por el usuario el 17 de noviembre de 2026 (lo que dijo, resumido):
 1. **(Hecho el 17-nov: `js/medios-convertir.js`, `js/vendor/mediabunny.min.js` 1.65.1.)** **Convertir en el navegador** (`js/medios-convertir.js` + `js/vendor/mediabunny`): de MP4, MOV, M4V, WebM, MKV,
    MP3, M4A, AAC, WAV, OGG, FLAC a WebM AV1/Opus con barra de avance, cancelable, con los límites de arriba y las
    alternativas (VP9; original). También la vuelta a MP4 H.264/AAC para PowerPoint.
-2. **Almacén de medios en el servidor**: subir (en partes, se puede reanudar), entregar con `Range` y caché, permisos
+2. **(Hecho para imágenes y el Office original el 18-nov, 0.17.0: `js/binarios.js`, `ServicioBinarios`,
+   `RepositorioBinariosArchivos` y `RepositorioBinariosTelefono`; referencia `nom:bin/<sha256>.<ext>`, permisos por
+   espacio, cuota, cifrado en reposo y de extremo a extremo, caché en IndexedDB para sin Internet, sincronía
+   teléfono↔nube, copiar/mover entre espacios y limpieza a los 30 días. Falta para video y audio: subir en partes
+   y reanudar, entregar con `Range`, cifrado en reposo por bloques.)** **Almacén de medios en el servidor**: subir (en partes, se puede reanudar), entregar con `Range` y caché, permisos
    por espacio, cuota por cuenta, cifrado en reposo por bloques (para poder pedir partes), extremo a extremo en los
    espacios cifrados, borrar lo que nadie usa. También en el teléfono como servidor y sin Internet (lo subido espera
    en el equipo hasta que haya conexión).
