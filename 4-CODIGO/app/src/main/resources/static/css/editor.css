@@ -974,7 +974,9 @@
 .wd-recorte-vista { display: grid; place-items: center; padding: 10px; background: repeating-conic-gradient(#eee 0 25%, #fff 0 50%) 0 0 / 16px 16px; border-radius: var(--r-s); min-height: 120px; }
 /* 8.2 paginación: corte de párrafo entre páginas, notas al pie y ecuaciones */
 .wd-corte { display: inline-block; width: 100%; vertical-align: top; pointer-events: none; user-select: none; }
-.wd-notas { position: absolute; font-size: 9pt; line-height: 1.25; color: #222; border-top: 1px solid #999; padding-top: 4px; }
+.wd-notas { position: absolute; font-size: 9pt; line-height: 1.25; color: #222; padding-top: 4px; }
+/* la raya de Word antes de las notas: corta (2 pulgadas), no de todo el ancho */
+.wd-notas::before { content: ""; position: absolute; left: 0; top: 0; width: 192px; max-width: 100%; border-top: .75pt solid #000; }
 .wd-notas .wd-nota-pie { margin: 0 0 2px; text-align: left; white-space: normal; }
 .wd-nota[data-obj] { cursor: pointer; color: #1F4E9E; }
 /* Objeto de Word que se conserva sin poder editarse aquí (cuadro de texto, forma, gráfico) */

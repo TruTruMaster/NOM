@@ -776,7 +776,12 @@
             o.style.zIndex = libre && !bl.detras && +bl.z ? String(2 + +bl.z) : "";
             o.title = ed.soloLectura ? "" : libre ? "Arrastra para moverla a cualquier lugar" : "Arrastra para moverla a otro lugar del texto";
           } else if (e.tipo === "tabla") pintarTabla(o, bl, e.ref);
-          else if (e.tipo === "nota") { o.innerHTML = `<sup>${numerosNotas().get(o.dataset.id) || "*"}</sup>`; o.title = bl && bl.texto ? "Nota: " + bl.texto : "Nota al pie (toca para escribirla)"; }
+          else if (e.tipo === "nota") {
+            const fin = !!(bl && bl.final);
+            o.classList.toggle("final", fin);
+            o.innerHTML = `<sup>${(fin ? numerosFinales() : numerosNotas()).get(o.dataset.id) || "*"}</sup>`;
+            o.title = bl && bl.texto ? (fin ? "Nota al final: " : "Nota: ") + bl.texto : "Nota al pie (toca para escribirla)";
+          }
           else if (e.tipo === "ecuacion") { o.innerHTML = NOM.ecuaciones ? NOM.ecuaciones.html((bl && bl.tex) || "", !!(bl && bl.bloque)) : esc((bl && bl.tex) || ""); o.classList.toggle("en-bloque", !!(bl && bl.bloque)); o.title = ed.soloLectura ? "" : "Toca para editar la ecuación"; }
           else if (e.tipo === "objeto" && e.g && NOM.graficaOffice && +e.w > 0 && +e.h > 0) {
             // gráfico de Word: dibujado como Word, de su tamaño (no se edita aquí; al descargar sale el original)
@@ -847,14 +852,17 @@
 
       /** 8.2 Notas al pie: su número (en el orden del documento) y su texto. */
       let cacheNotas = null;
+      const esFinal = (it) => { const b = it && it.e && it.e.ref ? doc().bloque(it.e.ref) : null; return !!(b && b.final); };
       function numerosNotas() {
         if (cacheNotas && cacheNotas.vis === visPintado) return cacheNotas.m;
-        const m = new Map();
-        let n = 0;
-        for (const it of visPintado) if (it.e && it.e.tipo === "nota") m.set(it.id, ++n);
-        cacheNotas = { vis: visPintado, m };
+        const m = new Map(), f = new Map();
+        let n = 0, k = 0;
+        // (las notas al final se numeran aparte, en números romanos chicos como Word: i, ii, iii…)
+        for (const it of visPintado) if (it.e && it.e.tipo === "nota") { if (esFinal(it)) f.set(it.id, romano(++k)); else m.set(it.id, ++n); }
+        cacheNotas = { vis: visPintado, m, f };
         return m;
       }
+      function numerosFinales() { numerosNotas(); return cacheNotas.f; }
       const textoNota = (id) => { const it = sec().item(id), b = it && it.e && it.e.ref ? doc().bloque(it.e.ref) : null; return (b && b.texto) || ""; };
       /** Inserta un objeto en línea (nota, ecuación, cita, campo) donde está el cursor. */
       function insertarEnLinea(campos, meta) {
@@ -2890,7 +2898,7 @@
             if (esCopia) colocarCopia(el, p, col, y);
             else { ponerX(el, p, col); empujar(el, y + antes - el.offsetTop); }
             const top = esCopia ? y : el.offsetTop, h = el.offsetHeight;
-            const notasEl = esCopia ? [] : $$(".wd-nota[data-obj]", el), med = medidorDe(p.g), altoNotas = notasEl.reduce((s, o) => s + med(o.dataset.id), 0);
+            const notasEl = esCopia ? [] : $$(".wd-nota[data-obj]:not(.final)", el), med = medidorDe(p.g), altoNotas = notasEl.reduce((s, o) => s + med(o.dataset.id), 0);
             const tope = lim() - (altoNotas ? altoNotas + (p.notas.length ? 0 : 14) : 0);
             if (top + h <= tope + 1) {
               // cabe
@@ -2972,7 +2980,7 @@
                 // lo que flota (Word): sus objetos en esta hoja y el texto apartado
                 if (flot) flotarEnHoja(el, pags.indexOf(p));
                 const top = el.offsetTop, h = el.offsetHeight;
-                const notasEl = $$(".wd-nota[data-obj]", el), med = medidorDe(p.g), altoNotas = notasEl.reduce((sm, o) => sm + med(o.dataset.id), 0);
+                const notasEl = $$(".wd-nota[data-obj]:not(.final)", el), med = medidorDe(p.g), altoNotas = notasEl.reduce((sm, o) => sm + med(o.dataset.id), 0);
                 const tope = fondoHoja(p) - (altoNotas ? altoNotas + (p.notas.length ? 0 : 14) : 0);
                 // «conservar con el siguiente»: si el principio del que sigue no cabe, este baja con él
                 if (!primero && r.i + 1 < hasta && conSiguiente(el)) {
@@ -3084,6 +3092,26 @@
           }
         }
         tomarRegistros();
+        // Notas al final (Word): después del último renglón, con su raya; si no caben, siguen en hojas nuevas
+        const finPag = new Map();
+        const finales = [...numerosFinales().entries()];
+        if (finales.length && pags.length) {
+          let k = pags.length - 1, q = pags[k];
+          const med = medirNotas(q.g.w - q.g.m[2] - q.g.m[3]);
+          const hueco = (qq) => qq.top + qq.g.h - qq.g.m[1] - (qq.notas.length ? qq.notas.reduce((s2, x) => s2 + (x.alto || 0), 0) + 14 : 0);
+          let y = Math.max(cuerpo.offsetHeight, q.top + q.g.m[0]) + 14;
+          for (const [id, n] of finales) {
+            const alto = med(id);
+            if (y + alto > hueco(q) && y > q.top + q.g.m[0] + 14) {
+              k++;
+              if (!pags[k]) pags.push({ top: q.top + q.g.h + GAP, g: q.g, x0: q.x0, num: q.num + 1, fmt: q.fmt, regiones: [], notas: [], primero: null, bajo: null });
+              q = pags[k]; y = q.top + q.g.m[0] + 14;
+            }
+            if (!finPag.has(k)) finPag.set(k, []);
+            finPag.get(k).push({ n, texto: textoNota(id), y: y - q.top });
+            y += alto;
+          }
+        }
         numPaginas = Math.max(1, pags.length);
         const ultima = pags[pags.length - 1];
         cuerpo.style.minHeight = (ultima ? ultima.top + ultima.g.h : 0) + "px";
@@ -3102,7 +3130,9 @@
         let h = "";
         pags.forEach((q, i) => {
           const g = q.g, vacia = q.vacia || (e.primera && i === 0);
-          const bloqueNotas = q.notas.length ? `<div class="wd-notas" style="left:${g.m[2]}px;right:${g.m[3]}px;bottom:${g.m[1]}px">${q.notas.map((x) => `<div class="wd-nota-pie"><sup>${x.n}</sup> ${esc(x.texto)}</div>`).join("")}</div>` : "";
+          const finI = finPag.get(i) || [];
+          const bloqueNotas = (q.notas.length ? `<div class="wd-notas" style="left:${g.m[2]}px;right:${g.m[3]}px;bottom:${g.m[1]}px">${q.notas.map((x) => `<div class="wd-nota-pie"><sup>${x.n}</sup> ${esc(x.texto)}</div>`).join("")}</div>` : "")
+            + (finI.length ? `<div class="wd-notas wd-notas-fin" style="left:${g.m[2]}px;right:${g.m[3]}px;top:${finI[0].y - 14}px">${finI.map((x) => `<div class="wd-nota-pie"><sup>${esc(x.n)}</sup> ${esc(x.texto)}</div>`).join("")}</div>` : "");
           // la línea entre columnas (Word: «línea entre columnas»), del alto de lo escrito en ellas
           const lineas = q.regiones.map((r) => r.cols.slice(1).map((c, k) => { const a = r.cols[k], x = g.m[2] + (a.x + a.w + c.x) / 2; return `<div class="wd-col-linea" style="left:${x.toFixed(2)}px;top:${(r.top - q.top).toFixed(2)}px;height:${Math.max(0, r.bajo - r.top).toFixed(2)}px"></div>`; }).join("")).join("");
           const ep = g.ep, encT = ep ? ep.e : e.enc, encA = ep ? ep.ea || "izq" : e.encAl, pieT = ep ? ep.p : e.pie, pieA = ep ? ep.pa || "izq" : e.pieAl;
@@ -3175,7 +3205,23 @@
         const { notasPag, forzar } = r;
         tomarRegistros();
         const fin = cuerpo.offsetHeight;
-        numPaginas = Math.max(1, Math.ceil((fin + 1) / paso));
+        // Notas al final (Word): después del último renglón, con su raya; si no caben, siguen en hojas nuevas
+        const notasFinPag = {};
+        let finNotas = fin;
+        const finales = [...numerosFinales().entries()];
+        if (finales.length) {
+          const med = medirNotas(pg.w - pg.m.iz - pg.m.d);
+          let p = Math.max(0, Math.floor(Math.max(0, fin - 1) / paso)), y = fin + 14;
+          const hueco = (q) => q * paso + pg.h - pg.m.i - ((notasPag[q] || []).reduce((s2, x) => s2 + x.alto, 0) + ((notasPag[q] || []).length ? 14 : 0));
+          for (const [id, n] of finales) {
+            const alto = med(id);
+            if (y + alto > hueco(p) && y > p * paso + pg.m.s + 1) { p++; y = p * paso + pg.m.s; }
+            (notasFinPag[p] = notasFinPag[p] || []).push({ n, texto: textoNota(id), y: y - p * paso });
+            y += alto;
+          }
+          finNotas = y;
+        }
+        numPaginas = Math.max(1, Math.ceil((Math.max(fin, finNotas) + 1) / paso));
         if (forzar != null) numPaginas = Math.max(numPaginas, Math.round((forzar - pg.m.s) / paso) + 1);
         cuerpo.style.minHeight = numPaginas * paso - GAP + "px";
         const e = encPie(), fb = formatoBase();
@@ -3200,7 +3246,9 @@
         for (let i = 0; i < numPaginas; i++) {
           const vacia = e.primera && i === 0;
           const notas = notasPag[i] || [];
-          const bloqueNotas = notas.length ? `<div class="wd-notas" style="left:${pg.m.iz}px;right:${pg.m.d}px;bottom:${pg.m.i}px">${notas.map((x) => `<div class="wd-nota-pie"><sup>${x.n}</sup> ${esc(x.texto)}</div>`).join("")}</div>` : "";
+          const finI = notasFinPag[i] || [];
+          const bloqueNotas = (notas.length ? `<div class="wd-notas" style="left:${pg.m.iz}px;right:${pg.m.d}px;bottom:${pg.m.i}px">${notas.map((x) => `<div class="wd-nota-pie"><sup>${x.n}</sup> ${esc(x.texto)}</div>`).join("")}</div>` : "")
+            + (finI.length ? `<div class="wd-notas wd-notas-fin" style="left:${pg.m.iz}px;right:${pg.m.d}px;top:${finI[0].y - 14}px">${finI.map((x) => `<div class="wd-nota-pie"><sup>${esc(x.n)}</sup> ${esc(x.texto)}</div>`).join("")}</div>` : "");
           h += `<div class="wd-pagina${bp && bp.hoja ? " con-borde" : ""}" style="top:${i * paso}px;${estiloEP}${bp && bp.hoja ? `;--bpe:${pg.m.s - dentroBorde >= 20 ? dentroBorde : 0}px;--bpp:${pg.m.i - dentroBorde >= 20 ? dentroBorde : 0}px` : ""}">${cajaBorde}${vacia ? "" : fila("enc", e.enc, e.encAl, i + 1, logo) + fila("pie", e.pie, e.pieAl, i + 1)}${bloqueNotas}${e.marca ? `<div class="wd-marca-agua">${esc(e.marca)}</div>` : ""}</div>`;
         }
         // (la letra capital, con su párrafo ya en su hoja)
@@ -3533,7 +3581,7 @@
           const pi = Math.floor(top / paso), arriba = pi * paso + pg.m.s;
           // lo que flota (Word): sus objetos en su lugar de esta hoja y el texto apartado (cambia el alto del párrafo)
           if (!calcular && flot) { const dh = flotarEnHoja(el, pi); h += dh; corr += dh; }
-          const notasEl = $$(".wd-nota[data-obj]", el);
+          const notasEl = $$(".wd-nota[data-obj]:not(.final)", el);
           const altoNotasEl = notasEl.reduce((s, o) => s + medidor(o.dataset.id), 0);
           const abajo = pi * paso + H - pg.m.i - reservado(pi) - (altoNotasEl ? altoNotasEl + (reservado(pi) ? 0 : 14) : 0);
           let destino = null, partido = null;

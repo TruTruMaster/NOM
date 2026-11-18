@@ -734,7 +734,7 @@
                 else if (cn === "tab") t = "\t";
                 else if (cn === "br" || cn === "cr") { if (O.attr(xp, c, "w:type") === "page") R.raro = true; t = "\u2028"; }
                 else if (cn === "sym") t = String.fromCharCode(parseInt(O.attr(xp, c, "w:char") || "20", 16) & 0xFFF);
-                else if (["drawing", "pict", "AlternateContent", "object", "footnoteReference"].includes(cn)) obj = true;
+                else if (["drawing", "pict", "AlternateContent", "object", "footnoteReference", "endnoteReference"].includes(cn)) obj = true;
                 if (t != null && /[<&]/.test(xp.slice(c.ci, c.cf)) && cn === "t" && /<!\[CDATA\[|<[a-zA-Z]/.test(xp.slice(c.ci, c.cf))) R.raro = true;
                 if (t == null && !obj && cn !== "lastRenderedPageBreak") R.fuera++;
                 const it = { xml, t: obj ? OBJ : t, cn, de: R.s.length };
@@ -1607,6 +1607,10 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     const formatoNum = {}, textoNum = {};
     // 8.2 Notas al pie: id → texto.
     const notasPie = {};
+    // Notas al final (endnotes.xml): id → texto; se numeran aparte (i, ii, iii… como Word, o el formato del archivo)
+    const notasFin = {};
+    const finTxt = await z.texto("word/endnotes.xml");
+    if (finTxt) [...P(finTxt).getElementsByTagNameNS(W, "endnote")].forEach((fn) => { const id = fn.getAttributeNS(W, "id") || fn.getAttribute("w:id"); if (+id > 0) notasFin[id] = [...fn.getElementsByTagNameNS(W, "t")].map((t) => t.textContent).join("").trim(); });
     const notasTxt = await z.texto("word/footnotes.xml");
     if (notasTxt) {
       const dn = P(notasTxt);
@@ -2323,6 +2327,9 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
             } else if (cn === "footnoteReference") {
               const id = c.getAttributeNS(W, "id") || c.getAttribute("w:id");
               tramos.push({ e: { tipo: "nota", texto: notasPie[id] || "", oe: ordinal(c) }, a: {} });
+            } else if (cn === "endnoteReference") {
+              const id = c.getAttributeNS(W, "id") || c.getAttribute("w:id");
+              tramos.push({ e: { tipo: "nota", final: true, texto: notasFin[id] || "", oe: ordinal(c) }, a: {} });
             } else if (cn === "sym") tramos.push({ x: String.fromCharCode(parseInt(c.getAttributeNS(W, "char") || c.getAttribute("w:char") || "20", 16) & 0xFFF), a });
             else if (cn === "fldChar" && parrafo) {
               // Campo de Word: { código | último valor }. Se guarda como campo (se ve su último valor, como en Word, y
