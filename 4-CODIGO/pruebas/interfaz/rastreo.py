@@ -298,6 +298,23 @@ class Rastreo:
             if not c:
                 if os.environ.get("NOM_DEPURAR"): print("      (no hay qué elegir para abrir la ruedita)", flush=True)
                 return False
+            # Un punto de la selección que no esté tapado (en el celular, una gráfica o un comentario insertados antes
+            # pueden quedar encima de la celda o del bloque elegido): si todo está tapado, no es una falla de la ruedita.
+            libre = self.ev(r"""(c) => { const el = document.querySelector('td.sel') || [...document.querySelectorAll('.bl.sel')].find(x => !x.closest('.mini'));
+              if (!el) return c;
+              const prueba = (x, y) => { const e = document.elementFromPoint(x, y); return e && (e === el || el.contains(e)); };
+              const caja = () => el.getBoundingClientRect();
+              for (let vuelta = 0; vuelta < 2; vuelta++) {
+                const r = caja();
+                const pts = [[c[0], c[1]], [r.x + r.width / 2, r.y + r.height / 2], [r.x + 6, r.y + 6], [r.right - 6, r.y + 6], [r.x + 6, r.bottom - 6], [r.right - 6, r.bottom - 6]];
+                for (const [x, y] of pts) if (x >= 0 && y >= 0 && x < innerWidth && y < innerHeight && prueba(x, y)) return [x, y];
+                el.scrollIntoView({ block: 'center', inline: 'center' });
+              }
+              return null; }""", c)
+            if not libre:
+                if os.environ.get("NOM_DEPURAR"): print("      (lo elegido está tapado por otra cosa)", flush=True)
+                return "tapado"
+            c = libre
             p.mouse.click(c[0], c[1], button="right"); p.wait_for_timeout(450)
             if os.environ.get("NOM_DEPURAR"): print("      clic derecho en", [round(v) for v in c], "→", self.ev("() => [...document.querySelectorAll('.rueda-item')].map(b => b.getAttribute('aria-label')).join('|')"), "| encima:", self.ev(f"() => (document.elementFromPoint({c[0]}, {c[1]}) || {{}}).className"), flush=True)
             for paso in (raiz or []):
@@ -311,6 +328,8 @@ class Rastreo:
         if ab == "sin-paso":
             # (las opciones de algunos submenús dependen de lo copiado: Pegar especial)
             self.res.append((modo, ruta, "NO", "el submenú ya no aparece")); self.limpiar(); return
+        if ab == "tapado":
+            self.res.append((modo, ruta, "NO", "lo elegido quedó tapado por algo insertado antes")); self.limpiar(); return
         if not ab:
             self.res.append((modo, ruta, "MAL", "la ruedita no abrió"))
             print(f"  MAL {modo:12} {ruta}: la ruedita no abrió", flush=True)
@@ -330,6 +349,8 @@ class Rastreo:
             ab = abrir_rueda()
             if ab == "sin-paso":
                 self.res.append((modo, r, "NO", "el submenú ya no aparece")); self.limpiar(); continue
+            if ab == "tapado":
+                self.res.append((modo, r, "NO", "lo elegido quedó tapado por algo insertado antes")); self.limpiar(); continue
             if not ab:
                 self.res.append((modo, r, "MAL", "la ruedita no volvió a abrir")); continue
             # una acción anterior pudo apagarla (Bloquear apaga Cortar): se vuelve a mirar justo antes de tocarla

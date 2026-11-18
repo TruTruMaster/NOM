@@ -17,6 +17,10 @@ DESDE_TEL = sys.argv[2] if len(sys.argv) > 2 else "http://10.0.2.2:8099"
 AQUI = Path(__file__).resolve().parent
 CDP = "http://localhost:9223"
 res = []
+# Por depuración INALÁMBRICA (la serie es una dirección: «ip:puerto» o «[ipv6]:puerto») el modo avión corta la propia
+# conexión de adb y el teléfono se queda sin red y sin poder quitarle el modo avión (pasó el 18-nov con el A55): ahí no
+# se corta la red; lo de «sin red» se prueba en el emulador o con cable.
+INALAMBRICO = SER.startswith("[") or (":" in SER and not SER.startswith("emulator"))
 
 
 def anota(n, ok, det=""):
@@ -54,7 +58,7 @@ dt = N.documento(a["token"], esp, "TEXTO", "Acta en la app")
 dh = N.documento(a["token"], esp, "HOJA", "Hoja en la app")
 
 # --- La app: servidor de la laptop y entrar con usuario y contraseña por la pantalla de entrar
-adb("shell", "cmd", "connectivity", "airplane-mode", "disable")
+if not INALAMBRICO: adb("shell", "cmd", "connectivity", "airplane-mode", "disable")
 adb("shell", "am", "force-stop", "mx.wack.nom"); time.sleep(1)
 adb("shell", "monkey", "-p", "mx.wack.nom", "-c", "android.intent.category.LAUNCHER", "1"); time.sleep(6)
 enlazar()
@@ -89,13 +93,14 @@ with sync_playwright() as pw:
     p.click(".wd-cuerpo"); p.keyboard.press("Control+End"); p.keyboard.type("Desde la computadora. ")
     ok, t = esperar_app("document.querySelector('.wd-cuerpo').innerText.includes('Desde la computadora')", 20)
     anota("lo de la computadora llega a la app", ok, f"{t:.1f} s")
-    # --- Sin red en la app (modo avión) un momento
-    adb("shell", "cmd", "connectivity", "airplane-mode", "enable"); time.sleep(4)
+    # --- Sin red en la app (modo avión) un momento (no por depuración inalámbrica: ver INALAMBRICO)
+    if INALAMBRICO: print("(omitido: sin red en un teléfono conectado por Wi-Fi; se prueba en el emulador)", flush=True)
+    else: adb("shell", "cmd", "connectivity", "airplane-mode", "enable"); time.sleep(4)
     app(ESCRIBIR_APP + "('Escrito en la app sin red. ')")
     p.click(".wd-cuerpo"); p.keyboard.press("Control+End"); p.keyboard.type("La computadora sigue escribiendo. ")
     time.sleep(3)
     estado = app("(document.querySelector('.estado-sync, [data-sync], .ed-estado') || {}).innerText || ''")
-    adb("shell", "cmd", "connectivity", "airplane-mode", "disable")
+    if not INALAMBRICO: adb("shell", "cmd", "connectivity", "airplane-mode", "disable")
     ok, t = esperar_app("document.querySelector('.wd-cuerpo').innerText.includes('La computadora sigue escribiendo')", 60)
     anota("al volver la red, a la app le llega lo que escribió la computadora", ok, f"{t:.1f} s · estado sin red: {str(estado)[:60]!r}")
     try: p.wait_for_function("() => document.querySelector('.wd-cuerpo').innerText.includes('Escrito en la app sin red')", timeout=60000); anota("y a la computadora le llega lo que la app escribió sin red", True)
@@ -120,7 +125,7 @@ with sync_playwright() as pw:
     anota("lo que escribe la computadora en la hoja se ve en la app", ok, f"{t:.1f} s")
     anota("sin errores de JavaScript en la computadora", not err, str(err[:2]))
     nav.close()
-adb("shell", "cmd", "connectivity", "airplane-mode", "disable")
+if not INALAMBRICO: adb("shell", "cmd", "connectivity", "airplane-mode", "disable")
 # Las dos cuentas de prueba se borran (con sus espacios y documentos): así no queda basura en la nube.
 app("(NOM.api.limpiarSesion(), location.hash = '#/', 1)")
 for c in (a, b):
