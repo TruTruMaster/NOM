@@ -82,6 +82,10 @@ class Rastreo:
         st = self.ev(ESTADO)
         if st["hoja"]:
             self.ev("() => document.querySelectorAll('.velo').forEach(v => v.remove())")
+        # la capa de «Dibujar una trayectoria» tapa toda la página (Esc la cierra)
+        if self.ev("() => !!document.querySelector('.ao-dibujo')"):
+            p.keyboard.press("Escape"); p.wait_for_timeout(200)
+            self.ev("() => document.querySelectorAll('.ao-dibujo').forEach((e) => e.remove())")
         # salir de la presentación o del modo enfoque
         self.ev("() => { const r = document.querySelector('.reproductor'); if (r) document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'})); }")
 
@@ -299,11 +303,15 @@ class Rastreo:
             for paso in (raiz or []):
                 if not self.ev("() => !!document.querySelector('.rueda-velo')"): return False
                 c2 = self.ev(f"() => {{ const b = [...document.querySelectorAll('.rueda-item')].find(x => x.getAttribute('aria-label') === {json.dumps(paso)}); if (!b) return null; const r = b.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }}")
-                if not c2: return False
+                if not c2: return "sin-paso"
                 p.mouse.click(*c2)
                 p.wait_for_timeout(350)
             return self.ev("() => !!document.querySelector('.rueda-velo')")
-        if not abrir_rueda():
+        ab = abrir_rueda()
+        if ab == "sin-paso":
+            # (las opciones de algunos submenús dependen de lo copiado: Pegar especial)
+            self.res.append((modo, ruta, "NO", "el submenú ya no aparece")); self.limpiar(); return
+        if not ab:
             self.res.append((modo, ruta, "MAL", "la ruedita no abrió"))
             print(f"  MAL {modo:12} {ruta}: la ruedita no abrió", flush=True)
             self.limpiar(); return
@@ -319,8 +327,14 @@ class Rastreo:
             if sub and nivel < 3:   # hasta tres niveles (Más › Otras › Fijar › sus opciones)
                 self.recorrer_rueda(modo, doc, (raiz or []) + [etiqueta], r, nivel + 1); continue
             antes_js = len(self.errores_js)
-            if not abrir_rueda():
+            ab = abrir_rueda()
+            if ab == "sin-paso":
+                self.res.append((modo, r, "NO", "el submenú ya no aparece")); self.limpiar(); continue
+            if not ab:
                 self.res.append((modo, r, "MAL", "la ruedita no volvió a abrir")); continue
+            # una acción anterior pudo apagarla (Bloquear apaga Cortar): se vuelve a mirar justo antes de tocarla
+            if self.ev(f"() => {{ const b = [...document.querySelectorAll('.rueda-item')].find(x => x.getAttribute('aria-label') === {json.dumps(etiqueta)}); return !!(b && b.classList.contains('off')); }}"):
+                self.res.append((modo, r, "off", "apagada después de una acción anterior")); self.limpiar(); continue
             c = self.ev(f"() => {{ const b = [...document.querySelectorAll('.rueda-item')].find(x => x.getAttribute('aria-label') === {json.dumps(etiqueta)}); if (!b) return null; const r = b.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }}")
             if not c:
                 # Las opciones de algunos submenús dependen de lo copiado (Pegar especial): ya no está.

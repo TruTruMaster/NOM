@@ -4237,12 +4237,16 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         (Enero:Marzo!B2 → Enero!B2,Febrero!B2,Marzo!B2) y nombres definidos (IVA → 0.16). */
     function sinNombres(fx) {
       if (V < 2) return fx;
-      let r = fx.replace(/('[^']+'|[A-Za-z_][\w.]*):('[^']+'|[A-Za-z_][\w.]*)!(\$?[A-Z]{1,3}\$?\d+(?::\$?[A-Z]{1,3}\$?\d+)?)/g, (todo, h1, h2, ref) => {
-        const limpia = (h) => h.replace(/^'|'$/g, "").replace(/''/g, "'");
+      const limpia = (h) => h.replace(/^'|'$/g, "").replace(/''/g, "'");
+      const tresD = (todo, h1, h2, ref) => {
         const i1 = ordenHojas.indexOf(limpia(h1)), i2 = ordenHojas.indexOf(limpia(h2));
         if (i1 < 0 || i2 < 0) return todo;
         return ordenHojas.slice(Math.min(i1, i2), Math.max(i1, i2) + 1).map((h) => hojaRef(h) + "!" + ref).join(",");
-      });
+      };
+      // Con espacios u otros signos, Excel escribe las dos hojas dentro de UNAS comillas: 'x02 Enero:x02 Marzo'!B2 (un nombre
+      // de hoja no puede llevar «:», así que dentro de las comillas los dos puntos siempre separan la primera de la última)
+      let r = fx.replace(/'((?:[^':]|'')+):((?:[^':]|'')+)'!(\$?[A-Z]{1,3}\$?\d+(?::\$?[A-Z]{1,3}\$?\d+)?)/g, tresD);
+      r = r.replace(/('[^']+'|[A-Za-z_][\w.]*):('[^']+'|[A-Za-z_][\w.]*)!(\$?[A-Z]{1,3}\$?\d+(?::\$?[A-Z]{1,3}\$?\d+)?)/g, tresD);
       if (Object.keys(nombresXl).length) {
         // fuera de los textos entre comillas: un identificador que es un nombre definido (y no una función)
         r = r.split(/("(?:[^"]|"")*")/).map((parte, i) => (i % 2 ? parte : parte.replace(/(^|[^\w.!'$\]])([A-Za-z_\\][\w.]*)(?![\w.(!\[])/g, (todo, antes, n) => {

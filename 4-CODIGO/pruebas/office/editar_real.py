@@ -21,7 +21,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "interfaz"))
 import nomprueba as N  # noqa: E402
 
 LISTO = "() => !!(window.NOM && NOM.editorActual && NOM.editorActual.doc && NOM.editorActual.vista && NOM.editorActual.vista.isConnected && !NOM.editorActual.doc.pendientes.length)"
-TIENE = "(t) => JSON.stringify(NOM.editorActual.doc.estado).includes(t)"
+# ¿El documento tiene este texto? En el estado o, si se escribió letra por letra (cada letra es un elemento de la
+# secuencia y en el estado quedan separadas), en el texto visible de cada secuencia.
+TIENE = """(t) => { const d = NOM.editorActual.doc; if (JSON.stringify(d.estado).includes(t)) return true;
+  try { for (const n of Object.keys(d.estado.seq || {})) { const s = d.secuencia(n); if (s && s.texto().includes(t)) return true; } } catch (e) { }
+  return false; }"""
 EXT = {"HOJA": "xlsx", "PRESENTACION": "pptx", "TEXTO": "docx"}
 # LibreOffice se queda esperando con el original de Microsoft de estos (ver ediciones.py).
 LO_SE_TRABA = {"ms-brownbag.pptx"}
