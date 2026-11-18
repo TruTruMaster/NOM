@@ -1001,6 +1001,15 @@ try:
         try:
             with urllib.request.urlopen(q, timeout=30) as x: return x.status, x.read(), {k.lower(): v for k, v in x.headers.items()}
         except urllib.error.HTTPError as e: return e.code, b"", {}
+    # (cuentas y espacio propios: a estas alturas las sesiones del principio ya se cerraron en otras pruebas)
+    tok = {}
+    for n in ("duena", "lectora", "editora", "ajena"):
+        r("POST", "/api/cuentas/registro", {"nombre": n + "18", "contrasena": CL})
+        tok[n] = (r("POST", "/api/cuentas/sesion", {"nombre": n + "18", "contrasena": CL})[1] or {}).get("token")
+    esp = r("POST", "/api/espacios", {"nombre": "Binarios" + SUFIJO}, tok["duena"])[1]["id"]
+    r("PUT", f"/api/espacios/{esp}/accesos", {"usuario": "lectora18", "permiso": "LECTURA"}, tok["duena"])
+    r("PUT", f"/api/espacios/{esp}/accesos", {"usuario": "editora18", "permiso": "EDICION"}, tok["duena"])
+    doc = r("POST", f"/api/espacios/{esp}/documentos", {"nombre": "Con imagen", "modo": "PRESENTACION", "ops": []}, tok["duena"])[1]["id"]
     bin18 = secrets.token_bytes(200000); h18 = _h.sha256(bin18).hexdigest()
     prueba("18.1 Quien edita sube un binario (con su huella)", 200, rb("PUT", f"/api/espacios/{esp}/binarios/{h18}", bin18, tok["editora"])[0])
     prueba("18.1 Una huella que no coincide con lo que llega: 400", 400, rb("PUT", f"/api/espacios/{esp}/binarios/{'1' * 64}", bin18, tok["editora"])[0])

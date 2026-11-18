@@ -1,6 +1,7 @@
 package mx.wack.nom.android.anfitrion;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -44,9 +45,12 @@ final class ApiTelefono {
     private final ServicioFuentes fuentes;
     private final ServicioPases pases;
     private final mx.wack.nom.core.servicio.ServicioChat chat;
+    private final mx.wack.nom.core.servicio.ServicioBinarios binarios;
 
     ApiTelefono(ServicioCuentas cuentas, ServicioEspacios espacios, ServicioDocumentos documentos, Difusor difusor,
-                Descubrimiento descubrimiento, Nodo nodo, ServicioSincronia sincronia, ServicioFuentes fuentes, ServicioPases pases) {
+                Descubrimiento descubrimiento, Nodo nodo, ServicioSincronia sincronia, ServicioFuentes fuentes, ServicioPases pases,
+                mx.wack.nom.core.servicio.ServicioBinarios binarios) {
+        this.binarios = binarios;
         this.fuentes = fuentes;
         this.pases = pases;
         this.chat = new mx.wack.nom.core.servicio.ServicioChat(espacios.repositorio(), espacios, difusor, new mx.wack.nom.core.servicio.Cifrado());
@@ -241,6 +245,9 @@ final class ApiTelefono {
         if ((x = coincide("/api/proyeccion/" + ID, r)) != null && m.equals("GET")) return ok(documentos.verProyeccion(x.group(1)));
         // 8.5 Ver un solo documento con su enlace (sin cuenta).
         if ((x = coincide("/api/ver/" + ID, r)) != null && m.equals("GET")) return ok(documentos.verPublico(x.group(1)));
+        // Almacén de binarios sin sesión: solo lo que usa el documento del enlace para ver o del proyector.
+        if ((x = coincide("/api/ver/" + ID + "/binarios/" + ID, r)) != null && m.equals("GET")) return Respuesta.bytes(binarios.bajarPublico("ver", x.group(1), x.group(2)));
+        if ((x = coincide("/api/proyeccion/" + ID + "/binarios/" + ID, r)) != null && m.equals("GET")) return Respuesta.bytes(binarios.bajarPublico("proyeccion", x.group(1), x.group(2)));
         if ((x = coincide("/api/proyeccion/" + ID + "/eventos", r)) != null && m.equals("GET")) {
             String codigo = x.group(1);
             return Respuesta.sse(canal -> documentos.suscribirProyeccion(codigo, canal));
@@ -256,6 +263,21 @@ final class ApiTelefono {
 
         final String token = token(p);
         Usuario u = usuario(token);
+
+        // ---- almacén de binarios (imágenes y el Office original de cada documento, aparte del documento)
+        if ((x = coincide("/api/espacios/" + ID + "/binarios/faltan", r)) != null && m.equals("POST")) {
+            Object hs = cuerpo(p).get("huellas");
+            List<String> lista = new java.util.ArrayList<>();
+            if (hs instanceof List) for (Object o : (List<?>) hs) lista.add(String.valueOf(o));
+            Map<String, Object> rf = new LinkedHashMap<>();
+            rf.put("faltan", binarios.faltan(u, x.group(1), lista));
+            rf.put("max", binarios.maxBytes());
+            return ok(rf);
+        }
+        if ((x = coincide("/api/espacios/" + ID + "/binarios/" + ID, r)) != null) {
+            if (m.equals("PUT")) return ok(binarios.subir(u, x.group(1), x.group(2), p.cuerpo));
+            if (m.equals("GET")) return Respuesta.bytes(binarios.bajar(u, x.group(1), x.group(2)));
+        }
 
         // ---- cuentas
         if (r.equals("/api/cuentas/yo") && m.equals("GET")) return ok(yo(u, null, 0));
