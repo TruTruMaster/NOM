@@ -55,6 +55,13 @@ version: 0.16.0
   ni el archivo original, se mueve con las transiciones de PowerPoint y deja de servir si a quien presenta le
   quitan el acceso; una ecuación que terminaba en barra invertida («\») ya no impide abrir el documento; un archivo de Office de
   más de 14 MB avisa que no se guarda su original.
+- **Probado en PowerPoint de verdad:** lo que armas con los paneles de animaciones, transiciones y vínculos se
+  abre en PowerPoint sin pedir reparar y se ve igual (medido con el video de PowerPoint). De paso se arregló:
+  al cambiar una transición que traía **sonido**, el sonido ya no se pierde; «**Atenuar**» y «Ocultar con el
+  siguiente clic» ocurren cuando empieza la animación que sigue, como en PowerPoint; y un archivo con nombres
+  internos con acentos (algunos que guarda LibreOffice) sale de NOM como Office lo pide.
+- **Excel:** una suma entre varias hojas cuyos nombres llevan espacios (por ejemplo `'Enero 2026:Marzo 2026'!B2`)
+  ya no da `#REF!`.
 
 ## 0.15.4 — noviembre de 2026
 
