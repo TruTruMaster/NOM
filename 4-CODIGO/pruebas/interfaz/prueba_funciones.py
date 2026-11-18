@@ -463,7 +463,11 @@ def prueba_colaboracion(P, c, e, salida):
     check("Invitar abre «Código de invitación»", (P.hoja_abierta() or "").startswith("Código"), P.hoja_abierta())
     P.clic('.velo .hoja input[data-invitados]') if P.ev("() => !!document.querySelector('.velo .hoja input[data-invitados]')") else None
     P.ev("() => { const i = document.querySelector('.velo .hoja input[data-invitados]'); if (i && !i.checked) { i.checked = true; i.dispatchEvent(new Event('change', {bubbles: true})); } }")
-    P.boton("Crear el código"); P.t(800)
+    P.boton("Crear el código")
+    # (el código lo da el servidor: con varias pruebas a la vez puede tardar varios segundos)
+    try: p.wait_for_function("() => ((document.querySelector('.qr-codigo') || {}).textContent || '').replace('-', '').trim().length >= 8", timeout=30000)
+    except Exception: pass
+    P.t(300)
     codigo = P.ev("() => (document.querySelector('.qr-codigo') || {}).textContent || ''").replace("-", "").strip()
     url_vista = P.ev("() => (document.querySelector('.qr-url') || {}).textContent || ''")
     check("se crea un código de 8 letras", len(codigo) == 8, codigo)

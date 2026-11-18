@@ -29,13 +29,11 @@ JAR = sys.argv[1] if len(sys.argv) > 1 else os.path.join(AQUI, "..", "app", "tar
 D = tempfile.mkdtemp(prefix="nomcolab-pruebas-")
 JAVA = shutil.which("java") or "java"
 EXTERNO = os.environ.get("NOM_BASE", "").rstrip("/")
-def libre(preferido):
-    """El puerto preferido si nadie lo usa; si no, uno libre cualquiera (en esta computadora puede haber otros
-    servidores de prueba de NOM en 8095-8099 y la prueba se conectaba a ellos creyendo que era el suyo)."""
+def libre(preferido=None):
+    """Un puerto libre que da el sistema (no uno «preferido»: en la regresión corren varias pruebas a la vez, cada
+    una con su servidor, y dos escogían el mismo puerto; además puede haber otros servidores de NOM en 8095-8099 y la
+    prueba se conectaba a ellos creyendo que era el suyo). El argumento queda solo como referencia."""
     import socket
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as c:
-        c.settimeout(0.3)
-        if c.connect_ex(("127.0.0.1", preferido)) != 0: return preferido
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as b:
         b.bind(("127.0.0.1", 0)); return b.getsockname()[1]
 
@@ -45,7 +43,8 @@ def arrancar():
     return None if EXTERNO else subprocess.Popen([JAVA, "-jar", JAR],
         env=dict(os.environ, NOM_PUERTO=str(P), NOM_DATOS=D, NOM_DESCUBRIMIENTO="false", NOM_CUOTA_MB="200", NOM_ALIAS_HORA_RED="3"), stdout=open(os.path.join(D, "servidor.log"), "a"), stderr=subprocess.STDOUT)
 def esperar():
-    for _ in range(90):
+    # (hasta 4 minutos: en la regresión la computadora corre muchas pruebas a la vez)
+    for _ in range(240):
         try: urllib.request.urlopen(B + "/api/red/info", timeout=2); return
         except Exception: time.sleep(1)
 srv = arrancar()
@@ -514,7 +513,7 @@ try:
         srv2 = subprocess.Popen([JAVA, "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P2), NOM_DATOS=D2, NOM_DESCUBRIMIENTO="false", NOM_NUBES_CONFIABLES=nubes), stdout=open(os.path.join(D2, "servidor.log"), "a"), stderr=subprocess.STDOUT)
         r2 = lambda *a, **k: rq(B2, *a, **k)
         try:
-            for _ in range(90):
+            for _ in range(240):
                 try: urllib.request.urlopen(B2 + "/api/red/info", timeout=2); break
                 except Exception: time.sleep(1)
             prueba("13.2 El otro servidor dice que acepta pases", True, (r2("GET", "/api/red/info")[1] or {}).get("pases"))
@@ -708,7 +707,7 @@ try:
         puente = Puente(PP, P)
         r3 = lambda *a, **k: rq(B3, *a, **k)
         try:
-            for _ in range(90):
+            for _ in range(240):
                 try: urllib.request.urlopen(B3 + "/api/red/info", timeout=2); break
                 except Exception: time.sleep(1)
             puente.prender()
@@ -840,7 +839,7 @@ try:
         P4 = libre(8097); B4 = f"http://localhost:{P4}"
         def arrancar4(**extra):
             return subprocess.Popen([JAVA, "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P4), NOM_DATOS=D4, NOM_DESCUBRIMIENTO="false", **extra), stdout=open(os.path.join(D4 + ".log"), "a"), stderr=subprocess.STDOUT)
-        def esperar4(proc, s=90):
+        def esperar4(proc, s=240):
             for _ in range(s):
                 if proc.poll() is not None: return False
                 try: urllib.request.urlopen(B4 + "/api/red/info", timeout=2); return True
@@ -1125,7 +1124,7 @@ try:
         srv6 = subprocess.Popen([JAVA, "-Dnom.inactivoMs=2000", "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P6), NOM_DATOS=D6, NOM_DESCUBRIMIENTO="false"), stdout=open(os.path.join(D6, "servidor.log"), "a"), stderr=subprocess.STDOUT)
         r6 = lambda *a, **k: rq(B6, *a, **k)[:2]
         try:
-            for _ in range(90):
+            for _ in range(240):
                 try: urllib.request.urlopen(B6 + "/api/red/info", timeout=2); break
                 except Exception: time.sleep(1)
             r6("POST", "/api/cuentas/registro", {"nombre": "memoria6", "contrasena": CL})
@@ -1153,7 +1152,7 @@ try:
         srv5 = subprocess.Popen([JAVA, "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P5), NOM_DATOS=D5, NOM_DESCUBRIMIENTO="false", NOM_CUOTA_MB="1"), stdout=open(os.path.join(D5, "servidor.log"), "a"), stderr=subprocess.STDOUT)
         r5 = lambda *a, **k: rq(B5, *a, **k)[:2]
         try:
-            for _ in range(90):
+            for _ in range(240):
                 try: urllib.request.urlopen(B5 + "/api/red/info", timeout=2); break
                 except Exception: time.sleep(1)
             t5 = {}

@@ -45,6 +45,7 @@ def subir(archivos, carpeta, timeout=900):
 
 def bajar(ruta, destino, timeout=900):
     destino = Path(destino)
+    destino.unlink(missing_ok=True)   # (si no, un archivo viejo con ese nombre parecería recién bajado)
     if AQUI_WIN:
         o = CASA / ruta
         if o.exists(): shutil.copy2(o, destino)

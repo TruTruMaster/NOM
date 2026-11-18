@@ -91,22 +91,24 @@ def main():
     # Windows: Word coloca cada uno en su página y exporta a PDF (lo que de verdad se ve en Office)
     (SAL / "lista.txt").write_text("".join(f"{n}\t{w}\t{h}\n" for n, (w, h) in tam.items()), encoding="utf-8")
     import tarfile
-    with tarfile.open(SAL / "ida.tar", "w") as t:
+    with tarfile.open(SAL / "meta.tar", "w") as t:
         t.add(SAL / "entrada", arcname="entrada"); t.add(SAL / "lista.txt", arcname="lista.txt")
-    ssh = lambda c, **k: subprocess.run(["ssh", "-o", "BatchMode=yes", WIN, c], capture_output=True, text=True, errors="replace", **k)
-    ssh("if exist nomoffice\\meta rmdir /s /q nomoffice\\meta & mkdir nomoffice\\meta")
-    subprocess.run(["scp", "-q", str(SAL / "ida.tar"), WIN + ":nomoffice/meta/ida.tar"], check=True, timeout=600)
-    subprocess.run(["scp", "-q", str(AQUI / "windows/metarchivos_word.py"), str(AQUI / "windows/comun.py"), WIN + ":nomoffice/"], check=True, timeout=120)
-    ssh("cd nomoffice\\meta && tar -xf ida.tar")
-    r = ssh("powershell -NoProfile -ExecutionPolicy Bypass -File nomoffice\\correr.ps1 meta metarchivos_word.py meta\\entrada meta\\lista.txt meta\\word.pdf", timeout=3600)
+    # (por SSH desde Linux, o aquí mismo si la prueba ya corre en la computadora con Windows: remoto.py)
+    sys.path.insert(0, str(AQUI))
+    import remoto
+    remoto.ejecutar("if exist nomoffice\\meta rmdir /s /q nomoffice\\meta & mkdir nomoffice\\meta")
+    remoto.subir([SAL / "meta.tar"], "nomoffice/meta")
+    remoto.ejecutar("cd nomoffice\\meta && tar -xf meta.tar && del meta.tar")
+    r = remoto.correr_office("meta", "metarchivos_word.py", "meta\\entrada", "meta\\lista.txt", "meta\\word.pdf", timeout=3600)
     print("\n".join(r.stdout.strip().splitlines()[-4:]) if r.stdout.strip() else r.stderr[-500:], flush=True)
-    subprocess.run(["scp", "-q", WIN + ":nomoffice/meta/word.pdf", str(SAL / "word.pdf")], check=True, timeout=600)
+    if not remoto.bajar("nomoffice/meta/word.pdf", SAL / "word.pdf"): print("Word no dejó el PDF"); return 1
     win = SAL / "windows"; shutil.rmtree(win, ignore_errors=True); win.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["pdftoppm", "-r", "192", "-png", str(SAL / "word.pdf"), str(win / "pag")], check=True)
-    pags = sorted(win.glob("pag-*.png"), key=lambda q: int(q.stem.split("-")[-1]))
-    for (n, (w, h)), q in zip(tam.items(), pags):
-        Image.open(q).convert("RGB").crop((0, 0, w, h)).save(win / (n + ".png"))
-    for q in pags: q.unlink()
+    # cada página del PDF de Word a 192 ppp (pypdfium2: igual en Linux y en Windows)
+    import pypdfium2
+    pdf = pypdfium2.PdfDocument(str(SAL / "word.pdf"))
+    for (n, (w, h)), pag in zip(tam.items(), pdf):
+        pag.render(scale=192 / 72).to_pil().convert("RGB").crop((0, 0, w, h)).save(win / (n + ".png"))
+    pdf.close()
     res = []
     for x in lista:
         a, bw = nom / (x["nombre"] + ".png"), win / (x["nombre"] + ".png")
@@ -122,7 +124,12 @@ def main():
         for r in medidos[:12]: print(f"  {r['tinta']:6.2f} %  {r['parecido']:6.2f} %  {r['nombre']}  ({r['de']})")
     sin = [r for r in res if r["tinta"] is None]
     if sin: print(f"sin medir {len(sin)}: " + ", ".join(r["nombre"] for r in sin[:10]))
-    return 0
+    # (lo medido el 18-nov: parecido 96.2 %, tinta 88.7 %; si baja de esto, algo se descompuso en js/emf.js)
+    if not medidos: return 1
+    pm, tm = np.mean([r["parecido"] for r in medidos]), np.mean([r["tinta"] for r in medidos])
+    bien = pm >= 95 and tm >= 87
+    print(("BIEN" if bien else "MAL") + f" EMF/WMF contra Word: parecido {pm:.2f} % (mínimo 95) · tinta {tm:.2f} % (mínimo 87)")
+    return 0 if bien else 1
 
 
 if __name__ == "__main__":

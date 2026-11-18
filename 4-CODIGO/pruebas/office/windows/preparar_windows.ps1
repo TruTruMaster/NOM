@@ -22,7 +22,7 @@ Write-Output ("java: " + $jdk.FullName)
 # 2. Paquetes de Python (los mismos que pruebas/preparar.sh)
 Write-Output "== Python"
 python -m pip install --user -q --upgrade pip
-python -m pip install --user -q playwright python-docx python-pptx openpyxl lxml pillow numpy opencv-python-headless cryptography
+python -m pip install --user -q playwright python-docx python-pptx openpyxl lxml pillow numpy opencv-python-headless cryptography pypdfium2
 $env:PLAYWRIGHT_BROWSERS_PATH = Join-Path $env:USERPROFILE ".cache\nom-pruebas\navegadores"
 python -m playwright install chromium firefox
 

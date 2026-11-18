@@ -4,12 +4,11 @@ import json, os, subprocess, sys, tempfile, time, urllib.request, http.client
 import shutil, socket
 # (el jar de este repositorio, donde esté; Java el de JAVA o el del PATH; un puerto libre desde el 8093)
 JAR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "4-CODIGO", "app", "target", "nom-colab.jar"))
-def _libre(p):
-    while True:
-        with socket.socket() as s_:
-            try: s_.bind(("127.0.0.1", p)); return p
-            except OSError: p += 1
-P = _libre(8093); B = f"http://localhost:{P}"
+def _libre(p=None):
+    # (un puerto que da el sistema: con varias pruebas a la vez, dos escogían el mismo «desde el 8093»)
+    with socket.socket() as s_:
+        s_.bind(("127.0.0.1", 0)); return s_.getsockname()[1]
+P = _libre(); B = f"http://localhost:{P}"
 D = tempfile.mkdtemp(prefix="nom-limites-")
 srv = subprocess.Popen([os.environ.get("JAVA") or shutil.which("java") or "java", "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P), NOM_DATOS=D, NOM_DESCUBRIMIENTO="false"), stdout=open(os.path.join(D, "log"), "w"), stderr=subprocess.STDOUT)
 def r(m, u, b=None, t=None):
@@ -30,9 +29,15 @@ def caso(id_, desc, esperado, obt):
     res.append(dict(id=id_, desc=desc, esperado=esperado, obtenido=obt[0] if isinstance(obt, tuple) else obt, ok=ok, msg=msg))
     print(("OK   " if ok else "FALLA"), id_, desc, "esperado", esperado, "obtenido", obt[0] if isinstance(obt, tuple) else obt, msg)
 try:
-    for _ in range(90):
+    for _ in range(240):
         try: urllib.request.urlopen(B + "/api/red/info", timeout=2); break
-        except Exception: time.sleep(1)
+        except Exception:
+            if srv.poll() is not None: break
+            time.sleep(1)
+    else:
+        pass
+    if srv.poll() is not None:
+        print("El servidor de la prueba no arrancó:\n" + open(os.path.join(D, "log"), encoding="utf-8", errors="replace").read()[-3000:]); sys.exit(1)
     CL = "Clave-Segura-123"
     reg = lambda n, c=CL: r("POST", "/api/cuentas/registro", {"nombre": n, "contrasena": c, "acepto": "2026-11-13"})
     caso("VL-01", "Nombre de 2 caracteres (ab)", 400, reg("ab"))

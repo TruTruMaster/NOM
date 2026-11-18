@@ -71,7 +71,7 @@ archivo de Office se muestra (y se conserva al descargar), pero no se crea ni se
 | Insertar · Símbolos | Ecuación, símbolo | Sí (ecuaciones con notación tipo LaTeX, a OMML de Word) |
 | Dibujar | Pluma, entintado | No en el texto (la pluma existe al presentar) |
 | Diseño | Temas, conjuntos de estilos, colores, fuentes, marca de agua, color y bordes de página | Marca de agua sí; color y bordes de página se ven; temas, conjuntos de estilos, colores y fuentes del documento: no |
-| Disposición | Márgenes, orientación, tamaño, columnas, saltos, números de línea, guiones, sangría, espacio, organizar | Márgenes, orientación, tamaño, saltos de página, sangría y espacio: sí. Columnas: las del archivo se ven como Word; en NOM, «dos lado a lado» como bloque. Saltos de sección: se ven. **Números de línea y división automática de palabras: no** |
+| Disposición | Márgenes, orientación, tamaño, columnas, saltos, números de línea, guiones, sangría, espacio, organizar | Márgenes, orientación, tamaño, saltos de página, sangría y espacio: sí. Columnas: las del archivo se ven como Word; en NOM, «dos lado a lado» como bloque. Saltos de sección: se ven. **División automática de palabras: sí** (18-nov: «Guiones automáticos» del archivo —zona, mayúsculas, «No dividir con guiones» por párrafo— se respeta, se activa y desactiva en Más y se guarda al descargar; patrones de TeX en inglés y español. Medido contra Word en w13-guiones: 57.1 % de renglones idénticos, 19.6 % sin dividir. Lo que falta: Word usa su propio diccionario y parte algunas palabras en otro lugar —«extra-ordinariamente», «con-exión» en inglés—; ver RELEVO-18NOV-TARDE). **Números de línea: no** |
 | Referencias | Tabla de contenido, notas al pie y al final, citas y bibliografía, títulos, tabla de ilustraciones, índice, tabla de autoridades | Tabla de contenido y notas al pie: sí. Notas al final: no. Citas y bibliografía: **las de NOM** (APA, fuentes por DOI, ISBN o dirección); las de Word (`CITATION`, `Sources.xml`): no. Títulos «Figura 1.»: sí. Tabla de ilustraciones, índice (`XE`) y tabla de autoridades: no. Investigar (Wikipedia, libros, artículos): sí, extra |
 | Correspondencia | Combinar correspondencia, sobres, etiquetas, reglas | **La de NOM** (texto con `{{campos}}` + una hoja = un documento por fila); la de Word (`MERGEFIELD`, origen de datos), sobres y etiquetas: no |
 | Revisar | Ortografía, Editor, contar palabras, accesibilidad, traducir, idioma, comentarios, control de cambios, comparar, proteger | Contar palabras, comentarios y proteger: sí. **Control de cambios: a medias** (NOM tiene su modo sugerencia con aceptar y rechazar; los cambios marcados de un Word se muestran ya aplicados, sin sus marcas). Comparar, traducir, idioma y Editor: no |
@@ -104,13 +104,13 @@ w06 84.5 %, w07 91.2 %, w08 94.3 %, w09 77.3 %, w10 34.0 %, w11 100 %, w12 77.8 
 | Vista | Saltos de página, diseño de página, cuadrícula, encabezados, zoom, inmovilizar, macros, celda de enfoque, modo oscuro | Inmovilizar (fijar filas y columnas): sí; cuadrícula como la del archivo. Vista de saltos, de diseño, celda de enfoque y macros: no |
 | VBA, Python en Excel, Power Query (M), Power Pivot y DAX, cubos | | No |
 
-**Funciones.** NOM tiene **453** (con sus nombres en español y en inglés), con matrices dinámicas, `LET` y `LAMBDA`
-(18-nov: +223). La lista de Excel 2024 sale del propio Excel (la biblioteca de tipos de `WorksheetFunction`, 416
+**Funciones.** NOM tiene **454** (con sus nombres en español y en inglés), con matrices dinámicas, `LET` y `LAMBDA`
+(18-nov: +224). La lista de Excel 2024 sale del propio Excel (la biblioteca de tipos de `WorksheetFunction`, 416
 funciones, `windows/lista_funciones.py`): de esas faltan solo las de idiomas de doble byte o tailandés (`BAHTTEXT`,
 `THAI*`, `PHONETIC`), las que piden un servicio externo (`RTD`, `WEBSERVICE`, `FILTERXML`, `STOCKHISTORY`, `FIELDVALUE`),
-`FORECAST.ETS*` (4), `ODDFPRICE`/`ODDFYIELD`/`ODDLPRICE`/`ODDLYIELD`, `ISFORMULA` y `IMAGE`.
+`FORECAST.ETS*` (4), `ODDFPRICE`/`ODDFYIELD`/`ODDLPRICE`/`ODDLYIELD` e `IMAGE`.
 Comprobadas contra **Excel 2024 real** (`funciones_excel.py`: Excel escribe cada fórmula con `Formula2`, calcula y
-devuelve el valor o el error exacto): **496 de 497** fórmulas iguales. La que no: `BESSELJ` con x ≥ 8 (Excel se aparta
+devuelve el valor o el error exacto): **499 de 500** fórmulas iguales. La que no: `BESSELJ` con x ≥ 8 (Excel se aparta
 del valor exacto en ~5e-7 y no se encontró su método; NOM da el exacto). Las funciones iterativas (`TIR`, `TIR.NO.PER`,
 `TASA`) se comparan con la precisión que Excel documenta (1e-8).
 No existen en Excel 2024 (son de Microsoft 365; dan `#NAME?` en la PC de prueba, así que no hay contra qué compararlas):
