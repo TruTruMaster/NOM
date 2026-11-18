@@ -3,7 +3,7 @@ import sys, os, json, urllib.request
 from comun import *
 TOK = (os.environ.get("NOM_TOKEN") or open(os.path.expanduser("~/.cache/nom-pruebas/token-x1")).read()).strip()   # sesión del dueño del espacio de prueba
 ESP = sys.argv[1]; OUT = os.path.expanduser("~/.cache/nom-pruebas/exportados-k"); os.makedirs(OUT, exist_ok=True)
-q = urllib.request.Request(BASE + f"/api/espacios/{ESP}/documentos", headers={"Authorization": "Bearer " + TOK, "User-Agent": "NOM-COLAB-pruebas/1.0"})
+q = urllib.request.Request(BASE + f"/api/espacios/{ESP}/documentos", headers={"Authorization": "Bearer " + TOK, "User-Agent": "NOM-pruebas/1.0"})
 docs = json.load(urllib.request.urlopen(q, timeout=20))
 with sync_playwright() as pw:
     e = Equipo(pw, "laptop-chromium-x2", "chromium", "pruebaa55x2"); e.entrar()

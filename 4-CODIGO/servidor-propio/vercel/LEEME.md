@@ -1,5 +1,10 @@
 # nom.qd.je por Vercel
 
+> **No se usa** (16-nov-2026). Funcionó de punta a punta, pero Vercel pide comprobar el dominio con un TXT en
+> `_vercel.qd.je`, que es de DigitalPlat (otra cuenta de Vercel ya usa un `*.qd.je`). Hoy `nom.qd.je` redirige a
+> `www.nom.qd.je` con GitHub Pages (`docs/DOMINIO-Y-BUSCADORES.md`). Se conserva por si eso cambia. El token de
+> Vercel que se usó para probar se pegó en una conversación: conviene revocarlo en el panel de Vercel.
+
 `nom.qd.je` es la raíz de su zona en DigitalPlat: no puede ser CNAME, y Cloudflare for SaaS solo
 acepta raíces con el plan Enterprise. Vercel sí acepta la raíz (registro A) y reenvía cada petición,
 sin cambiar la dirección que ve la persona, a `https://nomcolab.dpdns.org`, que sigue llegando a la

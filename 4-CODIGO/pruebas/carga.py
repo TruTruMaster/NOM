@@ -30,7 +30,7 @@ A = ap.parse_args()
 B = A.base.rstrip("/")
 U = urllib.parse.urlsplit(B)
 CL = "Carga-" + "".join(random.choice(string.ascii_letters) for _ in range(12))
-AG = {"User-Agent": "NOM-COLAB-pruebas/1.0"}   # Cloudflare rechaza el de urllib
+AG = {"User-Agent": "NOM-pruebas/1.0"}   # Cloudflare rechaza el de urllib
 
 
 def r(m, u, b=None, t=None):

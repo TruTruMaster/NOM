@@ -87,7 +87,43 @@ public class ServicioDocumentos {
         repo.guardarVisita(docId, usuarioId, v);
     }
 
-    private Object candado(String docId) { return candados.computeIfAbsent(docId, k -> new Object()); }
+    private Object candado(String docId) {
+        ultimoUso.put(docId, System.currentTimeMillis());
+        return candados.computeIfAbsent(docId, k -> new Object());
+    }
+
+    /**
+     * Memoria: cada documento que se abre queda en memoria (con el archivo de Office original dentro, que puede medir
+     * 14 MB). Sin soltarlos, la Raspberry (512 MB para Java) se llenaba con unos cuantos. Los que nadie tiene abiertos,
+     * ya guardados en disco y sin una versión pendiente, salen de la memoria tras un rato sin uso y se vuelven a leer
+     * del disco al abrirlos. Corre en el mismo hilo que persistir() (después de escribir), así que nunca suelta un
+     * estado con cambios que todavía no están en disco.
+     */
+    private final Map<String, Long> ultimoUso = new ConcurrentHashMap<>();
+    private static final long INACTIVO_MS = Long.getLong("nom.inactivoMs", 20 * 60_000L);
+    private volatile long ultimaLiberacion;
+
+    private void liberarMemoria() {
+        long ahora = System.currentTimeMillis();
+        if (ahora - ultimaLiberacion < Math.min(60_000L, INACTIVO_MS)) return;
+        ultimaLiberacion = ahora;
+        int n = 0;
+        for (var e : new ArrayList<>(ultimoUso.entrySet())) {
+            String id = e.getKey();
+            if (ahora - e.getValue() < INACTIVO_MS || sucios.contains(id) || difusor.hayCanales(id)) continue;
+            Documento d = repo.porId(id).orElse(null);
+            if (d != null && d.pendienteVersion) continue;   // el autoguardado lo busca entre los que están en memoria
+            synchronized (candados.computeIfAbsent(id, k -> new Object())) {
+                Long u = ultimoUso.get(id);
+                if (sucios.contains(id) || (u != null && ahora - u < INACTIVO_MS) || difusor.hayCanales(id)) continue;
+                repo.olvidarEstado(id);
+                motores.remove(id);
+                ultimoUso.remove(id);
+                n++;
+            }
+        }
+        if (n > 0) log.info("Memoria: {} documento(s) sin uso salieron de la memoria (se leen del disco al abrirlos)", n);
+    }
 
     private MotorCRDT motor(String docId) { return motores.computeIfAbsent(docId, k -> new MotorCRDT()); }
 
@@ -412,6 +448,7 @@ public class ServicioDocumentos {
         List<String> rechazadas = new ArrayList<>();
         String motivo = null;
         EstadoDocumento est;
+        Map<String, Object> paraProy = null;
         synchronized (candado(docId)) {
             est = repo.estado(docId);
             if (repo.bytesEstado(docId) > 64 * 1024) revisarCuota(e);
@@ -447,12 +484,13 @@ public class ServicioDocumentos {
                 if (cambioMeta) repo.guardar(d);
                 anotar(docId, u, cliente, dispositivo, aplicadas);
                 conMencion.addAll(comentariosConMencion(est, aplicadas));
+                if (difusor.hayProyectores(docId)) paraProy = paraProyectores(est, aplicadas, cliente);
                 if (cambioMeta) {
                     difusor.avisarEspacio(d.espacioId, "documentos", Map.of("accion", "actualizado", "id", d.id));
                 }
             }
         }
-        if (!aplicadas.isEmpty()) difusor.ops(docId, Map.of("ops", aplicadas, "cliente", cliente == null ? "" : cliente));
+        if (!aplicadas.isEmpty()) difusor.ops(docId, Map.of("ops", aplicadas, "cliente", cliente == null ? "" : cliente), paraProy);
         if (!conMencion.isEmpty()) {
             try { avisarMenciones(u, d, e, conMencion); } catch (RuntimeException ex) { log.aviso("No se pudo avisar una mención en {}: {}", docId, ex.getMessage()); }
         }
@@ -646,6 +684,7 @@ public class ServicioDocumentos {
                 repo.porId(id).ifPresent(repo::guardar);
             }
         }
+        try { liberarMemoria(); } catch (RuntimeException ex) { log.aviso("No se pudo liberar memoria: {}", ex.getMessage()); }
     }
 
     /** Cuanto ocupa, mas o menos, un valor al guardarse en JSON (sin armar el texto). */
@@ -856,7 +895,9 @@ public class ServicioDocumentos {
             repo.guardar(d);
             v = nuevaVersion(d, est, u, "Restaurada desde la versión " + numero);
         }
-        difusor.ops(docId, Map.of("ops", ops, "cliente", "servidor"));
+        Map<String, Object> paraProy;
+        synchronized (candado(docId)) { paraProy = paraProyectores(repo.estado(docId), ops, "servidor"); }
+        difusor.ops(docId, Map.of("ops", ops, "cliente", "servidor"), paraProy);
         difusor.avisarDocumento(docId, "version", Map.of("numero", v.numero, "desde", numero, "autor", u.nombre));
         return v;
     }
@@ -1206,9 +1247,50 @@ public class ServicioDocumentos {
     }
 
     private Proyeccion proyeccionVigente(String codigo) {
-        Proyeccion p = codigo == null ? null : proyecciones.get(codigo.trim().toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", ""));
-        if (p == null || repo.porId(p.docId).isEmpty()) throw new ErrorNom(ErrorNom.NO_EXISTE, "Ese código no corresponde a ninguna presentación activa");
+        final Proyeccion p = codigo == null ? null : proyecciones.get(codigo.trim().toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", ""));
+        Documento d = p == null ? null : repo.porId(p.docId).orElse(null);
+        // Si quien presenta ya no puede ver el documento (le quitaron el acceso, se movió a otro espacio o se
+        // fue a la papelera), su código deja de servir.
+        boolean vale = p != null && d != null && d.eliminado <= 0 && p.espacioId.equals(d.espacioId)
+                && espacios.repositorio().porId(d.espacioId).map(e -> e.permisoDe(p.usuarioId) != null).orElse(false);
+        if (!vale) {
+            if (p != null) proyecciones.remove(p.codigo);
+            throw new ErrorNom(ErrorNom.NO_EXISTE, "Ese código no corresponde a ninguna presentación activa");
+        }
         return p;
+    }
+
+    /** Lo que no se muestra a quien solo mira (pantalla de proyección o enlace para ver): notas del orador y partes asignadas. */
+    private static boolean campoPrivado(String k) { return k.startsWith("nota:") || k.startsWith("dueno:"); }
+
+    /**
+     * La parte de un lote que puede ver una pantalla de proyección (5.5): sin comentarios, sin notas del orador, sin
+     * dueños de partes y sin el archivo de Office original (que trae sus propios comentarios y notas). null si no queda nada.
+     */
+    private static Map<String, Object> paraProyectores(EstadoDocumento est, List<Operacion> ops, String cliente) {
+        List<Operacion> r = new ArrayList<>();
+        for (Operacion op : ops) {
+            if ("_origen".equals(op.bloque())) continue;
+            if (op.esSecuencia()) { if (!"comentario".equals(est.valor(op.bloque(), "tipo"))) r.add(new Operacion(op.id(), op.bloque(), op.campos(), op.t(), op.n(), op.s(), null)); continue; }
+            Map<String, Object> c = op.campos();
+            if (c == null || "comentario".equals(c.containsKey("tipo") ? c.get("tipo") : est.valor(op.bloque(), "tipo"))) continue;
+            if (c.keySet().stream().anyMatch(ServicioDocumentos::campoPrivado)) {
+                c = new LinkedHashMap<>(c);
+                c.keySet().removeIf(ServicioDocumentos::campoPrivado);
+                if (c.isEmpty()) continue;
+            }
+            r.add(new Operacion(op.id(), op.bloque(), c, op.t(), op.n(), null, null));
+        }
+        return r.isEmpty() ? null : Map.of("ops", r, "cliente", cliente == null ? "" : cliente);
+    }
+
+    /** Una copia del estado para quien solo mira: sin comentarios, notas del orador, dueños ni el original de Office. */
+    private static EstadoDocumento paraMirar(EstadoDocumento copia, boolean sinAnimaciones) {
+        copia.bloques.entrySet().removeIf(en -> "_origen".equals(en.getKey())
+                || (en.getValue().get("tipo") != null && "comentario".equals(en.getValue().get("tipo").v)));
+        Map<String, Registro> meta = copia.bloques.get(Operacion.DOC);
+        if (meta != null) meta.keySet().removeIf(k -> campoPrivado(k) || (sinAnimaciones && k.startsWith("anim:")));
+        return copia;
     }
 
     /** Publico (con el codigo): la presentacion y en que diapositiva va. */
@@ -1221,13 +1303,14 @@ public class ServicioDocumentos {
         doc.put("nombre", d.nombre);
         doc.put("modo", d.modo);
         r.put("documento", doc);
-        synchronized (candado(d.id)) { r.put("estado", repo.estado(d.id).copia()); }
+        // (sin comentarios, notas del orador ni el original de Office: la pantalla del proyector la ve la sala)
+        synchronized (candado(d.id)) { r.put("estado", paraMirar(repo.estado(d.id).copia(), false)); }
         return r;
     }
 
     public void suscribirProyeccion(String codigo, Canal canal) {
         Proyeccion p = proyeccionVigente(codigo);
-        difusor.suscribirProyector(p.espacioId, p.docId, p.codigo, canal);
+        difusor.suscribirProyector(p.espacioId, p.docId, p.codigo, p.usuarioId, canal);
         try { canal.enviar("diapositiva", estadoProyeccion(p)); } catch (java.io.IOException ignorado) { }
     }
 
@@ -1496,6 +1579,9 @@ public class ServicioDocumentos {
         repo.guardar(d);
         usoCache.clear();
         difusor.avisarDocumento(docId, "movido", Map.of("espacioId", destino.id, "espacio", destino.nombre, "por", u.nombre));
+        // Quien lo tenía abierto y no es del espacio nuevo deja de recibir sus cambios en vivo (y sus proyectores).
+        difusor.cerrarDocumento(docId, uid -> destino.permisoDe(uid) == null);
+        proyecciones.values().removeIf(x -> x.docId.equals(docId));
         difusor.avisarEspacio(antes, "documentos", Map.of("accion", "eliminado", "id", d.id));
         difusor.avisarEspacio(destino.id, "documentos", Map.of("accion", "creado", "id", d.id));
         return vistaPara(d, u, enDestino);
@@ -1704,9 +1790,8 @@ public class ServicioDocumentos {
         if (d == null) throw new ErrorNom(ErrorNom.NO_EXISTE, "Este enlace ya no sirve: el propietario lo quitó o el documento ya no existe");
         EstadoDocumento copia;
         synchronized (candado(d.id)) { copia = repo.estado(d.id).copia(); }
-        copia.bloques.entrySet().removeIf(en -> en.getValue().get("tipo") != null && "comentario".equals(en.getValue().get("tipo").v));
-        Map<String, Registro> meta = copia.bloques.get(Operacion.DOC);
-        if (meta != null) meta.keySet().removeIf(k -> k.startsWith("nota:") || k.startsWith("dueno:") || k.startsWith("anim:"));
+        // (también sin el archivo de Office original: trae sus propios comentarios, notas y datos del autor)
+        paraMirar(copia, true);
         Map<String, Object> doc = new LinkedHashMap<>();
         doc.put("nombre", d.nombre);
         doc.put("modo", d.modo);
@@ -1734,8 +1819,9 @@ public class ServicioDocumentos {
         synchronized (candado(docId)) { r = new LinkedHashMap<>(Replica.cambiosDeOtros(repo.estado(docId), base, nodos)); }
         cerrarRachas(docId, true);
         Set<String> personas = new LinkedHashSet<>();
+        // (sin cortar en la primera racha vieja: las que se cierran juntas no siempre quedan en orden de hora; ver cambiosDesde)
         if (desde > 0) for (Map<String, Object> a : repo.actividad(docId, 3000)) {
-            if (num(a.get("t")) < desde) break;
+            if (num(a.get("t")) < desde) continue;
             if (u.id.equals(String.valueOf(a.get("usuarioId"))) || a.get("usuario") == null) continue;
             personas.add(String.valueOf(a.get("usuario")));
         }
@@ -2009,7 +2095,11 @@ public class ServicioDocumentos {
                 anotar(docId, sync, "sincronia", "Sincronización", aplicadas);
             }
         }
-        if (!aplicadas.isEmpty()) difusor.ops(docId, Map.of("ops", aplicadas, "cliente", "sincronia"));
+        if (!aplicadas.isEmpty()) {
+            Map<String, Object> paraProy;
+            synchronized (candado(docId)) { paraProy = paraProyectores(repo.estado(docId), aplicadas, "sincronia"); }
+            difusor.ops(docId, Map.of("ops", aplicadas, "cliente", "sincronia"), paraProy);
+        }
         return aplicadas.size();
     }
 
@@ -2021,7 +2111,8 @@ public class ServicioDocumentos {
         cerrarRachas(docId, true);
         List<Map<String, Object>> l = new ArrayList<>();
         for (Map<String, Object> a : repo.actividad(docId, 5000)) {
-            if (num(a.get("t")) <= desde) break;
+            // (sin cortar en la primera racha vieja: no siempre quedan en orden de hora; ver cambiosDesde)
+            if (num(a.get("t")) <= desde) continue;
             String uid = String.valueOf(a.get("usuarioId"));
             if ("sincronia".equals(uid) || Boolean.TRUE.equals(a.get("externo"))) continue;
             Map<String, Object> x = new LinkedHashMap<>(a);
@@ -2041,19 +2132,26 @@ public class ServicioDocumentos {
     @SuppressWarnings("unchecked")
     public Map<String, Object> actividadExterna(Usuario u, String docId, List<Object> filas, String via) {
         Documento d = requerir(docId);
-        permiso(u, d, Permiso.EDICION);
+        Permiso p = permiso(u, d, Permiso.EDICION);
         int n = 0;
         String origen = via == null || via.isBlank() ? "otro NOM" : (via.length() > 60 ? via.substring(0, 60) : via);
+        long ahora = System.currentTimeMillis();
         for (Object o : filas == null ? List.<Object>of() : filas.subList(0, Math.min(filas.size(), 500))) {
             if (!(o instanceof Map<?, ?> m)) continue;
             Map<String, Object> f = (Map<String, Object>) m;
             String uid = String.valueOf(f.get("usuarioId"));
             String nombre = String.valueOf(f.getOrDefault("usuario", "Alguien"));
             if (nombre.length() > 40) nombre = nombre.substring(0, 40);
-            boolean propia = f.get("nube") != null && cuentas.porId(uid).filter(x -> !x.sinContrasena()).isPresent();
+            // A nombre de una cuenta de aquí solo si es quien sube o si sube el propietario del espacio (el que
+            // sincroniza su teléfono): un editor no puede escribir filas a nombre de otra persona, que irían a su
+            // recibo de proceso y a sus aportes.
+            boolean propia = f.get("nube") != null && (uid.equals(u.id) || p == Permiso.PROPIETARIO)
+                    && cuentas.porId(uid).filter(x -> !x.sinContrasena()).isPresent();
             Map<String, Object> a = new LinkedHashMap<>();
-            a.put("t", num(f.get("t")));
-            a.put("inicio", num(f.get("inicio")));
+            // (nunca en el futuro: la bitácora se lee de lo más nuevo a lo más viejo)
+            long t = Math.min(num(f.get("t")), ahora), ini = Math.min(num(f.get("inicio")), t);
+            a.put("t", t);
+            a.put("inicio", ini);
             a.put("usuarioId", propia ? uid : "ext:" + (uid.length() > 24 ? uid.substring(0, 24) : uid));
             a.put("usuario", propia ? nombre : nombre + (Boolean.TRUE.equals(f.get("alias")) ? ", sin conexión" : ""));
             a.put("color", f.get("color") instanceof String c && c.matches("#[0-9A-Fa-f]{6}") ? c : "#6B6875");

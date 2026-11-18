@@ -20,9 +20,10 @@ demás después.
 4. **Se prueba en local (puerto 8099), no en Azure.** Para editar CSS/JS sin recompilar:
    `SPRING_WEB_RESOURCES_STATIC_LOCATIONS=file:<repo>/4-CODIGO/app/src/main/resources/static/`.
 5. **Si cambia algo de la interfaz**, recompilar el APK y subir `versionName`/`versionCode` en
-   `android/app/build.gradle.kts` (hoy 0.10.0 / 12).
-6. **Pruebas**: agregar casos a `pruebas/seguridad.py` cuando la tarea toque permisos (hoy 76/76;
-   tienen que seguir pasando).
+   `android/app/build.gradle.kts` (hoy 0.15.4 / 30; la siguiente, 0.16.0 / 31) junto con `Version.java`,
+   `NOM.VERSION` (`nucleo.js`) y `VERSION` (`sw.js`).
+6. **Pruebas**: agregar casos a `pruebas/seguridad.py` cuando la tarea toque permisos (17-nov: 380 de 380,
+   más los de la revisión de esa noche; tienen que seguir pasando). Antes de publicar: `pruebas/regresion.sh`.
 7. **Commits**: en español, a nombre de trutrumaster, sin menciones a quien ayudó a escribirlos
    (ver las reglas del proyecto). No subir `py.py`, `research_notes/` ni `reports/`.
 8. **Interfaz**: todo texto visible en español; las acciones nuevas también van en la ruedita
@@ -323,12 +324,13 @@ reales de Microsoft (`pruebas/office/corpus.sh`, `fidelidad.py`, `ediciones.py`)
   colores de tema en PowerPoint. Se revisa con `pruebas/office/pantalla.py`.
 - [x] Teclear en un párrafo importado ya no mueve el cursor ni le quita su formato original.
 - [x] Reabrir sin conexión un documento con cambios sin enviar; aviso de versión entre app y servidor.
-- [ ] Lo que falta de ver: columnas de verdad, tabuladores con puntos, texto vertical y bordes por
-  celda (Word); comentarios, gráficas e imágenes del archivo (Excel).
+- [ ] Lo que falta de ver: tabuladores con puntos guía (Word). Ya se ven: columnas de verdad (fase 22,
+  `fa3cc00`), texto vertical en celdas y cuadros, bordes por celda (Word); notas, gráficas e imágenes del
+  archivo (Excel, 0.15.1).
 - [x] Probar en el A55 (app y navegador) importar, editar, exportar y `.nom` (13 de noviembre, fase 12).
 - [x] Raspberry Pi: servicios s6 supervisados (`servidor-propio/pi/`), respaldo diario, `nomcolab-pi`.
 - [x] Subir el jar nuevo a la Pi (11 de noviembre: 0.12.0, con `nomcolab-pi actualizar`) y LOG.
-- [ ] `nomcolab pi …` desde la laptop.
+- [x] `nomcolab pi …` desde la laptop (`azure/nomcolab pi estado|up|down|reiniciar|actualizar|respaldo|bitacora|instalar`).
 - [x] Una copia de los respaldos de la Pi en otro equipo (fase 11).
 
 ## Fase 11. Seguridad, cuentas y almacenamiento (11 de noviembre de 2026, versión 0.12.1)
@@ -353,13 +355,15 @@ cada punto está en `LOG.md`, entrada 53.
 - [x] Copia de los respaldos de la Raspberry en otro equipo (la laptop, diario).
 - [x] Decidido por el dueño: el disco de la Raspberry no se cifra; no habrá respaldo en el Drive
   de cada persona (el servidor guarda todo, con límite por cuenta a la vista, y solo documentos
-  de NOM comprimidos: el estado y las versiones se guardan con gzip).
+  de NOM comprimidos: el estado y las versiones se guardan con gzip). *(El 13-nov se decidió además
+  cifrar los datos en el servidor —fase 14, D.1—: el disco sigue sin cifrar, pero lo que NOM guarda va
+  cifrado con su llave, `datos-llaves/reposo.key`, que no sale de la Pi.)*
 - [x] Versión 0.12.1 (interfaz 13), todas las pruebas, publicar servidor y app juntos, LOG.
 
 Sigue pendiente de antes (no es de esta fase): columnas de verdad en pantalla, tabuladores con
 puntos, texto vertical y bordes por celda en Word; comentarios, formato condicional, gráficas e
 imágenes de Excel en pantalla; probar en el A55 (también la política de contenido de la app y el
-APK publicable). `~/NOM` (la "copia de trabajo") lleva sin sincronizarse desde el 22 de
+APK publicable). `~/NOM-COLAB` (la "copia de trabajo") lleva sin sincronizarse desde el 22 de
 octubre: se trabaja directo en `~/NOM`.
 
 ## Fase 12. Revisión completa de pruebas en equipos reales (13 de noviembre de 2026, versión 0.12.2)
@@ -511,7 +515,7 @@ Por qué y con qué fuentes: el documento «UI and Psychology» del equipo; lo d
 - [x] La ayuda y lo legal se muestran en su dirección limpia (`/legal/terminos`, `/ayuda/preguntas-frecuentes`), sin `index.html` ni diagonal final; las formas anteriores redirigen (301). Los archivos conservan sus enlaces relativos para la app (que los abre desde `file://`) y el servidor los cambia al servirlos (`nucleo/.../servicio/PaginasLimpias.java`, `PaginasApi.java`, `ServidorHttp.java` del teléfono); `NOM.urlAyuda`, `ayuda.js`, el mapa del sitio y lo que guarda el service worker usan la dirección limpia.
 - [x] Entrar y crear cuenta tienen un pie fijo (fuera de la tarjeta) con Ayuda, Preguntas frecuentes, Privacidad, Términos y Todo lo legal (`vista-cuentas.js`, `.pie-legal` en `nom.css`).
 
-Pruebas: `PaginasLimpiasTest` (4 casos), `prueba_ayuda.py` 24 de 24 (75 páginas en su dirección limpia, ningún enlace con `index.html`), regresión rápida. Jar y APK 0.14.1 (versionCode 24) compilados y copiados a `2-PAGINA-Servidor/` y `3-APP-Android/`. **Sin publicar** (ni Raspberry, ni release, ni push): falta que el equipo lo pida.
+Pruebas: `PaginasLimpiasTest` (4 casos), `prueba_ayuda.py` 24 de 24 (75 páginas en su dirección limpia, ningún enlace con `index.html`), regresión rápida. Jar y APK 0.14.1 (versionCode 24) compilados y copiados a `2-PAGINA-Servidor/` y `3-APP-Android/`. Se publicó dentro de la 0.14.2 (15-nov, fase 21).
 
 ## Fase 19. Entregables de la presentación y del plan de pruebas (15 de noviembre de 2026)
 
@@ -546,7 +550,7 @@ Regla para no multiplicar el trabajo: no se hace un editor por formato. Se hace 
 - [ ] Documento Typst sobre la base de 20.1: recompila al teclear y exporta a PDF.
 
 ### 20.5 LaTeX con autocompilado (solo en el servidor, y después de Typst)
-- [ ] Compilar LaTeX en el servidor (la Raspberry o una computadora), no en el navegador ni en el teléfono como servidor: una instalación completa no cabe en un APK de 2.5 MB. En el teléfono como servidor se avisa que no está disponible. Las ecuaciones ya aceptan notación tipo LaTeX.
+- [ ] Compilar LaTeX en el servidor (la Raspberry o una computadora), no en el navegador ni en el teléfono como servidor: una instalación completa no cabe en un APK de 6.6 MB. En el teléfono como servidor se avisa que no está disponible. Las ecuaciones ya aceptan notación tipo LaTeX.
 
 ### 20.6 PDF a texto editable (acotado)
 - [ ] Para PDF con texto real: pasarlo a un documento de texto en el navegador, avisando que el acomodo es aproximado. Los PDF que son solo imagen pasan por el OCR (20.7).
@@ -567,8 +571,8 @@ Ningún OCR acierta siempre: una foto movida o una letra manuscrita difícil pro
 - AsciiDoc: casi nadie lo usa y es otro formato que mantener.
 - «Convertir de esto a esto» como catálogo abierto: solo las rutas que la app ya domina (Office, `.nom`, PDF, Markdown, HTML).
 
-### 20.9 Propuesta aparte, sin decidir
-- [ ] **Decidido (17-nov): sí.** Pegar desde Word, Google Docs o una página web conservando el formato.
+### 20.9 Propuesta aparte (decidida el 17-nov: sí)
+- [ ] Pegar desde Word, Google Docs o una página web conservando el formato (estilos, tablas, imágenes, colores). Ya existe a medias en `modo-texto.js` (negritas, listas, vínculos); ver `RELEVO-ESTADO-Y-PENDIENTES.md` §5 Word 6.
 
 ## Fase 21. Revisión para la entrega del primer semestre (15 de noviembre de 2026, noche; versión 0.14.2)
 
@@ -654,17 +658,23 @@ imagen con `pruebas/office/comparar_real.py`).
       con sus datos vivos (0.15.3); cada gráfica medida contra la imagen que exporta Excel.
 - [x] Gráficas 3D (columnas y circular), circular separada, estilos de gráfica (degradados, transparencia,
       mayúsculas, rótulos dentro) y eje secundario (0.15.4).
-- [ ] Gráficas: líneas de tendencia, barras de error y tabla de datos.
-- [ ] Motor de fórmulas: matrices dinámicas (ORDENAR, FILTRAR, UNICOS, SECUENCIA…), LET y LAMBDA.
+- [x] Gráficas: líneas de tendencia, barras de error y tabla de datos (`6fadd42`, sin publicar: va en la 0.16.0).
+- [x] Motor de fórmulas: matrices dinámicas (ORDENAR, FILTRAR, UNICOS, SECUENCIA…), LET y LAMBDA (`fa3cc00`; x02 y
+      x09 100 % contra Excel real; va en la 0.16.0).
 - [x] Word: estilos de tabla, numeración «Chapter %1» con cuenta por lista, imágenes flotantes, gráficos (0.15.2).
 - [x] Word: formas y cuadros de texto en su lugar, con su geometría, relleno, contorno y texto (0.15.3).
-- [ ] Word: rellenos con degradado, trama o imagen en las formas, puntas y guiones de las líneas, grupos y lienzos,
-      secciones con otro tamaño u orientación, columnas, puntos guía del índice, división automática de palabras.
+- [x] Word: rellenos con degradado, trama o imagen en las formas, grupos y lienzos, secciones con otro tamaño u
+      orientación y columnas (`fa3cc00`; w04 38.4 → 86.5 %, LOG 71); lo que flota con el texto alrededor (`b3432b4`); tablas
+      que se parten entre hojas (`03c64a3`). Todo va en la 0.16.0.
+- [ ] Word: puntos guía del índice, división automática de palabras (w10), tabla flotante (`w:tblpPr`); volver a
+      medir w06 (formas con puntas, transparencia y efectos, hechas en `fa3cc00`).
 - [x] Excel (importador versión 4, 0.15.3): tramas y degradados en celdas, bordes diagonales, alineación completa
       (vertical, girado, apilado, sangría, rellenar, reducir, centrar en la selección), desborde a los dos lados y
       filas de alto fijo que recortan, con los altos en píxeles enteros como Excel.
-- [ ] PowerPoint: SmartArt sin dibujo guardado.
-- [ ] La vuelta: lo que exporta NOM abierto en Office real (sin reparar y con el mismo aspecto).
+- [x] PowerPoint: SmartArt sin dibujo guardado (`3d48460`, `js/smartart.js`; p11 82.6 → 89.5 %).
+- [x] La vuelta: lo que exporta NOM abierto en Office real sin avisos ni reparar (16-nov: 379 archivos con
+      `vuelta_office.py`; 17-nov: los 195 efectos de animación reescritos por NOM, 98.3 % contra el video).
+      Falta repetirla con lo hecho el 17-nov (paneles, vínculos, medios, sonidos).
 - [ ] Paridad en la app de Android (emulador y A55).
 
 ## Cómo quedó (8 de noviembre de 2026)
@@ -709,7 +719,7 @@ sesión anterior: `./desplegar.sh roles` para las columnas nuevas de usuarios.
 - Al importar .pptx, los videos y el SmartArt no se traen (se avisa); las formas libres llegan como
   rectángulos.
 - Investigar necesita Internet en el servidor; sin Internet queda la biblioteca del espacio.
-- La copia de trabajo `~/NOM` no se actualizó en esta sesión (es más vieja que `~/NOM`).
+- La copia de trabajo `~/NOM-COLAB` no se actualizó en esta sesión (es más vieja que `~/NOM`).
 
 ## Orden recomendado para la siguiente sesión
 

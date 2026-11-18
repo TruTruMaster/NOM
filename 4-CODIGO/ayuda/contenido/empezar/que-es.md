@@ -29,8 +29,8 @@ trabajo: **texto**, **hoja de cálculo**, **presentación** y **diagrama**. Vari
 | Programa | Lo que también tiene NOM | Lo que es distinto |
 |---|---|---|
 | Word | Estilos, listas, tablas, imágenes, notas al pie, ecuaciones, índice, encabezado y pie, columnas, citas en APA | Varias personas escriben a la vez letra por letra; partes con dueño; ramas de lo editado sin Internet |
-| Excel | Casi 100 funciones en español e inglés, referencias $ y entre hojas, gráficas, formato condicional, filtros | El filtro y el orden pueden ser **solo tuyos** sin cambiar lo que ven los demás |
-| PowerPoint | Temas, diseños, animaciones, transiciones, notas, modo presentador | Presentas desde el teléfono a un proyector conectado a otro navegador |
+| Excel | Más de 220 funciones en español e inglés (también matrices dinámicas, `LET` y `LAMBDA`), referencias $ y entre hojas, las gráficas de Excel, formato condicional, filtros | El filtro y el orden pueden ser **solo tuyos** sin cambiar lo que ven los demás |
+| PowerPoint | Temas, diseños, las animaciones y transiciones de PowerPoint (con su panel), videos y sonidos del archivo, notas, modo presentador | Presentas desde el teléfono a un proyector conectado a otro navegador |
 | Canva | Figuras, íconos, capas, grupos dentro de grupos, plantillas con candado | Diagramas UML y entidad-relación, y texto que se convierte en diagrama |
 
 ## Dónde vive tu trabajo

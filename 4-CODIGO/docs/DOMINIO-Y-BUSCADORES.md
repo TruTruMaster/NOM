@@ -6,8 +6,8 @@ Raspberry, con sus cuentas y su base de datos):
 | Nombre | Para qué |
 |---|---|
 | `https://www.nom.qd.je` | La dirección principal: la que se ve en Google, Bing y los demás. |
-| `https://nom.qd.je` | El nombre para compartir: redirige a `www.nom.qd.je`. |
-| `https://nomcolab.dpdns.org` | El de siempre. **No se apaga:** la app de Android le habla a este nombre, los pases van firmados con él y quien ya guardó cosas en el navegador con este nombre las sigue teniendo ahí. |
+| `nom.qd.je` | El nombre para compartir: redirige a `www.nom.qd.je`. **Al 17-nov solo por `http://`**: GitHub Pages todavía no emite su certificado (por `https://` el navegador ve el de `*.github.io` y avisa). |
+| `https://nomcolab.dpdns.org` | El de siempre. **No se apaga:** las apps 0.15.x le hablan a este nombre (desde la 0.16.0 la app usa `www.nom.qd.je` y trata los dos como la misma nube), los pases van firmados con él y quien ya guardó cosas en el navegador con este nombre las sigue teniendo ahí. |
 
 No se redirige un nombre al otro, porque el navegador guarda la sesión y los documentos de cada
 nombre por separado. Una redirección dejaría a la gente sin sesión y sin lo que tenía guardado sin
@@ -74,8 +74,10 @@ eso los servicios tratan a DigitalPlat como dueño de todo `qd.je`:
 **Cloudflare**, zona `nomcolab.dpdns.org`: `origen.nomcolab.dpdns.org` (CNAME con proxy al túnel) es el
 origen de respaldo de Cloudflare for SaaS; el nombre personalizado `www.nom.qd.je` está activo.
 
-**GitHub:** el repositorio público `TruTruMaster/nom-qd-je` (Pages, dominio `nom.qd.je`, HTTPS
-obligatorio) trae `index.html` y `404.html` que mandan a `https://www.nom.qd.je` con la misma ruta.
+**GitHub:** el repositorio público `TruTruMaster/nom-qd-je` (Pages, dominio `nom.qd.je`) trae `index.html` y
+`404.html` que mandan a `https://www.nom.qd.je` con la misma ruta. **Pendiente:** el certificado de `nom.qd.je`
+(la API de Pages dice `https_enforced: false` y sin certificado); cuando GitHub lo emita, activar «Enforce HTTPS».
+Las dos páginas todavía dicen «NOM-COLAB»: cambiarlas a «NOM» al publicar la 0.16.0.
 
 **Raspberry:** `doas sh ~/dominio-corto/dominio-corto.sh` (una vez) puso el túnel con
 `www.nom.qd.je`, `NOM_NUBE=https://nomcolab.dpdns.org` (los pases valen en los APK ya instalados) y la
@@ -113,7 +115,7 @@ nombre del sitio en los resultados.
 ```sh
 dig +short www.nom.qd.je                     # origen.nomcolab.dpdns.org y direcciones de Cloudflare
 curl -s https://www.nom.qd.je/robots.txt     # Sitemap: https://www.nom.qd.je/sitemap.xml
-curl -sL -o /dev/null -w '%{url_effective}\n' https://nom.qd.je/ayuda   # termina en www.nom.qd.je
+curl -s http://nom.qd.je/ayuda | grep -o 'url=[^"]*'   # url=https://www.nom.qd.je/ (redirige con meta y JavaScript, no con 301: curl -L no la sigue)
 NOM_BASE=https://www.nom.qd.je python3 4-CODIGO/pruebas/humo.py
 ```
 

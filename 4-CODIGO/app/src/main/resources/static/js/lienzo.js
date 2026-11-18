@@ -2093,7 +2093,7 @@
           const du = lienzo.duenoPagina(p), cambios = ed.resaltando && ed.cambiosVisita && (ed.cambiosVisita.bloques || []).some((id) => doc().valor(id, "pagina") === p);
           const T = tamDoc(doc());
           return `<button class="mini" data-p="${esc(p)}" aria-current="${p === ed.pagina}" aria-label="Diapositiva ${i + 1}" style="aspect-ratio:${T.w} / ${T.h}"><span class="num">${i + 1}</span>
-            <div class="mini-cont diapo-mini" style="${NOM.diapo ? NOM.diapo.estiloDiapo(doc(), p) : ""}">${htmlDiapositiva(doc(), p)}</div>${du ? `<span class="mini-dueno" style="--c:${esc(ed.colorDe(du))}">${esc(ed.nombreDe(du))}</span>` : ""}${cambios ? `<span class="mini-cambio" title="Cambió desde tu última visita"></span>` : ""}${doc().valor("_doc", "trans:" + p) ? `<span class="mini-trans" title="Con transición">${ico("sparkles", "ico-s")}</span>` : ""}</button>`;
+            <div class="mini-cont diapo-mini" style="${NOM.diapo ? NOM.diapo.estiloDiapo(doc(), p) : ""}">${htmlDiapositiva(doc(), p)}</div>${du ? `<span class="mini-dueno" style="--c:${esc(ed.colorDe(du))}">${esc(ed.nombreDe(du))}</span>` : ""}${cambios ? `<span class="mini-cambio" title="Cambió desde tu última visita"></span>` : ""}${tieneTransicion(doc(), p) ? `<span class="mini-trans" title="Con transición">${ico("sparkles", "ico-s")}</span>` : ""}</button>`;
         }).join("") + (ed.soloLectura ? "" : `<button class="btn plano" data-nueva data-micro="Nueva diapositiva|Agrega una diapositiva después de la actual.">${ico("plus")}</button>`);
         $$(".mini", minis).forEach((m) => {
           const c = $(".mini-cont", m);
@@ -2489,6 +2489,13 @@
     if (!Array.isArray(bs) || !bs.length) return "";
     return bs.map((b) => `<div class="bl heredado" aria-hidden="true" style="${estiloBloque(Object.assign({}, b, { z: -1 }))}z-index:0;pointer-events:none;overflow:${b.tipo === "forma" || b.ppt ? "visible" : "hidden"};">${contenido(b)}</div>`).join("");
   }
+  /** ¿La diapositiva tiene transición? La de PowerPoint («transOffice:», del panel) o la de antes («trans:»). */
+  function tieneTransicion(doc, p) {
+    const t = doc.valor("_doc", "transOffice:" + p);
+    if (t) return t.t !== "corte0" || t.advTm != null;
+    return !!doc.valor("_doc", "trans:" + p);
+  }
+
   function htmlDiapositiva(doc, p, paso, opc) {
     const bs = bloquesPresentables(doc, p);
     const est = paso == null ? null : estadoAnimaciones(doc, p, paso, opc && opc.final).estado;

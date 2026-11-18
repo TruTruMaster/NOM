@@ -12,12 +12,19 @@ import jakarta.servlet.http.HttpServletRequest;
  * direccion real viene en una cabecera. Esa cabecera solo se cree cuando quien la entrega es de
  * confianza (si no, cualquiera podria escribirla):
  *  - este mismo equipo (el tunel de Cloudflare o Funnel corren aqui), o
- *  - una direccion "de enlace" (169.254.x.x, fe80::), que es desde donde entrega las peticiones
- *    la plataforma de Azure; un equipo de la red del salon (192.168.x, 10.x) nunca llega asi.
+ *  - en Azure, una direccion "de enlace" (169.254.x.x, fe80::), que es desde donde entrega las
+ *    peticiones esa plataforma. Fuera de Azure no: cualquier equipo de la misma red (la casa de la
+ *    Raspberry, el salon) puede llegar por su direccion fe80:: y escribir la cabecera que quiera.
  * Una peticion de este mismo equipo sin cabecera es del propio equipo: null (sin limites).
  */
 public final class Origen {
     private Origen() { }
+
+    /** ¿Corre en Azure App Service? (la plataforma pone WEBSITE_SITE_NAME a cada Web App). */
+    private static final boolean EN_AZURE = System.getenv("WEBSITE_SITE_NAME") != null;
+
+    /** Direcciones de enlace de las que se creen las cabeceras de reenvio: solo en Azure. */
+    static boolean enlaceConfiable(InetAddress a) { return EN_AZURE && a != null && a.isLinkLocalAddress(); }
 
     /**
      * La direccion publica de este servidor tal como la ve quien llama (p. ej. https://nomcolab.dpdns.org):
@@ -31,7 +38,7 @@ public final class Origen {
         boolean confiable;
         try {
             InetAddress a = remota == null ? null : InetAddress.getByName(remota);
-            confiable = a == null || a.isLoopbackAddress() || a.isLinkLocalAddress();
+            confiable = a == null || a.isLoopbackAddress() || enlaceConfiable(a);
         } catch (Exception e) { confiable = false; }
         String esquema = req.getScheme();
         String fp = req.getHeader("X-Forwarded-Proto");
@@ -73,7 +80,7 @@ public final class Origen {
         try {
             InetAddress a = remota == null ? null : InetAddress.getByName(remota);
             local = a == null || a.isLoopbackAddress();
-            enlace = a != null && a.isLinkLocalAddress();
+            enlace = enlaceConfiable(a);
         } catch (Exception e) { local = false; }
         if (!local && !enlace) return remota;
         // El nombre corto (nom.qd.je) llega por Vercel, que reenvia a la nube por Cloudflare: la

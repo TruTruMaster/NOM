@@ -1,5 +1,8 @@
 # Relevo del 17 de noviembre de 2026 (tarde): animaciones y transiciones de PowerPoint
 
+> **Histórico** (se conserva como registro de ese día; lo que dice del estado puede ya no ser cierto). Lo vigente
+> —qué está confirmado, qué falta y en qué orden— está en `RELEVO-ESTADO-Y-PENDIENTES.md`.
+
 Leer al empezar la siguiente sesión, junto con `RELEVO-17NOV-LISTA-OFFICE.md` (lo de antes), `PLAN-CONSTRUCCION.md` y
 `LOG.md`. Este relevo se actualiza mientras se trabaja: lo último está al final de cada sección.
 

@@ -1,5 +1,8 @@
 # Relevo: revisión profunda, pruebas de cada función y paridad con Office (desde el 13 de noviembre de 2026, 0.13.1)
 
+> **Histórico** (se conserva como registro de ese día; lo que dice del estado puede ya no ser cierto). Lo vigente
+> —qué está confirmado, qué falta y en qué orden— está en `RELEVO-ESTADO-Y-PENDIENTES.md`.
+
 Para la siguiente sesión de trabajo. Este documento dice **exactamente** qué hacer, en qué orden,
 con qué comandos y cómo saber que quedó bien. La presentación del proyecto es alrededor del **20 de
 noviembre de 2026** y el plan de pruebas (PDF) se entrega el **27 de noviembre**.

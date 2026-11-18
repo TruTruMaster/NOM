@@ -18,7 +18,7 @@ import mx.wack.nom.core.modelo.Usuario;
  * EventSource por espacio y, si edita, otro por documento. Por aqui salen las
  * operaciones de los demas, la presencia y los avisos de accesos y versiones.
  *
- * Tambien aplica el RNF "maximo 5 usuarios simultaneos" contando usuarios
+ * Tambien aplica el RNF "maximo 50 personas a la vez por espacio" (antes 5) contando usuarios
  * distintos con un canal abierto en el espacio.
  *
  * El canal concreto (Canal) lo pone quien sirve la API: Spring en la computadora, el servidor de
@@ -32,6 +32,8 @@ public class Difusor {
         /** Pantalla de proyeccion (5.5): recibe los cambios del documento, pero no es una persona
             del espacio (no cuenta para el maximo, ni sale en la presencia). */
         final String proyector;
+        /** De una pantalla de proyeccion: quien presenta (si pierde el acceso, la pantalla se cierra). */
+        final String presentador;
         volatile String bloque;
         volatile String modo;
         volatile Map<String, Object> cursor;
@@ -45,9 +47,10 @@ public class Difusor {
             this.docId = docId;
             this.cliente = cliente;
             this.proyector = null;
+            this.presentador = null;
         }
 
-        Suscriptor(Canal c, String espacioId, String docId, String codigo) {
+        Suscriptor(Canal c, String espacioId, String docId, String codigo, String presentador) {
             this.canal = c;
             this.usuarioId = "proyector";
             this.nombre = "Proyector";
@@ -56,6 +59,7 @@ public class Difusor {
             this.docId = docId;
             this.cliente = "proyector-" + codigo;
             this.proyector = codigo;
+            this.presentador = presentador;
         }
     }
 
@@ -108,8 +112,8 @@ public class Difusor {
     }
 
     /** Una pantalla de proyeccion para un documento (5.5). */
-    public void suscribirProyector(String espacioId, String docId, String codigo, Canal canal) {
-        Suscriptor s = new Suscriptor(canal, espacioId, docId, codigo);
+    public void suscribirProyector(String espacioId, String docId, String codigo, String presentador, Canal canal) {
+        Suscriptor s = new Suscriptor(canal, espacioId, docId, codigo, presentador);
         subs.add(s);
         canal.alCerrar(() -> subs.remove(s));
         enviar(s, "hola", Map.of("ok", true));
@@ -144,8 +148,27 @@ public class Difusor {
     }
 
     /** Operaciones nuevas para todos los que tienen abierto el documento (incluido el autor: ignora las suyas por id de nodo). */
-    public void ops(String docId, Object datos) {
-        for (Suscriptor s : subs) if (docId.equals(s.docId)) enviar(s, "ops", datos);
+    public void ops(String docId, Object datos) { ops(docId, datos, datos); }
+
+    /** ¿Alguien (una persona o una pantalla de proyección) tiene abierto este documento? */
+    public boolean hayCanales(String docId) {
+        for (Suscriptor s : subs) if (docId.equals(s.docId)) return true;
+        return false;
+    }
+
+    /** ¿Hay alguna pantalla de proyección siguiendo este documento? */
+    public boolean hayProyectores(String docId) {
+        for (Suscriptor s : subs) if (s.proyector != null && docId.equals(s.docId)) return true;
+        return false;
+    }
+
+    /** Igual, con lo que pueden ver las pantallas de proyección (sin comentarios ni notas; null: nada). */
+    public void ops(String docId, Object datos, Object paraProyectores) {
+        for (Suscriptor s : subs) {
+            if (!docId.equals(s.docId)) continue;
+            if (s.proyector == null) enviar(s, "ops", datos);
+            else if (paraProyectores != null) enviar(s, "ops", paraProyectores);
+        }
     }
 
     public void actualizarPresencia(String docId, String cliente, String bloque, String modo, Map<String, Object> cursor) {
@@ -194,11 +217,31 @@ public class Difusor {
         for (Suscriptor s : subs) if (s.proyector == null && usuarioId.equals(s.usuarioId)) enviar(s, evento, datos);
     }
 
-    /** CU-17 3b: al revocar un acceso se cierra el canal de ese usuario. */
+    /**
+     * Cierra los canales abiertos en un documento de quienes ya no deben recibirlo (p. ej. al moverlo a un
+     * espacio del que no son miembros). Las pantallas de proyección se cierran también: siguen un código
+     * de quien presentaba en el espacio de antes.
+     */
+    public void cerrarDocumento(String docId, java.util.function.Predicate<String> sinAcceso) {
+        for (Suscriptor s : subs) {
+            if (!docId.equals(s.docId)) continue;
+            if (s.proyector != null || sinAcceso.test(s.usuarioId)) {
+                // (como expulsar: al cerrarse, el canal sale de la lista y se avisa la presencia)
+                enviar(s, s.proyector != null ? "fin" : "expulsado", Map.of("motivo", "Este documento se movió a un espacio en el que no estás"));
+                try { s.canal.cerrar(); } catch (RuntimeException ignorado) { /* ya estaba cerrado */ }
+            }
+        }
+    }
+
+    /** CU-17 3b: al revocar un acceso se cierra el canal de ese usuario (y las pantallas donde proyectaba). */
     public void expulsar(String espacioId, String usuarioId) {
         for (Suscriptor s : subs) {
-            if (s.proyector == null && s.espacioId.equals(espacioId) && s.usuarioId.equals(usuarioId)) {
+            if (!s.espacioId.equals(espacioId)) continue;
+            if (s.proyector == null && s.usuarioId.equals(usuarioId)) {
                 enviar(s, "expulsado", Map.of("motivo", "El propietario retiró tu acceso a este espacio"));
+                s.canal.cerrar();
+            } else if (s.proyector != null && usuarioId.equals(s.presentador)) {
+                enviar(s, "fin", Map.of("ok", true));
                 s.canal.cerrar();
             }
         }

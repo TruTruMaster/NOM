@@ -523,6 +523,11 @@ public class ServicioEspacios {
         return entrarConAlias(codigo, null, null, null);
     }
 
+    /** Igual, sabiendo de qué red llega (para el tope de alias nuevos por hora). */
+    public synchronized Map<String, Object> entrarComoInvitado(String codigo, String apodo, String origen) {
+        return entrarConAlias(codigo, null, null, origen);
+    }
+
     /**
      * Fase 13, A.1: entrar con un alias por el codigo o el QR del espacio, sin escribir nada. Si el
      * equipo ya tenia un alias de este espacio (id y llave), vuelve a ser el mismo; si no (o pidio
@@ -541,7 +546,7 @@ public class ServicioEspacios {
             }
         }
         boolean nuevo = s == null;
-        if (nuevo) s = cuentas.crearAlias(e.id, llave, false);
+        if (nuevo) s = cuentas.crearAlias(e.id, llave, false, origen);
         Usuario u = cuentas.porId(s.usuarioId).orElseThrow();
         Permiso antes = e.permisoDe(u.id);
         if (antes == null || !antes.alMenos(x.permiso)) {

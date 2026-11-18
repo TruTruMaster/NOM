@@ -5,7 +5,7 @@ DOC = sys.argv[1]; ESP = sys.argv[2]; ESPERA = int(sys.argv[3]) if len(sys.argv)
 TOK = (os.environ.get("NOM_TOKEN") or open(os.path.expanduser("~/.cache/nom-pruebas/token-x1")).read()).strip()   # sesión del dueño del espacio de prueba
 norm = lambda s: re.sub(r"\s+", "", s or "")
 def docs():
-    q = urllib.request.Request(BASE + f"/api/espacios/{ESP}/documentos", headers={"Authorization": "Bearer " + TOK, "User-Agent": "NOM-COLAB-pruebas/1.0"})
+    q = urllib.request.Request(BASE + f"/api/espacios/{ESP}/documentos", headers={"Authorization": "Bearer " + TOK, "User-Agent": "NOM-pruebas/1.0"})
     return json.load(urllib.request.urlopen(q, timeout=20))
 def fin(e, txt):
     e.p.locator("[contenteditable=true]").first.click(); e.p.keyboard.press("Control+End"); e.p.keyboard.press("Enter"); e.p.keyboard.type(txt, delay=40)

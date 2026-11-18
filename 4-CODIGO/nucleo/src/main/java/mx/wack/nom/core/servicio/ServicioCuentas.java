@@ -133,6 +133,30 @@ public class ServicioCuentas {
         if (registros.size() > 5_000) registros.values().removeIf(java.util.ArrayDeque::isEmpty);
     }
 
+    /**
+     * Alias nuevos por hora (fase 13): con un código vigente cualquiera crea uno sin escribir nada, así que sin
+     * tope un programa podría crear cuentas sin fin. Por red alcanza para un salón entero (todos salen con la
+     * misma IP) varias veces; el total frena a un programa. Sin lugar conocido (el propio equipo) no cuenta.
+     */
+    private final Map<String, java.util.ArrayDeque<Long>> aliasHora = new java.util.HashMap<>();
+    private int aliasHoraLugar = 300, aliasHoraTotal = 3000;
+
+    public void limitarAlias(int porLugar, int total) { aliasHoraLugar = porLugar; aliasHoraTotal = total; }
+
+    private void anotarAlias(String origen, long ahora) {
+        if (origen == null || origen.isBlank()) return;
+        for (String k : new String[] { origen, "*" }) {
+            int tope = "*".equals(k) ? aliasHoraTotal : aliasHoraLugar;
+            java.util.ArrayDeque<Long> l = aliasHora.computeIfAbsent(k, x -> new java.util.ArrayDeque<>());
+            while (!l.isEmpty() && ahora - l.peekFirst() > HORA) l.pollFirst();
+            if (tope > 0 && l.size() >= tope)
+                throw new ErrorNom(ErrorNom.DEMASIADOS, "Entraron demasiadas personas nuevas " + ("*".equals(k) ? "" : "desde esta red ") + "en la última hora. Intenta más tarde.");
+        }
+        aliasHora.get(origen).addLast(ahora);
+        aliasHora.get("*").addLast(ahora);
+        if (aliasHora.size() > 5_000) aliasHora.values().removeIf(java.util.ArrayDeque::isEmpty);
+    }
+
     /** Pedidos de pases (dar o presentar) por hora: por red y en total. */
     private final Map<String, java.util.ArrayDeque<Long>> pasesHora = new java.util.HashMap<>();
     private int pasesHoraLugar = 60, pasesHoraTotal = 1000;
@@ -310,8 +334,12 @@ public class ServicioCuentas {
      * (al azar, larga): con ella vuelve a entrar como el mismo alias. espacioId: el espacio al que
      * queda ligado (quien llega con el QR); null + dueno: el dueno del telefono que comparte.
      */
-    public synchronized Sesion crearAlias(String espacioId, String llave, boolean dueno) {
+    public synchronized Sesion crearAlias(String espacioId, String llave, boolean dueno) { return crearAlias(espacioId, llave, dueno, null); }
+
+    /** origen: la red de quien entra (para el tope de alias nuevos por hora; null = este mismo equipo). */
+    public synchronized Sesion crearAlias(String espacioId, String llave, boolean dueno, String origen) {
         if (llave != null) exigirLlave(llave);
+        if (!dueno) anotarAlias(origen, System.currentTimeMillis());
         Usuario u = new Usuario();
         u.id = cifrado.id();
         u.nombre = nombreAlias();

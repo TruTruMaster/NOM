@@ -1,6 +1,6 @@
 # NOM — Diseño de la interfaz
 
-Equipo 6 "WACK" · CECyT 9 · 5IM7 · octubre 2026 (apariencia revisada en noviembre de 2026, versión 0.14.0)
+WACK · octubre 2026 (apariencia revisada en noviembre de 2026, versión 0.14.0)
 
 Este documento explica **por qué** la interfaz se ve y se comporta como lo hace.
 Cada decisión sale de un principio de psicología cognitiva o de diseño de
@@ -270,11 +270,11 @@ responde. Tres ideas:
 
 ## 15. El teléfono como servidor
 
-- **Dónde:** en la app, "Conecta con tu red" muestra primero *Usar este teléfono como servidor*
-  (tarjeta con acento, botón Encender). Encendido, la app se conecta a sí misma (127.0.0.1) y al
-  pie de Entrar dice "Este teléfono es el servidor · los demás entran en IP:puerto" con
-  *Compartir*. En *Este dispositivo* hay un panel con el estado (Encendido/Apagado), cada
-  dirección con Copiar y Compartir, *Usarlo en esta app* y *Apagar*. La paleta (Ctrl K) lleva ahí.
+- **Dónde:** en la app, «¿Dónde trabaja tu equipo?» muestra arriba *Compartir desde este teléfono*
+  (tarjeta con botón Encender). Encendido, la app se conecta a sí misma (127.0.0.1) y al pie de
+  Entrar dice "Este teléfono comparte · los demás entran en IP:puerto" con *Compartir*. En *Este
+  dispositivo* está *Trabajar sin Internet con este teléfono*: el estado (Encendido/Apagado), cada
+  dirección con su QR, Copiar y Compartir, *Usarlo en esta app* y *Apagar*. La paleta (Ctrl K) lleva ahí.
 - **Arquitectura:** la lógica del servidor vive en `4-CODIGO/nucleo` sin Spring (solo `java.*`).
   El servidor de la computadora la envuelve con Spring (`Configuracion`, `Tareas`, `CanalSse`);
   el teléfono con un servidor HTTP propio (`ServidorHttp`, `ApiTelefono`, `ServicioAnfitrion`) y

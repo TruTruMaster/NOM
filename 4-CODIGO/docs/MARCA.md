@@ -1,6 +1,6 @@
 # NOM — Marca: "la llama compartida"
 
-Equipo 6 "WACK" · CECyT 9 · 5IM7 · octubre 2026
+WACK · octubre 2026
 
 Archivos: `4-CODIGO/marca/` (fuentes SVG y PNG) · en la app: `static/img/icono*.{svg,png}`,
 el símbolo `#logo` de `index.html` y `android/app/src/main/res/drawable/ic_llama*.xml`.

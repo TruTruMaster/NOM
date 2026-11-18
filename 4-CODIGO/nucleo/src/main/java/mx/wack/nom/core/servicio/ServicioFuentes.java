@@ -48,7 +48,7 @@ public class ServicioFuentes {
 
     private static final Bitacora log = Bitacora.de(ServicioFuentes.class);
     private static final int MAX_BYTES = 1_500_000, MAX_TEXTO = 25_000, MAX_BIBLIOTECA = 150, POR_MINUTO = 40;
-    private static final String AGENTE = "NOM/1.0 (proyecto escolar sin fines de lucro)";
+    private static final String AGENTE = "NOM/1.0 (sin fines de lucro)";
     private static final Set<String> CAMPOS = Set.of("tipo", "titulo", "anio", "fecha", "editorial", "revista", "volumen", "numero",
             "paginas", "doi", "isbn", "url", "sitio", "edicion", "consultado", "descripcion", "medio", "capitulo", "editores");
 

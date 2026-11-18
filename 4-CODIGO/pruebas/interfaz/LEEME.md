@@ -1,9 +1,9 @@
 # Pruebas de la interfaz en el navegador
 
 Pruebas automáticas de la página con Chromium (Playwright), escritas el 8 de noviembre de 2026
-para las fases 8 y 9. **No sustituyen las pruebas reales** en la laptop, el escritorio y el A55
-(ver `docs/PLAN-PRUEBAS-REALES.md`): sirven para revisar rápido que nada se rompió después de un
-cambio.
+para las fases 8 y 9 y ampliadas después. **No sustituyen las pruebas reales** en la laptop, el escritorio y el A55
+(ver `docs/RELEVO-PARIDAD-Y-PRUEBAS-REALES.md` y `pruebas/reales/`): sirven para revisar rápido que nada se rompió
+después de un cambio. Todas juntas (y las de la API y de Office): `pruebas/regresion.sh`.
 
 Necesitan un servidor encendido (por defecto `http://localhost:8099`, o el de `NOM_BASE`):
 
@@ -35,6 +35,11 @@ primer error) y deja capturas en la carpeta de salida: se revisan a ojo. Al fina
 | `prueba_red` | La red de punta a punta: dos páginas, el navegador de un celular y la interfaz del APK (cargada desde archivos) contra un servidor; misma cuenta en app y página, en vivo en todos los sentidos, sin conexión y de regreso, reabrir sin red con cambios pendientes, registrarse desde la app, aviso de versión | — |
 | `prueba_cuentas_equipo` | Cuentas y lo guardado en el equipo: dos cuentas en un mismo navegador, restablecer y cambiar la contraseña sin perder lo local (se recupera con la anterior), almacenamiento a la vista, dónde se guarda lo nuevo, boletos del canal en vivo, aviso de red local y borrar la cuenta | — (no va en la tanda por omisión: tarda unos 4 min) |
 | `prueba_fuentes_api` | Las rutas de fuentes (Wikipedia, libros, artículos, DOI, ISBN, página web, Wikidata) | Internet |
+| `prueba_funciones` | Que cada función haga lo correcto en los cuatro editores, cuentas, invitar, ramas, presentar (unos 190 casos; `--movil` a ancho de celular, `NOM_NAVEGADOR=firefox`) | — |
+| `rastreo` | Toca CADA botón, menú y acción de la ruedita de los cuatro editores y anota lo que no abre | — |
+| `prueba_sin_internet` | Sin conexión: cola, base, ramas (B.2 a B.6), crear documentos sin Internet | — |
+| `prueba_e2e` | Espacios cifrados de extremo a extremo: el servidor nunca ve el texto, el nombre ni el chat | — |
+| `prueba_ayuda` | El sitio de ayuda y lo legal: direcciones limpias, enlaces, buscador, botones «?» | — |
 
 `nomprueba.py` tiene lo común: crear cuentas, espacios y documentos por la API, y abrir el
 navegador (computadora o celular).

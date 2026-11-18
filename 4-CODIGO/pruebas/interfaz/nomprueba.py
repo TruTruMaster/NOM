@@ -5,7 +5,7 @@ B = os.environ.get("NOM_BASE", "http://localhost:8099")
 CL = "Clave-Segura-123"
 def api(m, u, b=None, t=None):
     # Un nombre de cliente propio: Cloudflare (la Raspberry detrás del túnel) rechaza el de urllib (error 1010).
-    h = {"Content-Type": "application/json", "User-Agent": "NOM-COLAB-pruebas/1.0"}
+    h = {"Content-Type": "application/json", "User-Agent": "NOM-pruebas/1.0"}
     if t: h["Authorization"] = "Bearer " + t
     q = urllib.request.Request(B + u, method=m, data=json.dumps(b).encode() if b is not None else None, headers=h)
     try:
@@ -15,7 +15,7 @@ def api(m, u, b=None, t=None):
         c = e.read(); return e.code, (json.loads(c) if c[:1] in b"{[" else None)
 def esperar_servidor():
     for _ in range(120):
-        try: urllib.request.urlopen(urllib.request.Request(B + "/api/red/info", headers={"User-Agent": "NOM-COLAB-pruebas/1.0"}), timeout=2); return True
+        try: urllib.request.urlopen(urllib.request.Request(B + "/api/red/info", headers={"User-Agent": "NOM-pruebas/1.0"}), timeout=2); return True
         except Exception: time.sleep(1)
     return False
 def cuenta(nombre=None):

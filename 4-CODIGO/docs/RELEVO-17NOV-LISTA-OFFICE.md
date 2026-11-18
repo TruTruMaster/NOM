@@ -1,5 +1,8 @@
 # Relevo del 17 de noviembre de 2026: la lista grande de Office, NOM y lo que sigue
 
+> **Histórico** (se conserva como registro de ese día; lo que dice del estado puede ya no ser cierto). Lo vigente
+> —qué está confirmado, qué falta y en qué orden— está en `RELEVO-ESTADO-Y-PENDIENTES.md`.
+
 Leer al empezar la siguiente sesión, junto con `PLAN-CONSTRUCCION.md` y `LOG.md` (entradas 71 a 76).
 
 ## 1. Estado del repositorio

@@ -6,7 +6,7 @@ aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-13
 version: 0.13.0
 ---
-- **Fórmulas**: empiezan con `=`. Casi 100 funciones en español o inglés (ver la
+- **Fórmulas**: empiezan con `=`. Más de 220 funciones en español o inglés (ver la
   [referencia de fórmulas](ayuda:editores/formulas)); al escribir `=PRO` te sugiere la función y lo
   que pide.
 - **Referencias**: `A1`, `$A$1`, `A$1`, rangos `A1:B5`, columnas `A:A`, otra hoja `Hoja2!A1`.

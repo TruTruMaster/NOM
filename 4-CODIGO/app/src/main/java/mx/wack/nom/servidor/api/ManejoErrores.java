@@ -33,7 +33,13 @@ public class ManejoErrores {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> argumento(IllegalArgumentException e) {
-        return ResponseEntity.badRequest().contentType(JSON).body(Map.of("error", e.getMessage()));
+        // Los mensajes propios (p. ej. «Se conservan entre 5 y 200 versiones») se muestran tal cual; los de Java
+        // (p. ej. "No enum constant mx.wack…Permiso.X") no: hablan del código, no de la petición. Y sin mensaje,
+        // Map.of fallaba y la respuesta salía como 500.
+        StackTraceElement[] st = e.getStackTrace();
+        boolean propio = e.getMessage() != null && st.length > 0 && st[0].getClassName().startsWith("mx.wack.nom.");
+        if (!propio) log.debug("Petición no válida: {}", e.getMessage());
+        return ResponseEntity.badRequest().contentType(JSON).body(Map.of("error", propio ? e.getMessage() : "La petición no es válida"));
     }
 
     @ExceptionHandler(org.springframework.web.context.request.async.AsyncRequestNotUsableException.class)

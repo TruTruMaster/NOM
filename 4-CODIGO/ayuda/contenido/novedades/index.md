@@ -21,6 +21,13 @@ version: 0.16.0
   duplicarse), «Conservar con el siguiente», «Conservar líneas juntas», «Salto de página anterior»,
   control de líneas viudas y huérfanas, letra capital, y lo que flota (imágenes, formas, cuadros de
   texto y gráficos) en su lugar de la hoja con el texto alrededor como lo acomoda Word.
+- **Word, tablas como en Word:** se parten entre hojas (con las filas de encabezado repetidas arriba), cada fila y
+  celda con sus medidas, bordes y texto girado, y celdas con imágenes, listas y otras tablas dentro. Al descargar
+  solo se escriben de nuevo las celdas que cambiaron.
+- **Word, secciones:** cada sección con su tamaño, orientación, márgenes, columnas (con línea y equilibradas),
+  encabezado y pie, y las formas con degradado, trama, imagen, transparencia, puntas y grupos.
+- **Word, texto oculto y elevado:** lo que el autor ocultó (formato «Oculto») ya no se ve, como en Word, y se
+  conserva al descargar; la letra elevada o bajada (Fuente → Avanzado → Posición) se ve en su lugar.
 - **SmartArt** con el dibujo y los colores de PowerPoint (antes algunos salían con letra blanca sobre
   blanco) y los que no traen dibujo, acomodados con su diseño.
 - **Animaciones y transiciones como en PowerPoint:** se reproducen como en PowerPoint (medido contra sus
@@ -28,7 +35,13 @@ version: 0.16.0
   animación con línea de tiempo, copiar animación, trayectorias dibujadas y el panel de transiciones.
   Lo que armes se guarda en el .pptx como lo escribe PowerPoint.
 - **Videos y audios de un .pptx** se reproducen al presentar, como en PowerPoint: solos o al tocarlos,
-  con su volumen, en bucle y recortados, con una barra para pausar o ir a otra parte.
+  con su volumen, en bucle y recortados, con una barra para pausar o ir a otra parte. También los **sonidos**
+  de los efectos y de las transiciones. (Salen del archivo original que NOM guarda dentro del documento: si el
+  .pptx pesaba más de 14 MB no se guarda y se quedan como imagen.)
+- **Vínculos y botones de acción** de PowerPoint: ir a otra diapositiva, a la siguiente o la anterior, terminar o
+  abrir una página web al tocar la figura; se ponen en **Animación → Acción al hacer clic** y salen así al .pptx.
+- **Animar gráficas y SmartArt por partes:** una gráfica por serie, por categoría o por elemento, y un SmartArt
+  por figura, como en PowerPoint.
 - **Gráficas:** líneas de tendencia con su ecuación y R², barras de error y tabla de datos.
 - **Fórmulas:** matrices dinámicas (los resultados se derraman a las celdas vecinas), `LET` y `LAMBDA`.
 - **Accesibilidad:** el alto contraste del sistema cambia los colores de la interfaz, «reducir
@@ -37,6 +50,11 @@ version: 0.16.0
 - **Privacidad, más clara:** qué puede ver Cloudflare, dónde guarda sus datos la versión en Azure y un
   canal privado para pedir lo de tus datos.
 - **App de Android:** cada versión publica su SHA-256 y la huella del certificado con que se firma.
+- **Arreglos de una revisión completa:** el código para dejar entrar sin cuenta ya dice que se entra con un
+  alias al azar (no con un apodo escrito); la pantalla del proyector ya no recibe comentarios, notas del orador
+  ni el archivo original, se mueve con las transiciones de PowerPoint y deja de servir si a quien presenta le
+  quitan el acceso; una ecuación que terminaba en barra invertida («\») ya no impide abrir el documento; un archivo de Office de
+  más de 14 MB avisa que no se guarda su original.
 
 ## 0.15.4 — noviembre de 2026
 

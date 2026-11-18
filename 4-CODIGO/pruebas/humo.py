@@ -7,7 +7,7 @@ almacenamiento, descargar mis datos, pase firmado. Crea 3 cuentas `humo_…` y l
     NOM_BASE=https://nomcolab.dpdns.org python3 pruebas/humo.py
 """
 import json,urllib.request,os,random,string,time,base64,sys
-B=os.environ.get("NOM_BASE","http://localhost:8099").rstrip("/"); AG={"User-Agent":"NOM-COLAB-pruebas/1.0"}
+B=os.environ.get("NOM_BASE","http://localhost:8099").rstrip("/"); AG={"User-Agent":"NOM-pruebas/1.0"}
 CL="Humo-"+"".join(random.choice(string.ascii_letters) for _ in range(10)); SUF="".join(random.choice("abcdefghjkmnpqrstuvwxyz") for _ in range(4))
 res=[]
 def r(m,u,b=None,t=None):

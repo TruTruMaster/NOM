@@ -1,11 +1,11 @@
-# Relevo general: qué está confirmado, qué no y qué falta construir (17 de noviembre de 2026, tarde)
+# Relevo general: qué está confirmado, qué no y qué falta construir (17 de noviembre de 2026, noche)
 
 Este es el relevo para la siguiente sesión. **Leerlo primero**, junto con `PLAN-CONSTRUCCION.md` (fases y marcas),
-`LOG.md` (entradas 71 a 79), `RELEVO-17NOV-ANIMACIONES.md` (detalle de PowerPoint), `RELEVO-17NOV-LISTA-OFFICE.md`
+`LOG.md` (entradas 71 a 80), `RELEVO-17NOV-ANIMACIONES.md` (detalle de PowerPoint), `RELEVO-17NOV-LISTA-OFFICE.md`
 (detalle de Word, Excel, contraseñas, tablas), `PARIDAD-OFFICE-REAL.md` (cómo se mide contra Office real) y
 `PLAN-MEDIOS.md` (video y audio). Aquí no se repite el detalle técnico: se dice **qué está probado de verdad, qué solo
 se escribió y qué falta**, para Word, Excel y PowerPoint, y cómo tiene que convivir cada función con lo que NOM ya
-tenía.
+tenía. La sección 9 es la revisión completa de la noche del 17-nov (código, documentación, la Pi y GitHub).
 
 ## 0. Lo que pidió el usuario (vigente)
 
@@ -24,19 +24,25 @@ tenía.
   `ListAgents`/`SendMessage`, pero es fácil pisarse. Antes de empezar, `ListAgents`: si hay otra, acordar qué archivos
   toca cada una.
 
-## 1. Estado del repositorio
+## 1. Estado del repositorio (verificado la noche del 17-nov)
 
-- `main` va **24 commits adelante de `origin/main`** (de `6fadd42` a `71243e9`, más este relevo). **Nada de eso está
-  publicado**: ni en GitHub (empujar a `main` despliega a Azure si toca `4-CODIGO/app/**`), ni en la Pi, ni en el APK.
+- `main` va **26 commits adelante de `origin/main`** (`b65438d`, la 0.15.4) más los de la revisión de esta noche
+  (sección 9). **Nada de eso está publicado**: ni en GitHub (empujar a `main` despliega a Azure si toca
+  `4-CODIGO/app/**` o `4-CODIGO/nucleo/**`), ni en la Pi, ni en el APK. Comprobado con `git fetch`.
+- **Lo publicado:** la Pi sirve la **0.15.4** (interfaz 20, jar del 16-nov 16:57) en `https://www.nom.qd.je` y
+  `https://nomcolab.dpdns.org`; la release «latest» de GitHub es **v0.15.4** (`NOM-COLAB.apk`, código 30); Azure,
+  apagada (403). El repositorio es **público**, con licencia GPL-3.0 y «Website» `https://www.nom.qd.je`.
 - El código dice **0.15.4** (`Version.java`, `NOM.VERSION` en `nucleo.js`, `VERSION` en `sw.js`,
   `versionName`/`versionCode` en `android/app/build.gradle.kts`); la ayuda y `CAMBIOS.md` ya describen la **0.16.0**.
-  Al publicar: subir los cuatro a 0.16.0 (código de APK 31), regresión completa antes.
+  Al publicar: subir los cuatro a 0.16.0 (código de APK 31) e **INTERFAZ a 21** (la 0.16.0 trae campos nuevos en los
+  documentos: `transOffice:`, árboles de animación, `oc`/`pos` del texto de Word…), regresión completa antes.
 - Sin rastrear a propósito: `7-PRESENTACION/`, `ENTREGA/5IM7_WACK_Casos_de_Uso.*`, `ENTREGA/5IM7_WACK_Presentacion.pdf`.
 - `tmp-17-11-26/` (3 GB, en `.git/info/exclude`): lo útil ya está en `~/NOM/trabajo/`; **se puede borrar con permiso
   del usuario** (no se ha borrado).
 - Servidor de pruebas local: `cd 4-CODIGO/app && SPRING_WEB_RESOURCES_STATIC_LOCATIONS=file:/home/user/NOM/4-CODIGO/app/src/main/resources/static/ NOM_DATOS=/home/user/nom-datos-pruebas NOM_PUERTO=8099 nohup java -jar target/nom-colab.jar &`
-  (el JS y el CSS se sirven en vivo). Los 24 commits cambian también 6 archivos de Java (`CuentasApi`, `PaginasApi`…)
-  y el jar es de las 03:15 del 17-nov: **`mvn package` antes de probar** lo del servidor.
+  (el JS y el CSS se sirven en vivo; **`mvn package` antes** si cambió Java). Para medir contra Office sin estorbar a
+  la regresión sirve un segundo servidor (copia del jar, otro `NOM_DATOS`, `NOM_PUERTO=8097`) con
+  `NOM_BASE=http://localhost:8097` en `comparar_real.py`.
 
 ## 2. Confirmado (medido de verdad)
 
@@ -236,3 +242,64 @@ the features we already had»):
 
 Herramientas y trucos (Windows por SSH, `office_real.py`, `comparar_real.py`, análisis de animaciones): sección 3 de
 `RELEVO-17NOV-ANIMACIONES.md` y sección 4 de `RELEVO-17NOV-LISTA-OFFICE.md`.
+
+## 9. Revisión completa (17 de noviembre de 2026, noche)
+
+Pedido del usuario: auditar todo el código, corregir **toda** la información equivocada del repositorio (también lo
+hecho que seguía marcado como pendiente), revisar la página, la Pi y GitHub, y después seguir construyendo (paso 0 de
+la sección 8), «como un ingeniero muy cuidadoso que busca incongruencias entre la documentación y el código».
+
+### 9.1 Lo que se revisó
+- **Servidor** (Java, `app/` y `nucleo/`): filtros de sesión, CORS, cabeceras, origen de las peticiones, todas las
+  rutas de `*Api.java`, servicios de cuentas, espacios, documentos (permisos, cuotas, proyección, ramas, sincronía,
+  enlace para ver), canal en vivo y repositorios. Paridad de rutas con el teléfono (`ApiTelefono`): todas salvo
+  `POST /api/cuentas/aceptar`, que allí no aplica (no hay cuentas con contraseña).
+- **Interfaz**: `node --check` y ESLint (variables sin definir, claves repetidas, código inalcanzable…) de los 54
+  archivos: limpio salvo lo de abajo; reglas del proyecto (`data-nom` en los estilos inyectados, variables CSS que
+  existen); módulos sin probar del 17-nov (medios, transiciones, proyector).
+- **App de Android**: WebView (solo `file:///android_asset/`, lo demás al navegador del sistema), puente `NomAndroid`
+  (solo en la propia interfaz; la política de contenido impide marcos ajenos).
+- **Afuera**: la Pi (`nomcolab-pi estado`, `/etc/nomcolab.conf`, túnel), las tres direcciones, GitHub (repositorio,
+  releases, ramas, Pages de `nom-qd-je`), Azure.
+
+### 9.2 Defectos encontrados y arreglados
+| Dónde | Qué pasaba | Arreglo |
+|---|---|---|
+| `ServicioDocumentos.actividadExterna` | Un editor podía escribir filas de la bitácora **a nombre de otra cuenta** (bastaba su id y `nube`): falsificaba su recibo de proceso y sus aportes; además filas con hora en el futuro | Solo a nombre de quien sube o si sube el propietario del espacio (el que sincroniza su teléfono); horas limitadas al presente. `seguridad.py` 17.1 |
+| Proyección (`/api/proyeccion/{código}`, sin sesión) | Daba **todo** el estado: comentarios, notas del orador, dueños y el Office original; el código seguía sirviendo hasta 8 h aunque a quien presenta le quitaran el acceso o se moviera el documento; los cambios en vivo también llevaban comentarios y notas | Foto y cambios sin comentarios, notas, dueños ni `_origen`; el código deja de servir sin acceso; al quitar el acceso o mover el documento se cierran sus pantallas. 17.2 |
+| Enlace para ver (`/api/ver/…`) | Quitaba comentarios y notas, pero dejaba el `.docx`/`.pptx` original dentro (con los suyos) | Sin `_origen`. 17.3 |
+| Alias (`/api/enlaces/{c}/alias` y `/invitado`) | Con un código vigente se creaban cuentas sin fin | Tope por red y en total por hora (`NOM_ALIAS_HORA_RED`, 300; `NOM_ALIAS_HORA`, 3000). 17.4 |
+| `Origen` | Se creían las cabeceras de reenvío (CF-Connecting-IP…) desde direcciones `fe80::`/`169.254.x` también fuera de Azure: cualquier equipo de la misma red falseaba su IP y se saltaba los topes | Solo en Azure (`WEBSITE_SITE_NAME`) |
+| `ManejoErrores` | Un `IllegalArgumentException` sin mensaje daba 500; los de Java mostraban nombres de clases («No enum constant mx.wack…») | 400 con el mensaje propio o «La petición no es válida». 17.5 |
+| Memoria del servidor | Todo documento abierto se quedaba en memoria hasta reiniciar (con su Office original, hasta 14 MB): la Pi (512 MB para Java) se llenaba con unos cuantos | Salen de la memoria tras 20 min sin uso, guardados y sin canales ni versión pendiente, en el hilo de `persistir()` (`-Dnom.inactivoMs`). 17.6 |
+| Mover un documento | Quien lo tenía abierto sin ser del espacio destino seguía recibiendo los cambios en vivo | Se le cierra el canal |
+| `cambiosDesdeBase`, `actividadDesde` | Cortaban en la primera racha vieja (lo que ya se había corregido en `cambiosDesde`) | Sin cortar |
+| `ecuaciones.js` | Una ecuación que terminaba en `\` (o `\` antes de un salto) tiraba el dibujo del documento y la exportación | Se escribe tal cual |
+| Panel de transiciones vs. proyector y miniaturas | El panel guarda `transOffice:` y borra `trans:`; la pantalla del proyector y la marca «Con transición» de las miniaturas solo leían `trans:` | El proyector juega la transición de PowerPoint; la marca lee las dos |
+| `union.js` | «Dejar entrar sin cuenta: cada quien **escribe un apodo**» — desde la fase 13 es un alias al azar | Texto corregido |
+| Importar Office de más de 14 MB | No se guarda el original (`MAX_ORIGEN`) y no avisaba; el aviso de PowerPoint decía «se conservan» | Aviso al importar |
+| Word, texto oculto (`w:vanish`) y elevado/bajado (`w:position`) | No se leían: NOM **mostraba lo oculto** («ESTO NO SE VE» de w01) | Se leen, se dibujan y se escriben; al parchar uno importado antes no se quitan |
+| `--peligro` (editor.js, formatos.js) | La variable no existe en `nom.css`: en tema oscuro el rojo de respaldo no contrasta | `--error` |
+| `ServicioFuentes.AGENTE` | Decía «proyecto escolar» (contra lo decidido el 17-nov) | «NOM/1.0 (sin fines de lucro)» |
+| `azure/nomcolab local up` | Encendía el túnel de la laptop, que es **el mismo** de la Pi (869abbea…): Cloudflare habría repartido a la gente entre dos servidores con datos distintos | No lo enciende si la nube contesta desde otro equipo |
+| `prueba_funciones.py` | Buscaba el menú viejo «Desvanecer»: la sección del lienzo se cortaba ahí (no corrían presentador ni .pptx) | Usa el panel nuevo y revisa `transOffice:` |
+
+`rastreo.py`: 6 «MAL», revisados a mano: son de la prueba (toca «Bloquear» y luego «Cortar», que queda apagado;
+«Pegar especial» depende de lo copiado; «Acción al hacer clic» abre una hoja que tapa la ruedita).
+
+### 9.3 Documentación corregida
+LEEME y README (direcciones, nombres de botones que ya no existen, «con apodo», cifras de pruebas, licencias de
+Mediabunny y de las fuentes «NOM …», escuela), `PLAN-CONSTRUCCION.md` (casillas de lo ya hecho en las fases 10 y 22,
+erratas `~/NOM` por `~/NOM-COLAB`, cifras viejas), `SERVIDOR-PROPIO.md` (`doas nomcolab-pi` no sirve sin la ruta
+completa; dirección principal; aviso del túnel compartido), `DOMINIO-Y-BUSCADORES.md` (`nom.qd.je` todavía sin
+https), `DISENO-UI.md`, `MARCA.md`, `PLAN-MEDIOS.md`, los relevos viejos marcados como históricos, la ayuda («Qué se ve
+igual», abrir y descargar, preguntas 16 y 24, 230 funciones de hoja y no «casi 100») y las novedades de la 0.16.0 (le
+faltaban tablas y secciones de Word, vínculos, sonidos, gráficas y SmartArt por partes).
+
+### 9.4 Pendiente de decidir (el usuario)
+- **`nom.qd.je` sin certificado**: según la documentación de GitHub Pages hay que quitar y volver a poner el dominio en
+  el repositorio `nom-qd-je` para que lo emita (cambio en GitHub; no se hizo sin preguntar).
+- En GitHub sigue una rama vieja del 28-oct (no es `main` ni `desarrollo`) con commits que rompen la regla de menciones
+  del proyecto: borrarla solo si el usuario lo pide.
+- Publicar la 0.16.0 (sección 7: falta la regresión completa, la vuelta en PowerPoint real y el A55).
+

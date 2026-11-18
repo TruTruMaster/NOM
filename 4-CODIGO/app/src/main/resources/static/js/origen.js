@@ -343,6 +343,6 @@
   const quitarOp = () => ({ bloque: BLOQUE, campos: { eliminado: true } });
 
   NOM.paquete = { empacar, desempacar, esPaquete, aB64, deB64 };
-  NOM.origen = { BLOQUE, VERSION_IMPORTADOR, crearOps, sacarDatos, meterDatos, abrirZip, leer, bytesDe, huellaBytes, huella, estable, hijosXml, hijoXml, attr, finEtiqueta, local, desescapar, quitarOp, YA_COMPRIMIDO };
+  NOM.origen = { BLOQUE, MAX_ORIGEN, VERSION_IMPORTADOR, crearOps, sacarDatos, meterDatos, abrirZip, leer, bytesDe, huellaBytes, huella, estable, hijosXml, hijoXml, attr, finEtiqueta, local, desescapar, quitarOp, YA_COMPRIMIDO };
   if (typeof module !== "undefined" && module.exports) module.exports = { paquete: NOM.paquete, origen: NOM.origen };
 })();

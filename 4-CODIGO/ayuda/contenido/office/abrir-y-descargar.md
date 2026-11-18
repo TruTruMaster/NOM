@@ -21,6 +21,9 @@ Google Drive y guárdalo como **.docx**, **.xlsx** o **.pptx**: ese sí se impor
 Markdown, CSV, SVG, PNG).
 
 - Lo que **no tocaste** sale **idéntico** al original (se parte del archivo guardado dentro).
-- Lo que editaste se reescribe con lo que NOM sabe hacer.
+- Lo que editaste se cambia **sobre ese original**: solo las partes que cambiaron se escriben de nuevo, y
+  Office lo abre sin pedir «reparar».
+- Si el archivo tenía contraseña, se descarga con la misma (ver
+  [Contraseñas y protección](ayuda:office/contrasenas-y-proteccion)).
 
 Ver [qué se ve igual y qué todavía no](ayuda:office/que-se-ve-igual).

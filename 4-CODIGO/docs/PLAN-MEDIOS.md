@@ -5,8 +5,8 @@ Decidido por el usuario el 17 de noviembre de 2026 (lo que dijo, resumido):
 - Los archivos del usuario **tienen que estar en la nube** para abrirlos desde cualquier lugar.
 - Convertir los formatos comunes (MP4, MP3…) a lo **más ligero posible sin perder calidad visible**, que se
   descomprima en tiempo real al reproducir, tanto video como audio, con archivos propios de NOM.
-- **Límites de subida que no castiguen**; la Raspberry Pi recibe un disco de **2 TB** (entre el 17 y el 19 de noviembre):
-  «decide lo mejor para MUCHOS usuarios».
+- **Límites de subida que no castiguen**; la Raspberry Pi recibe un disco de **2 TB** (entre el 17 y el 19 de noviembre;
+  la noche del 17 todavía tenía solo su tarjeta de 58 GB): «decide lo mejor para MUCHOS usuarios».
 - **Azure ya no cuenta** (no se diseña para su cuota de 50 MB).
 - Al descargar: **lo más ligero para el ancho de banda** del servidor.
 

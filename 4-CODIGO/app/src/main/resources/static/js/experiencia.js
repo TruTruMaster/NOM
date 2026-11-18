@@ -128,7 +128,7 @@
       l.push({ grupo: "Crear", texto: "Nuevo espacio", icono: "plus", fn: () => NOM.vistaEspacios.nuevoEspacio(), claves: "crear espacio equipo proyecto" });
       l.push({ grupo: "Crear", texto: "Unirse a un espacio", icono: "qr-code", fn: () => NOM.vistaEspacios.unirse(), claves: "codigo qr invitacion entrar wifi buscar" });
       l.push({ grupo: "Crear", texto: "Unirse con código QR", icono: "qr-code", fn: () => NOM.union.escanear(), claves: "qr camara codigo salon escanear" });
-      if (esp && esp.permiso === "PROPIETARIO") l.push({ grupo: "Crear", texto: `Invitar a ${esp.nombre} con código QR`, icono: "qr-code", fn: () => NOM.union.invitar(esp), claves: "qr invitar salon alumnos apodo" });
+      if (esp && esp.permiso === "PROPIETARIO") l.push({ grupo: "Crear", texto: `Invitar a ${esp.nombre} con código QR`, icono: "qr-code", fn: () => NOM.union.invitar(esp), claves: "qr invitar salon alumnos alias apodo sin cuenta" });
       if (esp && esp.id && !ed) l.push({ grupo: "Crear", texto: `Exportar todo ${esp.nombre} (.zip)`, icono: "archive", fn: async () => NOM.vistaEspacios.exportarTodo(await api().get(`/api/espacios/${esp.id}`)), claves: "descargar office zip respaldo" });
     } else {
       l.push({ grupo: "Crear", texto: "Nuevo documento (en este equipo)", icono: "file-plus", fn: nuevoDoc(null), claves: "crear documento nuevo" });

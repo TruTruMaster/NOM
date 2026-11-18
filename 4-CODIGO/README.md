@@ -2,11 +2,13 @@
 
 Suite colaborativa: **texto, hojas de cálculo, presentaciones y diagramas en una sola app**,
 con edición simultánea. Funciona en la red local sin depender de Internet (un equipo o un
-teléfono hace de servidor), en Azure (https://nomcolab-wack.azurewebsites.net) o en el servidor
-propio: una Raspberry Pi publicada con Cloudflare Tunnel en https://nomcolab.dpdns.org
-(`docs/SERVIDOR-PROPIO.md`).
+teléfono hace de servidor) o en el servidor propio: una Raspberry Pi publicada con Cloudflare
+Tunnel en **https://www.nom.qd.je** (también responde en https://nomcolab.dpdns.org, el nombre de
+antes; `docs/SERVIDOR-PROPIO.md` y `docs/DOMINIO-Y-BUSCADORES.md`). La copia en Azure
+(https://nomcolab-wack.azurewebsites.net, `docs/DESPLIEGUE-AZURE.md`) fue para una demostración y
+normalmente está apagada.
 
-Equipo 6 "WACK" · CECyT 9 "Juan de Dios Bátiz" · 5IM7
+WACK
 
 ```
 NOM/
@@ -20,7 +22,8 @@ NOM/
 │                   nomcolab (prende y apaga Azure o el servidor propio)
 ├── servidor-propio/ publicar NOM desde una computadora o la Raspberry Pi (pi/: servicios s6, respaldo, nomcolab-pi)
 ├── pruebas/        seguridad.py (API) · interfaz/ (la página en navegadores reales) · office/ (Word, Excel y PowerPoint)
-└── docs/           PLAN-CONSTRUCCION.md · DISENO-UI.md · DESPLIEGUE-AZURE.md · SERVIDOR-PROPIO.md · GUIA-FACIL-DE-USAR.md · MARCA.md
+└── docs/           RELEVO-ESTADO-Y-PENDIENTES.md (empezar aquí) · PLAN-CONSTRUCCION.md · PARIDAD-OFFICE-REAL.md ·
+                    PLAN-MEDIOS.md · DISENO-UI.md · SERVIDOR-PROPIO.md · DOMINIO-Y-BUSCADORES.md · GUIA-FACIL-DE-USAR.md · MARCA.md
 (Los PDF para entregar están fuera del código, en ../ENTREGA/.)
 ```
 
@@ -62,18 +65,18 @@ cd android
 ./gradlew assembleDebug          # solo para probar en un teléfono con las herramientas de depuración; no se publica
 ```
 
-Al abrirla pide el servidor: **Buscar en la red** lo encuentra por UDP, o se escribe
-`IP:8080`. La app abre los documentos aunque no haya red y envía los cambios al
-volver (CU-26).
+Al abrirla pregunta **«¿Dónde trabaja tu equipo?»**: escanear el QR, **Usar NOM en Internet**,
+**Buscar en este Wi-Fi** (lo encuentra por UDP) o escribir `IP:8080`. La app abre los documentos
+aunque no haya red y envía los cambios al volver (CU-26).
 
 ### El teléfono como servidor (Android 8+)
 
-En "Conecta con tu red" → **Usar este teléfono como servidor** (o en *Este dispositivo* →
-*Servidor en este teléfono*). La app enciende un servicio en primer plano
+En «¿Dónde trabaja tu equipo?» → **Compartir desde este teléfono** (o en *Este dispositivo* →
+**Trabajar sin Internet con este teléfono**). La app enciende un servicio en primer plano
 (`android/.../anfitrion/`) que arma los mismos servicios de `nucleo/` sobre archivos de la app,
 abre el puerto 8080 (o el siguiente libre), sirve la API, los canales en tiempo real y la misma
 página web, y se anuncia por UDP como cualquier otro servidor. Los demás entran desde la app
-(**Buscar en la red**) o desde el navegador con `http://IP-del-teléfono:8080`, en el mismo
+(**Buscar en este Wi-Fi** o el QR) o desde el navegador con `http://IP-del-teléfono:8080`, en el mismo
 Wi-Fi o conectados al punto de acceso del teléfono (sin router ni Internet). Mientras sirve hay
 una notificación con la dirección y un botón **Detener**; si Android cierra la app, al abrirla
 otra vez se enciende solo.
@@ -81,12 +84,15 @@ otra vez se enciende solo.
 ## Pruebas
 
 ```bash
-cd app && mvn test                       # CRDT: convergencia con 5 usuarios y 200 órdenes de llegada distintos
-python3 pruebas/seguridad.py             # 226 casos de la API (sesión, bloqueo, permisos, cuentas, tope de tamaño…)
+pruebas/preparar.sh                      # una vez: Python con Playwright, navegadores, corpus de Office y validador de Microsoft
+pruebas/regresion.sh rapido              # TODO lo automático menos Office (unos 20 min); sin «rapido», todo (60-80 min)
+cd app && mvn test                       # CRDT (convergencia con 5 usuarios y 200 órdenes de llegada) y direcciones limpias
+python3 pruebas/seguridad.py             # unos 400 casos de la API (sesión, bloqueo, permisos, cuentas, pases, cifrado…)
 pruebas/interfaz/correr.sh               # la página en un navegador de verdad (ver pruebas/interfaz/LEEME.md)
 python pruebas/interfaz/rastreo.py SALIDA        # toca CADA botón, menú y acción de la ruedita de los 4 editores
-python pruebas/interfaz/prueba_funciones.py SALIDA   # que cada función haga lo correcto (≈180 casos)
+python pruebas/interfaz/prueba_funciones.py SALIDA   # que cada función haga lo correcto (unos 190 casos)
 python pruebas/office/fidelidad.py       # Word, Excel y PowerPoint reales de Microsoft: abrir y volver a guardar
+python pruebas/office/comparar_real.py ARCHIVO   # contra Word, Excel y PowerPoint 2024 de verdad (docs/PARIDAD-OFFICE-REAL.md)
 python pruebas/office/visor.py SALIDA archivos…   # cómo se ve en NOM junto a LibreOffice
 cd azure && ./desplegar.sh roles         # roles de la base en Azure SQL: los aplica y prueba qué se permite y qué no
 ```
@@ -101,9 +107,9 @@ tanda quedan en `../6-PLAN-DE-PRUEBAS/registros/`.
 | Módulo (mapa de navegación) | Funcionalidad |
 |---|---|
 | **Gestión de cuentas** | Base de datos (H2 / Azure SQL) con **seguridad con roles en la base** · sin administrador general: cada cuenta controla sus espacios · crear cuenta con **código de recuperación** · iniciar y cerrar sesión · recuperar la contraseña con el código · cambiar la contraseña y **borrar la cuenta** · contraseñas con PBKDF2 + sal · bloqueo por intentos (por cuenta y por red) y tope de cuentas nuevas por hora · preferencias (tema, letra, movimiento) · lo guardado en el equipo va **cifrado** (bóveda por cuenta) |
-| **Espacios de trabajo** | Crear espacio · **invitar con código de 8 letras o QR** (con fecha de vencimiento, anulable, y entrada **con apodo sin cuenta**) · agregar por nombre de usuario · visible en el mismo Wi-Fi (UDP) · Puede editar / Solo lectura / quitar · máximo 50 personas a la vez · carpetas, destacados, ordenar y buscar dentro del contenido · **papelera de 30 días** · @menciones · plantillas del espacio · letra de los textos nuevos · descargar todo · cuánto ocupa y depurar versiones · copia en otro NOM |
+| **Espacios de trabajo** | Crear espacio · **invitar con código de 8 letras o QR** (con fecha de vencimiento, anulable, y entrada **sin cuenta con un alias al azar**) · agregar por nombre de usuario · visible en el mismo Wi-Fi (UDP) · Puede editar / Solo lectura / quitar · máximo 50 personas a la vez · carpetas, destacados, ordenar y buscar dentro del contenido · **papelera de 30 días** · @menciones · plantillas del espacio · letra de los textos nuevos · descargar todo · cuánto ocupa y depurar versiones · copia en otro NOM |
 | **Editores** | 4 tipos (fijo al crear) · **texto tipo Word letra por letra** (estilos, listas, tablas, imágenes, notas al pie, ecuaciones, índice, encabezado y pie, columnas, marca de agua, configurar página) · **hoja de cálculo** (fórmulas en español e inglés, referencias $ y entre hojas, relleno, filtro y orden personales, fijar filas, formato condicional, listas desplegables, gráficas) · **presentación** (temas, diseños, animaciones, transiciones, notas, modo presentador, proyector, láser) · **diagrama** (UML, entidad-relación, diagramas listos, texto a diagrama, conectores) · **ruedita de acciones** en los cuatro · comentarios y **modo sugerencia** · partes asignadas a una persona · entrega con fecha límite · **recibo del proceso de escritura** verificable · investigar y citar en APA · deshacer/rehacer · sin conexión con cola persistente |
-| **Importar y exportar** | .docx, .xlsx y .pptx de Office (un archivo sin cambios sale idéntico; lo editado se reescribe), .nom (formato propio comprimido), PDF, HTML, Markdown, CSV, SVG y PNG |
+| **Importar y exportar** | .docx, .xlsx y .pptx de Office, también con contraseña (lo que no se tocó sale idéntico; lo editado se cambia sobre el archivo original), .nom (formato propio comprimido), PDF, HTML, Markdown, CSV, SVG y PNG. Medido contra Office 2024 real: `docs/PARIDAD-OFFICE-REAL.md` |
 | **Almacenamiento** | Límite por cuenta a la vista · 25 MB por documento · historial de versiones con vista previa y restauración · respaldos rotativos |
 | **Android** | La misma interfaz en una app · el **teléfono como servidor** (sin computadora ni Internet) · escanear el QR para unirse · guardar y compartir archivos |
 
@@ -144,9 +150,9 @@ código fuente y bajo la misma licencia.
 
 Las bibliotecas y fuentes de terceros conservan su propia licencia, todas compatibles con la
 GPL-3.0: Spring Boot (Apache-2.0), H2 (se usa bajo la MPL-2.0), mssql-jdbc (MIT),
-qrcode-generator (MIT), jsQR (Apache-2.0), los íconos Lucide (ISC) y las fuentes Nunito, Carlito,
-Caladea, Liberation y Comic Neue (OFL-1.1, se distribuyen aparte). El detalle está en
+qrcode-generator (MIT), jsQR (Apache-2.0), Mediabunny (MPL-2.0), los íconos Lucide (ISC), las fuentes
+Nunito, Carlito, Caladea, Liberation y Comic Neue y las fuentes «NOM …» con las medidas de las de
+Office, hechas sobre fuentes libres (todas OFL-1.1, se distribuyen aparte). El detalle está en
 `app/src/main/resources/static/js/vendor/LICENCIAS.md` y `static/fonts/LICENCIAS-FUENTES.txt`.
 
-Es un proyecto escolar (equipo WACK, CECyT 9, 5IM7): al terminar, el código queda en GitHub como
-portafolio de sus cuatro integrantes.
+Al terminar, el código queda en GitHub como portafolio de las cuatro personas de WACK.

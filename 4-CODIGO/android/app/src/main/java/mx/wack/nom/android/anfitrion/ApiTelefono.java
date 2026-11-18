@@ -236,7 +236,7 @@ final class ApiTelefono {
         // Enlaces para unirse (QR), recibos y proyeccion: sin sesion (como en ConfigWeb).
         if ((x = coincide("/api/enlaces/" + ID, r)) != null && m.equals("GET")) return ok(espacios.infoEnlace(x.group(1)));
         if ((x = coincide("/api/enlaces/" + ID + "/invitado", r)) != null && m.equals("POST"))
-            return ok(espacios.entrarComoInvitado(x.group(1), texto(cuerpo(p), "apodo")));
+            return ok(espacios.entrarComoInvitado(x.group(1), texto(cuerpo(p), "apodo"), p.origen));
         if (r.equals("/api/recibos/verificar") && m.equals("POST")) return ok(documentos.verificarRecibo(cuerpo(p)));
         if ((x = coincide("/api/proyeccion/" + ID, r)) != null && m.equals("GET")) return ok(documentos.verProyeccion(x.group(1)));
         // 8.5 Ver un solo documento con su enlace (sin cuenta).

@@ -424,7 +424,11 @@
     if (a.vers) st += "font-variant-caps:small-caps;";
     if (a.mayus) st += "text-transform:uppercase;";
     if (+a.esp) st += `letter-spacing:${+a.esp}pt;`;
+    // elevado o bajado de Word (w:position): como Word, el renglón crece si hace falta
+    if (+a.pos) st += `vertical-align:${+a.pos}pt;`;
     if (st) h = `<span style="${esc(st)}">${h}</span>`;
+    // texto oculto de Word (w:vanish): no se ve ni se imprime, como en Word; se conserva al descargar
+    if (a.oc) h = `<span class="wd-oculto" style="display:none">${h}</span>`;
     if (a.va === "sub") h = `<sub>${h}</sub>`; else if (a.va === "sup") h = `<sup>${h}</sup>`;
     if (a.s) h = `<s>${h}</s>`;
     if (a.u) h = `<u>${h}</u>`;

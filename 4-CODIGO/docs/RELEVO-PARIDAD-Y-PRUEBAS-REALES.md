@@ -1,5 +1,8 @@
 # Relevo: paridad con Word, Excel y PowerPoint + pruebas reales en equipos (14 de noviembre de 2026, 0.13.1)
 
+> **Histórico** (se conserva como registro de ese día; lo que dice del estado puede ya no ser cierto). Lo vigente
+> —qué está confirmado, qué falta y en qué orden— está en `RELEVO-ESTADO-Y-PENDIENTES.md`.
+
 Para la siguiente sesión. Lo pedido por el dueño: (1) investigar **todo** lo que tienen Word, Excel y
 PowerPoint y que NOM todavía no tiene, con la documentación de Microsoft, para que todo lo que
 se importe y exporte quede perfecto; (2) probar **a mano y de verdad** lo nuevo (0.13.x) con todas

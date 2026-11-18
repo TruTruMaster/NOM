@@ -60,7 +60,10 @@
       if (i >= s.length) return null;
       const c = s[i];
       if (c === "\\") {
-        const m = /^\\([A-Za-z]+|.)/.exec(s.slice(i));
+        // (una «\» al final o antes de un salto de renglón no es una orden: se escribe tal cual; antes
+        // tumbaba el dibujo del documento y la exportación)
+        const m = /^\\([A-Za-z]+|[^\n\r])/.exec(s.slice(i));
+        if (!m) { i++; return { t: "op", v: "\\" }; }
         i += m[0].length;
         const n = m[1];
         if (n === "frac" || n === "dfrac") { const a = grupo(), b = grupo(); return { t: "frac", a, b }; }

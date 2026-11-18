@@ -1,5 +1,8 @@
 # Plan de pruebas antes de la presentación (13 al 20 de noviembre de 2026, versiones 0.13.0 y 0.13.1)
 
+> **Histórico** (se conserva como registro de ese día; lo que dice del estado puede ya no ser cierto). Lo vigente
+> —qué está confirmado, qué falta y en qué orden— está en `RELEVO-ESTADO-Y-PENDIENTES.md`.
+
 Objetivo: llegar a la presentación con **todo probado en equipos reales**, con pruebas de que lo
 que ya funcionaba **sigue funcionando** (sin regresiones) y sabiendo decir con números qué hace
 la app, qué no y por qué los archivos no se rompen.

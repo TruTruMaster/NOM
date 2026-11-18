@@ -16,6 +16,8 @@ public interface RepositorioDocumentos {
 
     EstadoDocumento estado(String docId);
     void guardarEstado(String docId, EstadoDocumento estado);
+    /** Saca de la memoria el estado de un documento que ya está guardado en disco (se vuelve a leer al usarlo). */
+    default void olvidarEstado(String docId) { }
     /** Lo que el estado ocupa guardado (en la computadora va comprimido): es lo que cuenta para la cuota. */
     long bytesEstado(String docId);
     /** Lo que el estado mide sin comprimir: para el tope de tamano de un documento. */

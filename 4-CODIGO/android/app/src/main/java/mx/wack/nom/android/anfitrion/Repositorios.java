@@ -204,6 +204,8 @@ final class Repositorios {
             return almacen.leer("docs/" + docId + "/" + nombre + ".json", null);
         }
 
+        @Override public void olvidarEstado(String docId) { estados.remove(docId); }
+
         @Override public void guardarEstado(String docId, EstadoDocumento estado) {
             estados.put(docId, estado);
             almacen.escribir("docs/" + docId + "/estado.json", estado);

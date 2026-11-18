@@ -78,14 +78,15 @@ documentos).
    navegador. También funciona en el navegador del celular.
 3. **En Android:** instalar `NOM-COLAB.apk` (permite "instalar apps de origen
    desconocido" si lo pide). Con el celular en el **mismo Wi-Fi**, la app
-   encuentra sola el servidor y se conecta; si hay varios, eliges uno. Si la
-   red bloquea el descubrimiento, escribe la dirección (`192.168.1.20:8080`).
+   encuentra el servidor con **Buscar en este Wi-Fi** (o con el QR); si hay varios, eliges uno. Si
+   la red bloquea el descubrimiento, escribe la dirección (`192.168.1.20:8080`).
 
 ### Sin computadora: el teléfono es el servidor
-En Android 8 o más reciente, en **"Conecta con tu red" → Usar este teléfono como servidor →
-Encender**. Ese teléfono guarda los espacios y los documentos (no tiene cuentas con contraseña) y
-los demás entran:
-- con la app, en el mismo Wi-Fi: **Buscar en la red** (aparece el nombre del teléfono);
+En Android 8 o más reciente, en la pantalla **«¿Dónde trabaja tu equipo?»** → **Compartir desde este
+teléfono** (o en *Este dispositivo* → **Trabajar sin Internet con este teléfono**). Ese teléfono
+guarda los espacios y los documentos (no tiene cuentas con contraseña) y los demás entran:
+- con la app, en el mismo Wi-Fi: **Buscar en este Wi-Fi** (aparece el nombre del teléfono) o
+  escaneando el QR que muestra;
 - con el navegador (computadora u otro celular): la dirección que muestra la app, por ejemplo
   `http://192.168.0.232:8080` (botón **Compartir** para mandarla por WhatsApp o correo).
 
@@ -96,7 +97,7 @@ persona queda en una **rama** y el original no se toca: después se compara y se
 
 Sin router: activa el **punto de acceso** de ese teléfono y conecta a los demás a esa red.
 Mientras está encendido aparece una notificación con la dirección y el botón **Detener**; gasta
-algo más de batería. Se apaga en *Este dispositivo → Servidor en este teléfono*.
+algo más de batería. Se apaga ahí o en *Este dispositivo → Trabajar sin Internet con este teléfono*.
 
 ### Sin cuenta
 En la pantalla de inicio está el botón **"Usar sin cuenta"**. En la app Android también aparece
@@ -114,8 +115,9 @@ y con **… → Subir a un espacio** quedan guardados en el servidor.
 **Crear cuenta → Nuevo espacio → Nuevo documento.** Al crear la cuenta sale un **código de
 recuperación**: guárdalo (sirve si se olvida la contraseña).
 Para que otras personas entren a tu espacio usa **Invitar**: **Crear código** da un código de 8
-letras y un QR (se puede dejar entrar **con apodo, sin cuenta**, por 1 hora, 1 día, 1 semana o 30
-días, y anularlo cuando quieras); o escribe el nombre de usuario de alguien que ya tiene cuenta.
+letras y un QR (se puede **dejar entrar sin cuenta**: cada quien entra con un alias al azar, sin
+escribir nada; dura 1 hora, 1 día, 1 semana o 30 días, y se anula cuando quieras); o escribe el
+nombre de usuario de alguien que ya tiene cuenta.
 Quien tenga el código lo escribe en **Tengo un código de invitación** o escanea el QR con la cámara.
 
 Cada espacio tiene su **chat** (con imágenes y archivos de hasta 2 MB). Al crear un espacio se puede

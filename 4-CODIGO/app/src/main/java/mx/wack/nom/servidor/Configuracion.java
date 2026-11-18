@@ -39,10 +39,13 @@ public class Configuracion {
                                            @Value("${nom.cuentas.registros-hora-red:30}") int registrosRed,
                                            @Value("${nom.cuentas.registros-hora:300}") int registrosTotal,
                                            @Value("${nom.cuentas.registros-hora-equipo:5}") int registrosEquipo,
-                                           @Value("${nom.cuentas.registros-hora-red-equipo:200}") int registrosRedEquipo) {
+                                           @Value("${nom.cuentas.registros-hora-red-equipo:200}") int registrosRedEquipo,
+                                           @Value("${nom.cuentas.alias-hora-red:300}") int aliasRed,
+                                           @Value("${nom.cuentas.alias-hora:3000}") int aliasTotal) {
         ServicioCuentas s = new ServicioCuentas(repo, cifrado, maxIntentos, minutosBloqueo, horasSesion);
         s.limitarRegistros(registrosRed, registrosTotal);
         s.limitarRegistrosPorEquipo(registrosEquipo, registrosRedEquipo);
+        s.limitarAlias(aliasRed, aliasTotal);
         return s;
     }
 

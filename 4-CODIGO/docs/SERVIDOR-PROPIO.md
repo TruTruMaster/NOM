@@ -1,19 +1,24 @@
 # NOM en tu propia computadora (servidor propio en internet)
 
-Además de Azure (que se queda para la entrega escolar), NOM puede correr en una
-computadora de la casa y estar en internet **gratis**, sin abrir puertos del módem y con HTTPS.
+Además de Azure (una copia que se hizo para una demostración y casi siempre está apagada), NOM puede
+correr en una computadora de la casa y estar en internet **gratis**, sin abrir puertos del módem y con HTTPS.
 
 > **Estado actual (13 de noviembre de 2026):** el servidor propio corre en la **Raspberry Pi 5**
 > (ver "En la Raspberry Pi", abajo). Los servicios de la laptop (`nomcolab.service`,
 > `nomcolab-tunel.service`) están apagados y deshabilitados; lo que se describe de la laptop queda
 > como la forma de montarlo en otra computadora.
 >
-> **16 de noviembre de 2026:** también el nombre corto `nom.qd.je` (Cloudflare for SaaS sobre la misma
-> zona y el mismo túnel) y lo de los buscadores: ver `docs/DOMINIO-Y-BUSCADORES.md`.
+> **16 de noviembre de 2026:** también el nombre corto: **`www.nom.qd.je` es la dirección principal**
+> (Cloudflare for SaaS sobre la misma zona y el mismo túnel; `nom.qd.je` sin www redirige con GitHub Pages) y
+> lo de los buscadores: ver `docs/DOMINIO-Y-BUSCADORES.md`.
+>
+> **Ojo (17-nov):** el túnel de la laptop (`nomcolab-tunel.service`) y el de la Pi son **el mismo túnel**
+> (869abbea…). Si los dos corren, Cloudflare reparte a la gente entre los dos equipos, que tienen datos
+> distintos. Por eso `nomcolab local up` ya no enciende el túnel cuando la nube contesta desde la Pi.
 
 | | Azure | Servidor propio (Raspberry Pi) |
 |---|---|---|
-| Dirección | `https://nomcolab-wack.azurewebsites.net` | **`https://nomcolab.dpdns.org`** |
+| Dirección | `https://nomcolab-wack.azurewebsites.net` | **`https://www.nom.qd.je`** (y `https://nomcolab.dpdns.org`, el nombre de antes) |
 | Base de datos | Azure SQL (serverless, oferta gratis) | H2 en `/var/lib/nomcolab/datos` |
 | Límites | F1: 60 min de CPU al día, se duerme sin visitas, 1 GB de RAM compartida | Raspberry Pi 5 (8 GB) y el internet de la casa; 200 MB por cuenta, a la vista |
 | Costo | $0 (crédito de Azure for Students sin tocar) | $0 más la luz |
@@ -119,7 +124,7 @@ También sin menú: `nomcolab local up`, `nomcolab local down`, `nomcolab local 
 
 | Acción local | Qué hace |
 |---|---|
-| **Prender** | Si hay un jar nuevo en `2-PAGINA-Servidor/` lo copia; arranca y habilita el servidor y el túnel, espera a que `https://nomcolab.dpdns.org` responda y enciende Funnel |
+| **Prender** | Si hay un jar nuevo en `2-PAGINA-Servidor/` lo copia; arranca y habilita el servidor; el túnel solo si `https://nomcolab.dpdns.org` no lo sirve ya otro equipo (hoy la Pi: entonces no lo toca); enciende Funnel |
 | **Apagar** | Apaga el túnel y Funnel (las direcciones dejan de responder), apaga el servidor, le quita el arranque automático y hace un respaldo |
 | **Estado** | Si el servidor, el túnel y Funnel están prendidos y responden, el arranque automático, cuánta RAM usa, cuánto pesan los datos y el último respaldo |
 | **Reiniciar** | Apagar y prender (sirve para cargar una versión nueva del jar) |
@@ -213,8 +218,8 @@ systemctl --user daemon-reload && systemctl --user enable --now nomcolab-traer-r
 ~/nomcolab-servidor/traer-respaldos.sh      # una vez, para probar
 ```
 
-Restaurar en la Pi: `scp` del respaldo a la Pi, `doas nomcolab-pi apagar`, descomprimirlo en
-`/var/lib/nomcolab` (`tar -xzf datos-….tar.gz`, deja la carpeta `datos`) y `doas nomcolab-pi prender`.
+Restaurar en la Pi: `scp` del respaldo a la Pi, `/usr/local/sbin/nomcolab-pi apagar`, descomprimirlo en
+`/var/lib/nomcolab` (`tar -xzf datos-….tar.gz`, deja la carpeta `datos`) y `/usr/local/sbin/nomcolab-pi prender`.
 
 ## Cifrado en reposo (desde la 0.13.0)
 
@@ -262,23 +267,26 @@ no repite lo que ya está hecho):
 
 | Qué | Dónde |
 |---|---|
-| Servicios supervisados por s6 (arrancan con la Pi y se levantan solos si se caen) | `nomcolab-servidor` (el jar, usuario `nomcolab` sin privilegios), `nomcolab-tunel` (Cloudflare Tunnel → `nomcolab.dpdns.org`), `nomcolab-vigia` (cada minuto revisa que contesten) |
+| Servicios supervisados por s6 (arrancan con la Pi y se levantan solos si se caen) | `nomcolab-servidor` (el jar, usuario `nomcolab` sin privilegios), `nomcolab-tunel` (Cloudflare Tunnel → `www.nom.qd.je` y `nomcolab.dpdns.org`), `nomcolab-vigia` (cada minuto revisa que contesten) |
 | El jar | `/opt/nomcolab/nom-colab.jar` |
 | Datos | `/var/lib/nomcolab/datos` |
 | Ajustes (puerto, cuota por cuenta…) | `/etc/nomcolab.conf` |
 | Bitácoras | `/var/log/<servicio>` (10 archivos de 1 MB) |
 | Respaldo | diario a las 02:00 en la Pi (se guardan 14) y copia diaria en la laptop (`~/nomcolab-servidor/respaldos-pi/`, ver la sección anterior) |
 
-La orden `nomcolab-pi` (con `doas`, sin contraseña solo para ella) hace lo de todos los días:
+La orden `nomcolab-pi` (con `doas` sin contraseña solo para ella, **con su ruta completa**: `doas nomcolab-pi`
+pide contraseña y se queda esperando; la orden se eleva sola) hace lo de todos los días:
 
 ```
-ssh pi5 doas nomcolab-pi estado      # servicios, túnel, jar, datos, respaldo y temperatura
-ssh pi5 doas nomcolab-pi reiniciar
-ssh pi5 doas nomcolab-pi respaldo    # un respaldo ahora
-ssh pi5 doas nomcolab-pi bitacora
+ssh pi5 /usr/local/sbin/nomcolab-pi estado      # servicios, túnel, jar, datos, respaldo y temperatura
+ssh pi5 /usr/local/sbin/nomcolab-pi reiniciar
+ssh pi5 /usr/local/sbin/nomcolab-pi respaldo    # un respaldo ahora
+ssh pi5 /usr/local/sbin/nomcolab-pi bitacora
 # Actualizar el servidor: copiar el jar nuevo y pedir el cambio (respalda antes y vuelve al anterior si no arranca)
-scp 2-PAGINA-Servidor/nom-colab.jar pi5:/home/user/nom-colab.jar.nuevo && ssh pi5 doas nomcolab-pi actualizar
+scp 2-PAGINA-Servidor/nom-colab.jar pi5:/home/user/nom-colab.jar.nuevo && ssh pi5 /usr/local/sbin/nomcolab-pi actualizar
 ```
+
+Desde la laptop también: `4-CODIGO/azure/nomcolab pi estado|actualizar|respaldo|bitacora|…`.
 
 El túnel `pi5` de `vefose.pp.ua` (otro sitio del dueño en la misma Pi) no se toca.
 

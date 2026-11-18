@@ -32,7 +32,7 @@ EXTERNO = os.environ.get("NOM_BASE", "").rstrip("/")
 P = 8092; B = EXTERNO or f"http://localhost:{P}"
 def arrancar():
     return None if EXTERNO else subprocess.Popen([JAVA, "-jar", JAR],
-        env=dict(os.environ, NOM_PUERTO=str(P), NOM_DATOS=D, NOM_DESCUBRIMIENTO="false", NOM_CUOTA_MB="200"), stdout=open(os.path.join(D, "servidor.log"), "a"), stderr=subprocess.STDOUT)
+        env=dict(os.environ, NOM_PUERTO=str(P), NOM_DATOS=D, NOM_DESCUBRIMIENTO="false", NOM_CUOTA_MB="200", NOM_ALIAS_HORA_RED="3"), stdout=open(os.path.join(D, "servidor.log"), "a"), stderr=subprocess.STDOUT)
 def esperar():
     for _ in range(90):
         try: urllib.request.urlopen(B + "/api/red/info", timeout=2); return
@@ -926,6 +926,57 @@ try:
     prueba("16.3 (DEF-42) El chat cuenta en el almacenamiento del propietario", True, bool(alm_chat) and (alm_chat[0].get("chat") or 0) >= len(b"contenido del anexo"))
     prueba("15.5 Un adjunto de más de 2 MB no se acepta", 413, r("POST", f"/api/espacios/{salon}/chat", {"texto": "", "adjunto": {"tipo": "archivo", "nombre": "g.bin", "mime": "application/octet-stream", "datos": "A" * (3 * 1024 * 1024)}}, tk["alumno1"])[0])
 
+    # 17. Revisión del 17 de noviembre de 2026
+    # 17.1 Un editor no escribe filas de la bitácora a nombre de otra cuenta (irían a su recibo y a sus aportes).
+    tot = lambda: ((r("GET", f"/api/documentos/{tdoc}/recibo?usuario={uid['alumno1']}", t=tk["maestra"])[1] or {}).get("totales") or {}).get("letrasPegadas")
+    antes17 = tot()
+    fila = {"usuarioId": uid["alumno1"], "usuario": "alumno1", "nube": "https://otra.nube", "t": int(time.time() * 1000), "inicio": int(time.time() * 1000) - 60_000, "pegadas": 5000, "escritas": 5000}
+    prueba("17.1 Un editor manda filas de otra persona…", 200, r("POST", f"/api/documentos/{tdoc}/actividad-externa", {"filas": [fila], "via": "prueba"}, tk["alumno2"])[0])
+    prueba("17.1 …pero no le cambian el recibo a esa persona", antes17, tot())
+    prueba("17.1 El propietario (el que sincroniza su teléfono) sí las anota a su nombre", 200, r("POST", f"/api/documentos/{tdoc}/actividad-externa", {"filas": [dict(fila, pegadas=7)], "via": "prueba"}, tk["maestra"])[0])
+    prueba("17.1 …y cuentan en el recibo de esa persona", (antes17 or 0) + 7, tot())
+    futuro = dict(fila, usuarioId=uid["alumno2"], usuario="alumno2", t=int(time.time() * 1000) + 10 * 86_400_000)
+    r("POST", f"/api/documentos/{tdoc}/actividad-externa", {"filas": [futuro], "via": "prueba"}, tk["alumno2"])
+    act17 = r("GET", f"/api/documentos/{tdoc}/actividad", t=tk["maestra"])[1] or []
+    prueba("17.1 Una fila no queda con hora en el futuro", True, all((a.get("t") or 0) <= time.time() * 1000 + 5000 for a in act17))
+    # 17.2 La pantalla del proyector: sin comentarios, notas del orador ni el original de Office; y el código deja de
+    # servir si a quien presenta le quitan el acceso.
+    r("POST", f"/api/documentos/{pres}/ops", lote("m1", {"bloque": "com17", "campos": {"tipo": "comentario", "texto": "Solo para el equipo", "pagina": "p1"}},
+                                                 {"bloque": "_doc", "campos": {"nota:p1": "Notas del orador secretas"}},
+                                                 {"bloque": "_origen", "campos": {"tipo": "origen", "fmt": "pptx", "n": 1, "p0": "UEsDBA"}}), tk["maestra"])
+    for n in ("proyecta",): r("POST", "/api/cuentas/registro", {"nombre": n, "contrasena": CL})
+    tpy = (r("POST", "/api/cuentas/sesion", {"nombre": "proyecta", "contrasena": CL})[1] or {}).get("token")
+    r("PUT", f"/api/espacios/{salon}/accesos", {"usuario": "proyecta", "permiso": "LECTURA"}, tk["maestra"])
+    cpy = (r("POST", f"/api/documentos/{pres}/proyeccion", t=tpy)[1] or {}).get("codigo", "X")
+    vista = json.dumps(r("GET", f"/api/proyeccion/{cpy}")[1] or {}, ensure_ascii=False)
+    prueba("17.2 El proyector abre con el código de quien solo puede ver", True, '"documento"' in vista)
+    prueba("17.2 …sin comentarios, notas del orador ni el original de Office", [False, False, False], ["Solo para el equipo" in vista, "secretas" in vista, "_origen" in vista])
+    prueba("17.2 Al quitarle el acceso a quien presenta…", 200, r("PUT", f"/api/espacios/{salon}/accesos", {"usuario": "proyecta", "permiso": "NINGUNO"}, tk["maestra"])[0])
+    prueba("17.2 …su código de proyección ya no sirve", 404, r("GET", f"/api/proyeccion/{cpy}")[0])
+    # 17.3 El enlace para ver tampoco lleva el original de Office (trae sus propios comentarios y notas).
+    ev = (r("POST", f"/api/documentos/{pres}/enlace-ver", t=tk["maestra"])[1] or {}).get("enlace", "X")
+    pub = json.dumps(r("GET", f"/api/ver/{ev}")[1] or {}, ensure_ascii=False)
+    prueba("17.3 El enlace para ver no trae el original, comentarios ni notas", [True, False, False, False], ['"estado"' in pub, "_origen" in pub, "Solo para el equipo" in pub, "secretas" in pub])
+    # 17.4 Alias nuevos con tope por red (este servidor de prueba: 3 por hora desde una red).
+    en17 = (r("POST", f"/api/espacios/{salon}/enlaces", {"permiso": "LECTURA", "horas": 1, "invitados": True}, tk["maestra"])[1] or {}).get("codigo", "X")
+    alias17 = [r("POST", f"/api/enlaces/{en17}/alias", {}, de="203.0.113.77")[0] for _ in range(4)]
+    if not EXTERNO:
+        prueba("17.4 Desde una red entran alias nuevos hasta el tope…", [200, 200, 200], alias17[:3])
+        prueba("17.4 …y el siguiente espera (429)", 429, alias17[3])
+        prueba("17.4 …por la ruta de antes (con apodo) tampoco", 429, r("POST", f"/api/enlaces/{en17}/invitado", {"apodo": "x"}, de="203.0.113.77")[0])
+        prueba("17.4 Desde otra red sí entra", 200, r("POST", f"/api/enlaces/{en17}/alias", {}, de="203.0.113.78")[0])
+    r("DELETE", f"/api/espacios/{salon}/enlaces/{en17}", t=tk["maestra"])
+    # 17.5 Un permiso inventado responde 400 sin nombres de clases de Java.
+    def crudo17(m, u, b, t):
+        q = urllib.request.Request(B + u, method=m, data=json.dumps(b).encode(), headers={"Content-Type": "application/json", "Authorization": "Bearer " + t})
+        try:
+            with urllib.request.urlopen(q, timeout=30) as x: return x.status, x.read().decode("utf-8", "replace")
+        except urllib.error.HTTPError as e17: return e17.code, e17.read().decode("utf-8", "replace")
+    c17 = crudo17("PUT", f"/api/espacios/{salon}/accesos", {"usuario": "alumno2", "permiso": "JEFE"}, tk["maestra"])
+    prueba("17.5 Un permiso inventado: 400 sin nombres de clases", [400, False], [c17[0], "mx.wack" in c17[1] or "enum" in c17[1].lower()])
+    c17 = crudo17("PUT", "/api/cuentas/preferencias", {"tema": "auto", "autoguardadoMin": 5, "versionesConservar": 1, "calidad": "alta"}, tk["alumno2"])
+    prueba("17.5 …los mensajes propios sí llegan («Se conservan entre 5 y 200 versiones»)", [400, True], [c17[0], "200 versiones" in c17[1]])
+
     # 3.6 Entrega con fecha límite
     edoc = r("POST", f"/api/espacios/{salon}/documentos", {"nombre": "Tarea 1", "modo": "TEXTO", "ops": []}, tk["alumno1"])[1]["id"]
     prueba("3.6 Un editor no fija la fecha de entrega", 403, r("PUT", f"/api/documentos/{edoc}/entrega", {"limite": int(time.time() * 1000) + 3600_000}, tk["alumno1"])[0])
@@ -940,6 +991,34 @@ try:
         if not EXTERNO or time.time() - t_boleto > 31:
             prueba("12.1 Un boleto sin usar vence a los 30 segundos", 401, canal(f"/api/espacios/{salon}/eventos?boleto={boleto_viejo}&cliente=prueba-b")[0])
     if not EXTERNO:
+        # 17.6 Memoria: un documento sin uso sale de la memoria (aquí a los 2 s) y vuelve del disco igual, con sus cambios.
+        D6 = tempfile.mkdtemp(prefix="nomcolab-pruebas-m-")
+        P6 = 8095; B6 = f"http://localhost:{P6}"
+        srv6 = subprocess.Popen([JAVA, "-Dnom.inactivoMs=2000", "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P6), NOM_DATOS=D6, NOM_DESCUBRIMIENTO="false"), stdout=open(os.path.join(D6, "servidor.log"), "a"), stderr=subprocess.STDOUT)
+        r6 = lambda *a, **k: rq(B6, *a, **k)[:2]
+        try:
+            for _ in range(90):
+                try: urllib.request.urlopen(B6 + "/api/red/info", timeout=2); break
+                except Exception: time.sleep(1)
+            r6("POST", "/api/cuentas/registro", {"nombre": "memoria6", "contrasena": CL})
+            t6 = (r6("POST", "/api/cuentas/sesion", {"nombre": "memoria6", "contrasena": CL})[1] or {}).get("token")
+            e6 = (r6("POST", "/api/espacios", {"nombre": "Memoria"}, t6)[1] or {}).get("id")
+            d6 = (r6("POST", f"/api/espacios/{e6}/documentos", {"nombre": "Larga", "modo": "TEXTO", "ops": []}, t6)[1] or {}).get("id")
+            ins = lambda i, iz, x: {"cliente": "m6", "dispositivo": "prueba", "ops": [{"id": f"m6:{i}", "bloque": "cuerpo", "campos": {}, "t": i, "n": "m6", "s": {"k": "i", "iz": iz, "x": x}}]}
+            r6("POST", f"/api/documentos/{d6}/ops", ins(10, None, "Hola"), t6)
+            r6("POST", f"/api/documentos/{d6}/versiones", {"etiqueta": "antes de dormir"}, t6)
+            time.sleep(6)   # más que el umbral: el documento sale de la memoria
+            texto6 = lambda: "".join(x for x in re.findall(r'"x":\s*"([^"]*)"', json.dumps((r6("GET", f"/api/documentos/{d6}", t=t6)[1] or {}).get("estado", {}).get("seq", {}))))
+            prueba("17.6 Un documento que salió de la memoria vuelve igual del disco", True, "Hola" in texto6())
+            r6("POST", f"/api/documentos/{d6}/ops", ins(14, "13@m6", " mundo"), t6)
+            time.sleep(6)
+            prueba("17.6 …y sigue recibiendo cambios (otra vez fuera y dentro de la memoria)", True, "Hola" in texto6() and "mundo" in texto6())
+            rep6 = r6("POST", f"/api/documentos/{d6}/ops", ins(14, "13@m6", " mundo"), t6)
+            prueba("17.6 …un cambio repetido (la cola que reintenta) no duplica el texto", 1, texto6().count("mundo"))
+            prueba("17.6 …y sus versiones siguen ahí", True, len(r6("GET", f"/api/documentos/{d6}/versiones", t=t6)[1] or []) >= 2)
+        finally:
+            srv6.kill(); srv6.wait(30)
+            shutil.rmtree(D6, ignore_errors=True); shutil.rmtree(D6 + "-llaves", ignore_errors=True)
         # 16.1 y 16.3 en un servidor aparte con 1 MB por cuenta: 50 personas a la vez y el chat dentro de la cuota
         D5 = tempfile.mkdtemp(prefix="nomcolab-pruebas-e-")
         P5 = 8096; B5 = f"http://localhost:{P5}"

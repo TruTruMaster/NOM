@@ -1,5 +1,8 @@
 # Relevo: revisión completa de pruebas (0.12.2, 13 de noviembre de 2026)
 
+> **Histórico** (se conserva como registro de ese día; lo que dice del estado puede ya no ser cierto). Lo vigente
+> —qué está confirmado, qué falta y en qué orden— está en `RELEVO-ESTADO-Y-PENDIENTES.md`.
+
 Para la siguiente sesión de trabajo: qué se probó, cómo volver a correrlo, qué se corrigió y **qué
 queda por revisar a ojo** (lo que las pruebas automáticas no alcanzan a juzgar). La lista de
 defectos corregidos está en `PLAN-CONSTRUCCION.md`, fase 12, y en `LOG.md`, entradas 54 y 55.

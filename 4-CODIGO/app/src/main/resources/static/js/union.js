@@ -1,6 +1,6 @@
 /* NOM · Unirse sin Internet (2.1, 2.2 y 2.3).
    El propietario crea un enlace para su espacio: caduca solo (1 hora a 30 días), se puede revocar y
-   puede dejar entrar con apodo, sin registrarse (modo salón). Se comparte como código QR con la
+   puede dejar entrar sin cuenta, con un alias al azar (modo salón). Se comparte como código QR con la
    dirección del equipo que comparte: http://<ip-local>:<puerto>/unirse?c=<código>.
    - Con la cámara del sistema basta: abre la dirección en el navegador y se entra.
    - En la app hay un botón "Escanear QR" (cámara dentro de la app); el espacio se abre en la app.
@@ -238,7 +238,7 @@
         <div class="qr-caja">${url ? NOM.qr.svg(url, { titulo: "Código QR para unirse a " + (esp.nombre || "") }) : `<div class="qr-sin">${ico("wifi-off")}</div>`}</div>
         <div class="col" style="gap:8px;min-width:0">
           <span class="etiqueta">Código</span><b class="qr-codigo">${esc(enlace.codigo.slice(0, 4))}-${esc(enlace.codigo.slice(4))}</b>
-          <span class="suave chico" style="font-weight:500">${esc(PERMISO[enlace.permiso] || "")}${enlace.invitados ? " · con apodo, sin cuenta" : ""} · hasta ${esc(new Date(enlace.caduca).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}</span>
+          <span class="suave chico" style="font-weight:500">${esc(PERMISO[enlace.permiso] || "")}${enlace.invitados ? " · sin cuenta, con alias" : ""} · hasta ${esc(new Date(enlace.caduca).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}</span>
           ${bs.length > 1 ? `<select class="mini-select" data-base aria-label="Dirección">${bs.map((b) => `<option ${b === base ? "selected" : ""}>${esc(b.replace(/^https?:\/\//, ""))}</option>`).join("")}</select>` : url ? `<span class="chico qr-url">${esc(url)}</span>` : ""}
           ${url ? "" : `<div class="alerta aviso chico">${ico("wifi-off")}<span>${api().lan === false
             ? "Para que el QR funcione, abre NOM con la dirección que usan los demás (la de Internet). Mientras, el código sí sirve escrito a mano."
@@ -288,7 +288,7 @@
         <button type="button" data-p="LECTURA" aria-pressed="false">${ico("eye", "ico-s")} Solo ver</button></div>
       <div class="campo"><label for="qh">El código sirve durante</label><div class="entrada"><select id="qh" data-horas>
         <option value="1">1 hora (una clase)</option><option value="24" selected>1 día</option><option value="168">1 semana</option><option value="720">30 días</option></select></div></div>
-      <label class="lista-item">${ico("users")}<span class="crece"><b>Dejar entrar sin cuenta</b><small>Cada quien escribe un apodo y entra solo a este espacio, desde ese celular o esa computadora. Ideal para una clase.</small></span>
+      <label class="lista-item">${ico("users")}<span class="crece"><b>Dejar entrar sin cuenta</b><small>Cada quien entra con un alias al azar (como «Colibrí 37»), sin escribir nada, y solo a este espacio, desde ese celular o esa computadora. Ideal para una clase.</small></span>
         <span class="interruptor"><input type="checkbox" data-invitados><span></span></span></label>
       <button class="btn primario" data-crear>${ico("qr-code")} Crear el código</button>
       <div data-qr></div>
@@ -303,7 +303,7 @@
       const ls = (d.enlaces || []).slice(0, 12);
       lista.innerHTML = ls.length ? `<span class="etiqueta">Códigos que ya creaste</span><div class="lista">${ls.map((x) => `
         <div class="lista-item"><span class="crece"><b style="font-family:var(--mono)">${esc(x.codigo.slice(0, 4))}-${esc(x.codigo.slice(4))}</b>
-          <small>${esc(PERMISO[x.permiso] || "")}${x.invitados ? " · con apodo" : ""} · ${x.estado === "vigente" ? "hasta " + esc(new Date(x.caduca).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })) : x.estado === "revocado" ? "anulado" : "venció"} · ${x.usos} ${x.usos === 1 ? "uso" : "usos"}</small></span>
+          <small>${esc(PERMISO[x.permiso] || "")}${x.invitados ? " · sin cuenta" : ""} · ${x.estado === "vigente" ? "hasta " + esc(new Date(x.caduca).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })) : x.estado === "revocado" ? "anulado" : "venció"} · ${x.usos} ${x.usos === 1 ? "uso" : "usos"}</small></span>
           ${x.estado === "vigente" ? `<button class="btn chico" data-ver="${esc(x.codigo)}">${ico("qr-code", "ico-s")} Ver</button><button class="btn chico peligro" data-revocar="${esc(x.codigo)}">Anular</button>` : `<span class="chip">${x.estado === "revocado" ? "Anulado" : "Venció"}</span>`}
         </div>`).join("")}</div>` : "";
       $$("[data-ver]", lista).forEach((b) => (b.onclick = () => tarjetaQr($("[data-qr]", cuerpo), ls.find((x) => x.codigo === b.dataset.ver), d.conexion, esp)));

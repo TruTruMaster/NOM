@@ -65,13 +65,16 @@ JS_RENGLONES = r"""
         corte = p && p.dataset.clip != null ? +p.dataset.clip : null; pr = p ? p.getBoundingClientRect() : null; zz = p && pr ? pr.height / (p.offsetHeight || 1) || 1 : 1;
       }
       const s = n.data;
+      // lo que se VE: «Mayúsculas» de Word es text-transform (el texto del documento no cambia), como lo lee Word
+      const tt = getComputedStyle(n.parentElement).textTransform;
+      const ver = (c) => (tt === 'uppercase' ? c.toUpperCase() : tt === 'lowercase' ? c.toLowerCase() : c);
       for (let i = 0; i < s.length; i++) {
         let j = i + 1; const c0 = s.charCodeAt(i); if (c0 >= 0xD800 && c0 < 0xDC00 && j < s.length) j++;
         r.setStart(n, i); r.setEnd(n, j);
         const q = r.getClientRects(); if (!q.length) { i = j - 1; continue; }
         const b = q[q.length - 1];
         if (corte != null && pr && (b.top + b.bottom) / 2 - pr.top > corte * zz) { i = j - 1; continue; }
-        letras.push({ c: s.slice(i, j), x: b.left, y: b.top, h: b.height, w: b.width, p: numPar });
+        letras.push({ c: ver(s.slice(i, j)), x: b.left, y: b.top, h: b.height, w: b.width, p: numPar });
         i = j - 1;
       }
     }

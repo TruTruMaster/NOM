@@ -459,6 +459,13 @@ ${formas.join("\n")}
     for (const id in doc.estado.bloques) if (id === "_doc" || (doc.vivo(id) && id !== "_origen")) bloques[id] = doc.bloque(id);
     return JSON.stringify({ formato: "nom-colab", version: 2, exportado: new Date().toISOString(), bloques, seq: doc.estado.seq || {} });
   }
+  /** Si el archivo es demasiado grande para guardarlo dentro del documento, se avisa: al descargarlo se arma de nuevo. */
+  function avisoSinOrigen(aviso, archivo) {
+    const max = NOM.origen && NOM.origen.MAX_ORIGEN;
+    if (!archivo || !max || archivo.length <= max) return aviso;
+    const t = `Este archivo pesa más de ${Math.round(max / 1048576)} MB, así que NOM no guarda el original dentro del documento: al descargarlo se arma de nuevo con lo que NOM sabe hacer (lo que no conoce, como sus videos o sonidos, no sale)`;
+    return aviso ? aviso.replace(/[.\s]*$/, ". ") + t + "." : t + ".";
+  }
   /** Guarda dentro del documento recién importado el archivo de Office del que vino (y sus huellas). */
   function conOrigen(fmt, nombre, modo, ops, archivo) {
     if (!archivo || !NOM.origen) return ops;
@@ -601,7 +608,7 @@ ${formas.join("\n")}
     return new Promise((ok, mal) => {
       const cuerpo = NOM.html(`<form class="col" autocomplete="off"><p class="suave">«${NOM.esc(nombreArchivo)}» está protegido con contraseña en Office. Escríbela para abrirlo; no se guarda en ningún lado.</p>
         <div class="campo"><label for="contr-office">Contraseña</label><div class="entrada"><input id="contr-office" type="password" data-c autocomplete="current-password" maxlength="255"></div></div>
-        <p class="chico" data-err role="alert" style="color:var(--peligro, #B42318)" hidden></p></form>`);
+        <p class="chico" data-err role="alert" style="color:var(--error)" hidden></p></form>`);
       const pie = NOM.html(`<div style="display:contents"><span class="crece"></span><button class="btn" type="button" data-no>Cancelar</button><button class="btn primario" type="button" data-si>Abrir</button></div>`);
       let hecho = false;
       const h = NOM.hoja({ titulo: "Archivo con contraseña", icono: "lock", cuerpo, pie, alCerrar: () => { if (!hecho) { hecho = true; mal(new Error("Se necesita la contraseña para abrir este archivo")); } } });
@@ -751,7 +758,7 @@ ${formas.join("\n")}
     // Formato base (el estilo Normal del archivo), encabezado, pie y número de página. Con reloj 2: va
     // después del formato que el servidor le pone a los documentos nuevos del espacio.
     if (r.doc && Object.keys(r.doc).length) ops.push({ id: "imp:doc", bloque: "_doc", campos: r.doc, t: 2, n: "importar" });
-    return { nombre, modo: "TEXTO", ops: conOrigen("docx", nombre, "TEXTO", ops, r.archivo), aviso: r.aviso };
+    return { nombre, modo: "TEXTO", ops: conOrigen("docx", nombre, "TEXTO", ops, r.archivo), aviso: avisoSinOrigen(r.aviso, r.archivo) };
   }
 
   /** Excel (.xlsx) → hoja de cálculo: una hoja por pestaña, con fórmulas, formato, combinadas y anchos. */
@@ -762,7 +769,7 @@ ${formas.join("\n")}
     const ops = comoOps(bloques, paginas);
     // (lo del libro: estructura protegida, contraseña para modificar, marcado como final)
     if (r.doc) ops.push(...NOM.DocCRDT.partir([{ id: "imp:doc", bloque: "_doc", campos: r.doc, t: 2, n: "importar" }]));
-    return { nombre, modo: "HOJA", ops: conOrigen("xlsx", nombre, "HOJA", ops, r.archivo), aviso: r.aviso };
+    return { nombre, modo: "HOJA", ops: conOrigen("xlsx", nombre, "HOJA", ops, r.archivo), aviso: avisoSinOrigen(r.aviso, r.archivo) };
   }
   /** PowerPoint (.pptx) → presentación (lo arma ooxml.leerPptx). */
   async function importarPptx(archivo, nombre) {
@@ -771,7 +778,7 @@ ${formas.join("\n")}
     const ops = comoOps(r.bloques, r.paginas);
     // Tamaño, fondos, transiciones y notas del orador van en los datos del documento.
     if (r.doc && Object.keys(r.doc).length) ops.push(...NOM.DocCRDT.partir([{ id: "imp:d", bloque: "_doc", campos: r.doc, t: 2, n: "importar" }]));
-    return { nombre, modo: "PRESENTACION", ops: conOrigen("pptx", nombre, "PRESENTACION", ops, r.archivo), aviso: r.aviso };
+    return { nombre, modo: "PRESENTACION", ops: conOrigen("pptx", nombre, "PRESENTACION", ops, r.archivo), aviso: avisoSinOrigen(r.aviso, r.archivo) };
   }
 
   /** Imagen local -> data URL comprimida (máx. 1600 px, JPEG 0.85) para no inflar el documento. */

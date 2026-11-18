@@ -390,8 +390,10 @@
       if (a.mayus) r += "<w:caps/>";
       if (a.vers) r += "<w:smallCaps/>";
       if (a.s) r += "<w:strike/>";
+      if (a.oc) r += "<w:vanish/>";
       if (hexW(a.color)) r += `<w:color w:val="${hexW(a.color)}"/>`;
       if (+a.esp) r += `<w:spacing w:val="${Math.round(+a.esp * 20)}"/>`;
+      if (+a.pos) r += `<w:position w:val="${Math.round(+a.pos * 2)}"/>`;
       if (a.tam) r += `<w:sz w:val="${Math.round(a.tam * 2)}"/><w:szCs w:val="${Math.round(a.tam * 2)}"/>`;
       if (a.u) r += '<w:u w:val="single"/>';
       if (hexW(a.fondo)) r += `<w:shd w:val="clear" w:color="auto" w:fill="${hexW(a.fondo)}"/>`;
@@ -598,7 +600,7 @@
         };
       })();
       const ORDEN_RPR = ["rStyle", "rFonts", "b", "bCs", "i", "iCs", "caps", "smallCaps", "strike", "dstrike", "outline", "shadow", "emboss", "imprint", "noProof", "snapToGrid", "vanish", "webHidden", "color", "spacing", "w", "kern", "position", "sz", "szCs", "highlight", "u", "effect", "bdr", "shd", "fitText", "vertAlign", "rtl", "cs", "em", "lang", "eastAsianLayout", "specVanish", "oMath"];
-      const GRUPOS_RPR = { fuente: ["rFonts"], b: ["b", "bCs"], i: ["i", "iCs"], mayus: ["caps"], vers: ["smallCaps"], s: ["strike", "dstrike"], color: ["color"], esp: ["spacing"], tam: ["sz", "szCs"], u: ["u"], fondo: ["highlight", "shd"], va: ["vertAlign"] };
+      const GRUPOS_RPR = { fuente: ["rFonts"], b: ["b", "bCs"], i: ["i", "iCs"], mayus: ["caps"], vers: ["smallCaps"], s: ["strike", "dstrike"], oc: ["vanish"], color: ["color"], esp: ["spacing"], pos: ["position"], tam: ["sz", "szCs"], u: ["u"], fondo: ["highlight", "shd"], va: ["vertAlign"] };
       const cacheRpr = new Map(), baseDoc = doc.valor("_doc", "formato") || {}, clavesA = new WeakMap();
       /** Dos letras tienen el mismo formato si sus atributos dicen lo mismo (aunque sean objetos distintos). */
       const claveA = (a) => { if (!a) return ""; let c = clavesA.get(a); if (c == null) { c = O.estable(a); clavesA.set(a, c); } return c; };
@@ -619,6 +621,8 @@
         if (el("strike") || el("dstrike")) d0.s = activo(el("strike") || el("dstrike"));
         if (el("caps")) d0.mayus = activo(el("caps"));
         if (el("smallCaps")) d0.vers = activo(el("smallCaps"));
+        if (el("vanish")) d0.oc = activo(el("vanish"));
+        if (el("position")) d0.pos = Math.round(+at(el("position"), "val") * 50) / 100 || null;
         const va = at(el("vertAlign"), "val");
         if (va) d0.va = va === "superscript" ? "sup" : va === "subscript" ? "sub" : null;
         const c = at(el("color"), "val");
@@ -631,7 +635,7 @@
         if (el("spacing")) d0.esp = Math.round((+at(el("spacing"), "val") / 20) * 100) / 100 || null;
         const rf = el("rFonts");
         if (rf) { const t = at(rf, "asciiTheme") || at(rf, "hAnsiTheme"); d0.fuente = (t && fuentesTema()[/^major/.test(t) ? "major" : "minor"]) || at(rf, "ascii") || at(rf, "hAnsi") || null; }
-        const igual = (k, v, w) => (k === "tam" || k === "esp" ? Math.abs(+v - +w) < 0.005 : k === "color" || k === "fondo" ? String(v).toUpperCase() === String(w).toUpperCase() : v === w);
+        const igual = (k, v, w) => (k === "tam" || k === "esp" || k === "pos" ? Math.abs(+v - +w) < 0.005 : k === "color" || k === "fondo" ? String(v).toUpperCase() === String(w).toUpperCase() : v === w);
         const nuevo = {
           fuente: (v) => {
             if (!rf) return [{ n: "rFonts", x: `<w:rFonts w:ascii="${x(v)}" w:hAnsi="${x(v)}" w:cs="${x(v)}"/>` }];
@@ -644,6 +648,8 @@
           mayus: () => [{ n: "caps", x: "<w:caps/>" }],
           vers: () => [{ n: "smallCaps", x: "<w:smallCaps/>" }],
           s: () => [{ n: "strike", x: "<w:strike/>" }],
+          oc: () => [{ n: "vanish", x: "<w:vanish/>" }],
+          pos: (v) => (+v ? [{ n: "position", x: `<w:position w:val="${Math.round(+v * 2)}"/>` }] : []),
           color: (v) => (hexW(v) ? [{ n: "color", x: `<w:color w:val="${hexW(v)}"/>` }] : []),
           esp: (v) => (+v ? [{ n: "spacing", x: `<w:spacing w:val="${Math.round(+v * 20)}"/>` }] : []),
           tam: (v) => [{ n: "sz", x: `<w:sz w:val="${Math.round(v * 2)}"/>` }, { n: "szCs", x: `<w:szCs w:val="${Math.round(v * 2)}"/>` }],
@@ -654,6 +660,9 @@
         let toco = false;
         for (const k in GRUPOS_RPR) {
           const v = a[k] == null || a[k] === false || a[k] === "" ? undefined : a[k], hay = GRUPOS_RPR[k].some((n) => el(n));
+          // oculto y elevado: los documentos importados antes de que NOM los leyera no los traen en el modelo; lo que
+          // diga el original se queda (NOM todavía no tiene cómo quitarlos)
+          if ((k === "oc" || k === "pos") && v === undefined) continue;
           if (!hay) { if (v !== undefined) { hijos.push(...nuevo[k](v)); toco = true; } continue; }
           if (v !== undefined && d0[k] != null && d0[k] !== false && igual(k, d0[k], v)) continue;
           // sin valor en el modelo: un «apagado» explícito no se anota, ni la fuente o el tamaño que son
@@ -1620,6 +1629,10 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       if (vs) a.vers = activo(vs);
       if (my) a.mayus = activo(my);
       if (es && val(es) != null) a.esp = Math.round((+val(es) / 20) * 100) / 100 || null;
+      // texto oculto (Word no lo muestra ni lo imprime) y elevado o bajado (w:position, en medios puntos)
+      const vn = hijo(rpr, "vanish"), ps = val(hijo(rpr, "position"));
+      if (vn) a.oc = activo(vn);
+      if (ps != null && ps !== "" && !isNaN(+ps)) a.pos = Math.round(+ps * 50) / 100 || null;
       Object.keys(a).forEach((k) => { if (a[k] == null || a[k] === false) delete a[k]; });
       return a;
     }
@@ -6384,7 +6397,9 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
     const paginaDeRuta = new Map(paginas.map((pg) => [docCampos["os:" + pg], pg]));
     bloques.forEach((b) => { if (b.accion && b.accion.ruta) { const pg = paginaDeRuta.get(b.accion.ruta); if (pg) b.accion = { tipo: "diapo", pagina: pg }; else delete b.accion; } });
     if (!paginas.length) throw new Error("La presentación no tiene diapositivas que se puedan leer");
-    return { archivo: u8, paginas, bloques, doc: docCampos, aviso: aproximado ? "Algunos objetos de PowerPoint (videos o imágenes de otro formato) no se ven aquí, pero se conservan: al descargar en PowerPoint salen completos" : null };
+    // (lo que no se ve se conserva porque va dentro el archivo original; uno muy grande no se guarda: formatos.js lo avisa)
+    const conserva = !(NOM.origen && NOM.origen.MAX_ORIGEN) || u8.length <= NOM.origen.MAX_ORIGEN;
+    return { archivo: u8, paginas, bloques, doc: docCampos, aviso: aproximado ? (conserva ? "Algunos objetos de PowerPoint (videos o imágenes de otro formato) no se ven aquí, pero se conservan: al descargar en PowerPoint salen completos" : "Algunos objetos de PowerPoint (videos o imágenes de otro formato) no se ven aquí") : null };
   }
 
   /**

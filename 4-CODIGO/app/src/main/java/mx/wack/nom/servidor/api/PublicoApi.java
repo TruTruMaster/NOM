@@ -40,8 +40,8 @@ public class PublicoApi {
     }
 
     @PostMapping("/api/enlaces/{codigo}/invitado")
-    public Map<String, Object> invitado(@PathVariable String codigo, @RequestBody Apodo a) {
-        return espacios.entrarComoInvitado(codigo, a.apodo());
+    public Map<String, Object> invitado(@PathVariable String codigo, @RequestBody Apodo a, jakarta.servlet.http.HttpServletRequest req) {
+        return espacios.entrarComoInvitado(codigo, a == null ? null : a.apodo(), mx.wack.nom.servidor.seguridad.Origen.de(req));
     }
 
     /** Fase 13: entrar con un alias al azar (o volver a ser el mismo, con la llave de este equipo). */

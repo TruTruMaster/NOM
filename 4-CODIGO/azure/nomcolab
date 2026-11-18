@@ -11,13 +11,15 @@
 #        nomcolab-sql-6a073f.database.windows.net (Azure SQL serverless, oferta gratis), en
 #        rg-nomcolab / westus. "down" detiene la página y cierra la base a internet.
 # Local: el jar como servicio de usuario (systemd: nomcolab.service, puerto 8080, datos en
-#        ~/nomcolab-servidor) publicado en https://nomcolab.dpdns.org (Cloudflare Tunnel,
-#        nomcolab-tunel.service) y en Tailscale Funnel. Siempre prendido: arranca solo con la
-#        computadora y un vigía lo reinicia si se cuelga. "down" lo apaga y le quita el
-#        arranque automático hasta el siguiente "up".
-# Pi:    la Raspberry Pi (pi5 en Tailscale) es la casa de https://nomcolab.dpdns.org: el jar y el
-#        túnel corren ahí como servicios supervisados (s6). "actualizar" le sube el jar nuevo (si
-#        no arranca, la Pi regresa sola al anterior); "respaldo" hace uno y trae una copia aquí.
+#        ~/nomcolab-servidor), con Tailscale Funnel. Desde el 16-nov la nube es la Raspberry: el
+#        túnel de Cloudflare (nomcolab-tunel.service) usa EL MISMO túnel que la Pi, así que "up" no
+#        lo enciende si la nube ya contesta desde otro equipo (Cloudflare repartiría a la gente
+#        entre dos servidores con datos distintos). "down" lo apaga y le quita el arranque
+#        automático hasta el siguiente "up".
+# Pi:    la Raspberry Pi (pi5 en Tailscale) es la casa de https://www.nom.qd.je (y del nombre de
+#        antes, https://nomcolab.dpdns.org): el jar y el túnel corren ahí como servicios
+#        supervisados (s6). "actualizar" le sube el jar nuevo (si no arranca, la Pi regresa sola al
+#        anterior); "respaldo" hace uno y trae una copia aquí.
 # Todo se queda en planes gratuitos. Más detalles: docs/SERVIDOR-PROPIO.md y docs/DESPLIEGUE-AZURE.md.
 URL="https://nomcolab-wack.azurewebsites.net"
 RG="rg-nomcolab"; APP="nomcolab-wack"; PLAN="plan-nomcolab"; SQL="nomcolab-sql-6a073f"; DB="nomcolab"
@@ -200,7 +202,13 @@ local_up() {
     done
     if [ "${r%% *}" = "200" ]; then log "local: responde en http://127.0.0.1:$LOCAL_PUERTO"; else err "local: no responde tras 60 s"; return 1; fi
   fi
-  if systemctl --user cat "$TUNEL" >/dev/null 2>&1; then
+  # El túnel de la laptop es el mismo de la Raspberry: encenderlo mientras la Pi sirve la nube partiría a la
+  # gente entre dos servidores. Solo se enciende si la nube no contesta o si contesta este mismo equipo.
+  local quien
+  quien=$(curl -s --max-time 10 "$DOMINIO/api/red/info" | sed -n 's/.*"equipo":"\([^"]*\)".*/\1/p')
+  if [ -n "$quien" ] && [ "$quien" != "$(hostname)" ]; then
+    log "túnel: NO se enciende: $DOMINIO ya lo sirve «$quien» (la Raspberry). Esta computadora queda solo en la red local y en Funnel."
+  elif systemctl --user cat "$TUNEL" >/dev/null 2>&1; then
     log "túnel: publicando en $DOMINIO"
     if systemctl --user enable --now "$TUNEL"; then
       for i in $(seq 1 30); do r=$(local_http "$DOMINIO/api/red/info" 10); [ "${r%% *}" = "200" ] && break; sleep 2; done

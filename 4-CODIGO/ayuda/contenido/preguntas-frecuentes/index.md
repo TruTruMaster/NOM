@@ -77,7 +77,8 @@ En tu equipo, en el camino por Internet y en el disco del servidor, sí; y en lo
 de extremo a extremo, ni el servidor puede leerlos. Ver [Cifrado](ayuda:cuentas/cifrado).
 
 ### 16. ¿La cuenta de la página es la misma que la de la app? ¿Y la de Azure? {#p16}
-La de la página y la app «En Internet», sí. La versión en Azure es aparte (otra base) por ahora.
+La de la página y la app «En Internet», sí. La versión en Azure es aparte (otra base): se hizo para una
+demostración y casi siempre está apagada.
 
 ### 17. ¿Qué es «Conexión sin cifrar»? {#p17}
 Un aviso de la red del salón (http). Ver [Conexión sin cifrar](ayuda:cuentas/conexion-sin-cifrar).
@@ -105,7 +106,8 @@ Ver [Entrega con fecha límite](ayuda:espacios/entrega-fecha-limite).
 ## Office y archivos
 
 ### 24. ¿Mis archivos de Office quedan iguales al descargarlos? {#p24}
-Lo que no tocaste sale idéntico; lo editado se reescribe. Ver [Abrir y descargar](ayuda:office/abrir-y-descargar).
+Lo que no tocaste sale idéntico; lo que editaste se cambia sobre el archivo original (Office lo abre sin
+«reparar»). Ver [Abrir y descargar](ayuda:office/abrir-y-descargar).
 
 ### 25. ¿Por qué algo se ve distinto que en Word? {#p25}
 Ver [Qué se ve igual y qué todavía no](ayuda:office/que-se-ve-igual).

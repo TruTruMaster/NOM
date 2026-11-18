@@ -624,8 +624,14 @@ def prueba_lienzo(P, c, e):
     P.ev("() => { const t = [...document.querySelectorAll('textarea')].find(x => x.offsetParent && /^Lo que quieres decir/i.test(x.placeholder)); t.focus(); }")
     P.p.keyboard.type("Saludar y explicar la gráfica"); P.t(900)
     check("las notas del orador se guardan en la diapositiva", P.doc("return doc.valor('_doc', 'nota:' + ed.pagina) || '';") == "Saludar y explicar la gráfica", P.doc("return doc.valor('_doc', 'nota:' + ed.pagina) || '';"))
-    P.barra("Transición"); P.menu("Desvanecer"); P.t(300)
-    check("transición «Desvanecer»", P.doc("return doc.valor('_doc', 'trans:' + ed.pagina);") == "desvanecer", P.doc("return doc.valor('_doc', 'trans:' + ed.pagina);"))
+    # Desde el 17-nov «Transición» abre el panel de transiciones de PowerPoint (antes un menú con 4).
+    P.barra("Transición"); P.t(500)
+    check("«Transición» abre el panel de transiciones", (P.hoja_abierta() or "").startswith("Transición de la diapositiva"), P.hoja_abierta())
+    P.boton("Desvanecer", ".velo .hoja [data-cats]"); P.t(300)
+    P.boton("Guardar", ".velo .hoja"); P.t(400)
+    tr = P.doc("const t = doc.valor('_doc', 'transOffice:' + ed.pagina); return t ? t.t : null;")
+    check("transición «Desvanecer» (como la escribe PowerPoint)", tr == "fade", [tr, P.doc("return JSON.stringify(doc.valor('_doc', 'transOffice:' + ed.pagina));")])
+    check("…y la miniatura de la diapositiva lo marca", P.ev("() => !!document.querySelector('.mini.activa .mini-trans, [aria-current] .mini-trans, .mini-trans')"), "")
     # Modo presentador: muestra las notas; la figura de la mesa de trabajo y la oculta no se presentan
     P.barra("Presentar"); P.t(300)
     P.menu("Modo presentador"); P.t(1200)

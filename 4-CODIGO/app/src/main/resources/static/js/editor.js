@@ -109,7 +109,7 @@
     function pedirClaveProteccion(titulo, texto, p) {
       return new Promise((ok) => {
         if (!p || !(p.hash || p.viejo)) return ok(true);
-        const cuerpo = html(`<form class="col" autocomplete="off"><p class="suave">${esc(texto)}</p><div class="campo"><label for="prot-c">Contraseña</label><div class="entrada"><input id="prot-c" type="password" data-c maxlength="255" autocomplete="off"></div></div><p class="chico" data-err role="alert" style="color:var(--peligro, #B42318)" hidden></p></form>`);
+        const cuerpo = html(`<form class="col" autocomplete="off"><p class="suave">${esc(texto)}</p><div class="campo"><label for="prot-c">Contraseña</label><div class="entrada"><input id="prot-c" type="password" data-c maxlength="255" autocomplete="off"></div></div><p class="chico" data-err role="alert" style="color:var(--error)" hidden></p></form>`);
         const pie = html(`<div style="display:contents"><span class="crece"></span><button class="btn" type="button" data-no>Cancelar</button><button class="btn primario" type="button" data-si>Aceptar</button></div>`);
         let listo = false;
         const h = hoja({ titulo, icono: "lock", cuerpo, pie, alCerrar: () => { if (!listo) { listo = true; ok(false); } } });

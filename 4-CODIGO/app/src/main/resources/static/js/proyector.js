@@ -60,14 +60,24 @@
       s.innerHTML = (m.trazos || []).map((t) => `<polyline points="${t.map(Number).join(" ")}" fill="none" stroke="${c}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>`).join("")
         + (m.puntero ? `<circle cx="${+m.puntero.x}" cy="${+m.puntero.y}" r="10" fill="#F2385A" fill-opacity=".85"/><circle cx="${+m.puntero.x}" cy="${+m.puntero.y}" r="22" fill="#F2385A" fill-opacity=".25"/>` : "");
     }
+    // La transición de PowerPoint de la diapositiva (la que se elige en el panel, «transOffice:», o la de antes, «trans:»),
+    // como la ve quien presenta.
+    const transicionDe = (p) => (NOM.transOffice ? doc.valor("_doc", "transOffice:" + p) || NOM.transOffice.deLegado(doc.valor("_doc", "trans:" + p)) : null);
+    let trActual = null;
     function pintar() {
       const pags = doc.paginas();
       if (!pags.includes(pagina)) pagina = pags[0];
       const nueva = pagina !== ultimaPagina;
+      const tr = nueva && ultimaPagina ? transicionDe(pagina) : null;
+      const viejo = tr && d.firstChild ? { html: d.innerHTML, fondo: d.style.background } : null;
+      if (trActual) { trActual.saltar(); trActual = null; }
       d.innerHTML = V.htmlDiapositiva(doc, pagina, paso);
       escala();
       pintarMarcas();
-      if (nueva) {
+      if (viejo) {
+        const T = V.tam ? V.tam(doc) : { w: V.ANCHO, h: V.ALTO };
+        try { trActual = NOM.transOffice.jugar(d, viejo, tr, T); trActual.promesa.then(() => { trActual = null; }); } catch (e) { trActual = null; }
+      } else if (nueva && !NOM.transOffice) {
         const t = doc.valor("_doc", "trans:" + pagina);
         d.classList.remove("trans-desvanecer", "trans-deslizar", "trans-empujar", "trans-zoom");
         if (t && ultimaPagina) { void d.offsetWidth; d.classList.add("trans-" + t); }
