@@ -101,7 +101,7 @@ def pruebas(modo, out):
                              str(R / "xlsx/ms-plantilla-tablas-dinamicas.xlsx"), str(R / "pptx/ms-plantilla-presentacion-basica.pptx"),
                              str(R / "pptx/lo-group-rot.pptx"), str(CACHE / "corpus/docx/ms-complex2010.docx")], True, 300, None),
             ("office_raros", [PY, o("raros.py")], True, 120, None),
-            ("funciones_lo", [PY, o("funciones_lo.py")], True, 120, None),
+            ("funciones_excel", [PY, o("funciones_excel.py")], True, 120, None),
             ("almacen_binarios", [PY, o("almacen_binarios.py")], True, 200, None),
         ]
     return L

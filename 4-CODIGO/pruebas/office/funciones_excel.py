@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Compara las funciones de la hoja de NOM con LibreOffice, fórmula por fórmula.
+"""Compara las funciones de la hoja de NOM con Excel 2024 de verdad, fórmula por fórmula.
 
-Arma un .xlsx con datos y una fórmula por renglón (con los nombres en inglés, como los guarda
-Excel), lo abre LibreOffice sin pantalla para que calcule y lo pasa a CSV; después evalúa las
-mismas fórmulas con el motor de NOM (en la página real) y compara los resultados.
+Excel (en la computadora con Windows, por automatización) escribe los datos y cada fórmula como si se tecleara
+(Formula2: con matrices dinámicas), recalcula y devuelve el valor, el error exacto y el texto de la celda; después se
+evalúan las mismas fórmulas con el motor de NOM (en la página real) y se comparan: el mismo número (hasta 1e-9
+relativo), el mismo lógico, el mismo texto o el mismo error.
 
-  ~/.cache/nom-pruebas/venv/bin/python pruebas/office/funciones_lo.py [--detalle]
+  ~/.cache/nom-pruebas/venv/bin/python pruebas/office/funciones_excel.py [--detalle]
 
-Código de salida 1 si alguna función da otro resultado. Una función que LibreOffice no conoce se
-anota como «sin comparar» (no cuenta como falla).
+Código de salida 1 si alguna función da otro resultado.
 """
-import csv, os, subprocess, signal, sys, tempfile
+import os, subprocess, sys, tempfile
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import fidelidad as F
@@ -55,83 +55,67 @@ CASOS = [
     "ROW(A7)", "COLUMN(C5)", "ROWS(A1:B8)", "COLUMNS(A1:C8)", "ROW(B3:C9)", "ADDRESS(3,2)", "ADDRESS(3,2,4)", "ADDRESS(10,28,2)", "INDIRECT(\"A\"&2)", "SUM(INDIRECT(\"A1:A4\"))",
     "SUM(OFFSET(A1,1,0,3,1))", "OFFSET(A1,2,1)", "SUM(OFFSET(A1:A2,2,1))", "ROW()", "COLUMN()",
 ]
-# (TYPE(TRUE) no se compara: LibreOffice dice 1 —para él un lógico es un número— y Excel dice 4, que es lo que da NOM.)
-# Lo que LibreOffice escribe con la configuración regional en inglés y lo que escribe NOM
-LOGICOS = {"TRUE": True, "FALSE": False, "VERDADERO": True, "FALSO": False}
-PREFIJO = {"IFNA": "_xlfn.", "SWITCH": "_xlfn.", "XOR": "_xlfn.", "TEXTBEFORE": "_xlfn.", "TEXTAFTER": "_xlfn.", "UNICHAR": "_xlfn.", "UNICODE": "_xlfn.", "ISOWEEKNUM": "_xlfn.",
-           "CEILING.MATH": "_xlfn.", "FLOOR.MATH": "_xlfn.", "COVARIANCE.P": "_xlfn.", "COVARIANCE.S": "_xlfn.", "RANK.AVG": "_xlfn."}
+WIN = os.environ.get("NOM_WINDOWS", "user@100.65.29.5")
+AQUI = Path(__file__).resolve().parent
 
 
-def para_excel(f):
-    import re
-    return re.sub(r"\b([A-Z][A-Z0-9.]*)\(", lambda m: PREFIJO.get(m.group(1), "") + m.group(1) + "(", f)
-
-
-def con_libreoffice(dir_tmp):
-    import openpyxl
-    wb = openpyxl.Workbook(); h = wb.active
-    for k, v in DATOS.items(): h[k] = v
-    for i, f in enumerate(CASOS):
-        h[f"G{i + 1}"] = "=" + para_excel(f)
-        # con formato de número fijo: si no, LibreOffice escribe "-$1,887.12" o "0.42%" y se pierden decimales
-        h[f"G{i + 1}"].number_format = "0.000000000000"
-    x = Path(dir_tmp) / "funciones.xlsx"; wb.save(x)
-    # 44 = coma, 34 = comillas, 76 = UTF-8; el 1 del final: los números tal como están guardados (sin formato)
-    pr = subprocess.Popen(["soffice", f"-env:UserInstallation=file://{F.CACHE / 'lo-perfil'}", "--headless", "--convert-to", 'csv:Text - txt - csv (StarCalc):44,34,76,1,,1033,false,true',
-                           "--outdir", str(dir_tmp), str(x)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-    try: pr.wait(timeout=180)
-    except subprocess.TimeoutExpired:
-        os.killpg(pr.pid, signal.SIGKILL); pr.wait(); sys.exit("LibreOffice no terminó")
-    filas = list(csv.reader(open(Path(dir_tmp) / "funciones.csv", encoding="utf-8")))
-    return [(filas[i][6] if i < len(filas) and len(filas[i]) > 6 else "") for i in range(len(CASOS))]
+def con_excel(dir_tmp):
+    """Excel 2024 en la computadora con Windows calcula cada fórmula (por SSH, en la sesión de escritorio)."""
+    import json
+    ent = Path(dir_tmp) / "funciones-entrada.json"
+    ent.write_text(json.dumps({"datos": DATOS, "casos": CASOS}, ensure_ascii=False), encoding="utf-8")
+    ssh = lambda c, **k: subprocess.run(["ssh", "-o", "BatchMode=yes", WIN, c], capture_output=True, text=True, errors="replace", **k)
+    ssh("mkdir nomoffice\\funciones 2>nul & echo.")
+    subprocess.run(["scp", "-q", str(ent), WIN + ":nomoffice/funciones/entrada.json"], check=True, timeout=120)
+    subprocess.run(["scp", "-q", str(AQUI / "windows/funciones_excel.py"), str(AQUI / "windows/comun.py"), WIN + ":nomoffice/"], check=True, timeout=120)
+    r = ssh("powershell -NoProfile -ExecutionPolicy Bypass -File nomoffice\\correr.ps1 funciones funciones_excel.py funciones\\entrada.json funciones\\salida.json", timeout=1800)
+    if "[fin 0]" not in r.stdout: sys.exit("Excel no terminó: " + (r.stdout + r.stderr)[-800:])
+    subprocess.run(["scp", "-q", WIN + ":nomoffice/funciones/salida.json", str(Path(dir_tmp) / "salida.json")], check=True, timeout=120)
+    return json.loads((Path(dir_tmp) / "salida.json").read_text(encoding="utf-8"))
 
 
 JS = r"""
 ([datos, casos]) => {
   const F = NOM.formulas, celdas = Object.assign({}, datos);
-  casos.forEach((f, i) => { celdas["G" + (i + 1)] = "=" + f; });
+  // (en el mismo lugar que en Excel: columna J, de 20 en 20 renglones; así ROW() y COLUMN() dan lo mismo)
+  casos.forEach((f, i) => { celdas[F.ref(9, i * 20)] = "=" + f; });
   const crudo = (c, f) => { const v = celdas[F.ref(c, f)]; return v == null ? "" : v === true ? "=VERDADERO" : v === false ? "=FALSO" : String(v); };
-  const ev = F.evaluador(crudo, { filas: casos.length + 5, cols: 8 });
-  return casos.map((_, i) => { const v = ev.valor(6, i); return v instanceof F.ErrorF ? { e: v.codigo } : v instanceof F.FechaF ? { n: v.serie } : typeof v === "number" ? { n: v } : typeof v === "boolean" ? { b: v } : { t: String(v) }; });
+  const ev = F.evaluador(crudo, { filas: casos.length * 20 + 5, cols: 14 });
+  return casos.map((_, i) => { const v = ev.valor(9, i * 20); return v instanceof F.ErrorF ? { e: v.codigo } : v instanceof F.FechaF ? { n: v.serie } : typeof v === "number" ? { n: v } : typeof v === "boolean" ? { b: v } : { t: String(v) }; });
 }
 """
 
 
-def igual(lo, nuestro):
-    """LibreOffice (texto del CSV) contra el valor de NOM."""
-    if "e" in nuestro: return lo.startswith(("#", "Err:")) and not lo.startswith(("#NAME", "Err:508", "Err:509"))
-    if "b" in nuestro:
-        if lo.upper() in LOGICOS: return LOGICOS[lo.upper()] == nuestro["b"]
-        try: return float(lo) in (0.0, 1.0) and bool(float(lo)) == nuestro["b"]   # con formato de número, un lógico sale 1 o 0
-        except ValueError: return False
-    if "n" in nuestro:
-        if lo.upper() in LOGICOS: return float(LOGICOS[lo.upper()]) == nuestro["n"]
-        try: x = float(lo)
-        except ValueError: return False
-        return abs(x - nuestro["n"]) <= 1e-7 * max(1.0, abs(x))
-    return lo == nuestro["t"]
+def igual(xl, nuestro):
+    """Excel (valor, error o texto de la celda) contra el valor de NOM."""
+    if "e" in xl: return "e" in nuestro and str(nuestro["e"]).upper() == xl["e"].upper()
+    if "e" in nuestro: return False
+    if "b" in xl: return "b" in nuestro and nuestro["b"] == xl["b"]
+    if "n" in xl:
+        if "n" not in nuestro: return False
+        x = xl["n"]
+        return abs(x - nuestro["n"]) <= 1e-9 * max(1.0, abs(x))
+    return "t" in nuestro and nuestro["t"] == xl.get("t", "")
 
 
 def main():
     detalle = "--detalle" in sys.argv
     from playwright.sync_api import sync_playwright
     with tempfile.TemporaryDirectory() as d:
-        de_lo = con_libreoffice(d)
+        de_xl = con_excel(d)
     with sync_playwright() as pw:
         nav = pw.chromium.launch(); pag = nav.new_page()
         pag.goto(F.BASE + "/"); pag.wait_for_function("() => window.NOM && NOM.formulas && NOM.formulas.evaluador", timeout=30000)
         nuestros = pag.evaluate(JS, [DATOS, CASOS])
         total = pag.evaluate("() => NOM.formulas.NOMBRES.length")
         nav.close()
-    bien = mal = sin = 0
-    for f, lo, n in zip(CASOS, de_lo, nuestros):
-        if lo.startswith(("#NAME", "Err:508", "Err:509")) or (lo == "" and "t" not in n):
-            sin += 1; print(f"  --   {f}: LibreOffice no la calcula ({lo or 'vacío'}); NOM = {n}"); continue
-        if igual(lo, n):
+    bien = mal = 0
+    for f, xl, n in zip(CASOS, de_xl, nuestros):
+        if igual(xl, n):
             bien += 1
-            if detalle: print(f"  ok   {f} = {lo}")
-        else: mal += 1; print(f"  MAL  {f}: LibreOffice = {lo!r}, NOM = {n}")
-    print(f"\nFunciones contra LibreOffice: {bien} bien, {mal} mal, {sin} sin comparar, de {len(CASOS)} fórmulas ({total} funciones en la hoja)")
+            if detalle: print(f"  ok   {f} = {xl.get('texto')}")
+        else: mal += 1; print(f"  MAL  {f}: Excel = {xl}, NOM = {n}")
+    print(f"\nFunciones contra Excel 2024: {bien} bien, {mal} mal, de {len(CASOS)} fórmulas ({total} funciones en la hoja)")
     sys.exit(1 if mal else 0)
 
 

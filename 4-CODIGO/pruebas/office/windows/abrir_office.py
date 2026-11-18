@@ -70,14 +70,27 @@ def pid_de(app_hwnd):
     except Exception: return None
 
 
+OCUPADO = ("-2147418111", "-2147417846", "rejected by callee", "Retry later")
+
+
+def reintentar(f, veces=8):
+    """Office a veces contesta «ocupado» (RPC_E_CALL_REJECTED) justo después de cerrar el archivo anterior: no es del
+    archivo, se espera un momento y se vuelve a pedir."""
+    for k in range(veces):
+        try: return f()
+        except Exception as e:
+            if k == veces - 1 or not any(x in str(e) for x in OCUPADO): raise
+            time.sleep(0.5 + k * 0.5)
+
+
 def abrir_word(w, ruta):
     r = {"archivo": os.path.basename(ruta), "app": "word"}
     v = Vigia(WORD_PID[0])
     t0 = time.time()
     try:
-        d = w.Documents.Open(ruta, False, True, False, "", "", False, "", "", 0, 0, True, False, 0, True)
+        d = reintentar(lambda: w.Documents.Open(ruta, False, True, False, "", "", False, "", "", 0, 0, True, False, 0, True))
         r["abrio"] = True
-        try: r["paginas"] = d.ComputeStatistics(2); r["parrafos"] = d.Paragraphs.Count; r["secciones"] = d.Sections.Count; r["formas"] = d.Shapes.Count; r["tablas"] = d.Tables.Count
+        try: r["paginas"] = reintentar(lambda: d.ComputeStatistics(2)); r["parrafos"] = d.Paragraphs.Count; r["secciones"] = d.Sections.Count; r["formas"] = d.Shapes.Count; r["tablas"] = d.Tables.Count
         except Exception as e: r["error_lectura"] = str(e)[:200]
         d.Close(0)
     except Exception as e:
@@ -94,7 +107,7 @@ def abrir_excel(x, ruta):
     temp = os.environ.get("TEMP", "")
     antes = set(glob.glob(os.path.join(temp, "error*.xml")))
     try:
-        wb = x.Workbooks.Open(ruta, 0, True)
+        wb = reintentar(lambda: x.Workbooks.Open(ruta, 0, True))
         r["abrio"] = True
         try:
             r["titulo"] = x.ActiveWindow.Caption
@@ -136,7 +149,7 @@ def abrir_powerpoint(p, ruta):
     v = Vigia(PPT_PID[0])
     t0 = time.time()
     try:
-        pr = p.Presentations.Open(ruta, True, False, True)
+        pr = reintentar(lambda: p.Presentations.Open(ruta, True, False, True))
         r["abrio"] = True
         try: r["diapositivas"] = pr.Slides.Count; r["formas"] = sum(s.Shapes.Count for s in pr.Slides)
         except Exception as e: r["error_lectura"] = str(e)[:200]

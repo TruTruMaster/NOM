@@ -6,11 +6,10 @@ Para cada archivo del corpus (pruebas/office/corpus.sh):
   2. lo exporta otra vez a su formato (.docx, .xlsx, .pptx) y también a .nom,
   3. compara el original contra el resultado:
        - estructura: lo que hay dentro (texto, formato, celdas, fórmulas, figuras, imágenes...),
-       - a la vista (opcional, --visual): LibreOffice dibuja los dos y se comparan las páginas.
+       (cómo se VE contra Office de verdad lo mide comparar_real.py, no esto)
 
 Uso (con el servidor local encendido en el puerto 8099):
   ~/.cache/nom-pruebas/venv/bin/python pruebas/office/fidelidad.py            # todo el corpus
-  ... fidelidad.py --solo docx --visual                                       # solo Word, con dibujo
   ... fidelidad.py ruta/a/archivo.xlsx                                        # un archivo
   ... fidelidad.py --modelo                                                   # la medida honesta (ver abajo)
 Deja los archivos exportados y `informe.json` en ~/.cache/nom-pruebas/office-salida.
@@ -506,44 +505,10 @@ def comparar_partes(orig, nuevo):
     return n
 
 
-# ------------------------------------------------------------------ a la vista (LibreOffice)
-def dibujar(ruta, carpeta):
-    """Convierte a PDF con LibreOffice y saca las páginas como PNG chicos. Devuelve (páginas, texto)."""
-    carpeta.mkdir(parents=True, exist_ok=True)
-    pdf = carpeta / (Path(ruta).stem + ".pdf")
-    if not pdf.exists():
-        perfil = CACHE / "lo-perfil"
-        subprocess.run(["soffice", f"-env:UserInstallation=file://{perfil}", "--headless", "--convert-to", "pdf", "--outdir", str(carpeta), str(ruta)],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=240)
-    if not pdf.exists(): return [], ""
-    if not list(carpeta.glob("pag-*.png")):
-        subprocess.run(["pdftoppm", "-r", "40", "-l", "40", "-png", str(pdf), str(carpeta / "pag")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=240)
-    texto = subprocess.run(["pdftotext", "-l", "60", str(pdf), "-"], capture_output=True, timeout=120).stdout.decode("utf8", "ignore")
-    return sorted(carpeta.glob("pag-*.png")), texto
-
-
-def comparar_vista(orig, nuevo, carpeta, n):
-    from PIL import Image, ImageChops, ImageStat
-    pa, ta = dibujar(orig, carpeta / "orig")
-    pb, tb = dibujar(nuevo, carpeta / "nuevo")
-    if not pa or not pb:
-        n.pon("vista: se pudo dibujar", 0.0 if pa else 1.0, f"{len(pa)} -> {len(pb)} páginas"); return
-    n.conteo("vista: páginas", len(pa), len(pb))
-    n.pon("vista: texto dibujado", parecido(ta, tb), f"{len(ta.split())} -> {len(tb.split())} palabras")
-    s = []
-    for x, y in zip(pa, pb):
-        ia = Image.open(x).convert("L"); ib = Image.open(y).convert("L").resize(ia.size)
-        s.append(1 - ImageStat.Stat(ImageChops.difference(ia, ib)).mean[0] / 255)
-    s += [0.0] * (max(len(pa), len(pb)) - len(s))
-    n.pon("vista: parecido de las páginas", sum(s) / len(s), f"{len(s)} páginas")
-
-
-# ------------------------------------------------------------------ principal
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("archivos", nargs="*")
     ap.add_argument("--solo", choices=["docx", "xlsx", "pptx"])
-    ap.add_argument("--visual", action="store_true", help="también comparar cómo se ven (LibreOffice; tarda)")
     ap.add_argument("--detalle", action="store_true", help="imprimir cada medida")
     ap.add_argument("--modelo", action="store_true", help="exportar solo con lo que NOM leyó, sin el archivo original guardado (lo que de verdad entiende)")
     ap.add_argument("--minimo", type=float, default=0.0, help="salir con error si el promedio queda debajo")
@@ -584,7 +549,6 @@ def main():
                     try: n = {"docx": comparar_docx, "xlsx": comparar_xlsx, "pptx": comparar_pptx}[ext](f, sale)
                     except Exception as e1:
                         n = comparar_partes(f, sale); fila["aviso_comparar"] = "por partes: " + repr(e1)[:120]
-                    if a.visual: comparar_vista(f, sale, SALIDA / "vista" / (ext + "-" + f.stem), n)
                     fila["medidas"] = n.m; fila["nota"] = n.total()
                 except Exception as e:
                     fila["error"] = "comparar: " + repr(e)[:300]; fila["nota"] = 0.0

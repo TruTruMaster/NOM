@@ -12,7 +12,8 @@ Por cada archivo:
      suyo en otro lugar; a Ana le llega sin recargar.
   4. Ana recarga la página: sigue todo.
   5. Ana descarga el archivo y se compara con el original: lo escrito por los dos está; las demás partes
-     salen idénticas; el validador de Microsoft (si está) no encuentra errores nuevos; LibreOffice lo abre.
+     salen idénticas; el validador de Microsoft (si está) no encuentra errores nuevos; Word, Excel o PowerPoint
+     de verdad lo abren sin avisos ni «reparar».
 Sale con código 1 si algo falla. Necesita el servidor de pruebas en NOM_BASE (por omisión el 8099).
 """
 import json, os, re, signal, subprocess, sys, time, zipfile
@@ -27,8 +28,7 @@ TIENE = """(t) => { const d = NOM.editorActual.doc; if (JSON.stringify(d.estado)
   try { for (const n of Object.keys(d.estado.seq || {})) { const s = d.secuencia(n); if (s && s.texto().includes(t)) return true; } } catch (e) { }
   return false; }"""
 EXT = {"HOJA": "xlsx", "PRESENTACION": "pptx", "TEXTO": "docx"}
-# LibreOffice se queda esperando con el original de Microsoft de estos (ver ediciones.py).
-LO_SE_TRABA = {"ms-brownbag.pptx"}
+para_office = []   # (lo descargado, el original, nombre)
 resultados = []
 
 
@@ -138,20 +138,6 @@ def partes(ruta):
         return {i.filename.replace("\\", "/").lower(): z.read(i.filename) for i in z.infolist() if not i.filename.endswith("/")}
 
 
-def abre_libreoffice(ruta, salida):
-    """LibreOffice abre el archivo y lo vuelve a guardar: Word y PowerPoint a PDF; Excel a .ods (pasar a
-    PDF una hoja grande dibuja cientos de páginas y LibreOffice se queda minutos aun con el original)."""
-    formato = "ods" if ruta.suffix == ".xlsx" else "pdf"
-    destino = salida / (ruta.stem + "." + formato)
-    if destino.exists(): destino.unlink()
-    pr = subprocess.Popen(["soffice", f"-env:UserInstallation=file://{salida / 'lo-perfil'}", "--headless", "--convert-to", formato, "--outdir", str(salida), str(ruta)],
-                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-    try: pr.wait(timeout=180)
-    except subprocess.TimeoutExpired:
-        os.killpg(pr.pid, signal.SIGKILL); pr.wait(); return None
-    return destino.exists() and destino.stat().st_size > 800
-
-
 def probar(pw, archivo, salida):
     nombre = archivo.name
     print(f"\n== {nombre} ({archivo.stat().st_size // 1024} KB)", flush=True)
@@ -221,18 +207,8 @@ def probar(pw, archivo, salida):
         if (Path.home() / ".dotnet" / "dotnet").exists():
             v = subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "validar_openxml.py"), str(destino), "--corpus", str(archivo.parent)], capture_output=True, text=True)
             anota(nombre, "validador de Microsoft: sin errores nuevos", v.returncode == 0, (v.stdout.strip().splitlines() or [""])[-1][:200] if v.returncode == 0 else v.stdout.strip()[:300])
-        if nombre in LO_SE_TRABA:
-            print("  (LibreOffice se traba con el original de este archivo: no se prueba)")
-        else:
-            lo = abre_libreoffice(destino, salida)
-            if lo is None:
-                # Si con el original también se traba, no es de la exportación.
-                (salida / "originales").mkdir(exist_ok=True)
-                copia = salida / "originales" / archivo.name; copia.write_bytes(archivo.read_bytes())
-                lo_o = abre_libreoffice(copia, salida)
-                anota(nombre, "LibreOffice abre lo descargado", lo_o is None, "se traba también con el original" if lo_o is None else "se trabó (con el original no)")
-            else:
-                anota(nombre, "LibreOffice abre lo descargado", bool(lo))
+        # se abre en Office de verdad al final, junto con los demás (un solo viaje a la computadora con Windows)
+        para_office.append((destino, archivo, nombre))
         errores = [e for e in A.errores + (B.errores if B else []) if "Content Security" not in e]
         anota(nombre, "sin errores de JavaScript", not errores, " | ".join(errores[:3])[:300])
     except Exception as e:
@@ -252,6 +228,15 @@ def main():
     from playwright.sync_api import sync_playwright
     with sync_playwright() as pw:
         for f in archivos: probar(pw, f, salida)
+    # Office de verdad (Word, Excel o PowerPoint en la computadora con Windows) abre cada descarga sin avisos ni «reparar»
+    import office_abre
+    res = office_abre.abrir([d for d, _, _ in para_office] + [o for _, o, _ in para_office], "editar-real")
+    for d, o, nombre in para_office:
+        if not res: anota(nombre, "Office de verdad lo abre sin avisos", False, "no se pudo llegar a la computadora con Windows"); continue
+        r_o = res.get(d.name) if d.name != o.name else None
+        if office_abre.bien(r_o): anota(nombre, "Office de verdad lo abre sin avisos ni reparar", True)
+        elif not office_abre.bien(res.get(o.name)): print(f"  ({nombre}: Office también se queja del original)")
+        else: anota(nombre, "Office de verdad lo abre sin avisos ni reparar", False, json.dumps(r_o, ensure_ascii=False)[:300])
     malos = [r for r in resultados if not r[2]]
     print(f"\nArchivos reales: {len(resultados) - len(malos)} de {len(resultados)} bien, en {len(archivos)} archivos")
     for r in malos: print("  MAL", r[0], "·", r[1], "·", r[3][:200])

@@ -104,9 +104,11 @@ print("pptx:", os.path.getsize(ruta), "xml malos:", malos)
 from pptx import Presentation
 pr = Presentation(ruta)
 print("formas en la diapositiva:", len(pr.slides[0].shapes))
-r = subprocess.run(["soffice", "--headless", "--convert-to", "pdf", "--outdir", OUT, ruta], capture_output=True, text=True, timeout=180)
-print("libreoffice:", r.returncode)
-subprocess.run(["pdftoppm", "-png", "-r", "70", os.path.join(OUT, "diagrama.pdf"), os.path.join(OUT, "diagrama")], timeout=60)
+# PowerPoint de verdad lo abre sin avisos ni «reparar» (en la computadora con Windows)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "office"))
+import office_abre
+_r = office_abre.abrir([ruta], "diagrama").get(os.path.basename(ruta))
+print("powerpoint:", "abre sin avisos" if office_abre.bien(_r) else ("NO: " + str(_r)[:300] if _r else "sin la computadora con Windows"))
 # 7. Presentación con un diagrama listo: las flechas se ven al presentar
 d3 = documento(c["token"], e, "PRESENTACION", "Con diagrama"); n.abrir(d3); p.wait_for_timeout(1200)
 ev("() => { const c = NOM.diagramas.CATALOGO.find(x => x.id === 'flujo'); const g = NOM.diagramas.generar(c); NOM.modos.PRESENTACION._lienzo.insertarBloques(g.bloques, g.uniones); }"); p.wait_for_timeout(500)

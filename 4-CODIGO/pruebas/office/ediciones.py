@@ -8,7 +8,7 @@ python-docx o python-pptx. Con --office además lo abre LibreOffice (tiene que p
 
   ~/.cache/nom-pruebas/venv/bin/python pruebas/office/ediciones.py [--office] [--solo xlsx]
 """
-import argparse, base64, os, subprocess, sys, warnings, zipfile, re
+import argparse, json, base64, os, subprocess, sys, warnings, zipfile, re
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import fidelidad as F
@@ -439,40 +439,15 @@ CASOS = {
 }
 
 
-# LibreOffice se queda esperando con el ORIGINAL de Microsoft de estos (comprobado el 15-nov-2026: 2 de 2
-# veces, 200 s cada una, sin tocarlo). Pasarlos por LibreOffice no dice nada de la exportación y gastaba
-# 6 minutos por caso (y a veces el original sí abría y daba una falla falsa). Los revisa el validador de
-# Microsoft (validar_openxml.py), que sí los lee.
-LO_SE_TRABA = {"ms-brownbag.pptx"}
-
-
-def abre_office(ruta):
-    """LibreOffice tiene que poder abrir el archivo y volverlo a guardar."""
-    carpeta = SALIDA / "lo"; carpeta.mkdir(parents=True, exist_ok=True)
-    ext = Path(ruta).suffix[1:]
-    destino = carpeta / (Path(ruta).stem + ".pdf")
-    if destino.exists(): destino.unlink()
-    # LibreOffice se queda esperando con algunos archivos (también con el original de Microsoft, p. ej.
-    # ms-brownbag.pptx): se corre en su propio grupo y, si no termina, se mata todo el grupo; si no,
-    # soffice.bin seguía vivo con el perfil bloqueado y todas las conversiones siguientes se trababan.
-    import os, signal
-    pr = subprocess.Popen(["soffice", f"-env:UserInstallation=file://{F.CACHE / 'lo-perfil'}", "--headless", "--convert-to", "pdf", "--outdir", str(carpeta), str(ruta)],
-                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-    try: pr.wait(timeout=180)
-    except subprocess.TimeoutExpired:
-        os.killpg(pr.pid, signal.SIGKILL); pr.wait()
-        return None
-    return destino.exists() and destino.stat().st_size > 800
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--solo", choices=["docx", "xlsx", "pptx"])
-    ap.add_argument("--office", action="store_true", help="abrir también cada resultado con LibreOffice")
+    ap.add_argument("--office", action="store_true", help="abrir también cada resultado con Office de verdad (Word, Excel o PowerPoint, en la computadora con Windows): sin avisos ni «reparar»")
     a = ap.parse_args()
     SALIDA.mkdir(parents=True, exist_ok=True)
     from playwright.sync_api import sync_playwright
     bien = mal = 0
+    para_office = []   # (lo exportado, el original, nombre, caso): se abren todos juntos en Office al final
     with sync_playwright() as pw:
         nav = pw.chromium.launch(); pag = nav.new_page()
         errores = []
@@ -493,11 +468,7 @@ def main():
                         try:
                             assert zipfile.ZipFile(sale).testzip() is None, "zip dañado"
                             det = revisar(r, orig, sale)
-                            if a.office and not sufijo and nombre not in LO_SE_TRABA:
-                                r_lo = abre_office(sale)
-                                # Si LibreOffice se traba, se prueba con el original de Microsoft: si con ese también, no es culpa de la exportación.
-                                if r_lo is None: assert abre_office(orig) is None, "LibreOffice se trabó con lo exportado y no con el original"
-                                else: assert r_lo, "LibreOffice no pudo abrirlo"
+                            if a.office and not sufijo: para_office.append((sale, orig, nombre, titulo))
                             bien += 1
                             print(f"   ok   {nombre}{' (vía .nom)' if sufijo else ''}: {det}; {orig.stat().st_size//1024} KB -> {sale.stat().st_size//1024} KB{'' if sufijo else f', .nom {r['nom']//1024} KB'}")
                         except AssertionError as e:
@@ -505,6 +476,18 @@ def main():
                         except Exception as e:
                             mal += 1; print(f"   MAL  {nombre}{' (vía .nom)' if sufijo else ''}: {type(e).__name__}: {str(e)[:260]}")
         nav.close()
+    if para_office:
+        import office_abre
+        # (se manda también cada original: si Office se queja del original, no es culpa de la exportación)
+        originales = {o for _, o, _, _ in para_office}
+        res = office_abre.abrir([s2 for s2, _, _, _ in para_office] + sorted(originales), "ediciones")
+        if not res: mal += 1; print("   MAL  no se pudo abrir en Office de verdad (¿la computadora con Windows está prendida?)")
+        for sale, orig, nombre, titulo in para_office:
+            r_o = res.get(sale.name)
+            if not res: break
+            if office_abre.bien(r_o): bien += 1; print(f"   ok   Office abre sin avisos: {sale.name}")
+            elif not office_abre.bien(res.get(orig.name)): print(f"   --   {sale.name}: Office también se queja del original ({json.dumps(res.get(orig.name), ensure_ascii=False)[:200]})")
+            else: mal += 1; print(f"   MAL  Office: {sale.name}: {json.dumps(r_o, ensure_ascii=False)[:400]}")
     print(f"\nEdiciones: {bien} bien, {mal} mal. Errores de JavaScript: {errores[:3]}")
     sys.exit(1 if mal else 0)
 
