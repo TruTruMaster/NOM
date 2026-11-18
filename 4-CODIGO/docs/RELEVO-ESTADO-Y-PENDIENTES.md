@@ -51,45 +51,53 @@ lo que esté por debajo de 100 % es trabajo pendiente, no «suficiente». El par
 exacto por el suavizado de bordes: para PowerPoint, la meta es diferencia de píxeles por debajo del umbral de suavizado
 en cada diapositiva y cada cuadro, y cambiar `comparar_real.py` y `animaciones_real.py` para que lo reporten así.
 
-«Confirmado» = medido contra Office real o probado de punta a punta. **Ojo:** casi todo se midió con la 0.15.x;
-desde entonces hay 24 commits sin regresión, así que hay que **volver a medirlo** antes de publicar (sección 6).
+«Confirmado» = medido contra Office real o probado de punta a punta. **17-nov noche:** todo lo de abajo se volvió a
+medir con los commits sin publicar (nada bajó; varias cifras subieron) y la regresión rápida pasó (sección 9).
 
 ### Word (contra Word 2024 real, `comparar_real.py`, renglones idénticos y páginas)
-| Archivo | Renglones idénticos | Páginas Word / NOM | Medido |
-|---|---|---|---|
-| w01 letra | 85.4 % | 6 / 6 | 0.15.0 |
-| w02 párrafo | 82.4 % | 9 / 9 | 0.15.0 |
-| w03 estilos y listas | 96.6 % | 7 / 7 | 0.15.0 |
-| w04 secciones | 38.4 % (después mejoró con secciones de otra hoja y columnas, `fa3cc00`, sin volver a medir la cifra) | 9 / 8 | 0.15.0 |
-| w05 tablas | 85.7 % | 8 / 8 (tablas como Word, `03c64a3`) | 17-nov |
-| w06 objetos | 77.0 % | 18 / 18 | 0.15.3 |
-| w07 referencias | 91.2 % | 6 / 6 | 0.15.0 |
-| w08 revisión (control de cambios, comentarios) | 94.3 % | 2 / 2 | 0.15.0 |
-| w09 informe | 77.3 % | 9 / 9 | 17-nov |
-| w10 raros | 18.1 % | 6 / 6 | 0.15.0 |
-- Once de doce Word con las mismas páginas que Word (17-nov). La tabla editada se descarga solo con las celdas que
-  cambiaron; Word la abre sin avisos y el validador de Microsoft no da errores nuevos.
+Medido de nuevo la noche del 17-nov con todo lo de los 26 commits sin publicar (columna «antes»: lo que decía este
+relevo). Imágenes y reportes: `~/.cache/nom-pruebas/office-real/comparar-17nov-b/`.
+| Archivo | Renglones idénticos | Páginas Word / NOM | Antes | Lo que falta (causa medida) |
+|---|---|---|---|---|
+| w01 letra | 85.4 % (117/137) | 6 / 6 | 85.4 % | escala de caracteres (`w:w` 50/150/200 %: no se lee), versalitas más anchas que las de Word, fuentes sin medidas de Office (Sitka, Lucida Sans Unicode), renglones que en Word caben justo |
+| w02 párrafo | 84.9 % (203/239) | 9 / 9 | 82.4 % | |
+| w03 estilos y listas | 96.6 % (170/176) | 7 / 7 | 96.6 % | |
+| w04 secciones | 86.5 % (198/229) | 9 / 9 | 38.4 % y 9/8 (cifra vieja: ya era 86.5 % en LOG 71) | |
+| w05 tablas | 85.7 % (30/35) | 8 / 8 | 85.7 % | desfase vertical mediano 17 pt |
+| w06 objetos | 84.5 % (125/148) | 18 / **17** | 77.0 % y 18/18 | una hoja de menos (el único Word con otra cuenta de páginas) |
+| w07 referencias | 91.2 % (104/114) | 6 / 6 | 91.2 % | |
+| w08 revisión | 94.3 % (33/35) | 2 / 2 | 94.3 % | |
+| w09 informe | 77.3 % (126/163) | 9 / 9 | 77.3 % | |
+| w10 raros | 34.0 % (32/94) | 6 / 6 | 18.1 % | división automática: el documento está en inglés y Word partió el español con reglas del inglés («con-exión», «in-cluye»); letra de 1 pt (Chromium la dibuja más ancha); guion suave; palabras más largas que el renglón |
+| w11 dibujos | 100 % (16/16) | 6 / 6 | — | en su página 75 % (desfase −18.9 pt) |
+| w12 flotantes | 77.8 % (364/468) | 21 / 21 | — | |
+- Once de doce Word con las mismas páginas que Word. La tabla editada se descarga solo con las celdas que cambiaron;
+  Word la abre sin avisos y el validador de Microsoft no da errores nuevos.
 - Contraseñas de Office (MS-OFFCRYPTO, Agile y Standard) y protección (restringir edición, marcar como final,
   contraseña para modificar): probadas en Office real (`a9e388a`, `1b0d8ea`).
+- 17-nov noche: el texto oculto (`w:vanish`) ya no se ve (antes NOM mostraba «ESTO NO SE VE» de w01) y el elevado
+  o bajado (`w:position`) se dibuja; w01 sigue en 85.4 % porque ese renglón también corta por las versalitas.
 
 ### Excel (contra Excel 2024 real: texto de cada celda, rellenos, anchos y altos)
 | Archivo | Texto | Rellenos | Anchos | Altos |
 |---|---|---|---|---|
-| x01 formato | 100 % | 100 % | 100 % | 98.2 % |
-| x02 fórmulas | 98.3 % → 100 % en las matrices dinámicas (x02/x09) | 100 % | 100 % | 100 % |
-| x03 formato condicional | 100 % | 100 % | 100 % | 100 % |
-| x04 gráficas (37, contra `Chart.Export`) | 100 % | — | 100 % | 100 %; cada gráfica 92–98 % de parecido |
-| x05 tablas y tablas dinámicas | 100 % | 100 % | 100 % | 100 % |
+| x01 formato | 100 % de 443 | 100 % | 100 % | 99.4 %: la fila 24 de «Letra» (texto ajustado, sin `customHeight`, `ht="75"`) Excel la recalcula al abrir a 60 pt; NOM respeta los 75 |
+| x02 fórmulas | 100 % de 975 | 100 % | 100 % | 100 % |
+| x03 formato condicional | 100 % de 441 | 100 % | 100 % | 100 % |
+| x04 gráficas (37, contra `Chart.Export`) | 100 % de 180 | — | 100 % | 100 %; cada gráfica 92–98 % de parecido |
+| x05 tablas y tablas dinámicas | 100 % de 747 | 100 % | 100 % | 100 % |
 | x06 objetos | 100 % | — | 100 % | 100 % |
 | x07 hojas | 100 % | — | 100 % | 100 % |
-| x08 registro y presupuesto | 100 % | 100 % | 100 % | 100 % |
-- Motor de fórmulas: matrices dinámicas, `LET`, `LAMBDA` (16-nov, x02/x09 100 %). Líneas de tendencia con ecuación y
-  R², barras de error y tabla de datos de las gráficas (`6fadd42`).
+| x08 registro y presupuesto | 100 % de 649 | 100 % | 100 % | 100 % |
+| x09 matrices dinámicas | 100 % de 928 | — | 100 % | 100 % |
+- Motor de fórmulas: matrices dinámicas, `LET`, `LAMBDA` (16-nov). Líneas de tendencia con ecuación y R², barras de
+  error y tabla de datos de las gráficas (`6fadd42`).
 
 ### PowerPoint (contra PowerPoint 2024 real)
-| Qué | Resultado |
+| Qué | Resultado (17-nov noche; entre paréntesis, la medida de la 0.15.0) |
 |---|---|
-| p01–p10 (parecido de imagen, 0.15.0) | p01 97.6 %, p02 99.0 %, p03 95.2 %, p04 98.0 %, p05 92.1 %, p06 94.0 %, p07 98.8 %, p08 99.5 %, p09 96.8 %, p10 97.9 % |
+| p01–p11 (parecido de imagen) | p01 97.6 %, p02 99.0 %, p03 95.2 %, p04 98.0 %, p05 **97.9 %** (92.1), p06 **96.3 %** (94.0), p07 98.8 %, p08 99.5 %, p09 **98.7 %** (96.8), p10 **98.6 %** (97.9), p11 89.5 % (mínimo 75.7) |
+| Posición del texto | Medida de la tinta en p01 (1920 px de ancho): mediana +1 px (NOM apenas más abajo), ±5 px según el renglón: no es un corrimiento fijo sino el interlineado de cada fuente (lo de «2 px más arriba» era de un cuadro Arial 54 negrita) |
 | Motor de animaciones, a01 (195 efectos) contra el video de PowerPoint | 97.0 % medio, 159 ≥ 98 % |
 | a02 opciones (por letra, palabra, párrafo, repetir, suaves, rebote…) | letras y palabras 94–97 %; «Destello en negrita por letra» 84 %, «Volar por párrafo al revés» 85 % |
 | Inicio/fin suaves (16 combinaciones) | error medio 0.12 % del recorrido |
@@ -119,11 +127,16 @@ real salvo lo que se dice.
 
 ## 4. Lo que se sabe que no está bien
 
-- **Texto estático de PowerPoint ~2 px más arriba** que en PowerPoint (Arial 54 negrita: tinta en 284 contra 288 px a
-  1280 de ancho). Sube también todos los efectos de texto (por eso los de texto quedan en 88–95 %).
+- **Texto de PowerPoint**: no es un corrimiento fijo (medido en p01: mediana +1 px a 1920 de ancho, ±5 px según el
+  renglón); es el interlineado de cada fuente y tamaño. Un cuadro Arial 54 negrita sí quedaba ~2 px más arriba
+  (tinta en 284 contra 288 px a 1280 de ancho), y eso baja los efectos de texto (88–95 %).
+- **Escala de caracteres de Word** (`w:w`, 50 %–200 %): no se lee; el renglón corta en otro lugar (w01).
+- **Versalitas**: más anchas que las de Word (w01).
 - «Destello en negrita por letra» (84 %) y «Volar por párrafo al revés» (85 %) contra el video.
-- Word w10 «raros» 18 % (falta la división automática de palabras) y w04 secciones por debajo del resto.
-- Excel: un alto de fila con texto ajustado que Excel recalcula al abrir (aquí se respeta lo guardado; pasó una vez).
+- Word w10 «raros» 34 % (división automática de palabras con las reglas del idioma del documento —inglés en w10—,
+  letra de 1 pt, guion suave, palabras más largas que el renglón).
+- Excel: un alto de fila con texto ajustado y sin `customHeight` que Excel recalcula al abrir (x01, «Letra», fila 24:
+  75 → 60 pt); NOM respeta lo guardado. Es la única diferencia de los nueve Excel.
 - Al exportar a .pptx **sin** el archivo original, el SmartArt sale como figuras sueltas y los videos, audios y sonidos
   se pierden (salen la portada o nada).
 - `nom.qd.je` sin https (GitHub Pages no había emitido el certificado); su página de redirección aún dice NOM-COLAB.
@@ -192,9 +205,9 @@ abrir en Office sin reparar, validador), **[T]** en el teléfono/app.
 
 ### Para los tres
 - **.odt / .ods / .odp** (abrir y guardar), RTF.
-- Terminar el **inventario por pestaña** (`docs/paridad/`: WORD.md casi completo, POWERPOINT.md solo Inicio e
-  Insertar, EXCEL.md sin escribir) y convertirlo en `docs/PARIDAD-OFFICE.md`: una fila por comando de la cinta con
-  «NOM: sí / a medias / no» y su prueba (T2/T3 de `RELEVO-REVISION-PROFUNDA.md`).
+- `docs/PARIDAD-OFFICE.md` ya tiene el inventario por pestaña (17-nov noche). Falta bajarlo a **una fila por comando
+  de la cinta** (con `WordControls.txt`, `ExcelControls.txt` y `PowerPointControls.txt` de Microsoft y lo de
+  `docs/paridad/`) con «NOM: sí / a medias / no» y su prueba (T2/T3 de `RELEVO-REVISION-PROFUNDA.md`).
 
 ## 6. Emparejar cada función con lo que NOM ya tenía
 
@@ -218,8 +231,9 @@ the features we already had»):
 
 ## 7. Pruebas pendientes (cuando el usuario esté en casa), en este orden
 
-1. `pruebas/preparar.sh` y `pruebas/regresion.sh rapido`; luego la regresión completa.
-2. `comparar_real.py` de los 28 archivos (w01–w10, x01–x08, p01–p10) para confirmar que nada bajó.
+1. ~~`pruebas/regresion.sh rapido`~~ (hecho el 17-nov noche: todo bien salvo `rastreo`, 6 marcas de la prueba; y
+   `funciones`, cuya prueba vieja de la transición ya se corrigió: 203 de 203). Falta la regresión completa.
+2. ~~`comparar_real.py` de los 32 archivos~~ (hecho el 17-nov noche: nada bajó; sección 2).
 3. La vuelta en PowerPoint real de un archivo armado con el panel de animaciones, transiciones, vínculos, medios y
    sonidos + `validar_openxml.py`.
 4. `transiciones_real.py` (calibración) y Morph.
@@ -283,6 +297,7 @@ la sección 8), «como un ingeniero muy cuidadoso que busca incongruencias entre
 | `ServicioFuentes.AGENTE` | Decía «proyecto escolar» (contra lo decidido el 17-nov) | «NOM/1.0 (sin fines de lucro)» |
 | `azure/nomcolab local up` | Encendía el túnel de la laptop, que es **el mismo** de la Pi (869abbea…): Cloudflare habría repartido a la gente entre dos servidores con datos distintos | No lo enciende si la nube contesta desde otro equipo |
 | `prueba_funciones.py` | Buscaba el menú viejo «Desvanecer»: la sección del lienzo se cortaba ahí (no corrían presentador ni .pptx) | Usa el panel nuevo y revisa `transOffice:` |
+| Id del servidor (`NodoLocal`, `NodoTelefono`) | Era al azar en cada arranque: la app guarda los alias de cada espacio con ese id, así que tras reiniciar el servidor (la Pi, `nomcolab-pi actualizar`, el teléfono que se apaga) a quien entró con alias le tocaba uno nuevo; la sincronía lo usa para no copiarse a sí misma | Se guarda: `<datos>-llaves/nodo.id` en la computadora, `nodo-servidor.id` en la carpeta privada de la app. 17.7 |
 
 `rastreo.py`: 6 «MAL», revisados a mano: son de la prueba (toca «Bloquear» y luego «Cortar», que queda apagado;
 «Pegar especial» depende de lo copiado; «Acción al hacer clic» abre una hoja que tapa la ruedita).
@@ -296,7 +311,18 @@ https), `DISENO-UI.md`, `MARCA.md`, `PLAN-MEDIOS.md`, los relevos viejos marcado
 igual», abrir y descargar, preguntas 16 y 24, 230 funciones de hoja y no «casi 100») y las novedades de la 0.16.0 (le
 faltaban tablas y secciones de Word, vínculos, sonidos, gráficas y SmartArt por partes).
 
-### 9.4 Pendiente de decidir (el usuario)
+### 9.4 La Pi y su disco nuevo
+El usuario puso un NVMe de **500 GB** (no hubo de 2 TB) y reinició la Pi: el PCIe lo ve (SK hynix, `1c5c:1339`, enlace
+5 GT/s x1), pero el kernel propio `6.18.59-min` no trae NVMe ni USB ni módulos: no hay `/dev/nvme0n1`. Pasos en
+`SERVIDOR-PROPIO.md` («El disco nuevo»). NOM volvió solo tras el reinicio. `PLAN-MEDIOS.md` ya cuenta con 500 GB.
+
+### 9.5 Inventario de Office contra NOM
+El usuario entregó un inventario de funciones de Office (32 páginas). Quedó contrastado contra NOM en
+`PARIDAD-OFFICE.md` (qué hay, qué hay a medias, qué falta, por pestaña; funciones de hoja una por una: NOM tiene 118
+de las 261 que enumera, 230 en total) con la lista de errores del inventario. Falta el inventario por comando de la
+cinta con los archivos de controles de Microsoft.
+
+### 9.6 Pendiente de decidir (el usuario)
 - **`nom.qd.je` sin certificado**: según la documentación de GitHub Pages hay que quitar y volver a poner el dominio en
   el repositorio `nom-qd-je` para que lo emita (cambio en GitHub; no se hizo sin preguntar).
 - En GitHub sigue una rama vieja del 28-oct (no es `main` ni `desarrollo`) con commits que rompen la regla de menciones

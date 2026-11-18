@@ -794,6 +794,7 @@ try:
         s4 = arrancar4(NOM_CIFRAR="false")
         try:
             esperar4(s4)
+            id_antes = (r4("GET", "/api/red/info")[1] or {}).get("servidor")
             r4("POST", "/api/cuentas/registro", {"nombre": "claro1", "contrasena": CL})
             t4 = (r4("POST", "/api/cuentas/sesion", {"nombre": "claro1", "contrasena": CL})[1] or {}).get("token")
             e4 = (r4("POST", "/api/espacios", {"nombre": "Espacio en claro"}, t4)[1] or {}).get("id")
@@ -806,6 +807,8 @@ try:
         s4 = arrancar4()
         try:
             prueba("14.1 Al arrancar con cifrado, lo que estaba en claro se cifra", True, esperar4(s4))
+            # 17.7 el id del servidor no cambia al reiniciarlo (con él la app guarda los alias de cada espacio)
+            prueba("17.7 El servidor conserva su id al reiniciarse", [True, id_antes], [bool(id_antes), (r4("GET", "/api/red/info")[1] or {}).get("servidor")])
             time.sleep(1)
             prueba("14.1 …ya no aparece en claro en ningún archivo (ni en la base)", [], en_claro(D4, ["MARCA-EN-CLARO-123", "claro1", "Espacio en claro"]))
             t4 = (r4("POST", "/api/cuentas/sesion", {"nombre": "claro1", "contrasena": CL})[1] or {}).get("token")

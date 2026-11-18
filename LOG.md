@@ -1483,3 +1483,24 @@ exporta Excel de ella (ver la entrada 68).
   regresar a una diapositiva arrancaba sus videos.
 - Falta: insertar un video o audio desde NOM, empezar animaciones con un marcador, el video en la pantalla del
   proyector y probarlo en el teléfono y en PowerPoint.
+
+## 80. Revisión completa del código y de la documentación (17 de noviembre de 2026, noche)
+- Se revisó todo el servidor (permisos, cuotas, proyección, ramas, sincronía, enlace para ver, canal en vivo,
+  repositorios), la interfaz (análisis estático de los 54 archivos y los módulos sin probar del 17-nov), la app de
+  Android, la Pi, las direcciones y GitHub. Lo encontrado y arreglado, en `docs/RELEVO-ESTADO-Y-PENDIENTES.md`,
+  sección 9: un editor podía escribir filas de la bitácora a nombre de otra persona (recibos y aportes); la pantalla
+  del proyector recibía comentarios, notas del orador y el Office original, y su código seguía sirviendo aunque a
+  quien presentaba le quitaran el acceso; el enlace para ver llevaba el original; alias sin tope; cabeceras de
+  reenvío creídas desde la red local; documentos que nunca salían de la memoria; el id del servidor cambiaba en cada
+  arranque y con él se perdían los alias guardados; ecuaciones con «\» al final tiraban el documento; el proyector y
+  las miniaturas no veían las transiciones del panel nuevo; «invitar sin cuenta» decía «apodo»; el texto oculto de
+  Word se veía; un Office de más de 14 MB no avisaba que no guarda su original; `nomcolab local up` podía encender
+  en la laptop el mismo túnel de la Pi.
+- Documentación al día en todo el repositorio (direcciones, botones que cambiaron de nombre, cifras viejas, casillas
+  de lo ya hecho, `doas nomcolab-pi` que no sirve sin la ruta completa, `nom.qd.je` todavía sin https, relevos viejos
+  marcados como históricos, ayuda y novedades de la 0.16.0).
+- Pruebas: regresión rápida (todo bien salvo marcas conocidas de `rastreo`), `seguridad.py` con 21 casos nuevos,
+  `prueba_funciones` 203 de 203, `prueba_ayuda` 24 de 24. Todo Word, Excel y PowerPoint medido otra vez contra Office
+  real: nada bajó; w04 86.5 % (el relevo decía 38.4 %), w10 34 %, p05 97.9 %, p09 98.7 %, x01 altos 99.4 %.
+- La Pi tiene un NVMe de 500 GB conectado que el kernel propio no ve (sin NVMe, USB ni módulos): pasos en
+  `docs/SERVIDOR-PROPIO.md`. Inventario de funciones de Office contra NOM: `docs/PARIDAD-OFFICE.md`.

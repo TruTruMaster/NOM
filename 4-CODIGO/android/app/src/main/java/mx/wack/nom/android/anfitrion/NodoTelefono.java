@@ -20,11 +20,30 @@ import mx.wack.nom.core.servicio.Nodo;
  * así funciona aunque no haya router, con el teléfono compartiendo su propia red.
  */
 final class NodoTelefono implements Nodo {
-    private final String id = UUID.randomUUID().toString().substring(0, 8);
+    private final String id;
     private final String equipo;
     private volatile int puerto;
 
+    /** El id no cambia al apagar y prender el servidor del teléfono: la app guarda con él los alias de cada espacio. */
+    private static String idGuardado(Context c) {
+        String nuevo = UUID.randomUUID().toString().substring(0, 8);
+        try {
+            java.io.File f = new java.io.File(Build.VERSION.SDK_INT >= 21 ? c.getNoBackupFilesDir() : c.getFilesDir(), "nodo-servidor.id");
+            if (f.isFile()) {
+                try (java.io.FileInputStream in = new java.io.FileInputStream(f)) {
+                    byte[] b = new byte[16];
+                    int n = in.read(b);
+                    String g = n > 0 ? new String(b, 0, n, java.nio.charset.StandardCharsets.UTF_8).trim() : "";
+                    if (g.matches("[0-9a-f]{8}")) return g;
+                }
+            }
+            try (java.io.FileOutputStream o = new java.io.FileOutputStream(f)) { o.write(nuevo.getBytes(java.nio.charset.StandardCharsets.UTF_8)); }
+        } catch (Exception e) { /* al azar, como antes */ }
+        return nuevo;
+    }
+
     NodoTelefono(Context c) {
+        this.id = idGuardado(c);
         String nombre = null;
         try { nombre = Settings.Global.getString(c.getContentResolver(), "device_name"); } catch (Exception ignorado) { }
         if (nombre == null || nombre.isBlank()) nombre = Build.MODEL;

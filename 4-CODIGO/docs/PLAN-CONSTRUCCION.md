@@ -677,6 +677,21 @@ imagen con `pruebas/office/comparar_real.py`).
       Falta repetirla con lo hecho el 17-nov (paneles, vínculos, medios, sonidos).
 - [ ] Paridad en la app de Android (emulador y A55).
 
+## Fase 23. Revisión completa del código y la documentación (17 de noviembre de 2026, noche)
+
+Detalle: `RELEVO-ESTADO-Y-PENDIENTES.md`, sección 9, y `LOG.md`, entrada 80.
+
+- [x] Servidor: bitácora externa solo a nombre propio (o del propietario), proyección y enlace para ver sin
+      comentarios, notas ni original, código del proyector ligado al acceso de quien presenta, tope de alias, origen
+      de las peticiones, errores 400, documentos sin uso fuera de la memoria, id del servidor que no cambia.
+- [x] Interfaz: ecuaciones con «\» al final, transiciones de PowerPoint en el proyector y en las miniaturas, alias en
+      vez de apodo, texto oculto y elevado de Word, aviso de los Office de más de 14 MB, color de error en tema oscuro.
+- [x] Documentación corregida en todo el repositorio; `docs/PARIDAD-OFFICE.md` (inventario de Office contra NOM).
+- [x] Regresión rápida, `seguridad.py` (con los casos 17.x), `prueba_funciones` y `prueba_ayuda`; todo Word, Excel y
+      PowerPoint medido otra vez contra Office real.
+- [ ] Regresión completa, la vuelta en PowerPoint real de lo hecho el 17-nov, el A55 y publicar la 0.16.0.
+- [ ] Disco de 500 GB de la Pi: kernel con NVMe (lo hace el dueño; `SERVIDOR-PROPIO.md`).
+
 ## Cómo quedó (8 de noviembre de 2026)
 
 Las fases 8 y 9 están construidas en Spring, en el servidor del teléfono (`ApiTelefono`) y en la

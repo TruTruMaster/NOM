@@ -5,8 +5,9 @@ Decidido por el usuario el 17 de noviembre de 2026 (lo que dijo, resumido):
 - Los archivos del usuario **tienen que estar en la nube** para abrirlos desde cualquier lugar.
 - Convertir los formatos comunes (MP4, MP3…) a lo **más ligero posible sin perder calidad visible**, que se
   descomprima en tiempo real al reproducir, tanto video como audio, con archivos propios de NOM.
-- **Límites de subida que no castiguen**; la Raspberry Pi recibe un disco de **2 TB** (entre el 17 y el 19 de noviembre;
-  la noche del 17 todavía tenía solo su tarjeta de 58 GB): «decide lo mejor para MUCHOS usuarios».
+- **Límites de subida que no castiguen**; la Raspberry Pi iba a recibir un disco de **2 TB**; el 17-nov en la noche se
+  le puso uno de **500 GB** (NVMe; todavía no se usa: el kernel de la Pi no trae NVMe, ver `SERVIDOR-PROPIO.md`):
+  «decide lo mejor para MUCHOS usuarios».
 - **Azure ya no cuenta** (no se diseña para su cuota de 50 MB).
 - Al descargar: **lo más ligero para el ancho de banda** del servidor.
 
@@ -36,8 +37,9 @@ Decidido por el usuario el 17 de noviembre de 2026 (lo que dijo, resumido):
 
 ## Límites (pensados para muchas cuentas en 2 TB; se cambian con propiedades del servidor)
 
-- **Por cuenta: 5 GB de medios** (`nom.medios.cuota.mb`, por omisión 5120). 2 TB alcanzan para 400 cuentas llenas;
-  la mayoría usa mucho menos. Se ve en la cuenta cuánto queda.
+- **Por cuenta: 5 GB de medios** (`nom.medios.cuota.mb`, por omisión 5120). Con el disco de 500 GB alcanzan para unas
+  90 cuentas llenas (2 TB habrían dado 400); la mayoría usa mucho menos. Se ve en la cuenta cuánto queda. Si se llena,
+  bajar la cuota por propiedad sin tocar el código.
 - **Por archivo, ya convertido:** video hasta **500 MB**, audio hasta **200 MB**. El archivo de origen puede pesar hasta
   4 GB (se convierte en el equipo antes de subir).
 - **Video:** hasta 1080p (lo más grande se reduce sin deformar), los cuadros por segundo del original hasta 60,

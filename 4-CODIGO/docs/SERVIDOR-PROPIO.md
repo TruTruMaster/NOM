@@ -290,6 +290,32 @@ Desde la laptop también: `4-CODIGO/azure/nomcolab pi estado|actualizar|respaldo
 
 El túnel `pi5` de `vefose.pp.ua` (otro sitio del dueño en la misma Pi) no se toca.
 
+## El disco nuevo (17 de noviembre de 2026): conectado, pero el kernel no lo ve
+
+El usuario conectó un disco de **500 GB** (no se consiguió el de 2 TB) y reinició la Pi. Revisado esa noche:
+
+- **El hardware está bien:** en el PCIe externo aparece un controlador NVMe de SK hynix (`0001:01:00.0`,
+  `1c5c:1339`, clase `0x010802`), con el enlace arriba a 5 GT/s x1. No hay que tocar `config.txt` para eso.
+- **El kernel no tiene con qué usarlo:** la Pi arranca un kernel propio, `6.18.59-min` (compilado el 27-oct), sin
+  módulos (`# CONFIG_MODULES is not set`), **sin NVMe** (`# CONFIG_BLK_DEV_NVME is not set`) y **sin nada de USB**
+  (`# CONFIG_USB_SUPPORT is not set`): ni un disco NVMe ni uno USB pueden verse. El dispositivo queda sin
+  controlador y no existe `/dev/nvme0n1`. (El sistema está en la **microSD**, `mmcblk0`, de 64 GB; no es un SSD.)
+- NOM volvió solo tras el reinicio (servidor, túnel con 4 conexiones, datos intactos). `nomcolab-pi estado` muestra
+  «1794975195 seconds» de encendido porque la Pi arrancó con el reloj en 1970 (su reloj no tiene pila) y luego lo
+  corrigió por la red: es solo cosmético.
+
+**Para usarlo** (lo hace el dueño, con `doas`):
+1. Recompilar el kernel `-min` agregando `CONFIG_BLK_DEV_NVME=y` (trae `CONFIG_NVME_CORE`) y, para ver la
+   temperatura del disco, `CONFIG_NVME_HWMON=y`. Si algún día se quiere un disco USB: `CONFIG_USB_SUPPORT=y`,
+   `CONFIG_USB=y`, `CONFIG_USB_XHCI_HCD=y`, `CONFIG_USB_XHCI_PLATFORM=y`, `CONFIG_SCSI=y`, `CONFIG_BLK_DEV_SD=y`,
+   `CONFIG_USB_STORAGE=y` y `CONFIG_USB_UAS=y`. ext4 ya viene adentro. (La otra salida es arrancar el kernel de Alpine,
+   `linux-rpi` 6.18.58, que está instalado; hay que confirmar en `/boot` que trae NVMe.)
+2. Con el disco a la vista (`/dev/nvme0n1`): una partición GPT, `mkfs.ext4 -L nom-datos`, montarlo por su UUID en
+   `/etc/fstab` **con `nofail`** (si el disco falla, la Pi sigue arrancando desde la microSD).
+3. Con NOM apagado (`/usr/local/sbin/nomcolab-pi apagar`): mover `/var/lib/nomcolab` al disco (datos, llaves y
+   respaldos) y montarlo en el mismo lugar, o cambiar `NOM_DATOS` en `/etc/nomcolab.conf`; prender y
+   `nomcolab-pi estado`.
+
 ## Historia del dominio
 
 Primero se pidió `nomcolab.eu.org` (23 de octubre de 2026, solicitud

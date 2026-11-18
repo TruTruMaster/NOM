@@ -19,11 +19,33 @@ import org.springframework.stereotype.Component;
 @Component
 public class NodoLocal implements Nodo {
 
-    private final String id = UUID.randomUUID().toString().substring(0, 8);
+    private final String id;
     private final Environment env;
 
     public NodoLocal(Environment env) {
         this.env = env;
+        this.id = idGuardado(env);
+    }
+
+    /**
+     * El id de este servidor no cambia al reiniciarlo: la app guarda con él los alias de cada espacio (para «volver a
+     * ser el mismo») y la sincronía lo usa para no copiarse a sí misma. Vive junto a las llaves («<datos>-llaves»),
+     * fuera de los datos cifrados. Si no se puede guardar, uno al azar (como antes).
+     */
+    static String idGuardado(Environment env) {
+        String nuevo = UUID.randomUUID().toString().substring(0, 8);
+        try {
+            java.nio.file.Path dir = mx.wack.nom.servidor.Configuracion.carpetaLlaves(
+                    env.getProperty("nom.datos", "./datos-nom"), env.getProperty("nom.llaves", ""));
+            java.nio.file.Path f = dir.resolve("nodo.id");
+            if (java.nio.file.Files.isRegularFile(f)) {
+                String g = java.nio.file.Files.readString(f, java.nio.charset.StandardCharsets.UTF_8).trim();
+                if (g.matches("[0-9a-f]{8}")) return g;
+            }
+            java.nio.file.Files.createDirectories(dir);
+            java.nio.file.Files.writeString(f, nuevo + "\n", java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception e) { /* sin carpeta de llaves: al azar */ }
+        return nuevo;
     }
 
     public String id() { return id; }
