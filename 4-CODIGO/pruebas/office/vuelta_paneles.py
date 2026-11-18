@@ -16,8 +16,9 @@ transiciones → NOM.transOffice, acción al hacer clic → bloque.accion):
            distinta por diapositiva (con opciones, duración, avance solo o sin clic) y las nueve acciones al hacer clic.
   medios   p08-animaciones.pptx de PowerPoint (con video y audio): efectos y vínculos nuevos en sus figuras,
            transiciones cambiadas, y se exporta sobre su original (los medios tienen que seguir).
-  sonidos  dos .pptx con sonidos (de transición y de efecto): se cambian la transición y las opciones del efecto que
-           suena; el sonido tiene que quedarse.
+  sonidos  dos .pptx con sonidos hechos con PowerPoint: v04-sonidos (windows/hacer_sonidos.py: sonido propio en una
+           transición, en un efecto, «detener el sonido anterior» y en bucle) y una plantilla de Microsoft con sonido en
+           un efecto; se cambian la transición y las opciones del efecto que suena: el sonido tiene que quedarse.
 Para cada una: exporta, vuelve a importar lo exportado y compara efecto por efecto (clase, número, dirección,
 inicio, retraso, duración, opciones, desencadenador), la transición y la acción de cada figura. Luego la sube a la
 Windows, la abre en PowerPoint (windows/abrir_office.py: avisos, «reparar») y corre validar_openxml.py.
@@ -53,7 +54,7 @@ async ([b64, nombre, modo]) => {
     return {
       anim: l.map((x) => ({ quien: nombreDe(doc, p, x.id), clave: A.clavePreset(x) || x.efecto || "?", tipo: x.tipo, inicio: x.inicio || "clic",
         retraso: Math.round(+x.retraso || 0), dur: Math.round(+x.dur || 0), disp: x.disp ? nombreDe(doc, p, x.disp) : "", par: x.par == null ? null : x.par, opc: opc(x) })),
-      trans: t ? { t: t.t, a: JSON.stringify(t.a || {}), dur: Math.round(+t.dur || 0), advTm: t.advTm == null ? null : Math.round(t.advTm), sinClic: !!t.sinClic, snd: !!t.snd } : null,
+      trans: t ? { t: t.t, a: JSON.stringify(t.a || {}), dur: Math.round(+t.dur || 0), advTm: t.advTm == null ? null : Math.round(t.advTm), sinClic: !!t.sinClic, snd: !!t.snd, sndFin: !!t.sndFin, bucle: !!(t.snd && t.snd.bucle) } : null,
       acc: doc.deLaPagina(p).filter((b) => b.accion).map((b) => [nombreDe(doc, p, b.id), b.accion.tipo, b.accion.url || "", b.accion.pagina ? doc.paginas().indexOf(b.accion.pagina) : -1]).sort(),
     };
   });
@@ -159,10 +160,10 @@ async ([b64, nombre, modo]) => {
         // sonidos: cambiar la transición (el sonido se queda, como en el panel) y las opciones de cada efecto que suena
         for (const p of pgs) {
           const t = doc.valor("_doc", "transOffice:" + p);
-          if (t && t.snd) {
+          if (t && (t.snd || t.sndFin)) {
             const e = TO.CATALOGO.findIndex((x) => x[0] === "Barrido");
             const nueva = Object.assign({}, TO.deVariante(TO.CATALOGO[e], 0), { dur: 1100 });
-            nueva.snd = t.snd; if (t.sndFin) nueva.sndFin = true;
+            if (t.snd) nueva.snd = t.snd; if (t.sndFin) nueva.sndFin = true;
             doc.cambiar("_doc", { ["transOffice:" + p]: nueva });
           }
           const l = doc.valor("_doc", "anim:" + p) || [];
@@ -222,7 +223,7 @@ def main():
     if sal.exists(): shutil.rmtree(sal)
     sal.mkdir(parents=True)
     casos = [("cero", None), ("medios", REAL / "p08-animaciones.pptx"),
-             ("sonidos", F.CACHE / "corpus-reales/pptx/lo-tdf148478_transitionMusic.pptx"),
+             ("sonidos", REAL / "v04-sonidos.pptx"),   # hecho con PowerPoint (windows/hacer_sonidos.py)
              ("sonidos", F.CACHE / "corpus/pptx/ms-rendimiento-tipico.pptx")]
     mal = 0
     from playwright.sync_api import sync_playwright

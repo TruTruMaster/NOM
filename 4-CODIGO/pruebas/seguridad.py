@@ -29,7 +29,18 @@ JAR = sys.argv[1] if len(sys.argv) > 1 else os.path.join(AQUI, "..", "app", "tar
 D = tempfile.mkdtemp(prefix="nomcolab-pruebas-")
 JAVA = shutil.which("java") or "java"
 EXTERNO = os.environ.get("NOM_BASE", "").rstrip("/")
-P = 8092; B = EXTERNO or f"http://localhost:{P}"
+def libre(preferido):
+    """El puerto preferido si nadie lo usa; si no, uno libre cualquiera (en esta computadora puede haber otros
+    servidores de prueba de NOM en 8095-8099 y la prueba se conectaba a ellos creyendo que era el suyo)."""
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as c:
+        c.settimeout(0.3)
+        if c.connect_ex(("127.0.0.1", preferido)) != 0: return preferido
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as b:
+        b.bind(("127.0.0.1", 0)); return b.getsockname()[1]
+
+
+P = libre(8092); B = EXTERNO or f"http://localhost:{P}"
 def arrancar():
     return None if EXTERNO else subprocess.Popen([JAVA, "-jar", JAR],
         env=dict(os.environ, NOM_PUERTO=str(P), NOM_DATOS=D, NOM_DESCUBRIMIENTO="false", NOM_CUOTA_MB="200", NOM_ALIAS_HORA_RED="3"), stdout=open(os.path.join(D, "servidor.log"), "a"), stderr=subprocess.STDOUT)
@@ -498,7 +509,7 @@ try:
     if not EXTERNO and pa[0] == 200 and ll[0] == 200:
         # Otro NOM (como el teléfono que comparte) que confía en la llave de este.
         D2 = tempfile.mkdtemp(prefix="nomcolab-pruebas-b-")
-        P2 = 8093; B2 = f"http://localhost:{P2}"
+        P2 = libre(8093); B2 = f"http://localhost:{P2}"
         nubes = json.dumps([{"nube": f"http://localhost:{P}", "llave": ll[1]["llave"]}])
         srv2 = subprocess.Popen([JAVA, "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P2), NOM_DATOS=D2, NOM_DESCUBRIMIENTO="false", NOM_NUBES_CONFIABLES=nubes), stdout=open(os.path.join(D2, "servidor.log"), "a"), stderr=subprocess.STDOUT)
         r2 = lambda *a, **k: rq(B2, *a, **k)
@@ -680,9 +691,10 @@ try:
                     except OSError: pass
                 self.socks = []
         D3 = tempfile.mkdtemp(prefix="nomcolab-pruebas-tel-")
-        P3 = 8094; B3 = f"http://localhost:{P3}"
+        P3 = libre(8094); B3 = f"http://localhost:{P3}"
         srv3 = subprocess.Popen([JAVA, "-Dnom.umbralRama=1000", "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P3), NOM_DATOS=D3, NOM_DESCUBRIMIENTO="false"), stdout=open(os.path.join(D3, "servidor.log"), "a"), stderr=subprocess.STDOUT)
-        puente = Puente(8096, P)
+        PP = libre(8096)
+        puente = Puente(PP, P)
         r3 = lambda *a, **k: rq(B3, *a, **k)
         try:
             for _ in range(90):
@@ -695,7 +707,7 @@ try:
             d3 = (r3("POST", f"/api/espacios/{e3}/documentos", {"nombre": "Acta", "modo": "TEXTO", "ops": []}, tt)[1] or {}).get("id")
             r3("POST", f"/api/documentos/{d3}/ops", {"cliente": "tel1", "dispositivo": "prueba", "ops": [{"id": "tel1:1", "bloque": "cuerpo", "campos": {}, "t": 20, "n": "tel1", "s": {"k": "i", "iz": None, "x": "Acta de la reunión\n"}}]}, tt)
             time.sleep(1.2)
-            c1 = r3("PUT", f"/api/espacios/{e3}/sincronia", {"servidor": "http://localhost:8096", "usuario": "maestra", "contrasena": CL}, tt)
+            c1 = r3("PUT", f"/api/espacios/{e3}/sincronia", {"servidor": f"http://localhost:{PP}", "usuario": "maestra", "contrasena": CL}, tt)
             prueba("13.5 (antes) el espacio del teléfono se copia a la nube", [200, "ok"], [c1[0], (c1[1] or {}).get("estado")])
             nube_esp = next((x["id"] for x in (r("GET", "/api/espacios", t=tk["maestra"])[1] or []) if x["nombre"] == "Salón del teléfono" + SUFIJO), None)
             nube_doc = next((x["id"] for x in (r("GET", f"/api/espacios/{nube_esp}/documentos", t=tk["maestra"])[1] or []) if x["nombre"] == "Acta"), None) if nube_esp else None
@@ -781,7 +793,7 @@ try:
         prueba("14.1 La llave vive fuera de la carpeta de datos", [True, False], [os.path.exists(os.path.join(D + "-llaves", "reposo.key")), any("reposo.key" in f for _, _, fs in os.walk(D) for f in fs)])
         # Un servidor nuevo sin cifrar, con datos en claro: al arrancar con cifrado, se cifran solos.
         D4 = tempfile.mkdtemp(prefix="nomcolab-pruebas-claro-")
-        P4 = 8097; B4 = f"http://localhost:{P4}"
+        P4 = libre(8097); B4 = f"http://localhost:{P4}"
         def arrancar4(**extra):
             return subprocess.Popen([JAVA, "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P4), NOM_DATOS=D4, NOM_DESCUBRIMIENTO="false", **extra), stdout=open(os.path.join(D4 + ".log"), "a"), stderr=subprocess.STDOUT)
         def esperar4(proc, s=90):
@@ -996,7 +1008,7 @@ try:
     if not EXTERNO:
         # 17.6 Memoria: un documento sin uso sale de la memoria (aquí a los 2 s) y vuelve del disco igual, con sus cambios.
         D6 = tempfile.mkdtemp(prefix="nomcolab-pruebas-m-")
-        P6 = 8095; B6 = f"http://localhost:{P6}"
+        P6 = libre(8095); B6 = f"http://localhost:{P6}"
         srv6 = subprocess.Popen([JAVA, "-Dnom.inactivoMs=2000", "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P6), NOM_DATOS=D6, NOM_DESCUBRIMIENTO="false"), stdout=open(os.path.join(D6, "servidor.log"), "a"), stderr=subprocess.STDOUT)
         r6 = lambda *a, **k: rq(B6, *a, **k)[:2]
         try:
@@ -1024,7 +1036,7 @@ try:
             shutil.rmtree(D6, ignore_errors=True); shutil.rmtree(D6 + "-llaves", ignore_errors=True)
         # 16.1 y 16.3 en un servidor aparte con 1 MB por cuenta: 50 personas a la vez y el chat dentro de la cuota
         D5 = tempfile.mkdtemp(prefix="nomcolab-pruebas-e-")
-        P5 = 8096; B5 = f"http://localhost:{P5}"
+        P5 = libre(8096); B5 = f"http://localhost:{P5}"
         srv5 = subprocess.Popen([JAVA, "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P5), NOM_DATOS=D5, NOM_DESCUBRIMIENTO="false", NOM_CUOTA_MB="1"), stdout=open(os.path.join(D5, "servidor.log"), "a"), stderr=subprocess.STDOUT)
         r5 = lambda *a, **k: rq(B5, *a, **k)[:2]
         try:

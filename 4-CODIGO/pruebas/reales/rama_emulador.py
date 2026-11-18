@@ -13,6 +13,10 @@ SER = sys.argv[1] if len(sys.argv) > 1 else "emulator-5554"
 DESDE_TEL = sys.argv[2] if len(sys.argv) > 2 else "http://10.0.2.2:8099"
 SEG = int(sys.argv[3]) if len(sys.argv) > 3 else 135
 AQUI = Path(__file__).resolve().parent
+# Esta prueba corta la red del teléfono (modo avión) más de 2 minutos: por depuración INALÁMBRICA eso corta también la
+# conexión de adb y el teléfono se queda en modo avión (pasó el 18-nov con el A55). Solo emulador o cable.
+if SER.startswith("[") or (":" in SER and not SER.startswith("emulator")):
+    sys.exit("rama_emulador.py corta la red del teléfono: córrela en el emulador o con el teléfono por cable (no por Wi-Fi)")
 res = []
 def anota(n, ok, det=""):
     res.append((n, ok)); print(("BIEN " if ok else "MAL  ") + n + (f" · {det}" if det else ""), flush=True)
