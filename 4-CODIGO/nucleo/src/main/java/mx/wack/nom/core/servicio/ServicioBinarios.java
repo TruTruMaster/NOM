@@ -46,7 +46,22 @@ public class ServicioBinarios {
         this.repo = repo;
         this.maxBytes = maxBytes > 0 ? maxBytes : 48L * 1024 * 1024;
         // lo que ocupa el almacén de cada espacio cuenta en la cuota de su propietario
-        if (documentos != null) documentos.contarBinarios(repo::bytesDe);
+        if (documentos != null) {
+            documentos.contarBinarios(repo::bytesDe);
+            // al copiar o mover un documento a otro espacio, sus binarios van con él
+            documentos.copiarBinariosCon(this::copiarEntreEspacios);
+        }
+    }
+
+    /**
+     * Copia al espacio destino los binarios (huellas) que usa un documento que se copia o se mueve allá. Lo que el origen
+     * no tenga (todavía no terminaba de subirse) se omite: el equipo que lo tenga lo subirá. Devuelve cuántos copió.
+     */
+    int copiarEntreEspacios(String deEspacio, String aEspacio, java.util.Set<String> huellas) {
+        if (huellas == null || huellas.isEmpty() || deEspacio.equals(aEspacio)) return 0;
+        int n = 0;
+        for (String h : huellas) if (HUELLA.matcher(h).matches() && repo.copiar(deEspacio, aEspacio, h)) n++;
+        return n;
     }
 
     public long maxBytes() { return maxBytes; }
@@ -77,7 +92,8 @@ public class ServicioBinarios {
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("huella", h);
         r.put("bytes", datos.length);
-        if (repo.existe(e.id, h)) { r.put("nuevo", false); return r; }
+        // (ya estaba: se marca como recién subido, para que la limpieza no lo borre antes de que llegue quien lo usa)
+        if (repo.existe(e.id, h)) { repo.tocar(e.id, h); r.put("nuevo", false); return r; }
         documentos.revisarCuotaDe(e);
         repo.guardar(e.id, h, datos);
         documentos.olvidarUso(e.propietarioId);
@@ -133,6 +149,15 @@ public class ServicioBinarios {
      * Devuelve cuántos se borraron. (En un espacio cifrado de extremo a extremo las referencias van cifradas: ahí no se
      * borra nada solo.)
      */
+    /** La limpieza programada: todos los espacios (salvo los cifrados de extremo a extremo). Devuelve cuántos borró. */
+    public int limpiarTodo() {
+        int n = 0;
+        for (Espacio e : espacios.todos()) {
+            try { n += limpiar(e.id); } catch (RuntimeException ex) { /* un espacio con problemas no detiene a los demás */ }
+        }
+        return n;
+    }
+
     public int limpiar(String espacioId) {
         Espacio e = espacios.requerir(espacioId);
         if (e.e2e) return 0;

@@ -37,7 +37,7 @@ public class EspaciosApi {
     public record Conexion(boolean activa) { }
     public record CambioAcceso(String usuario, String permiso) { }
     public record Depuracion(int conservar) { }
-    public record NuevoDocumento(String nombre, String modo, List<Operacion> ops, String llave) { }
+    public record NuevoDocumento(String nombre, String modo, List<Operacion> ops, String llave, String clave) { }
     public record NuevoEnlace(String permiso, Integer horas, Boolean invitados) { }
     public record Sincronizar(String servidor, String usuario, String contrasena) { }
     public record CambioCarpeta(String de, String a) { }
@@ -252,6 +252,6 @@ public class EspaciosApi {
     @ResponseStatus(HttpStatus.CREATED)
     public Documento crearDocumento(@RequestAttribute(FiltroSesion.ATRIBUTO) Usuario u, @PathVariable String id,
                                     @RequestBody NuevoDocumento n) {
-        return documentos.crear(u, id, n.nombre(), n.modo(), n.ops(), n.llave());
+        return documentos.crear(u, id, n.nombre(), n.modo(), n.ops(), n.llave(), n.clave());
     }
 }

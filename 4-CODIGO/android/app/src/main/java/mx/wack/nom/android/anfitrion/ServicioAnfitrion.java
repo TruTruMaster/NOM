@@ -190,6 +190,8 @@ public class ServicioAnfitrion extends Service {
         reloj.scheduleAtFixedRate(seguro(difusor::latido), 20, 20, TimeUnit.SECONDS);
         reloj.scheduleAtFixedRate(seguro(() -> primerPlano(null)), 30, 30, TimeUnit.SECONDS);
         reloj.scheduleWithFixedDelay(seguro(sincronia::cadaRato), 90, 300, TimeUnit.SECONDS);
+        // el almacén de binarios: lo que nadie usa desde hace 30 días sale (cada 6 horas)
+        reloj.scheduleWithFixedDelay(seguro(binarios::limpiarTodo), 600, 6 * 3600, TimeUnit.SECONDS);
         // 6.4: respaldo del día (se revisa cada hora; si hoy ya hay uno, no hace nada).
         File filesDir = getFilesDir();
         reloj.scheduleWithFixedDelay(seguro(() -> Respaldo.diario(filesDir)), 20, 3600, TimeUnit.SECONDS);

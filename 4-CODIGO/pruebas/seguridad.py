@@ -1052,6 +1052,34 @@ try:
     prueba("18.4 Un enlace inventado no entrega nada", 404, rb("GET", f"/api/ver/{'x' * 32}/binarios/{h18}")[0])
     alm18 = r("GET", "/api/cuentas/almacenamiento", t=tok["duena"])[1] or {}
     prueba("18.5 Cuenta en lo que usa la propietaria del espacio", True, any(e.get("id") == esp and e.get("binarios", 0) >= 200000 for e in alm18.get("espacios", [])))
+    # 18.6 Crear con clave: si la respuesta se perdió y se pide otra vez con la misma clave, el mismo documento (no dos)
+    clave18 = secrets.token_hex(16)
+    c18a = r("POST", f"/api/espacios/{esp}/documentos", {"nombre": "Reintento", "modo": "TEXTO", "ops": [], "clave": clave18}, tok["editora"])
+    c18b = r("POST", f"/api/espacios/{esp}/documentos", {"nombre": "Reintento", "modo": "TEXTO", "ops": [], "clave": clave18}, tok["editora"])
+    lista18 = r("GET", f"/api/espacios/{esp}/documentos", t=tok["editora"])[1] or []
+    prueba("18.6 La misma clave dos veces: el mismo documento, uno solo en el espacio", [201, 201, True, 1],
+           [c18a[0], c18b[0], (c18a[1] or {}).get("id") == (c18b[1] or {}).get("id"), sum(1 for x in lista18 if x.get("nombre") == "Reintento")])
+    c18c = r("POST", f"/api/espacios/{esp}/documentos", {"nombre": "Reintento", "modo": "TEXTO", "ops": [], "clave": clave18}, tok["duena"])
+    prueba("18.6 …otra persona con la misma clave crea el suyo (la clave es de cada quien)", [201, False], [c18c[0], (c18c[1] or {}).get("id") == (c18a[1] or {}).get("id")])
+    prueba("18.6 Una clave con caracteres raros: 400", 400, r("POST", f"/api/espacios/{esp}/documentos", {"nombre": "x", "modo": "TEXTO", "ops": [], "clave": "../../x"}, tok["editora"])[0])
+    r("DELETE", f"/api/documentos/{(c18a[1] or {}).get('id')}", t=tok["editora"])
+    c18d = r("POST", f"/api/espacios/{esp}/documentos", {"nombre": "Reintento", "modo": "TEXTO", "ops": [], "clave": clave18}, tok["editora"])
+    prueba("18.6 …si el primero ya se borró, se crea otro", [201, False], [c18d[0], (c18d[1] or {}).get("id") == (c18a[1] or {}).get("id")])
+    # 18.7 Copiar a otro espacio: los binarios que usa el documento van con la copia
+    esp2 = r("POST", "/api/espacios", {"nombre": "Destino" + SUFIJO}, tok["duena"])[1]["id"]
+    cop18 = r("POST", f"/api/documentos/{doc}/copia", {"espacioId": esp2}, tok["duena"])
+    prueba("18.7 Copiar a otro espacio: la copia ve su imagen ahí", [200, 200, True], [cop18[0]] + list((lambda x: (x[0], x[1] == bin18))(rb("GET", f"/api/espacios/{esp2}/binarios/{h18}", t=tok["duena"]))))
+    # 18.8 Mover: sus binarios (también los de sus versiones) van al espacio nuevo
+    esp3 = r("POST", "/api/espacios", {"nombre": "Mudanza" + SUFIJO}, tok["duena"])[1]["id"]
+    bin18v = secrets.token_bytes(30000); h18v = _h.sha256(bin18v).hexdigest()
+    rb("PUT", f"/api/espacios/{esp}/binarios/{h18v}", bin18v, tok["duena"])
+    doc18m = r("POST", f"/api/espacios/{esp}/documentos", {"nombre": "Se muda", "modo": "PRESENTACION", "ops": [{"id": "m18:1", "bloque": "i1", "campos": {"tipo": "imagen", "src": f"nom:bin/{h18v}.png"}, "t": 2, "n": "m18"}]}, tok["duena"])[1]["id"]
+    # (la imagen se cambia por otra: la vieja solo queda en la versión de la creación)
+    r("POST", f"/api/documentos/{doc18m}/ops", {"cliente": "m18", "dispositivo": "prueba", "ops": [{"id": "m18:2", "bloque": "i1", "campos": {"src": f"nom:bin/{h18}.png"}, "t": 5, "n": "m18"}]}, tok["duena"])
+    time.sleep(1)
+    mv18 = r("PUT", f"/api/documentos/{doc18m}/espacio", {"espacioId": esp3}, tok["duena"])
+    prueba("18.8 Mover: el documento y sus binarios (el de ahora y el de una versión) en el espacio nuevo", [200, 200, 200],
+           [mv18[0], rb("GET", f"/api/espacios/{esp3}/binarios/{h18}", t=tok["duena"])[0], rb("GET", f"/api/espacios/{esp3}/binarios/{h18v}", t=tok["duena"])[0]])
 
     # 3.6 Entrega con fecha límite
     edoc = r("POST", f"/api/espacios/{salon}/documentos", {"nombre": "Tarea 1", "modo": "TEXTO", "ops": []}, tk["alumno1"])[1]["id"]

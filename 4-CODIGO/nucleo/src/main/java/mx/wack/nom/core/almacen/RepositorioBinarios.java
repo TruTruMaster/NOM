@@ -28,4 +28,19 @@ public interface RepositorioBinarios {
 
     /** Milisegundos desde que se guardó (para no borrar lo recién subido que todavía no usa ningún documento). */
     long edadMs(String espacioId, String huella);
+
+    /** Lo marca como recién guardado (alguien lo volvió a subir: lo va a usar un documento nuevo). */
+    default void tocar(String espacioId, String huella) { }
+
+    /**
+     * Copia un binario de un espacio a otro (al copiar o mover un documento). Devuelve false si el origen no lo tiene.
+     * (Lo cifrado en reposo lleva la ruta autenticada: se lee en claro y se guarda otra vez con la ruta nueva.)
+     */
+    default boolean copiar(String deEspacio, String aEspacio, String huella) {
+        if (existe(aEspacio, huella)) { tocar(aEspacio, huella); return true; }
+        byte[] b = leer(deEspacio, huella);
+        if (b == null) return false;
+        guardar(aEspacio, huella, b);
+        return true;
+    }
 }

@@ -420,7 +420,7 @@ final class ApiTelefono {
             if (m.equals("GET")) return ok(documentos.listar(u, x.group(1)));
             if (m.equals("POST")) {
                 Map<String, Object> c = cuerpo(p);
-                Documento d = documentos.crear(u, x.group(1), texto(c, "nombre"), texto(c, "modo"), Json.operaciones(c.get("ops")), texto(c, "llave"));
+                Documento d = documentos.crear(u, x.group(1), texto(c, "nombre"), texto(c, "modo"), Json.operaciones(c.get("ops")), texto(c, "llave"), texto(c, "clave"));
                 return creado(d);
             }
         }

@@ -57,14 +57,33 @@ async (ext) => {
 """
 JS_IMAGENES = r"""
 () => {
-  const imgs = [...document.querySelectorAll('img')].filter((i) => i.offsetParent || i.closest('.diapo'));
+  // (también las de un marco de la misma página: el enlace para ver de un texto o una hoja va en un iframe)
+  const docs = [document].concat([...document.querySelectorAll('iframe')].map((f) => { try { return f.contentDocument; } catch (e) { return null; } }).filter(Boolean));
+  const imgs = docs.flatMap((d) => [...d.querySelectorAll('img')]).filter((i) => i.offsetParent || i.closest('.diapo') || i.ownerDocument !== document);
   const ref = imgs.filter((i) => (i.getAttribute('src') || '').startsWith('nom:bin/') || i.hasAttribute('data-nombin-src')).length;
   const blob = imgs.filter((i) => (i.getAttribute('src') || '').startsWith('blob:')).length;
   const rotas = imgs.filter((i) => i.complete && i.naturalWidth === 0 && !(i.getAttribute('src') || '').startsWith('data:image/gif')).length;
-  const estilos = [...document.querySelectorAll('[style*="nom:bin/"]')].length;
+  const estilos = docs.reduce((n, d) => n + d.querySelectorAll('[style*="nom:bin/"]').length, 0);
   return { total: imgs.length, ref, blob, rotas, estilos };
 }
 """
+
+# Una hoja de Excel: se abre la primera hoja que tiene una imagen encima (la primera puede no tener ninguna).
+JS_HOJA_CON_IMAGEN = r"""
+() => {
+  const d = NOM.editorActual && NOM.editorActual.doc; if (!d) return null;
+  for (const b of d.vivos()) {
+    if (b.tipo !== 'tabla' || b.enTexto || !Array.isArray(b.dib) || !b.dib.some((x) => x && x.tipo === 'imagen' && x.src)) continue;
+    const bt = document.querySelector(`.pestana-hoja[data-pag="${b.pagina}"]`);
+    if (bt) { bt.click(); return b.pagina; }
+  }
+  return null;
+}
+"""
+
+def a_la_hoja_con_imagen(p, ext):
+    if ext == "xlsx":
+        p.evaluate(JS_HOJA_CON_IMAGEN); p.wait_for_timeout(2500)
 
 def partes(b):
     z = zipfile.ZipFile(io.BytesIO(b))
@@ -110,9 +129,11 @@ def main():
             st = N.api("GET", "/api/cuentas/almacenamiento", None, a["token"])
             st = st[1] if isinstance(st, tuple) else st
             e = [x for x in (st or {}).get("espacios", []) if x["id"] == esp]
-            if e: anota("   el documento queda chico y los binarios van aparte", e[0]["bytes"] - e[0].get("binarios", 0) < 6e6 and e[0].get("binarios", 0) > 1e6,
+            # (el documento con sus versiones pesa mucho menos que con los datos dentro, y los binarios están aparte)
+            if e: anota("   el documento queda chico y los binarios van aparte", e[0]["bytes"] - e[0].get("binarios", 0) < min(6e6, 0.5 * r["pesoSin"]) and e[0].get("binarios", 0) > 0.25 * r["pesoSin"],
                         f"documento y versiones {(e[0]['bytes'] - e[0].get('binarios', 0)) / 1e6:.1f} MB · binarios {e[0].get('binarios', 0) / 1e6:.1f} MB")
             A.p.goto(N.B + "/#/doc/" + r["id"]); A.p.wait_for_timeout(4000)
+            a_la_hoja_con_imagen(A.p, ext)
             ok, im = esperar_imagenes(A.p)
             anota("2. al abrirlo las imágenes se ven", ok and im["rotas"] == 0, json.dumps(im))
             x = A.p.evaluate(JS_EXPORTAR, ext)
@@ -127,6 +148,7 @@ def main():
             cb, pb = otra_pagina(A, b)
             try:
                 pb.goto(N.B + "/#/doc/" + r["id"]); pb.wait_for_timeout(4000)
+                a_la_hoja_con_imagen(pb, ext)
                 ok, im = esperar_imagenes(pb)
                 anota("5. otra persona del espacio las ve (del servidor)", ok and im["rotas"] == 0, json.dumps(im))
             finally: cb.close()

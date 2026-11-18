@@ -106,24 +106,27 @@
     opc = opc || {};
     const base = api.servidor();
     if (empaquetada && !base) throw new ErrorApi(0, { error: "Primero elige dónde trabaja tu equipo" });
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), opc.ms || 9000);
     const cab = { Accept: "application/json" };
     if (cuerpo !== undefined) cab["Content-Type"] = "application/json";
     // Fase 15: en un espacio cifrado de extremo a extremo, el contenido se cifra aquí antes de salir.
     const original = cuerpo;
     if (cuerpo !== undefined && !opc.crudo && NOM.e2e) {
       try { cuerpo = await NOM.e2e.alEnviar(metodo, ruta, cuerpo); }
-      catch (e) { clearTimeout(t); throw new ErrorApi(e.estado === 0 ? 0 : 400, { error: e.message }); }
+      catch (e) { throw new ErrorApi(e.estado === 0 ? 0 : 400, { error: e.message }); }
     }
     const tok = api.token();
     if (tok) cab.Authorization = "Bearer " + tok;
+    // (las llaves «_…» del cuerpo son de este equipo, como _llaveDoc: no salen. Las de DENTRO de los datos sí: antes se
+    // quitaban todas y un documento perdía lo que la importación guarda así, como el color «_c» de una animación.)
+    // Se arma antes de pedir: si algo no se puede convertir a JSON es un error de aquí, no «sin conexión».
+    const enviar = cuerpo;
+    const texto0 = enviar === undefined ? undefined : JSON.stringify(enviar, function (k, v) { return this === enviar && k.startsWith("_") ? undefined : v; });
+    // (el tiempo límite cuenta desde que sale la petición: cifrar y armar un documento grande no se lo come)
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), opc.ms || 9000);
     let r;
     try {
-      // (las llaves «_…» del cuerpo son de este equipo, como _llaveDoc: no salen. Las de DENTRO de los datos sí: antes se
-      // quitaban todas y un documento perdía lo que la importación guarda así, como el color «_c» de una animación)
-      const enviar = cuerpo;
-      r = await fetch(base + ruta, { method: metodo, headers: cab, body: enviar === undefined ? undefined : JSON.stringify(enviar, function (k, v) { return this === enviar && k.startsWith("_") ? undefined : v; }), signal: ctl.signal });
+      r = await fetch(base + ruta, { method: metodo, headers: cab, body: texto0, signal: ctl.signal });
     } catch (e) {
       marcarRed(false);
       throw new ErrorApi(0, null);

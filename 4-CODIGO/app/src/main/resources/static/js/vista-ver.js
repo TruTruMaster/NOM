@@ -43,7 +43,9 @@
     const limpiar = [];
 
     if (modo === "TEXTO" || modo === "HOJA") {
-      // En un marco aislado y sin scripts: se ve igual que el documento exportado a HTML.
+      // En un marco aislado y sin scripts: se ve igual que el documento exportado a HTML. Las imágenes del almacén de
+      // binarios van dentro (como datos): se traen antes por la ruta del enlace.
+      if (NOM.binarios && NOM.binarios.refsDoc(doc).size) { try { await NOM.binarios.precargar(doc); } catch (e) { /* lo que falte sale vacío */ } }
       const f = document.createElement("iframe");
       f.className = "ver-marco";
       f.title = d.nombre || "Documento";

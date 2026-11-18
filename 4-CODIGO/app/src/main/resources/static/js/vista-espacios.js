@@ -635,7 +635,17 @@
       try {
         const r = await NOM.formatos.importar(f);
         if (donde === "local") { const d = NOM.local.crear(r.nombre, r.modo, r.ops); location.hash = "#/local/" + d.id; }
-        else { const d = await NOM.binarios.crearEnEspacio(donde, r.nombre, r.modo, r.ops); location.hash = "#/doc/" + d.id; }
+        else {
+          let d;
+          try { d = await NOM.binarios.crearEnEspacio(donde, r.nombre, r.modo, r.ops); }
+          catch (err) {
+            // sin Internet también se crea dentro del espacio (se sube al volver), como desde «Nuevo documento»
+            if (!err.red || !api.token()) throw err;
+            crearSinRed(donde, r.nombre, r.modo, r.ops);
+            return;
+          }
+          location.hash = "#/doc/" + d.id;
+        }
         aviso(r.aviso || `“${r.nombre}” importado${donde === "local" ? "" : " en " + donde.nombre}`, { tipo: r.aviso ? "aviso" : "ok", ms: 5000 });
       }
       catch (e) { aviso(e.message, { tipo: "error", ms: 6000 }); }

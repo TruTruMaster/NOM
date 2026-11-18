@@ -359,7 +359,14 @@
   }
   /** Huellas de cada unidad del cuerpo (párrafo o tabla de Word) tal como quedó importada: { k: [todo, soloFormatoDePárrafo] }. */
   const sinOx = (pa) => { const r = Object.assign({}, pa); delete r.ox; return r; };
-  const huellaGrupo = (g) => NOM.origen.huella(g.map((p) => [sinOx(p.pa), p.tramos.map((t) => (t.e ? { e: t.e, a: t.a } : [t.x, t.a]))]));
+  // Un objeto dentro del texto (ecuación, imagen…) lleva los campos de su bloque: un campo vacío (null) no cuenta, porque
+  // al guardar como .nom (y en cualquier copia) un campo vacío simplemente no está, y el párrafo parecía cambiado.
+  const sinNulosE = (e) => { const r = {}; for (const k in e) if (e[k] != null) r[k] = e[k]; return r; };
+  const huellaGrupo = (g) => NOM.origen.huella(g.map((p) => [sinOx(p.pa), p.tramos.map((t) => (t.e ? { e: sinNulosE(t.e), a: t.a } : [t.x, t.a]))]));
+  // (las huellas guardadas hasta la 0.16.0 sí contaban los campos vacíos: también valen)
+  const conNulos = (g) => g.some((p) => p.tramos.some((t) => t.e && Object.keys(t.e).some((k) => t.e[k] === null)));
+  const huellaGrupoVieja = (g) => NOM.origen.huella(g.map((p) => [sinOx(p.pa), p.tramos.map((t) => (t.e ? { e: t.e, a: t.a } : [t.x, t.a]))]));
+  const mismoGrupo = (g, h) => huellaGrupo(g) === h || (conNulos(g) && huellaGrupoVieja(g) === h);
   function huellasDocx(doc) {
     const ps = NOM.textoRico.parrafosDe(doc), u = {};
     for (let i = 0; i < ps.length;) {
@@ -1045,14 +1052,14 @@
         while (j + 1 < ps.length && ps[j + 1].pa.ox === k) j++;
         usados.add(String(k));
         const grupo = ps.slice(i, j + 1);
-        if (huellaGrupo(grupo) === hu[k][0]) { sale.push(antesDe(u) + xd.slice(u.i, u.f)); textuales++; }
+        if (mismoGrupo(grupo, hu[k][0])) { sale.push(antesDe(u) + xd.slice(u.i, u.f)); textuales++; }
         else {
           // La unidad cambió (se editó, o se partió con Enter). Párrafo por párrafo: el que sigue igual
           // que el original sale textual; los demás se parchan sobre su XML original (o se escriben de nuevo).
           let textual = false;
           for (let q = i; q <= j; q++) {
             const p = ps[q], unico = p.tramos.length === 1 && p.tramos[0].e;
-            if (!textual && grupo.length > 1 && huellaGrupo([p]) === hu[k][0]) { sale.push(xd.slice(u.i, u.f)); textual = true; textuales++; continue; }
+            if (!textual && grupo.length > 1 && mismoGrupo([p], hu[k][0])) { sale.push(xd.slice(u.i, u.f)); textual = true; textuales++; continue; }
             const ant = sale[sale.length - 1];
             if (unico && unico.tipo === "salto" && q > i && ant && ant.endsWith("</w:p>") && !textual) { sale[sale.length - 1] = ant.slice(0, -6) + '<w:r><w:br w:type="page"/></w:r></w:p>'; continue; }
             if (unico && unico.tipo === "saltocol" && q > i && ant && ant.endsWith("</w:p>") && !textual) { sale[sale.length - 1] = ant.slice(0, -6) + '<w:r><w:br w:type="column"/></w:r></w:p>'; continue; }
@@ -1125,7 +1132,7 @@
             if (q >= ps.length || String(ps[q].pa.ox) !== hk) { entero = false; break; }
             let j2 = q;
             while (j2 + 1 < ps.length && String(ps[j2 + 1].pa.ox) === hk) j2++;
-            if (huellaGrupo(ps.slice(q, j2 + 1)) !== hu[hk][0]) { entero = false; break; }
+            if (!mismoGrupo(ps.slice(q, j2 + 1), hu[hk][0])) { entero = false; break; }
             q = j2 + 1;
           }
           if (entero) { piezas.push(antesDe(us[top]) + xd.slice(us[top].i, us[top].f)); hojas[top].forEach((hk) => usados.add(hk)); textuales++; i = q; continue; }

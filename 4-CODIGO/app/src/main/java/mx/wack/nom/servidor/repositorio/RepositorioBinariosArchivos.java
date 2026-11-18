@@ -117,6 +117,12 @@ public class RepositorioBinariosArchivos implements RepositorioBinarios {
     }
 
     @Override
+    public void tocar(String espacioId, String huella) {
+        try { Files.setLastModifiedTime(archivo(espacioId, huella), java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis())); }
+        catch (IOException e) { /* nada: solo da más tiempo antes de la limpieza */ }
+    }
+
+    @Override
     public long edadMs(String espacioId, String huella) {
         try { return System.currentTimeMillis() - Files.getLastModifiedTime(archivo(espacioId, huella)).toMillis(); }
         catch (IOException e) { return 0; }

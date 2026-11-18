@@ -81,6 +81,11 @@ final class RepositorioBinariosTelefono implements RepositorioBinarios {
         bytesCache.remove(espacioId);
     }
 
+    @Override public void tocar(String espacioId, String huella) {
+        File f = archivo(espacioId, huella);
+        if (f.isFile()) f.setLastModified(System.currentTimeMillis());
+    }
+
     @Override public long edadMs(String espacioId, String huella) {
         File f = archivo(espacioId, huella);
         return f.isFile() ? System.currentTimeMillis() - f.lastModified() : 0;

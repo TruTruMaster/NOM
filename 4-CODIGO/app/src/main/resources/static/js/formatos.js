@@ -190,7 +190,11 @@ ${h}</body></html>`;
         if (b.estilo === "tarea") return `<p>${b.hecho ? "☑" : "☐"} ${b.html || ""}</p>`;
         return `<${tag}>${b.html || ""}</${tag}>`;
       }
-      if (b.tipo === "tabla") return "<table>" + celdasDe(b).map((r) => "<tr>" + r.map((v) => `<td>${NOM.esc(v)}</td>`).join("") + "</tr>").join("") + "</table>";
+      if (b.tipo === "tabla") {
+        // (las imágenes que flotan sobre una hoja de Excel van después de su tabla)
+        const imgs = Array.isArray(b.dib) ? b.dib.filter((d) => d && d.tipo === "imagen" && d.src).map((d) => `<p><img src="${NOM.esc(NOM.srcExport ? NOM.srcExport(d.src) : d.src)}" alt=""></p>`).join("") : "";
+        return "<table>" + celdasDe(b).map((r) => "<tr>" + r.map((v) => `<td>${NOM.esc(v)}</td>`).join("") + "</tr>").join("") + "</table>" + imgs;
+      }
       if (b.tipo === "imagen") return `<p><img src="${NOM.esc(NOM.srcExport ? NOM.srcExport(b.src) : b.src)}" alt="${NOM.esc(b.alt || "")}"></p>`;
       if (b.tipo === "forma") return `<p><em>[${NOM.esc(b.figura)}]</em> ${NOM.esc(b.texto || "")}</p>`;
       return "";

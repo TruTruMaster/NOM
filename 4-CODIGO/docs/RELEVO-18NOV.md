@@ -137,3 +137,31 @@ Falta antes de unirla (en orden):
 
 La copia de trabajo de la rama estaba en una carpeta temporal que se borra al apagar; los commits sí están en el
 repositorio. Para seguir: `git worktree prune` y `git worktree add <carpeta fuera de /tmp> almacen-binarios`.
+
+## 7. Sesión del 18-nov (mañana): almacén de binarios, casi listo para unir (rama `almacen-binarios`)
+
+Hecho y comprobado (servidor de pruebas 8099 con el jar de la rama):
+- **ms-complex2010.docx «Lo creaste sin conexión»**: no se reproduce (solo: 10/10; con los 5 archivos de la regresión:
+  50/50). Se endureció lo que lo podía causar: `api.js` arma el JSON antes de pedir (un error al armarlo ya no se
+  confunde con «sin conexión») y el tiempo límite cuenta desde que sale la petición; crear un documento lleva una
+  **clave de creación** (el servidor da el mismo documento si se repite: `ServicioDocumentos.crear(..., clave)`, también
+  en `ApiTelefono`); `crearEnEspacio` no toca el almacén si el sistema dice que no hay red y, si la creación falla por la
+  red pero el servidor contesta, la pide otra vez con la misma clave; `guardar(..., esperar)` avisa si no pudo subir.
+  Lo creado sin conexión (`local.subir`) sube por el almacén, con su clave guardada (sin duplicados al reintentar).
+- **Copiar y mover entre espacios con sus binarios** (`ServicioDocumentos.copiar/mover` + `RepositorioBinarios.copiar`;
+  al mover también los de sus versiones). Volver a subir un binario que ya estaba lo «toca» (30 días más de gracia).
+- **Limpieza programada**: `ServicioBinarios.limpiarTodo` cada 6 h (Spring `Tareas` y el teléfono).
+- `seguridad.py` **423/423** (nuevos 18.6 clave, 18.7 copiar, 18.8 mover).
+- **t01 y t02 por el almacén** (`almacen_binarios.py`): **18/18**. Arreglos que salieron de ahí: el enlace para ver de
+  Word/Excel no traía las imágenes del almacén (`vista-ver.js` precarga); el HTML de una hoja ahora lleva sus imágenes;
+  la prueba busca la hoja con imágenes y mira dentro del marco; y un defecto **anterior al almacén**: tras un `.nom`, un
+  párrafo con ecuación salía regenerado (un campo `null` del objeto se perdía y cambiaba la huella): `ooxml.js`
+  `mismoGrupo` (las huellas ya no cuentan los campos vacíos y las viejas siguen valiendo).
+- t03 por el almacén se lanzó al final y no se alcanzó a ver el resultado: repetirlo
+  (`almacen_binarios.py` sin argumentos).
+
+Falta para unirla a `main` como 0.17.0: ayuda (`4-CODIGO/ayuda/contenido`, `generar.py`), novedades (`CAMBIOS.md`),
+`PLAN-MEDIOS.md` (fase 2 hecha), subir versión a 0.17.0 (APK 32) e **INTERFAZ a 22** (`Version.java`, `nucleo.js`,
+`sw.js`, `build.gradle.kts`), regresión completa, unir, y publicar (push, Pi + `humo.py`, APK + `publicar-apk.sh`).
+Pendiente aparte: el enlace para ver de Word y Excel es el HTML exportado (simplificado), no la vista del editor.
+Después sigue el punto 2 del pedido (EMF/WMF, campos, notas al final, guiones, modelo de acomodo de Word…).

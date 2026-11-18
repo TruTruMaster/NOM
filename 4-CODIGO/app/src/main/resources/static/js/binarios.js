@@ -164,13 +164,30 @@
     const reg = { h, espacio: c.espacio || null, mime: mime || "application/octet-stream", datos: sale, cifrado: c.llave ? 1 : 0, pendiente: 1, t: Date.now() };
     recordar(h, bytes, reg.mime);
     ctxDe.set(h, c);
+    const antes = esperar ? await idbGet(h) : null;
     await idbPut(reg);
     const p = subirUno(reg);
     if (esperar) {
       const ok = await p;
       if (!ok && hayAlmacen === false) throw Object.assign(new Error("Este servidor no tiene almacén de archivos"), { sinAlmacen: true });
+      if (!ok) {
+        // Quien espera va a crear un documento con esto: sin subirlo, no lo crea (se guarda en este equipo con los
+        // datos dentro). Que no se quede pendiente de subir, salvo que ya lo estuviera por otra cosa.
+        if (!(antes && antes.pendiente && antes.espacio === reg.espacio)) idbPut(Object.assign({}, reg, { pendiente: 0 }));
+        throw new NOM.api.ErrorApi(0, null);
+      }
     }
     return PRE + h + "." + extDe(mime);
+  }
+  /** Una clave al azar para crear un documento: si la respuesta se pierde y se pide otra vez, el servidor da el mismo. */
+  function claveNueva() {
+    const u = new Uint8Array(16);
+    (window.crypto || window.msCrypto).getRandomValues(u);
+    return hex(u);
+  }
+  /** ¿Contesta el servidor? (para distinguir «sin red» de «la respuesta tardó o se perdió») */
+  async function servidorContesta() {
+    try { await NOM.api.get("/api/red/info", undefined, { ms: 6000 }); return true; } catch (e) { return false; }
   }
 
   // ------------------------------------------------------------ bajar
@@ -302,9 +319,15 @@
         if (b64) {
           const fmt = String(ogBase.campos.fmt || "bin");
           const ref = await guardar(deB64(b64), MIMES[fmt] || "application/octet-stream", c, true);
-          const campos = Object.assign({}, ogBase.campos, { bin: ref, n: 0 });
-          ops = ops.filter((o) => !(o.bloque === "_origen" && o !== ogBase && o.campos && Object.keys(o.campos).every((k) => /^p\d+$/.test(k))));
-          ops = ops.map((o) => (o === ogBase ? Object.assign({}, o, { campos }) : o));
+          // (los trozos pN pueden estar repartidos entre varias operaciones, también junto con otros campos: se quitan
+          // de todas, y las que se quedan vacías, fuera)
+          const sinTrozos = (campos) => { const r = {}; for (const k in campos) if (!/^p\d+$/.test(k)) r[k] = campos[k]; return r; };
+          ops = ops.map((o) => {
+            if (o.bloque !== "_origen" || !o.campos) return o;
+            if (o === ogBase) return Object.assign({}, o, { campos: Object.assign(sinTrozos(o.campos), { bin: ref, n: 0 }) });
+            const campos = sinTrozos(o.campos);
+            return Object.keys(campos).length ? Object.assign({}, o, { campos }) : null;
+          }).filter(Boolean);
         }
       }
       // 2) imágenes grandes en cualquier campo
@@ -346,13 +369,26 @@
    * llave del documento, que se genera aquí y se le pasa a e2e.js) y el documento solo con sus referencias.
    */
   async function crearEnEspacio(esp, nombre, modo, ops, opc) {
+    opc = Object.assign({}, opc || {});
+    const clave = opc.clave || claveNueva(), sinContexto = !!opc.sinContexto;
+    delete opc.clave; delete opc.sinContexto;
+    // Sin red (el sistema lo sabe): ni se toca el almacén; quien llama lo guarda en este equipo y lo sube al volver.
+    if (navigator.onLine === false) throw new NOM.api.ErrorApi(0, null);
     const cifrado = !!(esp && (esp.e2e || (NOM.e2e && NOM.e2e.espacioCifrado && NOM.e2e.espacioCifrado(esp.id))));
     const kd = cifrado && NOM.cripto ? NOM.cripto.azar(32) : null;
     const listas = await sacarDeOps(ops, { espacio: esp.id, llave: kd, nombre, modo });
-    const cuerpo = { nombre, modo, ops: NOM.DocCRDT.partir(listas) };
+    const cuerpo = { nombre, modo, ops: NOM.DocCRDT.partir(listas), clave };
     if (kd) cuerpo._llaveDoc = kd;
-    const d = await NOM.api.post(`/api/espacios/${esp.id}/documentos`, cuerpo, Object.assign({ ms: 60000 }, opc || {}));
-    if (d && d.id) contexto({ espacio: esp.id, llave: kd, doc: d.id });
+    const ruta = `/api/espacios/${esp.id}/documentos`;
+    let d;
+    try { d = await NOM.api.post(ruta, cuerpo, Object.assign({ ms: 60000 }, opc)); }
+    catch (e) {
+      // ¿De verdad sin red? Si el servidor contesta, la respuesta tardó más de la cuenta o se perdió en el camino: se
+      // pide otra vez con la misma clave (si ya lo había creado, el servidor da el mismo documento, no otro).
+      if (!e || !e.red || !(await servidorContesta())) throw e;
+      d = await NOM.api.post(ruta, cuerpo, Object.assign({}, opc, { ms: 240000 }));
+    }
+    if (d && d.id && !sinContexto) contexto({ espacio: esp.id, llave: kd, doc: d.id });
     return d;
   }
 
@@ -417,7 +453,7 @@
   NOM.srcExport = paraExportar;
   NOM.binarios = {
     PRE, UMBRAL, esRef, huellaDe, mimeDe, extDe, contexto, guardar, bytes, bytesYa, url, urlYa, datosYa, refsEn, refsDoc,
-    precargar, conDatos, sacarDeOps, crearEnEspacio, subirPendientes, resolverTodo, llaveDeTexto, paraSrc, paraExportar,
+    precargar, conDatos, sacarDeOps, crearEnEspacio, claveNueva, subirPendientes, resolverTodo, llaveDeTexto, paraSrc, paraExportar,
     /** Para las pruebas: ¿tiene almacén el servidor? (null = no se ha probado) */
     get hayAlmacen() { return hayAlmacen; },
   };
