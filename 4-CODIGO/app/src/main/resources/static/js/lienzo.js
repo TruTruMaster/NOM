@@ -908,6 +908,8 @@
         const conFormato = D && !COMPARTIMENTOS.has(b.figura) && /<(b|i|u|s|span|ul|ol|div|a|sub|sup)\b/.test(h);
         if (t !== (b.texto || "") || (conFormato ? h : null) !== (b.html || null)) doc().cambiar(id, { texto: t, html: conFormato ? h : null });
       } else if (h !== (b.html || "")) doc().cambiar(id, { html: h });
+      // (al dejar de escribir, cada renglón vuelve a donde lo pone PowerPoint, aunque el texto no haya cambiado)
+      if (acotado && NOM.diapo && NOM.diapo.ajustarRenglones) { const bl = mundo.querySelector(`[data-id="${CSS.escape(id)}"]`); if (bl) NOM.diapo.ajustarRenglones(bl); }
       pintarBarra();
     }
 
@@ -2097,6 +2099,8 @@
           return `<button class="mini" data-p="${esc(p)}" aria-current="${p === ed.pagina}" aria-label="Diapositiva ${i + 1}" style="aspect-ratio:${T.w} / ${T.h}"><span class="num">${i + 1}</span>
             <div class="mini-cont diapo-mini" style="${NOM.diapo ? NOM.diapo.estiloDiapo(doc(), p) : ""}">${htmlDiapositiva(doc(), p)}</div>${du ? `<span class="mini-dueno" style="--c:${esc(ed.colorDe(du))}">${esc(ed.nombreDe(du))}</span>` : ""}${cambios ? `<span class="mini-cambio" title="Cambió desde tu última visita"></span>` : ""}${tieneTransicion(doc(), p) ? `<span class="mini-trans" title="Con transición">${ico("sparkles", "ico-s")}</span>` : ""}</button>`;
         }).join("") + (ed.soloLectura ? "" : `<button class="btn plano" data-nueva data-micro="Nueva diapositiva|Agrega una diapositiva después de la actual.">${ico("plus")}</button>`);
+        // (los renglones de las miniaturas donde los pone PowerPoint, como en la diapositiva grande)
+        if (NOM.diapo && NOM.diapo.ajustarRenglones) requestAnimationFrame(() => { if (minis.isConnected) NOM.diapo.ajustarRenglones(minis); });
         $$(".mini", minis).forEach((m) => {
           const c = $(".mini-cont", m);
           const k = m.clientWidth / tamDoc(doc()).w || 0.17;

@@ -67,6 +67,11 @@ async (c) => {
   let res = null;
   if (c.op === "quitar_duplicados") res = H.herramientas.quitarDuplicados(r, c.columnas.map((k) => r.c1 + k - 1), !!c.encabezado);
   else if (c.op === "texto_columnas") res = H.herramientas.textoEnColumnas(r, c.anchos ? { anchos: c.anchos } : { sep: c.sep, seguidos: !!c.seguidos, calificador: c.calificador == null ? '"' : c.calificador });
+  else if (c.op === "buscar_objetivo") {
+    const o = H.herramientas.buscarObjetivo(c.celda, c.valor, c.cambiando);
+    await new Promise((r) => setTimeout(r, 150));
+    return { objetivo: typeof o === "string" ? { error: o } : { logrado: o.logrado, x: o.x, valor: o.valor } };
+  }
   else return { no: true };
   await new Promise((r) => setTimeout(r, 150));
   const ev = H.evaluar(), out = [], vals = [];
@@ -101,6 +106,16 @@ def con_nom(verdad):
             filas, cols = len(v["celdas"]), max(len(x) for x in v["celdas"])
             r = nav.p.evaluate(JS_CASO, dict(c, filasVer=filas, colsVer=cols))
             if r.get("no"): continue
+            if "objetivo" in r:
+                # Buscar objetivo: Excel no publica su método y su valor final difiere en la sexta cifra; se compara lo que
+                # Excel garantiza: si encontró solución y que la fórmula quede a menos de 0.001 (su «cambio máximo»)
+                o = r["objetivo"]
+                igual = "error" not in o and bool(o.get("logrado")) == bool(v.get("logrado")) and (
+                    not v.get("logrado") or (abs(o["valor"] - c["valor"]) < 0.001 and abs(v["resultado"] - c["valor"]) < 0.001))
+                bien += igual; mal += not igual
+                print(("  bien " if igual else "  MAL  ") + c["id"] + f"  (Excel: {'logrado' if v.get('logrado') else 'sin solución'}, x={v.get('cambio')}; "
+                      f"NOM: {'logrado' if o.get('logrado') else 'sin solución'}, x={o.get('x')}, valor={o.get('valor')})", flush=True)
+                continue
             xl = [[k["t"] for k in fila] for fila in v["celdas"]]
             # (donde Excel muestra #### la columna no le cabe: se compara el valor)
             def igual_celda(i, j):

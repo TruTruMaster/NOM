@@ -364,12 +364,53 @@
     cssCache = t;
     return t;
   }
+  /**
+   * Las fuentes de la página que usa un elemento, como reglas @font-face con el archivo adentro (data URL): una imagen SVG
+   * no ve las fuentes de la página y la diapositiva saldría con las del equipo (otros anchos, otros renglones).
+   */
+  const fuenteDatos = new Map();   // dirección → data URL
+  async function fuentesIncrustadas(el) {
+    const fams = new Set();
+    for (const n of [el, ...el.querySelectorAll("*")]) { const f = (getComputedStyle(n).fontFamily.split(",")[0] || "").replace(/["']/g, "").trim(); if (f) fams.add(f); }
+    const reglas = [];
+    for (const hoja of document.styleSheets) {
+      let rs; try { rs = hoja.cssRules; } catch (e) { continue; }
+      for (const r of rs) {
+        if (r.type !== CSSRule.FONT_FACE_RULE) continue;
+        const fam = (r.style.getPropertyValue("font-family") || "").replace(/["']/g, "").trim();
+        if (!fams.has(fam)) continue;
+        const m = /url\(["']?([^"')]+)["']?\)/.exec(r.style.getPropertyValue("src") || "");
+        if (!m) continue;
+        const url = new URL(m[1], hoja.href || location.href).href;
+        if (!fuenteDatos.has(url)) {
+          try {
+            const b = await (await fetch(url)).blob();
+            fuenteDatos.set(url, await new Promise((ok, mal) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = mal; fr.readAsDataURL(b); }));
+          } catch (e) { fuenteDatos.set(url, null); }
+        }
+        const datos = fuenteDatos.get(url);
+        if (datos) reglas.push(`@font-face { font-family: "${fam}"; font-style: ${r.style.getPropertyValue("font-style") || "normal"}; font-weight: ${r.style.getPropertyValue("font-weight") || "400"}; src: url("${datos}"); }`);
+      }
+    }
+    return reglas.join("\n");
+  }
   /** Dibuja el HTML de una diapositiva en un PNG (data URL). escala: 1 = tamaño real. */
-  function diapoPng(doc, p, escala) {
+  async function diapoPng(doc, p, escala) {
     const T = tam(doc), k = escala || 1;
     const cont = NOM.lienzoVista.htmlDiapositiva(doc, p);
-    const xhtml = new XMLSerializer().serializeToString(NOM.html(`<div class="diapo diapo-foto" style="${estiloDiapo(doc, p)}position:relative;left:0;top:0;transform:none;border-radius:0;box-shadow:none">${cont}</div>`));
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${T.w * k}" height="${T.h * k}" viewBox="0 0 ${T.w} ${T.h}"><foreignObject x="0" y="0" width="${T.w}" height="${T.h}"><div xmlns="http://www.w3.org/1999/xhtml"><style>${cssDePagina().replace(/<\/style/gi, "")}</style>${xhtml}</div></foreignObject></svg>`;
+    // en la página (fuera de la vista) para que cargue sus fuentes y cada renglón quede donde lo pone PowerPoint
+    const el = NOM.html(`<div class="diapo diapo-foto" style="${estiloDiapo(doc, p)}position:relative;left:0;top:0;transform:none;border-radius:0;box-shadow:none">${cont}</div>`);
+    const fuera = document.createElement("div");
+    fuera.style.cssText = "position:fixed;left:-30000px;top:0;visibility:hidden;pointer-events:none;contain:layout";
+    fuera.append(el); document.body.append(fuera);
+    let fuentes = "";
+    try {
+      if (document.fonts) { void el.offsetHeight; await Promise.race([document.fonts.ready, new Promise((ok) => setTimeout(ok, 3000))]); }
+      ajustarRenglones(el);
+      fuentes = await fuentesIncrustadas(el);
+    } finally { fuera.remove(); }
+    const xhtml = new XMLSerializer().serializeToString(el);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${T.w * k}" height="${T.h * k}" viewBox="0 0 ${T.w} ${T.h}"><foreignObject x="0" y="0" width="${T.w}" height="${T.h}"><div xmlns="http://www.w3.org/1999/xhtml"><style>${(fuentes + "\n" + cssDePagina()).replace(/<\/style/gi, "")}</style>${xhtml}</div></foreignObject></svg>`;
     return new Promise((ok, mal) => {
       const img = new Image();
       img.onload = () => {

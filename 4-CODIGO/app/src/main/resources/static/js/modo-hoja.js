@@ -501,6 +501,103 @@
           aviso(`${res.filas} ${res.filas === 1 ? "fila partida" : "filas partidas"} en ${res.columnas} columnas. Ctrl+Z para deshacer`, { tipo: "ok" });
         };
       }
+      /**
+       * Buscar objetivo, como Excel (Datos → Análisis de hipótesis → Buscar objetivo): cambia el valor de una celda (un
+       * número, sin fórmula) hasta que la fórmula de otra dé el valor pedido. Comparado con Excel 2024 en
+       * pruebas/office/datos_excel.py: misma tolerancia (Excel para cuando la fórmula queda a menos de 0.001 —«cambio
+       * máximo»— del valor), hasta 100 vueltas; si no lo logra lo dice, como Excel. Excel no publica su método y su valor
+       * final difiere del de aquí en la sexta cifra (los dos dentro de la tolerancia): aquí, Newton con la derivada
+       * numérica, y en cuanto la raíz queda encerrada, falsa posición (Illinois). Devuelve { logrado, x, valor, antes } o un
+       * texto con el motivo si no se puede.
+       */
+      function buscarObjetivo(celda, meta, cambiando, opc) {
+        opc = opc || {};
+        if (ed.soloLectura || !t) return "Solo puedes ver esta hoja";
+        const a = F().parseRef(String(celda || "").replace(/\$/g, "").toUpperCase()), b = F().parseRef(String(cambiando || "").replace(/\$/g, "").toUpperCase());
+        if (!a || !b) return "Escribe las celdas como en Excel (por ejemplo B2)";
+        if (!String(crudo(a.c, a.f)).startsWith("=")) return "La celda que defines debe tener una fórmula";
+        if (String(crudo(b.c, b.f)).startsWith("=")) return "La celda que cambia debe tener un valor, no una fórmula";
+        const g = typeof meta === "number" ? meta : Number(String(meta).replace(",", "."));
+        if (!isFinite(g)) return "El valor buscado debe ser un número";
+        const refB = "c:" + F().ref(b.c, b.f), antes = t[refB] == null ? null : t[refB];
+        const x0 = Number(F().leerEntrada(String(antes == null ? "" : antes)).valor ?? antes) || 0;
+        const tol = opc.tol || 0.001, max = opc.max || 100;
+        const f = (x) => {
+          const v = F().evaluadorDeTabla(doc(), Object.assign({}, t, { [refB]: String(x) })).valor(a.c, a.f);
+          const n = typeof v === "number" ? v : v && typeof v === "object" && typeof v.valueOf() === "number" ? +v : NaN;
+          return isFinite(n) ? n - g : NaN;
+        };
+        let x = x0, fx = f(x), mejor = { x, e: Math.abs(fx) };
+        const anotar = (xx, ff) => { if (isFinite(ff) && Math.abs(ff) < mejor.e) mejor = { x: xx, e: Math.abs(ff) }; };
+        let logrado = isFinite(fx) && Math.abs(fx) < tol, lo = null;   // lo: [a, fa, b, fb] con la raíz adentro
+        for (let k = 0; k < max && !logrado; k++) {
+          let xn;
+          if (lo) {
+            // falsa posición con el ajuste de Illinois (el lado que no se mueve pesa la mitad)
+            const [p0, f0, p1, f1] = lo;
+            xn = p1 - f1 * (p1 - p0) / (f1 - f0);
+            if (!isFinite(xn) || xn === p0 || xn === p1) xn = (p0 + p1) / 2;
+            const fn = f(xn); anotar(xn, fn);
+            if (!isFinite(fn)) { xn = (p0 + p1) / 2; }
+            else {
+              if (Math.abs(fn) < tol) { x = xn; fx = fn; logrado = true; break; }
+              if (Math.sign(fn) === Math.sign(f1)) lo = [p0, f0 / 2, xn, fn]; else lo = [p1, f1, xn, fn];
+              x = xn; fx = fn; continue;
+            }
+          }
+          // Newton con la derivada numérica; si la derivada es cero o no se puede, un paso para salir de ahí
+          const h = Math.max(Math.abs(x) * 1e-6, 1e-7), fh = f(x + h), d = (fh - fx) / h;
+          let paso = isFinite(d) && d !== 0 ? -fx / d : (Math.abs(x) > 0 ? Math.abs(x) : 1);
+          if (Math.abs(paso) > 1e6 * Math.max(1, Math.abs(x))) paso = Math.sign(paso) * 1e6 * Math.max(1, Math.abs(x));
+          let fn = NaN;
+          for (let medio = 0; medio < 30; medio++) {
+            xn = x + paso; fn = f(xn); anotar(xn, fn);
+            // (si se pasa de largo y queda peor, o cae donde no hay número, medio paso)
+            if (isFinite(fn) && (Math.abs(fn) < Math.abs(fx) || Math.sign(fn) !== Math.sign(fx))) break;
+            paso /= 2;
+          }
+          if (!isFinite(fn)) break;
+          if (Math.abs(fn) < tol) { x = xn; fx = fn; logrado = true; break; }
+          if (Math.sign(fn) !== Math.sign(fx)) lo = [x, fx, xn, fn];
+          x = xn; fx = fn;
+        }
+        if (!logrado) x = mejor.x;
+        else {
+          // (un paso más con la secante si deja la fórmula más cerca: con una fórmula lineal da el valor exacto, como Excel —48.5 y
+          // no 48.50000012—)
+          const h2 = Math.max(Math.abs(x) * 1e-7, 1e-9), f2 = f(x + h2), xs = x - fx * h2 / (f2 - fx), fs = f(xs);
+          if (isFinite(fs) && Math.abs(fs) < Math.abs(fx)) { x = xs; fx = fs; }
+        }
+        // (como Excel: la celda que cambia se queda con el valor encontrado; Cancelar la regresa)
+        cambiarT({ [refB]: String(x) });
+        const v = F().evaluadorDeTabla(doc(), t).valor(a.c, a.f);
+        return { logrado, x, valor: typeof v === "number" ? v : +v, antes, celda: F().ref(a.c, a.f), cambiando: F().ref(b.c, b.f), meta: g };
+      }
+      function dialogoObjetivo() {
+        if (ed.soloLectura || !t) return;
+        const def = F().ref(sel.c, sel.f);
+        const cuerpo = html(`<div class="col">
+          <label>Definir la celda <input data-celda value="${esc(def)}" autocomplete="off"></label>
+          <label>Con el valor <input data-valor inputmode="decimal" autocomplete="off"></label>
+          <label>Cambiando la celda <input data-cambia autocomplete="off"></label>
+          <p class="suave chico" style="font-weight:400">La celda que defines tiene una fórmula; la que cambia, un número del que depende esa fórmula.</p></div>`);
+        const pie = html(`<div style="display:contents"><span class="crece"></span><button class="btn primario" data-si>Aceptar</button></div>`);
+        const h = NOM.hoja({ titulo: "Buscar objetivo", icono: "target", cuerpo, pie });
+        setTimeout(() => $("[data-valor]", cuerpo).focus(), 30);
+        $("[data-si]", pie).onclick = () => {
+          const res = buscarObjetivo($("[data-celda]", cuerpo).value.trim(), $("[data-valor]", cuerpo).value.trim(), $("[data-cambia]", cuerpo).value.trim());
+          if (typeof res === "string") return aviso(res, { tipo: "aviso", ms: 5000 });
+          h.cerrar();
+          const fmt = (n) => F().formatear(n);
+          const c2 = html(`<div class="col"><p style="font-weight:400">${res.logrado ? `Buscar objetivo con la celda ${esc(res.celda)} encontró una solución.` : `Buscar objetivo con la celda ${esc(res.celda)} no encontró una solución.`}</p>
+            <p class="suave" style="font-weight:400">Valor buscado: ${esc(fmt(res.meta))}<br>Valor actual: ${esc(fmt(res.valor))}</p></div>`);
+          const p2 = html(`<div style="display:contents"><span class="crece"></span><button class="btn" data-no>Cancelar</button><button class="btn primario" data-ok>Aceptar</button></div>`);
+          const h2 = NOM.hoja({ titulo: "Estado de la búsqueda de objetivo", icono: "target", cuerpo: c2, pie: p2 });
+          $("[data-ok]", p2).onclick = () => h2.cerrar();
+          // (Cancelar: la celda que cambió vuelve a su valor de antes, como en Excel)
+          $("[data-no]", p2).onclick = () => { cambiarT({ ["c:" + res.cambiando]: res.antes }); h2.cerrar(); };
+        };
+      }
       function ordenarDeVerdad(c, asc) {
         if (ed.soloLectura || !t) return;
         const ev = evaluar();
@@ -2520,6 +2617,7 @@
             { texto: "Gráfica", icono: "bar-chart", off: lect, fn: () => nuevaGrafica("barras") },
             { texto: "Otras", icono: "more-vertical", sub: [
               { texto: "Buscar", icono: "search", fn: () => buscar(false) },
+              { texto: "Buscar objetivo", corto: "Objetivo", icono: "target", off: lect, fn: () => dialogoObjetivo() },
               { texto: "Comentar", icono: "message-square", off: !NOM.comentarios || ed.local, fn: () => NOM.comentarios.nuevo(ed) },
               { texto: "Fijar", icono: "snowflake", off: lect, sub: menuFijar(null).filter((x) => x && x.texto).map((x) => Object.assign({}, x, { corto: x.texto.replace(/^Hasta la /, "Hasta ").slice(0, 14) })) },
               { texto: "Lista desplegable…", corto: "Lista…", icono: "list-checks", off: lect, fn: dialogoValidacion },
@@ -2633,6 +2731,10 @@
           { texto: "Rellenar hacia abajo", icono: "arrow-down", atajo: "Ctrl+D", fn: () => rellenarCopia("abajo") },
           { texto: "Rellenar hacia la derecha", icono: "arrow-right", atajo: "Ctrl+R", fn: () => rellenarCopia("derecha") },
           { texto: "Pegar solo valores", icono: "hash", fn: () => pegarRango("valores") },
+          { titulo: "Datos" },
+          { texto: "Quitar duplicados…", icono: "copy-x", fn: () => dialogoDuplicados() },
+          { texto: "Texto en columnas…", icono: "columns-3", fn: () => dialogoTextoColumnas() },
+          { texto: "Buscar objetivo…", icono: "target", fn: () => dialogoObjetivo() },
           { titulo: "Hoja" },
           { texto: "Ancho de columna…", icono: "move-horizontal", fn: anchoColumnas },
           { texto: "Alto de fila…", icono: "move-vertical", fn: altoFilas },
@@ -2706,7 +2808,8 @@
       // Lo que usan otros módulos (datos → reporte, combinar correspondencia).
       this.api = { rango, tabla: () => t, evaluar, seleccion: () => ({ ...sel }),
         // herramientas de datos como las de Excel (también para las pruebas contra Excel real)
-        herramientas: { quitarDuplicados, regionActual, textoEnColumnas, partirTexto } };
+        herramientas: { quitarDuplicados, regionActual, textoEnColumnas, partirTexto, buscarObjetivo },
+        dialogos: { duplicados: dialogoDuplicados, textoColumnas: dialogoTextoColumnas, objetivo: dialogoObjetivo } };
       void self;
 
       render();
@@ -2714,7 +2817,11 @@
     },
     herramientas() { return this._herr || []; },
     acciones() {
+      const dlg = (k) => () => { const d = NOM.editorActual && NOM.editorActual.modoApi && NOM.editorActual.modoApi.api && NOM.editorActual.modoApi.api.dialogos; if (d && d[k]) d[k](); };
       return [
+        { texto: "Buscar objetivo", icono: "target", fn: dlg("objetivo"), claves: "hipotesis analisis meta valor buscar objetivo goal seek" },
+        { texto: "Quitar duplicados", icono: "copy-x", fn: dlg("duplicados"), claves: "repetidos duplicados unicos" },
+        { texto: "Texto en columnas", icono: "columns-3", fn: dlg("textoColumnas"), claves: "separar partir dividir columnas coma" },
         ...(NOM.datos ? [{ texto: "Hacer un reporte con estos datos", icono: "bar-chart", fn: () => NOM.datos.reporteDeDatos(NOM.editorActual), claves: "encuesta google forms resumen graficas frecuencias estadistica" }] : []),
         { texto: "Insertar fila o columna", icono: "between-horizontal-start", fn: () => { const b = document.querySelector('[data-micro^="Insertar o eliminar filas"]'); if (b) b.click(); }, claves: "fila columna insertar eliminar borrar" },
         { texto: "Formato de celdas", icono: "settings", atajo: "Ctrl 1", fn: () => document.querySelector("[data-rejilla]") && document.querySelector("[data-rejilla]").dispatchEvent(new KeyboardEvent("keydown", { key: "1", ctrlKey: true, bubbles: true })), claves: "moneda porcentaje decimales fecha alinear bordes relleno" },

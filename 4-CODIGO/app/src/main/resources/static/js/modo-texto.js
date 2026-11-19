@@ -906,11 +906,16 @@
         if (esCelda && el.isContentEditable && el.contains(document.activeElement)) return no("celda con el cursor");
         if (el.dataset.capital != null) return no("letra capital");
         if (el.dir === "rtl") return no("derecha a izquierda");
-        { const q = el.querySelector(".wd-guion, .wd-tab, img, table"); if (q) return no("contiene " + (q.className || q.tagName)); }
+        // (lo que flota —imagen o forma anclada— no ocupa lugar en el renglón: no cuenta)
+        { const q = [...el.querySelectorAll(".wd-guion, .wd-tab, img, table")].find((x) => !x.closest("[data-obj].flota-w, [data-obj].libre")); if (q) return no("contiene " + (q.className || q.tagName)); }
         // (un salto de renglón manual sí cuenta; el <br> del final, que solo le da alto al párrafo, no)
         if ([...el.querySelectorAll("br:not(.wd-pintado)")].some((b) => b !== el.lastChild)) return no("salto de renglón");
         // (el texto que se aparta de un objeto que flota cambia de ancho renglón por renglón: ese lo acomoda el navegador)
-        if (el.querySelector(":scope > .wd-excl")) return no("junto a lo que flota");
+        // Junto a lo que flota (los flotantes invisibles .wd-excl que pone la paginación): cada renglón tiene su ancho, el que
+        // le deja lo que flota a su altura (como Word: el renglón que toca la franja del dibujo se acorta). Con contorno
+        // (estrecho, a través) lo sigue acomodando el navegador.
+        const excl = [...el.querySelectorAll(":scope > .wd-excl")].filter((x) => parseFloat(x.style.width) > 0.5);
+        if (excl.some((x) => x.style.shapeOutside && x.style.shapeOutside !== "none")) return no("junto a un contorno");
         const alin = esCelda ? ({ center: "centro", right: "der", end: "der", justify: "just" }[getComputedStyle(el).textAlign] || "izq") : el.dataset.alin || "izq";
         if (!["izq", "just", "centro", "der"].includes(alin)) return no("alineación " + alin);
         const er = el.getBoundingClientRect(), z = escalaDe(er, el);
@@ -986,6 +991,7 @@
             if (c.classList.contains("wd-oculto") || c.style.display === "none") continue;
             if (c.classList.contains("wd-escala")) { if (caja) { mal = "escala dentro de escala"; return; } rec(c, esc * (+c.dataset.k || 1), c); continue; }
             if (c.hasAttribute("data-obj")) {
+              if (c.matches(".flota-w, .libre")) continue;   // (anclado: va en su lugar de la hoja, no en el renglón)
               const r = c.getBoundingClientRect();
               if (!primero) primero = { obj: c };
               fichas.push({ t: "", w: r.width / z, esp: false, rompe: false, obj: c });
@@ -1041,7 +1047,25 @@
             }
           }
         }
-        return { el, alin, fichas, A1: (der - x0) / z + ajuste, A: (der - izq) / z + ajuste, A1v: (der - x0) / z, Av: (der - izq) / z, ancho: (der - izq) / z, encoge: compat15 && alin === "just", tabs, hayTab, esCelda };
+        // lo que quita lo que flota a cada renglón (px sin zoom): renglón i = franja [arriba + i·alto, arriba + (i+1)·alto]
+        let quita = null;
+        if (excl.length) {
+          const lh = parseFloat(cs.lineHeight);
+          if (!(lh > 0)) return no("junto a lo que flota (sin alto de renglón)");
+          const arriba = er.top + (parseFloat(cs.borderTopWidth) + parseFloat(cs.paddingTop)) * z;
+          const cajas = excl.map((x) => ({ izq: getComputedStyle(x).float === "left", r: x.getBoundingClientRect() }));
+          quita = (i) => {
+            const y0 = arriba + i * lh * z, y1 = y0 + lh * z;
+            let a = 0, b = 0;
+            for (const c of cajas) {
+              if (c.r.top >= y1 - 0.01 || c.r.bottom <= y0 + 0.01) continue;
+              if (c.izq) a = Math.max(a, (c.r.right - izq) / z); else b = Math.max(b, (der - c.r.left) / z);
+            }
+            return [a, b];
+          };
+          if (hayTab) return no("tabulación junto a lo que flota");
+        }
+        return { el, alin, fichas, A1: (der - x0) / z + ajuste, A: (der - izq) / z + ajuste, A1v: (der - x0) / z, Av: (der - izq) / z, ancho: (der - izq) / z, encoge: compat15 && alin === "just", tabs, hayTab, esCelda, quita };
       }
       /** Dónde corta Word: índices de las fichas después de las cuales termina cada renglón (menos el último). */
       function cortesWord(L) {
@@ -1050,7 +1074,9 @@
         while (ini < n) {
           while (ini < n && F[ini].esp) ini++;   // (los espacios de después de un corte se quedan en el renglón de arriba)
           if (ini >= n) break;
-          const A = (renglon === 0 ? L.A1 : L.A) + 1e-6;
+          const q = L.quita ? L.quita(renglon) : null;
+          // (el primer renglón ya empieza después de lo que flota a su izquierda: x0 se midió así)
+          const A = (renglon === 0 ? L.A1 - (q ? q[1] : 0) : L.A - (q ? q[0] + q[1] : 0)) + 1e-6;
           // w: lo escrito sin los espacios del final; ult: el último lugar donde se puede cortar con lo de antes dentro
           let w = 0, pend = 0, ult = -1, wUlt = 0, pasa = false;
           const x0 = L.tabs ? (renglon === 0 ? L.tabs.x0 : L.tabs.izq) : 0;
@@ -1067,7 +1093,7 @@
             if (t.rompe) { if (w <= A) { ult = j; wUlt = w; } else { pasa = true; break; } }
           }
           if (!pasa && w <= A) break;   // lo que queda cabe: es el último renglón
-          if (ult < 0) { if (window.__razAcomodo) window.__razAcomodo.set(L.el, "palabra más ancha que el renglón"); return null; }     // una palabra más ancha que el renglón: que la parta el navegador
+          if (ult < 0) { if (window.__razAcomodo) window.__razAcomodo.set(L.el, q && (q[0] || q[1]) ? "no cabe ni una palabra junto a lo que flota" : "palabra más ancha que el renglón"); return null; }     // una palabra más ancha que el renglón: que la parta el navegador
           let corte = ult;
           if (L.encoge) {
             // ¿Word mete la palabra siguiente encogiendo los espacios? (si se pasa a lo más la mitad del hueco y cada
@@ -1157,7 +1183,8 @@
           let w = 0, fin = F.length;
           while (fin > u && F[fin - 1].esp) fin--;
           for (let q = u; q < fin; q++) w += F[q].w;
-          const A = cortes.length ? L.Av : L.A1v;   // (lo que se ve: el relleno no puede pasarse de la caja)
+          const qu = L.quita ? L.quita(cortes.length) : null;
+          const A = cortes.length ? L.Av - (qu ? qu[0] + qu[1] : 0) : L.A1v - (qu ? qu[1] : 0);   // (lo que se ve: el relleno no puede pasarse de la caja)
           const r = document.createElement("span");
           r.className = "wd-relleno wd-pintado";
           r.contentEditable = "false";
@@ -1205,7 +1232,9 @@
         for (const el of [...cuerpo.children, ...celdasDe(cuerpo.children)]) {
           if (quitar) { if (el.dataset.acw) otro = true; if (el.dataset.acw || el.dataset.acv) { quitarAcomodo(el); delete el.dataset.acv; } continue; }
           // (al paginar, un objeto que flota aparta el texto de este párrafo: el acomodo ya no sirve)
-          if (el.dataset.acw && el.querySelector(":scope > .wd-excl")) { quitarAcomodo(el); otro = true; if (window.__razAcomodo) window.__razAcomodo.set(el, "junto a lo que flota"); continue; }
+          // (junto a lo que flota: lo acomoda la paginación, que es la que pone los flotantes invisibles —apartarTexto—; junto a
+          // una letra capital, pintarCapitales)
+          if (el.querySelector(":scope > .wd-excl")) continue;
           // (acomodado a la izquierda lleva 1 px de holgura a la derecha: --hol en editor.css)
           const hol = el.classList.contains("wd-acomodo") && !el.closest(".wd-tab") && (!el.dataset.alin || el.dataset.alin === "izq") ? 1 : 0;
           // (con cualquier cambio: un renglón de Word se decide por centésimas de punto —w02: 524.98 pt en 524.70—)
@@ -3955,11 +3984,14 @@
           let f = q ? q.querySelector(":scope > .wd-cap") : null;
           if (!q || q.dataset.capital) continue;
           const lh = parseFloat(getComputedStyle(q).lineHeight) || 20;
+          const antes = f ? f.style.width + "|" + f.style.height : "";
           if (tipo === "drop") {
             if (!f) { f = exclusion("izq", 0, 0); f.classList.add("wd-cap"); q.prepend(f); }
             f.style.width = (ancho + hs).toFixed(2) + "px";
             f.style.height = (n * lh - 0.5).toFixed(2) + "px";
-          } else if (f) f.remove();
+          } else if (f) { f.remove(); f = null; }
+          // (si la letra cambió de tamaño, el párrafo que la rodea se corta otra vez como Word, con su nuevo ancho)
+          if ((f ? f.style.width + "|" + f.style.height : "") !== antes && vista === "paginas" && !window.__sinAcomodo) acomodarComoWord([q]);
           // el renglón base de la letra en el del renglón n del párrafo (el renglón base ≈ abajo menos 0.21 de la letra)
           const ls = lineasDe(q), ln = ls[Math.min(n, ls.length) - 1];
           if (!ln) continue;
@@ -3987,8 +4019,12 @@
        */
       function apartarTexto(el, fs) {
         const h0 = el.offsetHeight;
+        const habia = !!el.querySelector(":scope > .wd-excl:not(.wd-cap)");
+        if (!habia && (!fs || !fs.length)) return 0;   // (nada flota cerca, ni antes ni ahora: su acomodo se queda)
+        // (los cortes de antes eran para otro ancho: el texto corre libre junto a los flotantes y luego se acomoda con ellos)
+        if (el.classList.contains("wd-acomodo")) quitarAcomodo(el);
         quitarApartes(el);
-        if (!fs || !fs.length) return el.offsetHeight - h0;
+        if (!fs || !fs.length) { if (vista === "paginas" && !window.__sinAcomodo) acomodarComoWord([el]); return el.offsetHeight - h0; }
         const cs = getComputedStyle(el);
         const top = el.offsetTop + (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.paddingTop) || 0);
         const ci = el.offsetLeft + (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.paddingLeft) || 0);
@@ -4022,6 +4058,8 @@
           bajo = b2;
           if (!otra) break;
         }
+        // con los flotantes ya puestos, cada renglón cortado donde Word (con el ancho que le dejan)
+        if (vista === "paginas" && !window.__sinAcomodo) acomodarComoWord([el]);
         // lo que sobra de cada franja abajo del último renglón no es de este párrafo (si no, lo haría más alto)
         const fin = bajoTexto(el);
         const cuerpoTop = (x) => x.offsetTop;
