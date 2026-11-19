@@ -106,24 +106,27 @@
     opc = opc || {};
     const base = api.servidor();
     if (empaquetada && !base) throw new ErrorApi(0, { error: "Primero elige dónde trabaja tu equipo" });
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), opc.ms || 9000);
     const cab = { Accept: "application/json" };
     if (cuerpo !== undefined) cab["Content-Type"] = "application/json";
     // Fase 15: en un espacio cifrado de extremo a extremo, el contenido se cifra aquí antes de salir.
     const original = cuerpo;
     if (cuerpo !== undefined && !opc.crudo && NOM.e2e) {
       try { cuerpo = await NOM.e2e.alEnviar(metodo, ruta, cuerpo); }
-      catch (e) { clearTimeout(t); throw new ErrorApi(e.estado === 0 ? 0 : 400, { error: e.message }); }
+      catch (e) { throw new ErrorApi(e.estado === 0 ? 0 : 400, { error: e.message }); }
     }
     const tok = api.token();
     if (tok) cab.Authorization = "Bearer " + tok;
+    // (las llaves «_…» del cuerpo son de este equipo, como _llaveDoc: no salen. Las de DENTRO de los datos sí: antes se
+    // quitaban todas y un documento perdía lo que la importación guarda así, como el color «_c» de una animación.)
+    // Se arma antes de pedir: si algo no se puede convertir a JSON es un error de aquí, no «sin conexión».
+    const enviar = cuerpo;
+    const texto0 = enviar === undefined ? undefined : JSON.stringify(enviar, function (k, v) { return this === enviar && k.startsWith("_") ? undefined : v; });
+    // (el tiempo límite cuenta desde que sale la petición: cifrar y armar un documento grande no se lo come)
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), opc.ms || 9000);
     let r;
     try {
-      // (las llaves «_…» del cuerpo son de este equipo, como _llaveDoc: no salen. Las de DENTRO de los datos sí: antes se
-      // quitaban todas y un documento perdía lo que la importación guarda así, como el color «_c» de una animación)
-      const enviar = cuerpo;
-      r = await fetch(base + ruta, { method: metodo, headers: cab, body: enviar === undefined ? undefined : JSON.stringify(enviar, function (k, v) { return this === enviar && k.startsWith("_") ? undefined : v; }), signal: ctl.signal });
+      r = await fetch(base + ruta, { method: metodo, headers: cab, body: texto0, signal: ctl.signal });
     } catch (e) {
       marcarRed(false);
       throw new ErrorApi(0, null);
@@ -150,6 +153,33 @@
   ["get", "post", "put", "delete"].forEach((m) => {
     api[m] = (ruta, cuerpo, opc) => api.pedir(m.toUpperCase(), ruta, m === "get" || m === "delete" ? undefined : (cuerpo === undefined ? {} : cuerpo), opc);
   });
+  /**
+   * Bytes crudos (el almacén de binarios): PUT manda `bytes` tal cual y devuelve el JSON de la respuesta; GET devuelve
+   * los bytes (Uint8Array). Sin cifrado de extremo a extremo aquí: lo de un espacio cifrado ya viene cifrado (binarios.js).
+   */
+  api.binario = async function (metodo, ruta, bytes, opc) {
+    opc = opc || {};
+    const base = api.servidor();
+    if (empaquetada && !base) throw new ErrorApi(0, { error: "Primero elige dónde trabaja tu equipo" });
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), opc.ms || 180000);
+    const cab = {};
+    if (bytes) cab["Content-Type"] = "application/octet-stream";
+    const tok = opc.sinSesion ? null : api.token();
+    if (tok) cab.Authorization = "Bearer " + tok;
+    let r;
+    try { r = await fetch(base + ruta, { method: metodo, headers: cab, body: bytes || undefined, signal: ctl.signal }); }
+    catch (e) { marcarRed(false); throw new ErrorApi(0, null); }
+    finally { clearTimeout(t); }
+    marcarRed(true);
+    if (!r.ok) {
+      let datos = null;
+      try { datos = JSON.parse(await r.text()); } catch (e) { datos = null; }
+      throw new ErrorApi(r.status, datos);
+    }
+    if (metodo === "GET") return new Uint8Array(await r.arrayBuffer());
+    try { return JSON.parse(await r.text()); } catch (e) { return null; }
+  };
 
   /**
    * Canal en vivo (EventSource). No admite cabeceras, así que se identifica en la dirección; para

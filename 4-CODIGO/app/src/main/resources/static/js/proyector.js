@@ -29,6 +29,8 @@
     let llave = null;
     try { llave = sessionStorage.getItem("nom.e2e.inv." + codigo); } catch (e) { llave = null; }
     const descifrar = async (est) => (llave && NOM.e2e ? NOM.e2e.estadoConLlave(llave, est) : est);
+    // imágenes y medios del almacén de binarios: por la ruta del proyector (sin sesión) y con la llave del documento
+    if (NOM.binarios) NOM.binarios.contexto({ proyeccion: codigo, llave: llave ? NOM.binarios.llaveDeTexto(llave) : null });
     try { datos = await api().get(`/api/proyeccion/${encodeURIComponent(codigo)}`, undefined, { sin401: true, ms: 12000 }); datos.estado = await descifrar(datos.estado); }
     catch (e) {
       return pedirCodigo(e.red ? "No hay conexión" : "No se encontró la presentación",
@@ -73,6 +75,7 @@
       if (trActual) { trActual.saltar(); trActual = null; }
       d.innerHTML = V.htmlDiapositiva(doc, pagina, paso);
       escala();
+      if (NOM.diapo && NOM.diapo.ajustarRenglones) NOM.diapo.ajustarRenglones(d);
       pintarMarcas();
       if (viejo) {
         const T = V.tam ? V.tam(doc) : { w: V.ANCHO, h: V.ALTO };

@@ -14,6 +14,7 @@ version: 0.13.0
 | Ctrl . | Modo enfoque |
 | Ctrl B / Ctrl I / Ctrl U | Negrita / cursiva / subrayado |
 | Ctrl F | Buscar y reemplazar |
+| F9 / Alt F9 | En el texto: actualizar los campos de Word / ver sus códigos |
 | Ctrl D / Ctrl R | En la hoja: rellenar hacia abajo / a la derecha |
 | ? | Ver todos los atajos |
 | Esc | Cerrar ventanas y salir del modo enfoque |

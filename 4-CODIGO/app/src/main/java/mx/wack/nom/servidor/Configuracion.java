@@ -65,6 +65,14 @@ public class Configuracion {
         return s;
     }
 
+    /** Almacén de binarios (imágenes, el Office original; después video y audio): tope por archivo NOM_BINARIOS_MAX_MB. */
+    @Bean
+    public mx.wack.nom.core.servicio.ServicioBinarios servicioBinarios(ServicioEspacios espacios, ServicioDocumentos documentos,
+                                                                     mx.wack.nom.core.almacen.RepositorioBinarios repo,
+                                                                     @Value("${nom.binarios.max-mb:48}") long maxMb) {
+        return new mx.wack.nom.core.servicio.ServicioBinarios(espacios, documentos, repo, maxMb * 1024 * 1024);
+    }
+
     @Bean
     public CodecJson codecJson(AlmacenJson almacen) {
         return new CodecJson() {
@@ -121,8 +129,12 @@ public class Configuracion {
     }
 
     @Bean
-    public ServicioSincronia servicioSincronia(ServicioEspacios espacios, ServicioDocumentos documentos, CodecJson json, NodoLocal nodo) {
-        return new ServicioSincronia(espacios, documentos, json, nodo);
+    public ServicioSincronia servicioSincronia(ServicioEspacios espacios, ServicioDocumentos documentos, CodecJson json, NodoLocal nodo,
+                                               mx.wack.nom.core.almacen.RepositorioBinarios binarios) {
+        ServicioSincronia s = new ServicioSincronia(espacios, documentos, json, nodo);
+        // lo que un documento sincronizado menciona del almacén de binarios también viaja
+        s.usarBinarios(binarios);
+        return s;
     }
 
     @Bean(initMethod = "iniciar", destroyMethod = "detener")

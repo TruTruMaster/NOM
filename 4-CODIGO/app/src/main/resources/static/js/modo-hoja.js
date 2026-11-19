@@ -337,6 +337,170 @@
       const ordenar = (c, asc) => cambiarVista((v) => { v.orden = { c, asc }; });
       const quitarFiltro = (c) => cambiarVista((v) => { delete v.filtros[c]; });
       /** Ordena las filas de verdad (para todos): reescribe las celdas en el orden nuevo. */
+      /** La región de datos alrededor de una celda, como «región actual» de Excel: crece mientras haya algo junto. */
+      function regionActual(c0, f0) {
+        const lleno = (c, f) => c >= 0 && f >= 0 && crudo(c, f) !== "";
+        let r = { c1: c0, c2: c0, f1: f0, f2: f0 };
+        for (let vuelta = 0; vuelta < 2000; vuelta++) {
+          let crece = false;
+          const fila = (f) => { for (let c = r.c1 - 1; c <= r.c2 + 1; c++) if (lleno(c, f)) return true; return false; };
+          const col = (c) => { for (let f = r.f1 - 1; f <= r.f2 + 1; f++) if (lleno(c, f)) return true; return false; };
+          if (r.f1 > 0 && fila(r.f1 - 1)) { r.f1--; crece = true; }
+          if (fila(r.f2 + 1)) { r.f2++; crece = true; }
+          if (r.c1 > 0 && col(r.c1 - 1)) { r.c1--; crece = true; }
+          if (col(r.c2 + 1)) { r.c2++; crece = true; }
+          if (!crece) break;
+        }
+        return r;
+      }
+      /**
+       * Quitar duplicados, como Excel (Datos → Quitar duplicados; comparado con Excel 2024 en pruebas/office/datos_excel.py):
+       * compara las columnas elegidas por su valor (el texto sin distinguir mayúsculas; un espacio de más sí cuenta), deja
+       * la primera de cada grupo y sube las que quedan dentro del rango (lo de fuera no se mueve). Devuelve { quitadas,
+       * quedan } o un texto con el motivo si no se pudo.
+       */
+      function quitarDuplicados(r, columnas, encabezado) {
+        if (ed.soloLectura || !t) return "Solo puedes ver esta hoja";
+        const ev = evaluar();
+        for (let f = r.f1; f <= r.f2; f++) for (let c = r.c1; c <= r.c2; c++) if (String(crudo(c, f)).startsWith("="))
+          return "Hay fórmulas en el rango: al subir las filas cambiarían sus referencias";
+        const ini = r.f1 + (encabezado ? 1 : 0);
+        const clave = (f) => JSON.stringify(columnas.map((c) => { const v = ev.valor(c, f); return typeof v === "string" ? "t:" + v.toLowerCase() : v == null || v === "" ? "" : typeof v; }).concat(columnas.map((c) => { const v = ev.valor(c, f); return typeof v === "string" ? "" : v; })));
+        const vistas = new Set(), quedan = [];
+        let quitadas = 0;
+        for (let f = ini; f <= r.f2; f++) {
+          const k = clave(f);
+          if (vistas.has(k)) { quitadas++; continue; }
+          vistas.add(k); quedan.push(f);
+        }
+        if (!quitadas) return { quitadas: 0, quedan: quedan.length };
+        const campos = {};
+        for (let i = 0; i <= r.f2 - ini; i++) {
+          const destino = ini + i, origen = quedan[i];
+          for (let c = r.c1; c <= r.c2; c++) for (const p of PROPS.filter((x) => x !== "m")) {
+            const ref = F().ref(c, destino), v = origen == null ? null : t[p + ":" + F().ref(c, origen)], actual = t[p + ":" + ref];
+            if ((v == null ? null : v) !== (actual == null ? null : actual)) campos[p + ":" + ref] = v == null ? null : v;
+          }
+        }
+        cambiarT(campos, { meta: { o: "r" } });
+        return { quitadas, quedan: quedan.length };
+      }
+      function dialogoDuplicados() {
+        if (ed.soloLectura || !t) return;
+        let r = rango();
+        if (r.c1 === r.c2 && r.f1 === r.f2) r = regionActual(sel.c, sel.f);
+        const encIni = r.f1 === 0 ? pareceEncabezado() : false;
+        const nombreCol = (c, enc) => (enc && crudo(c, r.f1) !== "" ? String(crudo(c, r.f1)) : "Columna " + F().colLetra(c));
+        const cuerpo = html(`<div class="col">
+          <p class="suave chico" style="font-weight:400">En ${esc(textoRango(r))}. Se queda la primera fila de cada grupo; las demás se quitan y las de abajo suben.</p>
+          <label class="lista-item"><span class="crece"><b>Mis datos tienen encabezados</b></span><span class="interruptor"><input type="checkbox" data-enc ${encIni ? "checked" : ""}><span></span></span></label>
+          <div class="fila"><button class="btn chico" data-todas type="button">Todas</button><button class="btn chico" data-ninguna type="button">Ninguna</button></div>
+          <div class="lista" data-cols></div></div>`);
+        const pie = html(`<div style="display:contents"><span class="crece"></span><button class="btn primario" data-si>Quitar duplicados</button></div>`);
+        const h = NOM.hoja({ titulo: "Quitar duplicados", icono: "copy-x", cuerpo, pie });
+        const pintarCols = () => { const enc = $("[data-enc]", cuerpo).checked; $("[data-cols]", cuerpo).innerHTML = Array.from({ length: r.c2 - r.c1 + 1 }, (_, i) => `<label class="lista-item"><input type="checkbox" data-col="${r.c1 + i}" checked><span class="crece">${esc(nombreCol(r.c1 + i, enc))}</span></label>`).join(""); };
+        pintarCols();
+        $("[data-enc]", cuerpo).onchange = pintarCols;
+        $("[data-todas]", cuerpo).onclick = () => $$("[data-col]", cuerpo).forEach((x) => (x.checked = true));
+        $("[data-ninguna]", cuerpo).onclick = () => $$("[data-col]", cuerpo).forEach((x) => (x.checked = false));
+        $("[data-si]", pie).onclick = () => {
+          const cols = $$("[data-col]", cuerpo).filter((x) => x.checked).map((x) => +x.dataset.col);
+          if (!cols.length) return aviso("Elige al menos una columna", { tipo: "aviso" });
+          h.cerrar();
+          const res = quitarDuplicados(r, cols, $("[data-enc]", cuerpo).checked);
+          if (typeof res === "string") return aviso(res, { tipo: "aviso", ms: 5000 });
+          aviso(res.quitadas ? `Se encontraron y quitaron ${res.quitadas} ${res.quitadas === 1 ? "valor duplicado" : "valores duplicados"}; ${res.quedan === 1 ? "queda 1 valor único" : `quedan ${res.quedan} valores únicos`}. Ctrl+Z para deshacer` : "No se encontraron valores duplicados", { tipo: "ok", ms: 5000 });
+        };
+      }
+      /**
+       * Texto en columnas, como Excel (Datos → Texto en columnas; comparado con Excel 2024 en pruebas/office/datos_excel.py).
+       * opc: { sep: { tab, punto_coma, coma, espacio, otro }, seguidos, calificador } (delimitado) o { anchos: [0, 4, 9] }
+       * (ancho fijo: dónde empieza cada campo). Cada pedazo entra como si se escribiera en la celda (número, fecha,
+       * porcentaje, moneda o texto). Devuelve { filas, columnas } o un texto con el motivo si no se pudo.
+       */
+      function partirTexto(txt, opc) {
+        if (Array.isArray(opc.anchos)) {
+          const cortes = [...new Set(opc.anchos.map((x) => Math.max(0, Math.round(+x) || 0)))].sort((a, b) => a - b);
+          if (cortes[0] !== 0) cortes.unshift(0);
+          return cortes.map((ini, k) => txt.slice(ini, k + 1 < cortes.length ? cortes[k + 1] : undefined).trim());
+        }
+        const sp = opc.sep || {}, seps = new Set([sp.tab && "\t", sp.punto_coma && ";", sp.coma && ",", sp.espacio && " ", sp.otro && String(sp.otro)[0]].filter(Boolean));
+        const q = opc.calificador == null ? '"' : opc.calificador;
+        const out = [];
+        let campo = "", inicio = true, comillas = false;
+        for (let i = 0; i < txt.length;) {
+          const ch = txt[i];
+          if (q && inicio && ch === q) { comillas = true; inicio = false; i++; continue; }
+          if (comillas) {
+            if (ch === q) { if (txt[i + 1] === q) { campo += q; i += 2; continue; } comillas = false; i++; continue; }
+            campo += ch; i++; continue;
+          }
+          if (seps.has(ch)) {
+            out.push(campo); campo = ""; inicio = true; i++;
+            if (opc.seguidos) while (i < txt.length && seps.has(txt[i])) i++;
+            continue;
+          }
+          campo += ch; inicio = false; i++;
+        }
+        out.push(campo);
+        return out;
+      }
+      function textoEnColumnas(r, opc) {
+        if (ed.soloLectura || !t) return "Solo puedes ver esta hoja";
+        if (r.c1 !== r.c2) return "Elige una sola columna";
+        const campos = {};
+        let columnas = 1, filas = 0;
+        for (let f = r.f1; f <= r.f2; f++) {
+          const v = String(crudo(r.c1, f));
+          if (v === "" || v.startsWith("=")) continue;
+          const partes = partirTexto(v, opc);
+          columnas = Math.max(columnas, partes.length); filas++;
+          partes.forEach((pza, k) => {
+            const ref = F().ref(r.c1 + k, f), ent = F().leerEntrada(pza);
+            campos["c:" + ref] = ent.crudo == null || ent.crudo === "" ? null : ent.crudo;
+            if (ent.formato) campos["f:" + ref] = ent.formato;
+          });
+        }
+        if (r.c1 + columnas > (t.cols || 10)) campos.cols = r.c1 + columnas + 1;
+        if (Object.keys(campos).length) cambiarT(campos, { meta: { o: "r" } });
+        return { filas, columnas };
+      }
+      function dialogoTextoColumnas() {
+        if (ed.soloLectura || !t) return;
+        let r = rango();
+        if (r.c1 === r.c2 && r.f1 === r.f2) { const ra = regionActual(sel.c, sel.f); r = { c1: sel.c, c2: sel.c, f1: ra.f1, f2: ra.f2 }; }
+        if (r.c1 !== r.c2) return aviso("Elige una sola columna para partir", { tipo: "aviso" });
+        const cuerpo = html(`<div class="col">
+          <div class="segmentado" role="group"><button type="button" data-modo="sep" aria-pressed="true">Delimitado</button><button type="button" data-modo="fijo" aria-pressed="false">Ancho fijo</button></div>
+          <div data-sep class="col">
+            <div class="fila" style="flex-wrap:wrap;gap:12px">${[["tab", "Tabulación"], ["punto_coma", "Punto y coma"], ["coma", "Coma"], ["espacio", "Espacio"]].map(([k, n]) => `<label><input type="checkbox" data-s="${k}" ${k === "coma" ? "checked" : ""}> ${n}</label>`).join("")}
+              <label><input type="checkbox" data-s="otro"> Otro: <input data-otro maxlength="1" style="width:2.5em"></label></div>
+            <label><input type="checkbox" data-seguidos> Considerar los separadores seguidos como uno solo</label>
+            <label>Calificador de texto <select data-cal><option value='"'>"</option><option value="'">'</option><option value="">(ninguno)</option></select></label>
+          </div>
+          <div data-fijo class="col" hidden><label>Dónde empieza cada columna (posiciones, separadas por comas) <input data-anchos placeholder="10, 25"></label></div>
+          <p class="suave chico" style="font-weight:400">Vista previa de ${esc(textoRango(r))}:</p>
+          <div class="libre-tabla" data-previa style="max-height:180px;overflow:auto"></div></div>`);
+        const pie = html(`<div style="display:contents"><span class="crece"></span><button class="btn primario" data-si>Partir en columnas</button></div>`);
+        const h = NOM.hoja({ titulo: "Texto en columnas", icono: "columns-3", cuerpo, pie });
+        let modo = "sep";
+        const opcs = () => modo === "fijo" ? { anchos: $("[data-anchos]", cuerpo).value.split(/[,;\s]+/).filter(Boolean).map(Number) }
+          : { sep: Object.fromEntries($$("[data-s]", cuerpo).map((x) => [x.dataset.s, x.checked ? (x.dataset.s === "otro" ? $("[data-otro]", cuerpo).value : true) : false])), seguidos: $("[data-seguidos]", cuerpo).checked, calificador: $("[data-cal]", cuerpo).value };
+        const previa = () => {
+          const o = opcs(), filas = [];
+          for (let f = r.f1; f <= Math.min(r.f2, r.f1 + 7); f++) { const v = String(crudo(r.c1, f)); if (v && !v.startsWith("=")) filas.push(partirTexto(v, o)); }
+          $("[data-previa]", cuerpo).innerHTML = `<table>${filas.map((fl) => `<tr>${fl.map((x) => `<td>${esc(x)}</td>`).join("")}</tr>`).join("")}</table>`;
+        };
+        $$("[data-modo]", cuerpo).forEach((b) => (b.onclick = () => { modo = b.dataset.modo; $$("[data-modo]", cuerpo).forEach((x) => x.setAttribute("aria-pressed", x === b)); $("[data-sep]", cuerpo).hidden = modo !== "sep"; $("[data-fijo]", cuerpo).hidden = modo !== "fijo"; previa(); }));
+        cuerpo.addEventListener("input", previa); cuerpo.addEventListener("change", previa);
+        previa();
+        $("[data-si]", pie).onclick = () => {
+          h.cerrar();
+          const res = textoEnColumnas(r, opcs());
+          if (typeof res === "string") return aviso(res, { tipo: "aviso", ms: 5000 });
+          aviso(`${res.filas} ${res.filas === 1 ? "fila partida" : "filas partidas"} en ${res.columnas} columnas. Ctrl+Z para deshacer`, { tipo: "ok" });
+        };
+      }
       function ordenarDeVerdad(c, asc) {
         if (ed.soloLectura || !t) return;
         const ev = evaluar();
@@ -746,7 +910,7 @@
           if (d.tipo === "imagen") {
             const rc = d.recorte || [0, 0, 0, 0], kw = 1 / Math.max(0.01, 1 - rc[0] - rc[2]), kh = 1 / Math.max(0.01, 1 - rc[1] - rc[3]);
             const bordeI = d.linea && d.linea.c ? `outline:${Math.max(0.5, (d.linea.w || 0.75) * (96 / 72))}px solid ${esc(d.linea.c)};outline-offset:-${Math.max(0.25, ((d.linea.w || 0.75) * (96 / 72)) / 2)}px;` : "";
-            return `<div class="xl-dib" style="${st}overflow:hidden;${bordeI}"><img src="${esc(d.src)}" alt="" style="position:absolute;left:${-rc[0] * kw * 100}%;top:${-rc[1] * kh * 100}%;width:${kw * 100}%;height:${kh * 100}%;max-width:none"></div>`;
+            return `<div class="xl-dib" style="${st}overflow:hidden;${bordeI}"><img src="${esc(NOM.srcBin ? NOM.srcBin(d.src) : d.src)}" alt="" style="position:absolute;left:${-rc[0] * kw * 100}%;top:${-rc[1] * kh * 100}%;width:${kw * 100}%;height:${kh * 100}%;max-width:none"></div>`;
           }
           if (d.tipo === "grafica" && NOM.graficaOffice) {
             let s2 = "";
@@ -2377,6 +2541,8 @@
             { texto: "Columna a la derecha", corto: "Derecha", icono: "between-vertical-end", fn: () => insertarColumnas(false) },
             { texto: "Eliminar columna", corto: "Eliminar", icono: "trash-2", fn: eliminarColumnas }] },
           { texto: "Ancho", icono: "move-horizontal", off: lect, sub: [{ texto: "Ancho de columna…", corto: "Ancho…", icono: "move-horizontal", fn: anchoColumnas }, { texto: "Ajustar al contenido", corto: "Ajustar", icono: "maximize-2", fn: () => { const r = rango(); for (let k = r.c1; k <= r.c2; k++) ajustarAncho(k); } }] },
+          { texto: "Quitar duplicados…", corto: "Duplicados", icono: "copy-x", off: lect, fn: () => dialogoDuplicados() },
+          { texto: "Texto en columnas…", corto: "En columnas", icono: "columns-3", off: lect, fn: () => dialogoTextoColumnas() },
           { texto: "Ordenar para todos", corto: "Para todos", icono: "arrow-up-down", off: lect, sub: [{ texto: "A → Z (cambia las celdas)", corto: "A → Z", icono: "arrow-up", fn: () => ordenarDeVerdad(c, true) }, { texto: "Z → A (cambia las celdas)", corto: "Z → A", icono: "arrow-down", fn: () => ordenarDeVerdad(c, false) }] },
           { texto: "Más", icono: "more-horizontal", sub: [
             { texto: `Fijar hasta ${F().colLetra(c)}`, icono: "snowflake", off: lect, fn: () => fijar({ fijasC: c + 1 }) },
@@ -2538,7 +2704,9 @@
         pintar: (l) => { comentadas = new Map(); (l || []).forEach((c) => { if (!c.resuelto && c.ancla && c.ancla.tipo === "celda" && (!t || c.ancla.hoja === t.id)) comentadas.set(c.ancla.ref, c.id); }); render(); },
       };
       // Lo que usan otros módulos (datos → reporte, combinar correspondencia).
-      this.api = { rango, tabla: () => t, evaluar, seleccion: () => ({ ...sel }) };
+      this.api = { rango, tabla: () => t, evaluar, seleccion: () => ({ ...sel }),
+        // herramientas de datos como las de Excel (también para las pruebas contra Excel real)
+        herramientas: { quitarDuplicados, regionActual, textoEnColumnas, partirTexto } };
       void self;
 
       render();

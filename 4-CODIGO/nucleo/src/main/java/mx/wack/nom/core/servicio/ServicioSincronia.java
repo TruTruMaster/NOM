@@ -43,6 +43,12 @@ public class ServicioSincronia {
     private final CodecJson json;
     private final Nodo nodo;
 
+    /** El almacén de binarios de este servidor (las imágenes y el Office original de los documentos): lo que un documento
+        menciona tiene que estar también en el otro servidor. null = sin almacén. */
+    private volatile mx.wack.nom.core.almacen.RepositorioBinarios binarios;
+
+    public void usarBinarios(mx.wack.nom.core.almacen.RepositorioBinarios repo) { this.binarios = repo; }
+
     public ServicioSincronia(ServicioEspacios espacios, ServicioDocumentos documentos, CodecJson json, Nodo nodo) {
         this.espacios = espacios;
         this.documentos = documentos;
@@ -255,7 +261,9 @@ public class ServicioSincronia {
                     }
                 }
                 if (subir) {
-                    List<Operacion> ops = operaciones((Map<String, Object>) json.leer(new String(json.escribir(documentos.estadoParaCopiar(d.id)), StandardCharsets.UTF_8)));
+                    Map<String, Object> estadoAqui = (Map<String, Object>) json.leer(new String(json.escribir(documentos.estadoParaCopiar(d.id)), StandardCharsets.UTF_8));
+                    subirBinarios(e.id, base, rem, tok, estadoAqui);
+                    List<Operacion> ops = operaciones(estadoAqui);
                     for (int i = 0; i < ops.size(); i += LOTE) {
                         Map<String, Object> lote = new LinkedHashMap<>();
                         lote.put("cliente", "sincronia-" + nodo.id());
@@ -267,6 +275,7 @@ public class ServicioSincronia {
                 }
                 if (subir) mandarActividad(s, d, rid);
                 Map<String, Object> abierto = (Map<String, Object>) pedir("GET", base + "/api/documentos/" + rid, tok, null);
+                bajarBinarios(e.id, base, rem, tok, abierto.get("estado"));
                 bajadas += documentos.fusionarExterno(d.id, operaciones((Map<String, Object>) abierto.get("estado")), "Sincronización con " + s.servidor.replaceFirst("^https?://", ""));
                 s.copiados.put(d.id, documentos.requerir(d.id).modificado);
                 Object doc = abierto.get("documento");
@@ -357,6 +366,72 @@ public class ServicioSincronia {
     }
 
     // ------------------------------------------------------------ HTTP (solo el JDK)
+
+    // ------------------------------------------------------------ almacén de binarios
+    private static final java.util.regex.Pattern REF = java.util.regex.Pattern.compile("nom:bin/([0-9a-f]{64})");
+
+    private static void refsEn(Object v, Set<String> s) {
+        if (v instanceof CharSequence cs) { if (cs.length() >= 72 && cs.toString().contains("nom:bin/")) { var m = REF.matcher(cs); while (m.find()) s.add(m.group(1)); } }
+        else if (v instanceof Map<?, ?> m) m.values().forEach(x -> refsEn(x, s));
+        else if (v instanceof Iterable<?> it) it.forEach(x -> refsEn(x, s));
+    }
+
+    /** Antes de mandar un documento: los binarios que menciona y que el otro servidor no tiene, se le suben. */
+    @SuppressWarnings("unchecked")
+    private void subirBinarios(String aqui, String base, String rem, String tok, Object estado) throws IOException {
+        var repo = binarios;
+        if (repo == null || estado == null) return;
+        Set<String> refs = new java.util.TreeSet<>();
+        refsEn(estado, refs);
+        refs.removeIf(h -> !repo.existe(aqui, h));
+        if (refs.isEmpty()) return;
+        Object r;
+        try { r = pedir("POST", base + "/api/espacios/" + rem + "/binarios/faltan", tok, Map.of("huellas", new ArrayList<>(refs))); }
+        catch (ErrorRemoto ex) { if (ex.codigo == 404 || ex.codigo == 405) return; throw ex; }   // el otro no tiene almacén
+        Object f = r instanceof Map<?, ?> m ? m.get("faltan") : null;
+        if (!(f instanceof List<?> faltan)) return;
+        for (Object h : faltan) {
+            byte[] b = repo.leer(aqui, String.valueOf(h));
+            if (b != null) pedirBytes("PUT", base + "/api/espacios/" + rem + "/binarios/" + h, tok, b);
+        }
+    }
+
+    /** Después de traer un documento: los binarios que menciona y que aquí no están, se bajan del otro servidor. */
+    private void bajarBinarios(String aqui, String base, String rem, String tok, Object estado) throws IOException {
+        var repo = binarios;
+        if (repo == null || estado == null) return;
+        Set<String> refs = new java.util.TreeSet<>();
+        refsEn(estado, refs);
+        for (String h : refs) {
+            if (repo.existe(aqui, h)) continue;
+            try {
+                byte[] b = pedirBytes("GET", base + "/api/espacios/" + rem + "/binarios/" + h, tok, null);
+                // (se guarda solo si llegó lo que dice su huella)
+                if (b != null && b.length > 0 && ServicioBinarios.huellaDe(b).equals(h)) repo.guardar(aqui, h, b);
+            } catch (ErrorRemoto ex) { if (ex.codigo != 404) throw ex; }
+        }
+    }
+
+    private byte[] pedirBytes(String metodo, String url, String token, byte[] cuerpo) throws IOException {
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        try {
+            c.setRequestMethod(metodo);
+            c.setConnectTimeout(8_000);
+            c.setReadTimeout(120_000);
+            if (token != null) c.setRequestProperty("Authorization", "Bearer " + token);
+            if (cuerpo != null) {
+                c.setDoOutput(true);
+                c.setRequestProperty("Content-Type", "application/octet-stream");
+                c.setFixedLengthStreamingMode(cuerpo.length);
+                try (OutputStream o = c.getOutputStream()) { o.write(cuerpo); }
+            }
+            int codigo = c.getResponseCode();
+            if (codigo >= 400) { leer(c.getErrorStream()); throw new ErrorRemoto(codigo, "Error " + codigo); }
+            try (InputStream in = c.getInputStream()) { return in.readAllBytes(); }
+        } finally {
+            c.disconnect();
+        }
+    }
 
     private Object pedir(String metodo, String url, String token, Object cuerpo) throws IOException {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();

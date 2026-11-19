@@ -118,16 +118,23 @@ final class ServidorHttp {
         final int codigo;
         final Object cuerpo;
         final Consumer<Canal> canal;
+        /** Bytes tal cual (el almacén de binarios), con su tipo; null para JSON. */
+        final byte[] binario;
+        final String tipo;
 
-        private Respuesta(int codigo, Object cuerpo, Consumer<Canal> canal) {
+        private Respuesta(int codigo, Object cuerpo, Consumer<Canal> canal, byte[] binario, String tipo) {
             this.codigo = codigo;
             this.cuerpo = cuerpo;
             this.canal = canal;
+            this.binario = binario;
+            this.tipo = tipo;
         }
 
-        static Respuesta json(int codigo, Object cuerpo) { return new Respuesta(codigo, cuerpo, null); }
+        static Respuesta json(int codigo, Object cuerpo) { return new Respuesta(codigo, cuerpo, null, null, null); }
 
-        static Respuesta sse(Consumer<Canal> abrir) { return new Respuesta(200, null, abrir); }
+        static Respuesta sse(Consumer<Canal> abrir) { return new Respuesta(200, null, abrir, null, null); }
+
+        static Respuesta bytes(byte[] datos) { return new Respuesta(200, null, null, datos, "application/octet-stream"); }
     }
 
     private static String linea(InputStream in) throws IOException {
@@ -217,6 +224,10 @@ final class ServidorHttp {
         }
         if (p.ruta.startsWith("/api/")) {
             Respuesta r = api.atender(p);
+            if (r.binario != null) {
+                responder(out, r.codigo, r.tipo, r.binario, mantener, true);
+                return mantener;
+            }
             if (r.canal == null) {
                 byte[] b = r.cuerpo == null ? new byte[0] : Json.YO.escribir(r.cuerpo);
                 responder(out, r.codigo, "application/json;charset=UTF-8", b, mantener, true);

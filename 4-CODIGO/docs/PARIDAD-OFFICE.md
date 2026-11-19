@@ -59,30 +59,42 @@ archivo de Office se muestra (y se conserva al descargar), pero no se crea ni se
 |---|---|---|
 | Inicio · Portapapeles | Cortar, copiar, pegar, pegado especial, copiar formato | Sí, salvo **pegar con formato** (a medias: negritas, listas y vínculos; faltan estilos, tablas, imágenes y colores desde Word o Google Docs) |
 | Inicio · Fuente | Fuente, tamaño, negrita, cursiva, subrayado, tachado, sub/superíndice, color, resaltado, mayúsculas, borrar formato | Sí. Versalitas, espaciado entre letras, elevado/bajado y texto oculto: se leen y se conservan de Word, sin botón propio. **Escala de caracteres (`w:w`): no** |
-| Inicio · Párrafo | Alineación, sangrías, interlineado, espacio, viñetas, numeración multinivel, ordenar, marcas ¶, bordes y sombreado | Sí lo principal (también numeración como la escribe Word); bordes y sombreado se ven; **ordenar y mostrar marcas ¶: no** |
+| Inicio · Párrafo | Alineación, sangrías, interlineado, espacio, viñetas, numeración multinivel, ordenar, marcas ¶, bordes y sombreado | Sí lo principal (también numeración como la escribe Word); bordes y sombreado se ven; **ordenar y mostrar marcas ¶: no**. **Tabulaciones del archivo: sí** (18-nov: izquierda, derecha, centro y decimal con relleno de puntos, guiones o raya, las del estilo y las propias, «quitar» y la distancia de siempre; medido en w07 y w09: índices y tablas de contenido con sus puntos y el número en la parada; w09 98.2 % de renglones idénticos); ponerlas desde NOM (regla): no |
 | Inicio · Estilos | Galería de estilos, crear y modificar | A medias: Normal, Título 1-3 y los del archivo se ven; crear o cambiar estilos: no |
 | Inicio · Edición | Buscar, reemplazar, seleccionar | Sí |
 | Insertar · Páginas | Portada, página en blanco, salto | Salto sí; portada de la galería no («Armar reporte» hace la suya) |
 | Insertar · Tablas | Insertar, dibujar, convertir, Excel incrustado | Insertar, combinar, bordes, rellenos, encabezado, anchos: sí; estilos de tabla de Word se ven; dibujar, convertir texto↔tabla y Excel incrustado: no |
-| Insertar · Ilustraciones | Imágenes, formas, iconos, 3D, SmartArt, gráfico, captura | Imágenes sí (recortar, girar, texto alrededor, pie, texto alternativo). Formas, SmartArt y gráficos **se ven**; insertarlos en un texto: no. Iconos, modelos 3D y captura: no. EMF/WMF: no se ven |
+| Insertar · Ilustraciones | Imágenes, formas, iconos, 3D, SmartArt, gráfico, captura | Imágenes sí (recortar, girar, texto alrededor, pie, texto alternativo). Formas, SmartArt y gráficos **se ven**; insertarlos en un texto: no. Iconos, modelos 3D y captura: no. **EMF/WMF: sí** (18-nov: `js/emf.js`; 535 metarchivos del corpus contra cómo los muestra Word real, `metarchivos_real.py`: parecido 96.2 %, 88.5 % en lo dibujado; las ecuaciones viejas y los objetos incrustados se ven con su vista previa; falta: las letras dentro del dibujo usan las del equipo) |
 | Insertar · Vínculos y comentarios | Vínculo, marcador, referencia cruzada, comentario | Vínculo y comentario sí; marcador y referencia cruzada no |
 | Insertar · Encabezado y pie | Encabezado, pie, número de página | Sí (primera página distinta, «1 de 5», por sección al importar) |
 | Insertar · Texto | Cuadro de texto, WordArt, letra capital, firma, fecha, objeto | Fecha (fija) e insertar el contenido de otro Word: sí. Cuadros de texto y letra capital **se ven**; WordArt, firma y objetos: no |
 | Insertar · Símbolos | Ecuación, símbolo | Sí (ecuaciones con notación tipo LaTeX, a OMML de Word) |
 | Dibujar | Pluma, entintado | No en el texto (la pluma existe al presentar) |
 | Diseño | Temas, conjuntos de estilos, colores, fuentes, marca de agua, color y bordes de página | Marca de agua sí; color y bordes de página se ven; temas, conjuntos de estilos, colores y fuentes del documento: no |
-| Disposición | Márgenes, orientación, tamaño, columnas, saltos, números de línea, guiones, sangría, espacio, organizar | Márgenes, orientación, tamaño, saltos de página, sangría y espacio: sí. Columnas: las del archivo se ven como Word; en NOM, «dos lado a lado» como bloque. Saltos de sección: se ven. **Números de línea y división automática de palabras: no** |
+| Disposición | Márgenes, orientación, tamaño, columnas, saltos, números de línea, guiones, sangría, espacio, organizar | Márgenes, orientación, tamaño, saltos de página, sangría y espacio: sí. Columnas: las del archivo se ven como Word (18-nov: las de una sección continua se equilibran como Word; el índice a dos columnas de w07 ya no se encima); en NOM, «dos lado a lado» como bloque. Saltos de sección: se ven. **División automática de palabras: sí** (18-nov: «Guiones automáticos» del archivo —zona, mayúsculas, «No dividir con guiones» por párrafo— se respeta, se activa y desactiva en Más y se guarda al descargar; patrones de TeX en inglés y español. Medido contra Word en w13-guiones: 57.1 % de renglones idénticos, 19.6 % sin dividir. Lo que falta: Word usa su propio diccionario y parte algunas palabras en otro lugar —«extra-ordinariamente», «con-exión» en inglés—; ver RELEVO-18NOV-TARDE). **Números de línea: no** |
 | Referencias | Tabla de contenido, notas al pie y al final, citas y bibliografía, títulos, tabla de ilustraciones, índice, tabla de autoridades | Tabla de contenido y notas al pie: sí. Notas al final: no. Citas y bibliografía: **las de NOM** (APA, fuentes por DOI, ISBN o dirección); las de Word (`CITATION`, `Sources.xml`): no. Títulos «Figura 1.»: sí. Tabla de ilustraciones, índice (`XE`) y tabla de autoridades: no. Investigar (Wikipedia, libros, artículos): sí, extra |
 | Correspondencia | Combinar correspondencia, sobres, etiquetas, reglas | **La de NOM** (texto con `{{campos}}` + una hoja = un documento por fila); la de Word (`MERGEFIELD`, origen de datos), sobres y etiquetas: no |
 | Revisar | Ortografía, Editor, contar palabras, accesibilidad, traducir, idioma, comentarios, control de cambios, comparar, proteger | Contar palabras, comentarios y proteger: sí. **Control de cambios: a medias** (NOM tiene su modo sugerencia con aceptar y rechazar; los cambios marcados de un Word se muestran ya aplicados, sin sus marcas). Comparar, traducir, idioma y Editor: no |
 | Vista | Lectura, diseño de impresión, web, esquema, borrador, regla, cuadrícula, panel de navegación, zoom, ventanas, macros | Páginas o continuo, panel de esquema (títulos), zoom, modo enfoque: sí. Lectura, borrador, regla, cuadrícula y ventanas: no. Macros: no |
 | Formato de imagen (contextual) | Recortar, ajustar, estilos, ajuste del texto, girar, tamaño | Recortar, girar, ajuste del texto, tamaño, texto alternativo: sí; estilos y correcciones de imagen: no (los filtros están en presentaciones) |
-| Campos (los «75») | Insertar, actualizar, ver código | Se ve el último valor que guardó Word en todos. `PAGE`, `NUMPAGES`, `SECTIONPAGES` se calculan; `TOC` se escribe al descargar; `HYPERLINK` son vínculos. Actualizar `DATE`, `REF`, `SEQ`, `PAGEREF`, `MERGEFIELD`, `IF`, `=`, etc.: no |
+| Campos (los «75») | Insertar, actualizar, ver código | **Sí** (18-nov, `js/campos.js`): como Word, se ve el último valor (fecha y hora al día) y **Actualizar campos (F9)** calcula `DATE`/`TIME`/`CREATEDATE`/`SAVEDATE` con `\@`, `SEQ` (`\c \r \h \s`), `REF`, `PAGEREF` (`\p`), `PAGE`, `NUMPAGES`, `IF`, `=` (fórmulas y funciones, `\#`), `\*` (ROMAN, ALPHABETIC, CardText, OrdText, Ordinal, DollarText, Upper, Lower, Caps, FirstCap), `AUTHOR`, `TITLE`, `SUBJECT`, `DOCPROPERTY`, `STYLEREF`, `FILENAME`, `NUMWORDS`; **55 de 55 iguales a Word 2024** (`campos_real.py`). Ver códigos (Alt+F9) e insertar campo: sí. Falta: `MERGEFIELD` con el origen de datos de Word, `NOTEREF`, `TOC` actualizable, índice (`XE`/`INDEX`) |
 | Controles de contenido y formularios | Casilla, lista, fecha, texto | Se conservan y su texto se edita; como formulario: no |
 | VBA, modo seguro, automatización | | No |
 
-Medido contra Word 2024 real (renglones idénticos): w01 85.4 %, w02 84.9 %, w03 96.6 %, w04 86.5 %, w05 85.7 %,
-w06 84.5 %, w07 91.2 %, w08 94.3 %, w09 77.3 %, w10 34.0 %, w11 100 %, w12 77.8 %.
+Medido contra Word 2024 real (renglones idénticos, 18-nov, con los renglones cortados como Word, tabulaciones y
+columnas equilibradas): w01 94.9 %, w02 96.2 %, w03 96.6 %, w04 94.3 %, w05 85.7 %, w06 83.8 %, w07 96.5 %, w08 100 %,
+w09 98.2 %, w10 28.7 %, w11 100 %, w12 82.9 %, w13 57.1 %, t01 90.8 % (al empezar el 18-nov: w01 86.1, w02 84.9,
+w04 86.5, w07 93.0, w08 94.3, w09 78.5, w12 77.8, t01 83.8). Y w14-renglones (144 párrafos hechos en Word para esto: 8 fuentes, 3 tamaños, izquierda y justificado,
+3 anchos): **99.6 %** (antes 85.2 %) y las mismas 23 páginas que Word (antes 26).
+
+**Cómo corta Word un renglón** (medido con w14: `windows/hacer_renglones.py`, `analisis/acomodo_word.py`): a la
+izquierda, todo lo que cabe con los anchos EXACTOS de la fuente, sin tolerancia; justificado (Word 2013 y después),
+mete la palabra que no cabe encogiendo los espacios solo si se pasa del margen a lo más la mitad del hueco que
+quedaría sin ella y cada espacio se encoge a lo más un 25 % (0 errores en 559 decisiones); corta también después de un
+guion o una raya pegados a lo que sigue. NOM lo calcula con los anchos de sus fuentes (las mismas medidas que las de
+Office) y lo fuerza con cortes de pantalla (`acomodarComoWord` en `modo-texto.js`; el navegador solo no puede: mide el
+texto hasta un 0.1 % más angosto). Falta: párrafos justificados o centrados con tabuladores, guiones automáticos, escala de caracteres, letra
+capital o junto a un objeto que flota (esos los sigue acomodando el navegador), y el texto dentro de tablas y cuadros.
 
 ## 4. Excel
 
@@ -99,28 +111,22 @@ w06 84.5 %, w07 91.2 %, w08 94.3 %, w09 77.3 %, w10 34.0 %, w11 100 %, w12 77.8 
 | Insertar | Tabla dinámica, gráficas, minigráficos, imágenes, formas, cuadro de texto, vínculo, casilla, símbolos | Gráficas: sí (las de NOM; las de Excel se ven en su lugar, también 3D, cascada, histograma, Pareto, embudo, rectángulos, solar, cajas). Imágenes, formas, SmartArt y WordArt del archivo **se ven**; insertarlos: no. Tabla dinámica, minigráficos, segmentaciones y casilla en celda: no |
 | Disposición de página | Temas, márgenes, orientación, área de impresión, saltos, títulos | No |
 | Fórmulas | Biblioteca, nombres, auditoría, opciones de cálculo | Biblioteca y sugerencias al escribir: sí. Nombres del libro: se usan (también en LAMBDA); definirlos desde NOM: no. Rastrear precedentes y evaluar fórmula: no |
-| Datos | Obtener datos (Power Query), ordenar, filtrar, texto en columnas, relleno rápido, quitar duplicados, validación, consolidar, Y si (buscar objetivo, escenarios, tablas de datos), previsión, agrupar, tipos de datos | Ordenar, filtrar y validación (lista desplegable): sí; «Hacer un reporte con estos datos» y datos públicos de Wikidata: extra. Lo demás: no |
+| Datos | Obtener datos (Power Query), ordenar, filtrar, texto en columnas, relleno rápido, quitar duplicados, validación, consolidar, Y si (buscar objetivo, escenarios, tablas de datos), previsión, agrupar, tipos de datos | Ordenar, filtrar y validación (lista desplegable): sí. **Quitar duplicados y texto en columnas: sí** (18-nov; `datos_excel.py`: 10 de 10 casos iguales a Excel 2024, con lo que se escribe en una celda entendido como Excel: 1e3, (7), fechas con guiones, formatos de moneda/porcentaje/miles). «Hacer un reporte con estos datos» y datos públicos de Wikidata: extra. Buscar objetivo (la verdad de Excel ya está en `datos-excel.json`), relleno rápido, consolidar, escenarios, tablas de datos, previsión y agrupar: no |
 | Revisar | Ortografía, notas, comentarios, proteger hoja y libro | Notas del archivo se ven; comentarios de NOM y proteger: sí |
 | Vista | Saltos de página, diseño de página, cuadrícula, encabezados, zoom, inmovilizar, macros, celda de enfoque, modo oscuro | Inmovilizar (fijar filas y columnas): sí; cuadrícula como la del archivo. Vista de saltos, de diseño, celda de enfoque y macros: no |
 | VBA, Python en Excel, Power Query (M), Power Pivot y DAX, cubos | | No |
 
-**Funciones.** NOM tiene **230** (con sus nombres en español y en inglés), con matrices dinámicas, `LET` y `LAMBDA`.
-De las 261 que enumera el inventario tiene 118:
-
-| Categoría (lista del inventario) | NOM | Faltan |
-|---|---|---|
-| Destacadas | 10 / 10 | — |
-| Fecha y hora | 22 / 25 | `NETWORKDAYS.INTL`, `WORKDAY.INTL`, `YEARFRAC` |
-| Lógicas (con `AND`, `BYROW`, `BYCOL`) | 17 / 19 | `TRUE()`, `FALSE()` como funciones (los valores sí) |
-| Búsqueda (lista cortada) | 5 / 6 | `AREAS` |
-| Matemáticas (lista cortada) | 24 / 38 | `ACOSH`, `ACOT`, `ACOTH`, `ASINH`, `ATANH`, `CEILING.PRECISE`, `COMBINA`, `COT`, `COTH`, `CSC`, `CSCH`, `SUMX2MY2`, `SUMX2PY2`, `SUMXMY2` |
-| Estadística (lista cortada) | 13 / 30 | `BETA.*`, `BINOM.*`, `CHISQ.*`, `CONFIDENCE.*`, `DEVSQ`, `EXPON.DIST`, `F.*` |
-| Compatibilidad | 12 / 41 | las distribuciones viejas (`NORMDIST`, `TDIST`, `CHIDIST`…) |
-| Ingeniería (lista cortada) | 1 / 11 | `BESSEL*`, `BIN2HEX`, `BIN2OCT`, `BIT*` |
-| Base de datos | 0 / 12 | `DSUM`, `DAVERAGE`, `DCOUNT`… |
-| Cubo | 0 / 7 | todas (necesitan un modelo de datos) |
-| Financieras (las de Excel) | 10 / 51 | las de bonos, cupones, depreciación (`DB`, `DDB`, `SYD`, `VDB`), `XIRR`, `XNPV`… |
-| Sueltas | 4 / 11 | `GETPIVOTDATA`, `GROUPBY`, `PIVOTBY`, `IMAGE`, `TRIMRANGE`, `REGEXEXTRACT`, `TRANSLATE` |
+**Funciones.** NOM tiene **454** (con sus nombres en español y en inglés), con matrices dinámicas, `LET` y `LAMBDA`
+(18-nov: +224). La lista de Excel 2024 sale del propio Excel (la biblioteca de tipos de `WorksheetFunction`, 416
+funciones, `windows/lista_funciones.py`): de esas faltan solo las de idiomas de doble byte o tailandés (`BAHTTEXT`,
+`THAI*`, `PHONETIC`), las que piden un servicio externo (`RTD`, `WEBSERVICE`, `FILTERXML`, `STOCKHISTORY`, `FIELDVALUE`),
+`FORECAST.ETS*` (4), `ODDFPRICE`/`ODDFYIELD`/`ODDLPRICE`/`ODDLYIELD` e `IMAGE`.
+Comprobadas contra **Excel 2024 real** (`funciones_excel.py`: Excel escribe cada fórmula con `Formula2`, calcula y
+devuelve el valor o el error exacto): **499 de 500** fórmulas iguales. La que no: `BESSELJ` con x ≥ 8 (Excel se aparta
+del valor exacto en ~5e-7 y no se encontró su método; NOM da el exacto). Las funciones iterativas (`TIR`, `TIR.NO.PER`,
+`TASA`) se comparan con la precisión que Excel documenta (1e-8).
+No existen en Excel 2024 (son de Microsoft 365; dan `#NAME?` en la PC de prueba, así que no hay contra qué compararlas):
+`REGEXTEST`, `REGEXEXTRACT`, `REGEXREPLACE`, `GROUPBY`, `PIVOTBY`, `TRIMRANGE`, `PERCENTOF`, `TRANSLATE`, `DETECTLANGUAGE`.
 
 Medido contra Excel 2024 real: texto de las celdas 100 % en los nueve libros; altos de fila 100 % salvo una fila de
 x01 (99.4 %); cada gráfica 92-98 % de parecido.
@@ -143,6 +149,16 @@ x01 (99.4 %); cada gráfica 92-98 % de parecido.
 
 Medido contra PowerPoint 2024 real (parecido de imagen): p01 97.6 %, p02 99.0 %, p03 95.2 %, p04 98.0 %, p05 97.9 %,
 p06 96.3 %, p07 98.8 %, p08 99.5 %, p09 98.7 %, p10 98.6 %, p11 89.5 %.
+
+**Dónde pone PowerPoint cada renglón** (18-nov, `windows/hacer_interlineado.py` y `analisis/interlineado_ppt.py`: 12
+fuentes, 5 tamaños, interlineado 80, 90, 100, 110, 120, 150, 200 % y exacto, midiendo la tinta de la línea base en
+la imagen de PowerPoint): cada renglón baja exactamente el interlineado (1.2 × tamaño × %, o los puntos exactos
+redondeados a punto entero) en todas las fuentes, y la primera línea base queda en
+`max(1.2·tamaño·r + min(0, L − 1.2·tamaño), 0.75·L)` con r = (ascendente + espacio)/(ascendente + descendente +
+espacio) de la tabla hhea. NOM mide dónde puso el navegador la línea base y mueve cada párrafo lo que falta
+(`ajustarRenglones` en `diapositivas.js`: editor, presentar, proyector, enlace para ver). En p12: de hasta 10 pt de
+diferencia a ±0.5 pt (un píxel de la medida); en p01 la diferencia mediana de los renglones baja de 2 a 1 px (37 de 55
+exactos, antes 22) y en p07 de 4 a 1.5 px. Falta: las miniaturas y la imagen PNG de una diapositiva (no se acomodan).
 
 ## 6. Lo que NOM tiene y Office no
 

@@ -144,7 +144,7 @@
     if (pt.tipo === "img") {
       // (con recorte: la parte que se ve de la imagen llena la forma)
       const r = Array.isArray(pt.recorte) ? pt.recorte : [0, 0, 0, 0], iw = w / Math.max(0.01, 1 - r[0] - r[2]), ih = h / Math.max(0.01, 1 - r[1] - r[3]);
-      return `<pattern id="${id}" patternUnits="userSpaceOnUse" x="0" y="0" width="${n2(w)}" height="${n2(h)}"><image href="${escX(pt.src)}" x="${n2(-r[0] * iw)}" y="${n2(-r[1] * ih)}" width="${n2(iw)}" height="${n2(ih)}" preserveAspectRatio="none"${pt.alfa != null && pt.alfa < 1 ? ` opacity="${n2(pt.alfa)}"` : ""}/></pattern>`;
+      return `<pattern id="${id}" patternUnits="userSpaceOnUse" x="0" y="0" width="${n2(w)}" height="${n2(h)}"><image href="${escX(NOM.srcBin ? NOM.srcBin(pt.src) : pt.src)}" x="${n2(-r[0] * iw)}" y="${n2(-r[1] * ih)}" width="${n2(iw)}" height="${n2(ih)}" preserveAspectRatio="none"${pt.alfa != null && pt.alfa < 1 ? ` opacity="${n2(pt.alfa)}"` : ""}/></pattern>`;
     }
     if (pt.tipo === "lin") {
       // el ángulo va en el sentido de las agujas del reloj y el degradado cubre toda la caja (como Office)
@@ -227,7 +227,7 @@
   function htmlImagen(im, w, h) {
     const r = Array.isArray(im.recorte) ? im.recorte : [0, 0, 0, 0], iw = w / Math.max(0.01, 1 - r[0] - r[2]), ih = h / Math.max(0.01, 1 - r[1] - r[3]);
     const ln = im.linea && !im.linea.no ? im.linea : null, fx = filtroEfectos(im);
-    return `<span style="position:absolute;inset:0;overflow:hidden${ln ? `;outline:${n2((+ln.w || 0.75) * (96 / 72))}px solid ${HEX6.test(ln.c || "") ? ln.c : "#000"}` : ""}${fx ? ";filter:" + fx : ""}"><img src="${escX(im.src)}" alt="" style="position:absolute;left:${n2(-r[0] * iw)}px;top:${n2(-r[1] * ih)}px;width:${n2(iw)}px;height:${n2(ih)}px;max-width:none"></span>`;
+    return `<span style="position:absolute;inset:0;overflow:hidden${ln ? `;outline:${n2((+ln.w || 0.75) * (96 / 72))}px solid ${HEX6.test(ln.c || "") ? ln.c : "#000"}` : ""}${fx ? ";filter:" + fx : ""}"><img src="${escX(NOM.srcBin ? NOM.srcBin(im.src) : im.src)}" alt="" style="position:absolute;left:${n2(-r[0] * iw)}px;top:${n2(-r[1] * ih)}px;width:${n2(iw)}px;height:${n2(ih)}px;max-width:none"></span>`;
   }
   /**
    * HTML de un dibujo de Word del tamaño w × h: una forma (con su texto) o un grupo/lienzo con sus piezas (formas,

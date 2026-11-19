@@ -3,6 +3,16 @@
    Un archivo OOXML es un .zip de XML; aquí se arma comprimido, sin librerías (compresion.js). */
 (function () {
   "use strict";
+  /**
+   * Un símbolo de Word (w:sym): con la fuente Symbol, su letra en Unicode (F06B → κ, como la dibuja Word; js/emf.js);
+   * con otra fuente, el carácter tal cual. (Antes quedaba la letra latina —«knbernaw» en lugar de «κνβερναω»— y al
+   * descargar un párrafo cambiado salía así en Word.)
+   */
+  function textoSym(fuente, codigo) {
+    const k = parseInt(codigo || "20", 16);
+    if (/^symbol$/i.test(fuente || "") && NOM.emf && NOM.emf.deSymbol) return NOM.emf.deSymbol(String.fromCharCode(k >= 0xF000 ? k : k + 0xF000));
+    return String.fromCharCode(k & 0xFFF);
+  }
   const NOM = window.NOM;
   const F = () => NOM.formulas;
   const enc = new TextEncoder();
@@ -62,15 +72,39 @@
     return (pagina ? [pagina] : pags).flatMap((p) => doc.deLaPagina(p));
   }
 
-  /** data:image/png;base64,... → { bytes, ext, w, h } (solo PNG y JPEG; otros se omiten). */
+  /** Qué imagen es, por sus primeros bytes: png, jpeg, gif, bmp, emf, wmf o null. */
+  function tipoImagen(b) {
+    if (!b || b.length < 24) return null;
+    if (b[0] === 0x89 && b[1] === 0x50) return "png";
+    if (b[0] === 0xFF && b[1] === 0xD8) return "jpeg";
+    if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return "gif";
+    if (b[0] === 0x42 && b[1] === 0x4D) return "bmp";
+    return NOM.emf ? NOM.emf.tipo(b) : null;
+  }
+  const MIME_IMG = { png: "image/png", jpeg: "image/jpeg", gif: "image/gif", bmp: "image/bmp", emf: "image/x-emf", wmf: "image/x-wmf" };
+  /** Una imagen del documento (data:…;base64 o del almacén) → { bytes, ext, w, h }: PNG, JPEG, GIF, BMP, EMF o WMF
+      (lo que Office guarda tal cual; un EMF o WMF importado sale idéntico). Otras se omiten. */
   function imagen(src) {
-    const m = /^data:image\/(png|jpeg|jpg);base64,(.+)$/i.exec(src || "");
-    if (!m) return null;
-    const bin = atob(m[2]), bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const ext = m[1].toLowerCase() === "png" ? "png" : "jpeg";
+    let bytes;
+    if (NOM.binarios && NOM.binarios.esRef(src)) {
+      // del almacén de binarios (ya precargado antes de exportar)
+      bytes = NOM.binarios.bytesYa(src);
+    } else {
+      const m = /^data:[a-z0-9.+\/-]+;base64,(.+)$/i.exec(src || "");
+      if (!m) return null;
+      const bin = atob(m[1]);
+      bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    }
+    const ext = tipoImagen(bytes);
+    if (!ext) return null;
+    const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     let w = 800, h = 600;
-    if (ext === "png") { const v = new DataView(bytes.buffer); w = v.getUint32(16); h = v.getUint32(20); }
+    if (ext === "png") { w = v.getUint32(16); h = v.getUint32(20); }
+    else if (ext === "gif") { w = v.getUint16(6, true); h = v.getUint16(8, true); }
+    else if (ext === "bmp") { w = Math.abs(v.getInt32(18, true)); h = Math.abs(v.getInt32(22, true)); }
+    else if (ext === "emf") { const fw = v.getInt32(32, true) - v.getInt32(24, true), fh = v.getInt32(36, true) - v.getInt32(28, true); if (fw > 0 && fh > 0) { w = (fw / 2540) * 96; h = (fh / 2540) * 96; } }
+    else if (ext === "wmf") { if (v.getUint32(0, true) === 0x9AC6CDD7) { const k = v.getUint16(14, true) || 1440; w = (Math.abs(v.getInt16(10, true) - v.getInt16(6, true)) / k) * 96; h = (Math.abs(v.getInt16(12, true) - v.getInt16(8, true)) / k) * 96; } }
     else {
       for (let i = 2; i < bytes.length - 9;) {
         if (bytes[i] !== 0xFF) { i++; continue; }
@@ -79,7 +113,7 @@
         i += 2 + len;
       }
     }
-    return { bytes, ext, w, h };
+    return { bytes, ext, w: Math.max(1, Math.round(w)), h: Math.max(1, Math.round(h)) };
   }
 
   /** HTML de un párrafo (b, i, u, br) → tramos { t, b, i, u, br }. */
@@ -191,7 +225,7 @@
 
   const CT = (extra) => XML + `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
 <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>
-<Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/>${extra}</Types>`;
+<Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/><Default Extension="gif" ContentType="image/gif"/><Default Extension="bmp" ContentType="image/bmp"/><Default Extension="emf" ContentType="image/x-emf"/><Default Extension="wmf" ContentType="image/x-wmf"/>${extra}</Types>`;
   const RELS = (rels) => XML + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels.map((r, i) =>
     `<Relationship Id="${r.id || "rId" + (i + 1)}" Type="${r.tipo}" Target="${x(r.destino)}"${r.externo ? ' TargetMode="External"' : ""}/>`).join("")}</Relationships>`;
   const T = { doc: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument",
@@ -348,7 +382,14 @@
   }
   /** Huellas de cada unidad del cuerpo (párrafo o tabla de Word) tal como quedó importada: { k: [todo, soloFormatoDePárrafo] }. */
   const sinOx = (pa) => { const r = Object.assign({}, pa); delete r.ox; return r; };
-  const huellaGrupo = (g) => NOM.origen.huella(g.map((p) => [sinOx(p.pa), p.tramos.map((t) => (t.e ? { e: t.e, a: t.a } : [t.x, t.a]))]));
+  // Un objeto dentro del texto (ecuación, imagen…) lleva los campos de su bloque: un campo vacío (null) no cuenta, porque
+  // al guardar como .nom (y en cualquier copia) un campo vacío simplemente no está, y el párrafo parecía cambiado.
+  const sinNulosE = (e) => { const r = {}; for (const k in e) if (e[k] != null) r[k] = e[k]; return r; };
+  const huellaGrupo = (g) => NOM.origen.huella(g.map((p) => [sinOx(p.pa), p.tramos.map((t) => (t.e ? { e: sinNulosE(t.e), a: t.a } : [t.x, t.a]))]));
+  // (las huellas guardadas hasta la 0.16.0 sí contaban los campos vacíos: también valen)
+  const conNulos = (g) => g.some((p) => p.tramos.some((t) => t.e && Object.keys(t.e).some((k) => t.e[k] === null)));
+  const huellaGrupoVieja = (g) => NOM.origen.huella(g.map((p) => [sinOx(p.pa), p.tramos.map((t) => (t.e ? { e: t.e, a: t.a } : [t.x, t.a]))]));
+  const mismoGrupo = (g, h) => huellaGrupo(g) === h || (conNulos(g) && huellaGrupoVieja(g) === h);
   function huellasDocx(doc) {
     const ps = NOM.textoRico.parrafosDe(doc), u = {};
     for (let i = 0; i < ps.length;) {
@@ -372,6 +413,8 @@
     const FMT_NUM = { "1.": ["decimal", "%1."], "1)": ["decimal", "%1)"], "a.": ["lowerLetter", "%1."], "a)": ["lowerLetter", "%1)"], "A.": ["upperLetter", "%1."], "I.": ["upperRoman", "%1."], "i.": ["lowerRoman", "%1."] };
     const abstracto = (clave) => { if (!abstractos.has(clave)) abstractos.set(clave, abstractos.size + baseAbs); return abstractos.get(clave); };
     const nuevaInstancia = (clave, inicio) => { const id = baseNum + instancias.length; instancias.push({ id, abs: abstracto(clave), inicio }); return id; };
+    // Marcadores (los que usan los campos): un id por nombre
+    const marcadoresW = {};
     // 8.2 Notas al pie y figuras.
     const notas = [];
     let nFigura = 0;
@@ -380,7 +423,7 @@
     const TAM0 = (pagDoc.tam === "otro" && +pagDoc.w > 100 && +pagDoc.h > 100 ? [+pagDoc.w, +pagDoc.h] : null) || { carta: [816, 1056], a4: [794, 1123], oficio: [816, 1344], a5: [559, 794], media: [529, 816] }[pagDoc.tam] || [816, 1056];
     const mg0 = pagDoc.margen || {}, v0 = (v) => (typeof v === "number" ? v : 96);
     const anchoTexto = Math.round(((pagDoc.orient === "h" ? TAM0[1] : TAM0[0]) - v0(mg0.iz) - v0(mg0.d)) * TWIP);
-    const CMT = 567;   // twips por centímetro
+    const CMT = 1440 / 2.54;   // twips por centímetro
     const rPr = (a) => {
       // en el orden que pide el esquema de Word
       let r = "";
@@ -393,6 +436,7 @@
       if (a.oc) r += "<w:vanish/>";
       if (hexW(a.color)) r += `<w:color w:val="${hexW(a.color)}"/>`;
       if (+a.esp) r += `<w:spacing w:val="${Math.round(+a.esp * 20)}"/>`;
+      if (+a.esc && +a.esc !== 100) r += `<w:w w:val="${Math.round(+a.esc)}"/>`;
       if (+a.pos) r += `<w:position w:val="${Math.round(+a.pos * 2)}"/>`;
       if (a.tam) r += `<w:sz w:val="${Math.round(a.tam * 2)}"/><w:szCs w:val="${Math.round(a.tam * 2)}"/>`;
       if (a.u) r += '<w:u w:val="single"/>';
@@ -700,8 +744,8 @@
                 if (cn === "t") t = c.ci === c.cf ? "" : O.desescapar(xp.slice(c.ci, c.cf));
                 else if (cn === "tab") t = "\t";
                 else if (cn === "br" || cn === "cr") { if (O.attr(xp, c, "w:type") === "page") R.raro = true; t = "\u2028"; }
-                else if (cn === "sym") t = String.fromCharCode(parseInt(O.attr(xp, c, "w:char") || "20", 16) & 0xFFF);
-                else if (["drawing", "pict", "AlternateContent", "object", "footnoteReference"].includes(cn)) obj = true;
+                else if (cn === "sym") t = textoSym(O.attr(xp, c, "w:font"), O.attr(xp, c, "w:char"));
+                else if (["drawing", "pict", "AlternateContent", "object", "footnoteReference", "endnoteReference"].includes(cn)) obj = true;
                 if (t != null && /[<&]/.test(xp.slice(c.ci, c.cf)) && cn === "t" && /<!\[CDATA\[|<[a-zA-Z]/.test(xp.slice(c.ci, c.cf))) R.raro = true;
                 if (t == null && !obj && cn !== "lastRenderedPageBreak") R.fuera++;
                 const it = { xml, t: obj ? OBJ : t, cn, de: R.s.length };
@@ -735,7 +779,18 @@
         let s1 = "";
         const A = [];
         for (const t of p.tramos) {
-          if (t.e) { if (!["imagen", "objeto", "nota"].includes(t.e.tipo) || t.e.pie) return null; s1 += OBJ; A.push(null); continue; }
+          if (t.e) {
+            // un marcador no es texto en el original (va aparte y se queda donde estaba); un campo que vino del archivo es
+            // el texto de su resultado (el que está entre «separate» y «end»): así el párrafo se parcha y no se reescribe
+            if (t.e.tipo === "marcador") continue;
+            if (t.e.tipo === "campo" && t.e.orig) {
+              const v = NOM.campos ? NOM.campos.textoVisible(t.e, { idioma: doc.valor("_doc", "idioma") }) : String(t.e.res || "");
+              for (let k = 0; k < v.length; k++) A.push(t.e.a || {});
+              s1 += v; continue;
+            }
+            if (!["imagen", "objeto", "nota"].includes(t.e.tipo) || t.e.pie) return null;
+            s1 += OBJ; A.push(null); continue;
+          }
           const a = t.a || {};
           if (a.sug || a.sugBorrar) return null;
           for (let k = 0; k < t.x.length; k++) A.push(a);
@@ -1034,14 +1089,14 @@
         while (j + 1 < ps.length && ps[j + 1].pa.ox === k) j++;
         usados.add(String(k));
         const grupo = ps.slice(i, j + 1);
-        if (huellaGrupo(grupo) === hu[k][0]) { sale.push(antesDe(u) + xd.slice(u.i, u.f)); textuales++; }
+        if (mismoGrupo(grupo, hu[k][0])) { sale.push(antesDe(u) + xd.slice(u.i, u.f)); textuales++; }
         else {
           // La unidad cambió (se editó, o se partió con Enter). Párrafo por párrafo: el que sigue igual
           // que el original sale textual; los demás se parchan sobre su XML original (o se escriben de nuevo).
           let textual = false;
           for (let q = i; q <= j; q++) {
             const p = ps[q], unico = p.tramos.length === 1 && p.tramos[0].e;
-            if (!textual && grupo.length > 1 && huellaGrupo([p]) === hu[k][0]) { sale.push(xd.slice(u.i, u.f)); textual = true; textuales++; continue; }
+            if (!textual && grupo.length > 1 && mismoGrupo([p], hu[k][0])) { sale.push(xd.slice(u.i, u.f)); textual = true; textuales++; continue; }
             const ant = sale[sale.length - 1];
             if (unico && unico.tipo === "salto" && q > i && ant && ant.endsWith("</w:p>") && !textual) { sale[sale.length - 1] = ant.slice(0, -6) + '<w:r><w:br w:type="page"/></w:r></w:p>'; continue; }
             if (unico && unico.tipo === "saltocol" && q > i && ant && ant.endsWith("</w:p>") && !textual) { sale[sale.length - 1] = ant.slice(0, -6) + '<w:r><w:br w:type="column"/></w:r></w:p>'; continue; }
@@ -1114,7 +1169,7 @@
             if (q >= ps.length || String(ps[q].pa.ox) !== hk) { entero = false; break; }
             let j2 = q;
             while (j2 + 1 < ps.length && String(ps[j2 + 1].pa.ox) === hk) j2++;
-            if (huellaGrupo(ps.slice(q, j2 + 1)) !== hu[hk][0]) { entero = false; break; }
+            if (!mismoGrupo(ps.slice(q, j2 + 1), hu[hk][0])) { entero = false; break; }
             q = j2 + 1;
           }
           if (entero) { piezas.push(antesDe(us[top]) + xd.slice(us[top].i, us[top].f)); hojas[top].forEach((hk) => usados.add(hk)); textuales++; i = q; continue; }
@@ -1167,7 +1222,7 @@
         rels.filter((r) => (r.tipo === T.img || r.tipo === T.enlace) && usadosEnCuerpo(r.id)).forEach((r) => pq.agregaRel(DOC, r.id, r.tipo, r.destino, r.externo));
         medios.filter((mm) => epCambio || !/media\/(logo|marca)\./.test(mm.nombre)).forEach((mm) => {
           pq.pon(mm.nombre.replace(/^word\//, carpeta), mm.datos);
-          pq.extension(mm.nombre.split(".").pop(), /png$/.test(mm.nombre) ? "image/png" : "image/jpeg");
+          pq.extension(mm.nombre.split(".").pop(), MIME_IMG[mm.nombre.split(".").pop()] || "image/png");
         });
         // ---- numeración nueva (listas hechas en NOM)
         if (instancias.length) {
@@ -1291,6 +1346,14 @@
             runs += `<w:r><w:rPr><w:rStyle w:val="RefNota"/></w:rPr><w:footnoteReference w:id="${baseNota + notas.length}"/></w:r>`;
           } else if (t.e.tipo === "ecuacion" && NOM.ecuaciones) {
             runs += t.e.bloque ? `<m:oMathPara>${NOM.ecuaciones.omml(t.e.tex || "")}</m:oMathPara>` : NOM.ecuaciones.omml(t.e.tex || "");
+          } else if (t.e.tipo === "campo") {
+            // campo de Word: { código | valor } como lo escribe Word (la fecha y la hora, con el valor de ahora)
+            const v = NOM.campos ? NOM.campos.textoVisible(t.e, { idioma: doc.valor("_doc", "idioma") }) : String(t.e.res || "");
+            const rp = rPr(t.e.a || {});
+            runs += `<w:r>${rp}<w:fldChar w:fldCharType="begin"/></w:r><w:r>${rp}<w:instrText xml:space="preserve"> ${x(t.e.instr || "")} </w:instrText></w:r><w:r>${rp}<w:fldChar w:fldCharType="separate"/></w:r>${v ? texto(v, t.e.a || {}) : ""}<w:r>${rp}<w:fldChar w:fldCharType="end"/></w:r>`;
+          } else if (t.e.tipo === "marcador" && t.e.nombre) {
+            if (marcadoresW[t.e.nombre] == null) marcadoresW[t.e.nombre] = 900000 + Object.keys(marcadoresW).length;
+            runs += t.e.lado === "fin" ? `<w:bookmarkEnd w:id="${marcadoresW[t.e.nombre]}"/>` : `<w:bookmarkStart w:id="${marcadoresW[t.e.nombre]}" w:name="${x(t.e.nombre)}"/>`;
           } else if (t.e.texto != null && t.e.tipo !== "tabla") runs += texto(String(t.e.texto), t.a || {});
           return;
         }
@@ -1421,7 +1484,7 @@ ${ep("Footer", "footer", "", '<w:tabs><w:tab w:val="center" w:pos="4680"/><w:tab
 ${[...abstractos.entries()].map(([k, id]) => definicion(k, id)).join("")}
 <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num><w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>
 ${instancias.map((n) => `<w:num w:numId="${n.id}"><w:abstractNumId w:val="${n.abs}"/>${n.inicio != null ? `<w:lvlOverride w:ilvl="0"><w:startOverride w:val="${n.inicio}"/></w:lvlOverride>` : ""}</w:num>`).join("")}</w:numbering>`;
-    const ajustes = XML + `<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:defaultTabStop w:val="720"/><w:characterSpacingControl w:val="doNotCompress"/>${notas.length ? '<w:footnotePr><w:footnote w:id="-1"/><w:footnote w:id="0"/></w:footnotePr>' : ""}<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`;
+    const ajustes = XML + `<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:defaultTabStop w:val="720"/>${doc.valor("_doc", "guiones") ? `<w:autoHyphenation/><w:hyphenationZone w:val="${Math.round((+(doc.valor("_doc", "guiones") || {}).zona || 18) * 20)}"/>` : ""}<w:characterSpacingControl w:val="doNotCompress"/>${notas.length ? '<w:footnotePr><w:footnote w:id="-1"/><w:footnote w:id="0"/></w:footnotePr>' : ""}<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`;
     if (OGR) return OGR.ensamblar({ estilos, numeracion, notasXml, extras, refs, relsEnc, primera: ep2.primera && (hayEnc || hayPie), pgSz: `<w:pgSz w:w="${(hor ? TAM[1] : TAM[0]) * TWIP}" w:h="${(hor ? TAM[0] : TAM[1]) * TWIP}"${hor ? ' w:orient="landscape"' : ""}/>`, mv, m });
     const titulo = doc.valor("_doc", "nombre") || "Documento";
     // Sin fecha: el mismo documento da siempre exactamente el mismo archivo.
@@ -1514,6 +1577,11 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     let uEl = null;   // la unidad del cuerpo (párrafo o tabla de primer nivel) que se está leyendo
     const ordinal = (c) => (uEl ? c.localName + ":" + Array.prototype.indexOf.call(uEl.getElementsByTagNameNS("*", c.localName), c) : null);
     const xmlDoc = await z.texto("word/document.xml");
+    // Los marcadores que usa algún campo (REF, PAGEREF, NOTEREF): solo esos entran al texto (como marcas invisibles),
+    // para que «Actualizar campos» encuentre su texto y su página. Los demás (_GoBack, los del índice…) no hace falta.
+    const marcadoresUsados = new Set();
+    String(xmlDoc || "").replace(/(?:REF|PAGEREF|NOTEREF)\s+([A-Za-z_][\w]*)/g, (m, n) => { marcadoresUsados.add(n); return m; });
+    const nombreMarcador = {};   // id → nombre (bookmarkEnd solo trae el id)
     if (!xmlDoc) throw new Error("El archivo no parece un documento de Word (.docx)");
     const P = (t) => new DOMParser().parseFromString(t, "application/xml");
     const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -1561,6 +1629,10 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     const formatoNum = {}, textoNum = {};
     // 8.2 Notas al pie: id → texto.
     const notasPie = {};
+    // Notas al final (endnotes.xml): id → texto; se numeran aparte (i, ii, iii… como Word, o el formato del archivo)
+    const notasFin = {};
+    const finTxt = await z.texto("word/endnotes.xml");
+    if (finTxt) [...P(finTxt).getElementsByTagNameNS(W, "endnote")].forEach((fn) => { const id = fn.getAttributeNS(W, "id") || fn.getAttribute("w:id"); if (+id > 0) notasFin[id] = [...fn.getElementsByTagNameNS(W, "t")].map((t) => t.textContent).join("").trim(); });
     const notasTxt = await z.texto("word/footnotes.xml");
     if (notasTxt) {
       const dn = P(notasTxt);
@@ -1589,7 +1661,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       const b = await z.leer(ruta);
       if (!b) return null;
       const ext = (ruta.split(".").pop() || "").toLowerCase();
-      const mime = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp" }[ext];
+      const mime = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp", emf: "image/x-emf", wmf: "image/x-wmf", tif: "image/tiff", tiff: "image/tiff" }[ext];
       if (!mime) return null;
       let bin = "";
       for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
@@ -1629,6 +1701,9 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       if (vs) a.vers = activo(vs);
       if (my) a.mayus = activo(my);
       if (es && val(es) != null) a.esp = Math.round((+val(es) / 20) * 100) / 100 || null;
+      // Escala de caracteres de Word (Fuente → Avanzado → Escala: 50 %, 150 %, 200 %…)
+      const ww = hijo(rpr, "w");
+      if (ww && val(ww) != null) a.esc = +val(ww) && +val(ww) !== 100 ? +val(ww) : null;
       // texto oculto (Word no lo muestra ni lo imprime) y elevado o bajado (w:position, en medios puntos)
       const vn = hijo(rpr, "vanish"), ps = val(hijo(rpr, "position"));
       if (vn) a.oc = activo(vn);
@@ -1654,6 +1729,24 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       if (!ppr) return r;
       const jc = val(hijo(ppr, "jc"));
       if (jc) r.jc = jc;
+      const sg = hijo(ppr, "suppressAutoHyphens");
+      if (sg) r.sinGuiones = !["0", "false", "off"].includes(val(sg) || "1");
+      // Tabulaciones de Word: [posición en pt desde el margen, tipo (i, c, d, p = decimal, b = barra), relleno]
+      const tbs = hijo(ppr, "tabs");
+      if (tbs) {
+        let lista = (r.tabs || []).slice();
+        const TIPO = { left: "i", start: "i", center: "c", right: "d", end: "d", decimal: "p", bar: "b", num: "i" };
+        for (const t of Array.from(tbs.childNodes).filter((n) => n.nodeType === 1 && n.localName === "tab")) {
+          const pos = +at(t, "pos") / 20, tipo = at(t, "val") || "left";
+          if (isNaN(pos)) continue;
+          lista = lista.filter((x) => Math.abs(x[0] - pos) > 0.05);
+          if (tipo === "clear") continue;
+          const rel = at(t, "leader");
+          lista.push([pos, TIPO[tipo] || "i", rel && rel !== "none" ? rel : undefined]);
+        }
+        lista.sort((a, b) => a[0] - b[0]);
+        r.tabs = lista;
+      }
       const ind = hijo(ppr, "ind");
       if (ind) {
         const g = (k) => { const v = at(ind, k); return v == null || v === "" || isNaN(+v) ? null : +v; };
@@ -1702,7 +1795,9 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     // El estilo Normal del archivo es el "formato base" del documento: lo que no trae formato propio
     // se ve con esa fuente, ese tamaño y ese interlineado.
     const rN = letraDe(idNormal), pN = parDe(idNormal);
-    const cmDe = (tw) => Math.round((tw / 567) * 100) / 100;
+    // (centímetros con 4 decimales y el factor exacto: con 2 decimales una sangría se movía hasta 0.14 pt y un renglón
+    // de Word que cabía justo dejaba de caber, o al revés)
+    const cmDe = (tw) => Math.round((tw / (1440 / 2.54)) * 10000) / 10000;
     // (con 4 decimales: el 1.1583 de Office 2024 —line="278"— no es el 1.15 de antes; en 40 renglones son 5 pt)
     const liDe = (c) => (c.linea && (!c.regla || c.regla === "auto") ? Math.round((c.linea / 240) * 10000) / 10000 : null);
     const liDeWord = (v) => Math.abs(v - 1.15) <= 0.04 || Math.abs(v - 1.08) <= 0.03;   // lo que aquí ya es el interlineado normal
@@ -2251,6 +2346,18 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
                 const fOf = !gOf && /wordprocessingShape/.test(uri) ? await formaWord(c, w, h) : !gOf && /wordprocessingGroup|wordprocessingCanvas/.test(uri) ? await grupoWord(c, w, h) : null;
                 tramos.push({ e: Object.assign({ tipo: "objeto", que, oe: ordinal(c), txt: (await textoObjeto(c)) || undefined }, gOf || {}, fOf || {}), a: {} }); aproximado = true;
               }
+            } else if (cn === "object" && c.getElementsByTagNameNS("*", "imagedata")[0]) {
+              // Un objeto incrustado (ecuación del Editor de ecuaciones o de MathType, hoja de Excel, diapositiva…): Word
+              // muestra su vista previa (casi siempre un WMF o EMF); al descargar sale el objeto original completo.
+              const im = c.getElementsByTagNameNS("*", "imagedata")[0], forma = im.parentNode;
+              const rid = im.getAttribute("r:id") || im.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id");
+              const src = rid ? await imagenDe(rid) : null;
+              const est = (forma && forma.getAttribute && forma.getAttribute("style")) || "";
+              const med = (k) => { const m = new RegExp("(?:^|;)\\s*" + k + "\\s*:\\s*([\\d.]+)(pt|in|cm|mm|px)?", "i").exec(est); if (!m) return 0; const f = { pt: 96 / 72, in: 96, cm: 96 / 2.54, mm: 96 / 25.4, px: 1 }[(m[2] || "px").toLowerCase()]; return +m[1] * f; };
+              const w = med("width"), h = med("height");
+              const que = /Equation|MathType/i.test((c.getElementsByTagNameNS("*", "OLEObject")[0] || {}).getAttribute ? c.getElementsByTagNameNS("*", "OLEObject")[0].getAttribute("ProgID") || "" : "") ? "Ecuación" : "Objeto incrustado";
+              if (src && w > 0 && h > 0) tramos.push({ e: { tipo: "objeto", que, oe: ordinal(c), img: src, w: Math.round(w * 100) / 100, h: Math.round(h * 100) / 100 }, a: {} });
+              else { tramos.push({ e: { tipo: "objeto", que, oe: ordinal(c) }, a: {} }); aproximado = true; }
             } else if (cn === "AlternateContent" || cn === "object") {
               const que = cn === "object" ? "Objeto incrustado" : c.getElementsByTagNameNS("*", "txbxContent")[0] ? "Cuadro de texto" : /drawingml\/2006\/chart/.test(c.innerHTML || "") ? "Gráfico" : c.getElementsByTagNameNS("*", "relIds")[0] ? "SmartArt" : "Forma";
               const gOf = que === "Gráfico" ? await graficaWord(c) : null;
@@ -2264,8 +2371,27 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
               tramos.push({ e: Object.assign({ tipo: "objeto", que, oe: ordinal(c), txt: (await textoObjeto(c)) || undefined }, gOf || {}, fOf || {}), a: {} }); aproximado = true;
             } else if (cn === "footnoteReference") {
               const id = c.getAttributeNS(W, "id") || c.getAttribute("w:id");
-              tramos.push({ e: { tipo: "nota", texto: notasPie[id] || "", oe: ordinal(c) }, a: {} });
-            } else if (cn === "sym") tramos.push({ x: String.fromCharCode(parseInt(c.getAttributeNS(W, "char") || c.getAttribute("w:char") || "20", 16) & 0xFFF), a });
+              // (con marca propia —«*», †— Word no le pone número ni la cuenta: la marca es el texto que sigue)
+              const propia = ["1", "true", "on"].includes(c.getAttributeNS(W, "customMarkFollows") || c.getAttribute("w:customMarkFollows") || "");
+              tramos.push({ e: { tipo: "nota", texto: notasPie[id] || "", oe: ordinal(c), propia: propia || undefined }, a: {} });
+            } else if (cn === "endnoteReference") {
+              const id = c.getAttributeNS(W, "id") || c.getAttribute("w:id");
+              tramos.push({ e: { tipo: "nota", final: true, texto: notasFin[id] || "", oe: ordinal(c) }, a: {} });
+            } else if (cn === "sym") tramos.push({ x: textoSym(c.getAttributeNS(W, "font") || c.getAttribute("w:font"), c.getAttributeNS(W, "char") || c.getAttribute("w:char")), a });
+            else if (cn === "fldChar" && parrafo) {
+              // Campo de Word: { código | último valor }. Se guarda como campo (se ve su último valor, como en Word, y
+              // «Actualizar campos» lo calcula otra vez); los que NOM no calcula se quedan como texto.
+              const tipoF = c.getAttributeNS(W, "fldCharType") || c.getAttribute("w:fldCharType");
+              const pila = (parrafo._campos = parrafo._campos || []);
+              // (el idioma del campo es el de su texto: con él se escriben los meses y los números con letra)
+              const lg = rpr && hijo(rpr, "lang");
+              if (tipoF === "begin") pila.push({ instr: "", etapa: "instr", ini: tramos.length, a, idioma: (lg && (lg.getAttributeNS(W, "val") || lg.getAttribute("w:val"))) || null });
+              else if (tipoF === "separate" && pila.length) { const f = pila[pila.length - 1]; f.etapa = "res"; f.res0 = tramos.length; }
+              else if (tipoF === "end" && pila.length) cerrarCampo(pila, tramos);
+            } else if (cn === "instrText" && parrafo && parrafo._campos && parrafo._campos.length) {
+              const f = parrafo._campos[parrafo._campos.length - 1];
+              if (f.etapa === "instr") f.instr += c.textContent;
+            }
           }
         } else if (ln === "hyperlink") {
           const rid = r.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id") || r.getAttribute("r:id");
@@ -2274,8 +2400,36 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         } else if (ln === "oMath" || ln === "oMathPara") {
           const t = ommlATex(r).trim();
           if (t) tramos.push({ e: { tipo: "ecuacion", tex: t, bloque: ln === "oMathPara" || null, oe: ordinal(r) }, a: {} });
+        } else if (ln === "fldSimple" && parrafo) {
+          const ini = tramos.length, pila = (parrafo._campos = parrafo._campos || []);
+          pila.push({ instr: r.getAttributeNS(W, "instr") || r.getAttribute("w:instr") || "", etapa: "res", ini, res0: ini, a: base });
+          await runs(r, base, tramos, parrafo);
+          cerrarCampo(pila, tramos);
+        } else if (ln === "bookmarkStart") {
+          const nm = r.getAttributeNS(W, "name") || r.getAttribute("w:name"), id = r.getAttributeNS(W, "id") || r.getAttribute("w:id");
+          if (nm && marcadoresUsados.has(nm)) { nombreMarcador[id] = nm; tramos.push({ e: { tipo: "marcador", nombre: nm, lado: "ini" }, a: {} }); }
+        } else if (ln === "bookmarkEnd") {
+          const nm = nombreMarcador[r.getAttributeNS(W, "id") || r.getAttribute("w:id")];
+          if (nm) tramos.push({ e: { tipo: "marcador", nombre: nm, lado: "fin" }, a: {} });
         } else if (["ins", "smartTag", "fldSimple", "customXml", "sdt", "sdtContent", "bdo", "dir"].includes(ln)) await runs(r, base, tramos, parrafo);
       }
+    }
+    /** Los campos que NOM sabe calcular (los demás —índice, vínculos, XE…— se quedan como su texto). */
+    const CAMPOS_VIVOS = new Set(["DATE", "TIME", "CREATEDATE", "SAVEDATE", "PRINTDATE", "PAGE", "NUMPAGES", "SECTIONPAGES", "SECTION", "SEQ", "REF", "PAGEREF", "NOTEREF",
+      "IF", "=", "MERGEFIELD", "AUTHOR", "TITLE", "SUBJECT", "KEYWORDS", "COMMENTS", "FILENAME", "NUMWORDS", "NUMCHARS", "DOCPROPERTY", "LASTSAVEDBY", "QUOTE", "USERNAME", "USERINITIALS", "STYLEREF"]);
+    /** Termina el campo de arriba de la pila: su último valor (los tramos de su resultado) se vuelve un campo. */
+    function cerrarCampo(pila, tramos) {
+      const f = pila.pop();
+      const padre = pila[pila.length - 1];
+      const r0 = f.res0 != null ? f.res0 : tramos.length;
+      const resTr = tramos.slice(r0);
+      const texto = resTr.every((t) => !t.e) ? resTr.map((t) => t.x || "").join("") : null;
+      if (padre && padre.etapa === "instr") { padre.instr += texto || ""; tramos.length = f.ini; return; }   // dentro del código del de afuera
+      const codigo = f.instr.replace(/\s+/g, " ").trim();
+      const nombre = (/^=/.test(codigo) ? "=" : (codigo.split(" ")[0] || "")).toUpperCase();
+      if (!CAMPOS_VIVOS.has(nombre) || texto == null || tramos.slice(f.ini, r0).some((t) => t.e)) return;   // se queda como su texto
+      tramos.length = f.ini;
+      tramos.push({ e: { tipo: "campo", instr: codigo, res: texto, a: Object.assign({}, (resTr[0] && resTr[0].a) || f.a || {}), idioma: f.idioma || undefined, orig: true }, a: {} });
     }
     const ESTILO_POR_NOMBRE = (nm) => (/^heading 1$|^título 1$/.test(nm) ? "h1" : /^heading 2$|^título 2$/.test(nm) ? "h2" : /^heading [3-9]$|^título [3-9]$/.test(nm) ? "h3"
       : nm === "title" || nm === "título" ? "titulo" : nm === "subtitle" || nm === "subtítulo" ? "subtitulo" : /quote|cita/.test(nm) ? "cita" : null);
@@ -2290,6 +2444,11 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         const e = ESTILO_POR_NOMBRE(defEstilo[id].nombre);
         if (e) { pa.estilo = e; break; }
       }
+      if (c.sinGuiones) pa.sinGuiones = true;
+      if (c.tabs && c.tabs.length) pa.tabs = c.tabs;
+      // la marca de párrafo (¶) con su propia letra y tamaño: de ella sale el alto del renglón donde está
+      const mr = hijo(ppr, "rPr");
+      if (mr) { const am = attrsRun(mr, {}); if (+am.tam) pa.tm = +am.tam; if (am.fuente) pa.fm = am.fuente; }
       if (c.num && c.num.id != null && c.num.id !== "0") {
         const lvl = +(c.num.lvl || 0), f = (formatoNum[c.num.id] || {})[lvl] || "bullet";
         // (un nivel con formato «none» no lleva marca: Word solo le da la sangría)
@@ -2542,6 +2701,11 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
             const r = [];
             for (const t of tramos) {
               if (t.e && t.e.tipo === "imagen" && t.e.src) { r.push({ img: t.e.src, w: Math.round(+t.e.w || 0), h: Math.round(+t.e.h || 0) }); complejo = true; }
+              // (un objeto incrustado —ecuación vieja, hoja…— se ve en la celda con su vista previa, como en Word)
+              else if (t.e && t.e.tipo === "objeto" && t.e.img) { r.push({ img: t.e.img, w: Math.round(+t.e.w || 0), h: Math.round(+t.e.h || 0) }); complejo = true; }
+              // (un campo dentro de una celda: su último valor, como texto)
+              else if (t.e && t.e.tipo === "campo") { r.push({ x: String(t.e.res || ""), a: t.e.a || {} }); }
+              else if (t.e && t.e.tipo === "marcador") { /* nada que ver */ }
               else if (t.e) { if (t.e.txt) r.push({ x: String(t.e.txt), a: {} }); }
               else if (t.x) { r.push({ x: t.x, a: t.a || {} }); if (t.x.trim()) firmas.add(JSON.stringify(t.a || {})); }
             }
@@ -2711,6 +2875,23 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       return { texto: texto.slice(0, 300), alin: usados === 1 ? ["izq", "centro", "der"][limpios.findIndex(Boolean)] : "izq", num };
     }
     const docCampos = {};
+    // Para los campos de Word (AUTHOR, TITLE, CREATEDATE, SAVEDATE…, y el formato de fecha del idioma): las propiedades
+    // del documento (docProps/core.xml y app.xml) y el idioma del texto (docDefaults).
+    try {
+      const props = {};
+      const core = await z.texto("docProps/core.xml");
+      if (core) {
+        const dc = P(core), tx = (ln) => { const n = dc.getElementsByTagNameNS("*", ln)[0]; return n ? n.textContent.trim() : ""; };
+        [["title", "titulo"], ["subject", "asunto"], ["creator", "autor"], ["keywords", "claves"], ["description", "comentarios"], ["lastModifiedBy", "modificoPor"],
+          ["created", "creado"], ["modified", "guardado"], ["lastPrinted", "impreso"], ["category", "categoria"]].forEach(([k, n]) => { const v = tx(k); if (v) props[n] = v; });
+      }
+      const app = await z.texto("docProps/app.xml");
+      if (app) { const da = P(app), tx = (ln) => { const n = da.getElementsByTagNameNS("*", ln)[0]; return n ? n.textContent.trim() : ""; }; ["Company", "Manager", "Template"].forEach((k) => { const v = tx(k); if (v) props[k.toLowerCase()] = v; }); }
+      const lang = rprDef && hijo(rprDef, "lang");
+      const idioma = lang && (lang.getAttributeNS(W, "val") || lang.getAttribute("w:val"));
+      if (Object.keys(props).length) docCampos.props = props;
+      if (idioma) docCampos.idioma = idioma;
+    } catch (e) { /* sin propiedades */ }
     if (Object.keys(formato).length) docCampos.formato = formato;
     // Protección de Word: «restringir edición» (solo lectura, comentarios, cambios marcados o formularios), «contraseña para
     // modificar» con «abrir como de solo lectura» recomendado, y «marcar como final». La contraseña no se guarda: solo su hash.
@@ -2723,6 +2904,15 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         const tipo = { readOnly: "lectura", comments: "comentarios", trackedChanges: "cambios", forms: "formularios" }[ed];
         if (enf && tipo) docCampos.proteccion = { tipo, p: proteccionDe(dp, true) };
         if (wp) docCampos.modificar = { recomendada: /^(1|true|on)$/.test(wp.getAttributeNS(W, "recommended") || wp.getAttribute("w:recommended") || "") || undefined, p: proteccionDe(wp, false) };
+        const dts = x.getElementsByTagNameNS(W, "defaultTabStop")[0];
+        if (dts) { const v = +(dts.getAttributeNS(W, "val") || dts.getAttribute("w:val")) / 20; if (v > 0 && Math.abs(v - 36) > 0.01) docCampos.tabDef = v; }
+        // «Guiones automáticos» de Word (Disposición → Guiones): la zona, el límite de guiones seguidos y las mayúsculas
+        const ah = x.getElementsByTagNameNS(W, "autoHyphenation")[0];
+        if (ah && !/^(0|false|off)$/.test(ah.getAttributeNS(W, "val") || ah.getAttribute("w:val") || "")) {
+          const vz = (n) => { const e = x.getElementsByTagNameNS(W, n)[0]; return e ? e.getAttributeNS(W, "val") || e.getAttribute("w:val") : null; };
+          const dc = x.getElementsByTagNameNS(W, "doNotHyphenateCaps")[0];
+          docCampos.guiones = { zona: +(vz("hyphenationZone") || 360) / 20, limite: +(vz("consecutiveHyphenLimit") || 0) || undefined, mayus: dc && !/^(0|false|off)$/.test(dc.getAttributeNS(W, "val") || dc.getAttribute("w:val") || "") ? false : undefined };
+        }
       }
       if (await marcadoFinal(z)) docCampos.final = true;
     }
@@ -3871,7 +4061,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     const fuenteDml = (n) => (n === "+mn-lt" || n === "+mn-ea" ? fuentesDml.menor || "Calibri" : n === "+mj-lt" || n === "+mj-ea" ? fuentesDml.mayor || "Calibri" : n);
     const rutaRel = (desde, tg) => { const rt = String(tg || "").startsWith("/") ? tg.slice(1) : desde.replace(/[^/]+$/, "") + tg; return rt.split("/").reduce((a, x) => { if (x === "..") a.pop(); else if (x && x !== ".") a.push(x); return a; }, []).join("/"); };
     const relsDeParte = (ruta) => { const t2 = z.texto(ruta.replace(/([^/]+)$/, "_rels/$1.rels")), o = {}; if (t2) todos(P(t2), "Relationship").forEach((r) => (o[at(r, "Id")] = { tipo: at(r, "Type") || "", ruta: at(r, "TargetMode") === "External" ? null : rutaRel(ruta, at(r, "Target")) })); return o; };
-    const MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", bmp: "image/bmp", svg: "image/svg+xml", webp: "image/webp" };
+    const MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", bmp: "image/bmp", svg: "image/svg+xml", webp: "image/webp", emf: "image/x-emf", wmf: "image/x-wmf" };
     const dataUrlXl = (ruta) => {
       const b = ruta && z.bytes(ruta), ext = String(ruta || "").split(".").pop().toLowerCase();
       if (!b || !MIME[ext] || b.length > 8 * 1024 * 1024) return null;
@@ -5255,7 +5445,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         }
       }
       if (piezasP.length) pq.pon(PRES, aplicarPiezas(xp, piezasP));
-      medios.forEach((mm) => { pq.pon(mm.nombre, mm.datos); pq.extension(mm.nombre.split(".").pop(), /png$/.test(mm.nombre) ? "image/png" : "image/jpeg"); });
+      medios.forEach((mm) => { pq.pon(mm.nombre, mm.datos); pq.extension(mm.nombre.split(".").pop(), MIME_IMG[mm.nombre.split(".").pop()] || "image/png"); });
       graficas.forEach((gx, i) => { const nm = `ppt/charts/${pre}chart${i + 1}.xml`; pq.pon(nm, gx); pq.tipo(nm, "application/vnd.openxmlformats-officedocument.drawingml.chart+xml"); });
       return pq.zip();
     }
@@ -5666,7 +5856,7 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       if (medios.has(ruta)) return medios.get(ruta);
       const b = await z.leer(ruta);
       const ext = (ruta.split(".").pop() || "").toLowerCase();
-      const mime = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml" }[ext];
+      const mime = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml", bmp: "image/bmp", emf: "image/x-emf", wmf: "image/x-wmf" }[ext];
       let u = null;
       if (b && mime) { let bin = ""; for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); u = `data:${mime};base64,${btoa(bin)}`; }
       // Las fotos grandes se achican (máx. 1600 px) para que la presentación no pese de más.
@@ -5824,9 +6014,12 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
         const r0 = (tramos.find((x) => !x.br) || {}).r || finR;
         const tam0 = (r0.sz || 18) * cuerpo.escala;
         const ls = o.lnSpc || { pct: 1 };
-        const lh = ls.pts ? `${px(ls.pts)}px` : String(Math.round(1.2 * Math.max(0.1, ls.pct - cuerpo.reduce) * 10000) / 10000);
+        // (el interlineado exacto PowerPoint lo dibuja redondeado a puntos enteros: 33.6 → 34, medido)
+        const lh = ls.pts ? `${px(Math.round(ls.pts))}px` : String(Math.round(1.2 * Math.max(0.1, ls.pct - cuerpo.reduce) * 10000) / 10000);
         const espacio = (e) => (!e ? 0 : e.pts ? px(e.pts) : px(e.pct * tam0 * 1.2));
-        const st = [`font-size:${px(tam0)}px`, `line-height:${lh}`];
+        // (con la letra de su primer texto: si el párrafo heredara otra, el navegador alinea las dos por la línea base y el
+        // renglón crece más que el interlineado —medido contra PowerPoint: hasta 3 pt por renglón en Segoe UI 44—)
+        const st = [`font-size:${px(tam0)}px`, `line-height:${lh}`, `font-family:${NOM.textoRico ? NOM.textoRico.cssFuente(resolverFuente(r0.fuente)) : resolverFuente(r0.fuente)}`];
         if (o.algn) st.push(`text-align:${{ ctr: "center", r: "right", just: "justify", dist: "justify", l: "left" }[o.algn] || "left"}`);
         const marL = o.marL != null ? emu(+o.marL) : 0, ind = o.indent != null ? emu(+o.indent) : 0;
         if (marL) st.push(`margin-left:${marL}px`);
@@ -6475,6 +6668,12 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
         if (pr && ED[pr.tipo]) {
           const el = `<w:documentProtection w:edit="${ED[pr.tipo]}" w:enforcement="1"${cripto(pr.p, "w:")}/>`;
           s = /<w:defaultTabStop\b/.test(s) ? s.replace(/<w:defaultTabStop\b/, el + "<w:defaultTabStop") : s.replace(/<\/w:settings>/, el + "</w:settings>");
+        }
+        // «Guiones automáticos»: solo se toca si cambió (si no, el archivo sale idéntico)
+        const tenia = /<w:autoHyphenation\b(?![^>]*w:val="(?:0|false|off)")[^>]*\/?>/.test(s), quiere = !!v("guiones");
+        if (tenia !== quiere) {
+          s = quita(s, "w:autoHyphenation");
+          if (quiere) s = /<w:defaultTabStop\b[^>]*\/>/.test(s) ? s.replace(/(<w:defaultTabStop\b[^>]*\/>)/, "$1<w:autoHyphenation/>") : s.replace(/(<w:settings\b[^>]*>)/, "$1<w:autoHyphenation/>");
         }
         if (s !== st) cambios.set("word/settings.xml", s);
       }

@@ -199,6 +199,17 @@ public class ServicioDocumentos {
 
     public void contarChat(java.util.function.ToLongFunction<String> f) { this.bytesChat = f == null ? id -> 0 : f; }
 
+    /** Almacén de binarios (imágenes, el Office original…): lo que ocupa cada espacio cuenta en la cuota de su propietario. */
+    private volatile java.util.function.ToLongFunction<String> bytesBinarios = id -> 0;
+
+    public void contarBinarios(java.util.function.ToLongFunction<String> f) { this.bytesBinarios = f == null ? id -> 0 : f; }
+
+    /** Copia binarios de un espacio a otro (de, a, huellas): lo pone ServicioBinarios. */
+    public interface CopiaBinarios { int copiar(String deEspacio, String aEspacio, Set<String> huellas); }
+    private volatile CopiaBinarios copiaBinarios = (de, a, h) -> 0;
+
+    public void copiarBinariosCon(CopiaBinarios c) { this.copiaBinarios = c == null ? (de, a, h) -> 0 : c; }
+
     /** Para el chat: no deja subir mas si el propietario del espacio ya lleno su cuota. */
     public void revisarCuotaDe(Espacio e) { revisarCuota(e); }
 
@@ -218,6 +229,7 @@ public class ServicioDocumentos {
                 for (Version v : repo.historial(d.id)) total += v.bytes;
             }
             total += bytesChat.applyAsLong(e.id);
+            total += bytesBinarios.applyAsLong(e.id);
         }
         usoCache.put(propietarioId, new long[] { total, ahora });
         return total;
@@ -244,11 +256,14 @@ public class ServicioDocumentos {
             }
             long chat = bytesChat.applyAsLong(e.id);
             b += chat;
+            long bin = bytesBinarios.applyAsLong(e.id);
+            b += bin;
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", e.id);
             m.put("nombre", e.nombre);
             m.put("bytes", b);
             m.put("chat", chat);
+            m.put("binarios", bin);
             m.put("documentos", n);
             lista.add(m);
             total += b;
@@ -280,6 +295,52 @@ public class ServicioDocumentos {
 
     /** llave: fase 15, en un espacio cifrado la llave del documento envuelta con la del espacio. */
     public Documento crear(Usuario u, String espacioId, String nombre, String modo, List<Operacion> iniciales, String llave) {
+        return crear(u, espacioId, nombre, modo, iniciales, llave, null);
+    }
+
+    /** Creaciones recientes por clave del cliente (cuenta|espacio|clave → id del documento), para los reintentos. */
+    private final Map<String, Creacion> creaciones = new java.util.concurrent.ConcurrentHashMap<>();
+    private record Creacion(java.util.concurrent.CompletableFuture<String> id, long t) { }
+    static final long VIGENCIA_CLAVE_CREAR_MS = 24L * 60 * 60 * 1000;
+
+    /**
+     * clave: la que pone el equipo a cada creación (al azar). Si la respuesta se perdió (la red se fue justo después de
+     * crearlo, o tardó más que el tiempo de espera) y el equipo vuelve a pedirlo con la misma clave, se le da el mismo
+     * documento en vez de crear otro. Vale un día (lo creado sin Internet se sube cuando vuelve la red).
+     */
+    public Documento crear(Usuario u, String espacioId, String nombre, String modo, List<Operacion> iniciales, String llave, String clave) {
+        if (clave == null || clave.isBlank()) return crearNuevo(u, espacioId, nombre, modo, iniciales, llave);
+        if (clave.length() > 64 || !clave.matches("[A-Za-z0-9_-]+")) throw ErrorNom.invalido("Clave de creación no válida", "clave");
+        long ahora = System.currentTimeMillis();
+        if (creaciones.size() > 64) creaciones.entrySet().removeIf(x -> ahora - x.getValue().t() > VIGENCIA_CLAVE_CREAR_MS);
+        String k = u.id + "|" + espacioId + "|" + clave;
+        Creacion mia = new Creacion(new java.util.concurrent.CompletableFuture<>(), ahora);
+        Creacion previa = creaciones.putIfAbsent(k, mia);
+        if (previa != null && ahora - previa.t() <= VIGENCIA_CLAVE_CREAR_MS) {
+            String id;
+            try { id = previa.id().get(120, java.util.concurrent.TimeUnit.SECONDS); }
+            catch (Exception ex) { id = null; }
+            Documento d = id == null ? null : repo.porId(id).orElse(null);
+            if (d != null && d.eliminado <= 0) return d;
+            // (la primera falló o el documento ya se borró: se crea otra vez)
+            creaciones.remove(k, previa);
+            previa = creaciones.putIfAbsent(k, mia);
+            if (previa != null) return crear(u, espacioId, nombre, modo, iniciales, llave, clave);
+        } else if (previa != null) {
+            creaciones.put(k, mia);
+        }
+        try {
+            Documento d = crearNuevo(u, espacioId, nombre, modo, iniciales, llave);
+            mia.id().complete(d.id);
+            return d;
+        } catch (RuntimeException ex) {
+            creaciones.remove(k, mia);
+            mia.id().complete(null);
+            throw ex;
+        }
+    }
+
+    private Documento crearNuevo(Usuario u, String espacioId, String nombre, String modo, List<Operacion> iniciales, String llave) {
         Espacio e = espacios.requerir(espacioId);
         espacios.exigir(e, u, Permiso.EDICION);
         revisarCuota(e);
@@ -1534,6 +1595,12 @@ public class ServicioDocumentos {
         if (nuevo.length() > 120 && !ServicioEspacios.cifrado(nuevo)) nuevo = nuevo.substring(0, 120);
         EstadoDocumento est;
         synchronized (candado(docId)) { est = repo.estado(docId).copia(); }
+        // lo que el documento tiene en el almacén de binarios (imágenes, el Office original) va también al otro espacio
+        if (!destinoId.equals(origen.espacioId)) {
+            Set<String> bins = new HashSet<>();
+            refsBinarios(est, bins);
+            copiaBinarios.copiar(origen.espacioId, destinoId, bins);
+        }
         long ahora = System.currentTimeMillis();
         Documento d = new Documento();
         d.id = cifrado.id();
@@ -1573,6 +1640,14 @@ public class ServicioDocumentos {
         if ((d.protegido || d.entregaLimite > 0) && p != Permiso.PROPIETARIO)
             throw ErrorNom.prohibido("Solo el propietario del espacio mueve un documento protegido o con fecha de entrega");
         revisarCuota(destino);
+        // sus binarios (los del estado y los de sus versiones: restaurar una versión vieja también tiene que verse) van al
+        // espacio nuevo antes de moverlo; en el de antes se quedan hasta que la limpieza vea que ya nadie los usa
+        Set<String> bins = new HashSet<>();
+        synchronized (candado(docId)) { refsBinarios(repo.estado(docId), bins); }
+        for (Version v : repo.historial(docId)) {
+            try { refsEn(repo.fotoVersion(docId, v.numero), bins); } catch (RuntimeException ex) { /* una versión ilegible no detiene la mudanza */ }
+        }
+        copiaBinarios.copiar(d.espacioId, destino.id, bins);
         String antes = d.espacioId;
         d.espacioId = destino.id;
         d.carpeta = null;
@@ -1777,7 +1852,8 @@ public class ServicioDocumentos {
     }
 
     /** Lo que ve quien abre el enlace: el documento en solo lectura, sin comentarios, partes ni notas del orador. */
-    public Map<String, Object> verPublico(String token) {
+    /** El documento de un enlace para ver (o error si ya no sirve). */
+    public Documento docDeEnlaceVer(String token) {
         Documento d = null;
         if (token != null && token.length() >= 20) {
             for (Espacio e : espacios.todos()) {
@@ -1788,6 +1864,54 @@ public class ServicioDocumentos {
             }
         }
         if (d == null) throw new ErrorNom(ErrorNom.NO_EXISTE, "Este enlace ya no sirve: el propietario lo quitó o el documento ya no existe");
+        return d;
+    }
+
+    /** El documento de un código de proyector vigente (o error). */
+    public Documento docDeProyeccion(String codigo) {
+        return requerir(proyeccionVigente(codigo).docId);
+    }
+
+    /** ¿Lo que se le muestra a quien mira (con el enlace o en el proyector: sin el original de Office, comentarios ni
+        notas) usa ese binario? */
+    public boolean muestraBinario(Documento d, boolean proyeccion, String huella) {
+        EstadoDocumento copia;
+        synchronized (candado(d.id)) { copia = repo.estado(d.id).copia(); }
+        paraMirar(copia, !proyeccion);
+        Set<String> s = new HashSet<>();
+        refsBinarios(copia, s);
+        return s.contains(huella);
+    }
+
+    /** Las huellas de los binarios que usan los documentos del espacio: su estado, sus versiones y la papelera. */
+    public Set<String> binariosUsados(String espacioId) {
+        Set<String> s = new HashSet<>();
+        for (Documento d : repo.delEspacio(espacioId)) {
+            synchronized (candado(d.id)) { refsBinarios(repo.estado(d.id), s); }
+            for (Version v : repo.historial(d.id)) {
+                try { refsEn(repo.fotoVersion(d.id, v.numero), s); } catch (RuntimeException e) { /* una versión ilegible no borra nada */ }
+            }
+        }
+        return s;
+    }
+
+    static final java.util.regex.Pattern REF_BIN = java.util.regex.Pattern.compile("nom:bin/([0-9a-f]{64})");
+
+    private static void refsBinarios(EstadoDocumento est, Set<String> s) {
+        if (est == null) return;
+        est.bloques.values().forEach(campos -> campos.values().forEach(r -> refsEn(r == null ? null : r.v, s)));
+    }
+
+    private static void refsEn(Object v, Set<String> s) {
+        if (v instanceof CharSequence cs) {
+            if (cs.length() >= 72 && cs.toString().contains("nom:bin/")) { var m = REF_BIN.matcher(cs); while (m.find()) s.add(m.group(1)); }
+        } else if (v instanceof Map<?, ?> m) m.values().forEach(x -> refsEn(x, s));
+        else if (v instanceof Iterable<?> it) it.forEach(x -> refsEn(x, s));
+        else if (v instanceof Registro r) refsEn(r.v, s);
+    }
+
+    public Map<String, Object> verPublico(String token) {
+        Documento d = docDeEnlaceVer(token);
         EstadoDocumento copia;
         synchronized (candado(d.id)) { copia = repo.estado(d.id).copia(); }
         // (también sin el archivo de Office original: trae sus propios comentarios, notas y datos del autor)

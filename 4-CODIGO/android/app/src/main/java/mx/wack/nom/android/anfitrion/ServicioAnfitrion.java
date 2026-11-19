@@ -151,7 +151,13 @@ public class ServicioAnfitrion extends Service {
 
         // Fase 9: fuentes para investigar (cuando el teléfono tiene Internet) y la biblioteca del espacio.
         ServicioFuentes fuentes = new ServicioFuentes(espacios, espaciosRepo, Json.YO, cifrado);
-        http = new ServidorHttp(getAssets(), new ApiTelefono(cuentas, espacios, documentos, difusor, descubrimiento, nodo, sincronia, fuentes, pases));
+        // El almacén de binarios (imágenes y el Office original fuera del documento), como en la nube; tope por archivo
+        // igual al del cuerpo de una petición del teléfono (40 MB).
+        RepositorioBinariosTelefono repoBinarios = new RepositorioBinariosTelefono(new File(almacen.raiz(), "binarios"));
+        mx.wack.nom.core.servicio.ServicioBinarios binarios = new mx.wack.nom.core.servicio.ServicioBinarios(espacios, documentos, repoBinarios, 40L * 1024 * 1024);
+        // la sincronía con la nube también lleva y trae lo del almacén
+        sincronia.usarBinarios(repoBinarios);
+        http = new ServidorHttp(getAssets(), new ApiTelefono(cuentas, espacios, documentos, difusor, descubrimiento, nodo, sincronia, fuentes, pases, binarios));
         puerto = http.iniciar(8080);
         nodo.fijarPuerto(puerto);
 
@@ -184,6 +190,8 @@ public class ServicioAnfitrion extends Service {
         reloj.scheduleAtFixedRate(seguro(difusor::latido), 20, 20, TimeUnit.SECONDS);
         reloj.scheduleAtFixedRate(seguro(() -> primerPlano(null)), 30, 30, TimeUnit.SECONDS);
         reloj.scheduleWithFixedDelay(seguro(sincronia::cadaRato), 90, 300, TimeUnit.SECONDS);
+        // el almacén de binarios: lo que nadie usa desde hace 30 días sale (cada 6 horas)
+        reloj.scheduleWithFixedDelay(seguro(binarios::limpiarTodo), 600, 6 * 3600, TimeUnit.SECONDS);
         // 6.4: respaldo del día (se revisa cada hora; si hoy ya hay uno, no hace nada).
         File filesDir = getFilesDir();
         reloj.scheduleWithFixedDelay(seguro(() -> Respaldo.diario(filesDir)), 20, 3600, TimeUnit.SECONDS);

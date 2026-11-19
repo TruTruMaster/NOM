@@ -353,7 +353,8 @@
     if ((m = ruta.match(/^\/api\/espacios\/([^/]+)\/documentos$/)) && metodo === "POST" && espacioCifrado(m[1])) {
       const ke = await llaveEspacio(m[1]);
       if (!ke) throw sinLlave();
-      const kd = C().azar(32);
+      // (la llave del documento puede venir ya hecha: los binarios del almacén se cifran con ella antes de crearlo)
+      const kd = cuerpo._llaveDoc instanceof Uint8Array && cuerpo._llaveDoc.length === 32 ? cuerpo._llaveDoc : C().azar(32);
       return Object.assign({}, cuerpo, { nombre: await cifrarValor(kd, cuerpo.nombre || "Documento sin título"), ops: await cifrarOps(kd, cuerpo.ops), llave: await cifrarBytes(ke, C().bytes(b64(kd))), _llaveDoc: kd });
     }
     if ((m = ruta.match(/^\/api\/espacios\/([^/]+)\/chat$/)) && metodo === "POST" && espacioCifrado(m[1])) {

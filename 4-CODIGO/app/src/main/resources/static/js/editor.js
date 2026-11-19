@@ -181,6 +181,18 @@
     });
     ed.doc = doc;
     NOM.editorActual = ed;   // útil para depurar desde la consola
+    // Almacén de binarios: de qué espacio se bajan las imágenes y el original de este documento, y con qué llave
+    // (la del documento, si el espacio está cifrado de extremo a extremo); lo que usa se va trayendo desde ya.
+    if (NOM.binarios && ed.espacio && ed.espacio.id) {
+      const cifrado = !!(NOM.e2e && NOM.e2e.espacioCifrado && NOM.e2e.espacioCifrado(ed.espacio.id));
+      if (!cifrado) { NOM.binarios.contexto({ espacio: ed.espacio.id, llave: null, doc: docId }); NOM.binarios.precargar(doc).catch(() => {}); }
+      else (async () => {
+        let llave = null;
+        try { llave = await NOM.e2e.llaveDoc(docId); } catch (e) { llave = null; }
+        NOM.binarios.contexto({ espacio: ed.espacio.id, llave, doc: docId });
+        NOM.binarios.precargar(doc).catch(() => {});
+      })();
+    }
 
     // ------------------------------------------------------------ estructura
     raiz.innerHTML = "";
@@ -453,7 +465,7 @@
       cambiarPermiso("LECTURA");
       const pie = html(`<div style="display:contents"><button class="btn" data-no>Descartarlos</button><button class="btn primario" data-si>${ico("download")} Exportar mi copia</button></div>`);
       const h = hoja({ titulo: "Tus cambios no se aplicaron", cuerpo: `<p style="font-weight:400">Tu permiso cambió a <b>solo ver</b> mientras trabajabas sin conexión. ${n} cambio(s) quedaron solo en este equipo.</p>`, pie });
-      $("[data-si]", pie).onclick = () => { NOM.formatos.exportar(doc, "nom", (nombre.value || "copia") + " (mi copia)"); doc.descartarCola(); h.cerrar(); };
+      $("[data-si]", pie).onclick = async () => { try { await NOM.formatos.exportarListo(doc, "nom", (nombre.value || "copia") + " (mi copia)"); } catch (e) { aviso(e.message, { tipo: "error", ms: 7000 }); return; } doc.descartarCola(); h.cerrar(); };
       $("[data-no]", pie).onclick = () => { doc.descartarCola(); h.cerrar(); };
     }
 
@@ -789,7 +801,7 @@
     async function guardarVersion() {
       if (ed.soloLectura) return;
       if (enLocal) {
-        aviso(doc.guardarYa() ? "Guardado en este equipo. Para no perderlo si se borran los datos, descárgalo (.nom)." : "No se pudo guardar: " + NOM.aqui().sinEspacio.toLowerCase(), { tipo: "ok", accion: { texto: "Descargar", fn: () => NOM.formatos.exportar(doc, "nom", nombre.value || "documento") } });
+        aviso(doc.guardarYa() ? "Guardado en este equipo. Para no perderlo si se borran los datos, descárgalo (.nom)." : "No se pudo guardar: " + NOM.aqui().sinEspacio.toLowerCase(), { tipo: "ok", accion: { texto: "Descargar", fn: () => NOM.formatos.exportarListo(doc, "nom", nombre.value || "documento").catch((e) => aviso(e.message, { tipo: "error", ms: 7000 })) } });
         return;
       }
       try {
@@ -814,7 +826,7 @@
           <div class="campo"><label for="exp-c1">Contraseña</label><div class="entrada"><input id="exp-c1" type="password" data-c1 autocomplete="new-password" maxlength="255"></div></div>
           <div class="campo"><label for="exp-c2">Escríbela otra vez</label><div class="entrada"><input id="exp-c2" type="password" data-c2 autocomplete="new-password" maxlength="255"></div></div></details>` : ""}</div>`);
       const h = hoja({ titulo: "Exportar", icono: "download", cuerpo });
-      $$("[data-f]", cuerpo).forEach((b) => (b.onclick = () => {
+      $$("[data-f]", cuerpo).forEach((b) => (b.onclick = async () => {
         try {
           let opc;
           const c1 = $("[data-c1]", cuerpo), c2 = $("[data-c2]", cuerpo);
@@ -822,7 +834,7 @@
             if (c1.value !== c2.value) { aviso("Las dos contraseñas no son iguales", { tipo: "error" }); c2.focus(); return; }
             opc = { contrasena: c1.value };
           }
-          const av = NOM.formatos.exportar(doc, b.dataset.f, nombre.value || "documento", ed.pagina, tipo, opc);
+          const av = await NOM.formatos.exportarListo(doc, b.dataset.f, nombre.value || "documento", ed.pagina, tipo, opc);
           h.cerrar(true);
           aviso(av || (opc ? "Archivo descargado con contraseña" : "Archivo exportado"), { tipo: av ? "aviso" : "ok", ms: av ? 5000 : 3000 });
         } catch (e) { aviso(e.message, { tipo: "error" }); }
@@ -844,14 +856,14 @@
     $("[data-a=comentarios]", vista).onclick = () => NOM.comentarios && NOM.comentarios.abrir(ed);
     // Descarga directa en el formato de Office que corresponde al tipo del documento.
     const office = NOM.formatos.paraTipo(tipo)[0];
-    const descargarOffice = { texto: "Descargar " + office.nombre, icono: "download", fn: () => {
-      try { const av = NOM.formatos.exportar(doc, office.id, nombre.value || "documento", ed.pagina, tipo); aviso(av || "Archivo descargado", { tipo: av ? "aviso" : "ok" }); }
+    const descargarOffice = { texto: "Descargar " + office.nombre, icono: "download", fn: async () => {
+      try { const av = await NOM.formatos.exportarListo(doc, office.id, nombre.value || "documento", ed.pagina, tipo); aviso(av || "Archivo descargado", { tipo: av ? "aviso" : "ok" }); }
       catch (err) { aviso(err.message, { tipo: "error" }); }
     } };
     $("[data-a=mas]", vista).onclick = (e) => NOM.menu(e.currentTarget, enLocal ? [
       { titulo: "Guardado solo en este equipo" },
       descargarOffice,
-      { texto: "Descargar copia (.nom)", icono: "download", fn: () => NOM.formatos.exportar(doc, "nom", nombre.value || "documento") },
+      { texto: "Descargar copia (.nom)", icono: "download", fn: () => NOM.formatos.exportarListo(doc, "nom", nombre.value || "documento").catch((e) => aviso(e.message, { tipo: "error", ms: 7000 })) },
       { texto: "Descargar en otro formato (PDF y más)…", icono: "file-down", fn: exportar },
       ...(tipo === "DIAGRAMA" ? [] : [{ texto: "Proteger (como en Office)…", icono: "lock", fn: dialogoProteger }]),
       ...(api.token() ? [{ texto: "Subir a un espacio", icono: "upload", fn: () => { doc.guardarYa(); NOM.vistaEspacios.subirLocal(docId); } }]

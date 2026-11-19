@@ -52,9 +52,11 @@ for i, s in enumerate(pr.slides):
         if sh.has_text_frame and sh.text_frame.text.strip(): print("   texto:", repr(sh.text_frame.text[:60]))
         if getattr(sh, "has_chart", False) and sh.has_chart: print("   gráfica:", sh.chart.chart_type, [list(se.values) for se in sh.chart.plots[0].series])
         if getattr(sh, "has_table", False) and sh.has_table: print("   tabla:", [[c.text for c in r.cells] for r in sh.table.rows])
-r = subprocess.run(["soffice", "--headless", "--convert-to", "pdf", "--outdir", OUT, ruta], capture_output=True, text=True, timeout=120)
-print("libreoffice:", r.returncode, os.path.exists(os.path.join(OUT, "expo.pdf")))
-subprocess.run(["pdftoppm", "-png", "-r", "50", os.path.join(OUT, "expo.pdf"), os.path.join(OUT, "expo")], timeout=60)
+# PowerPoint de verdad lo abre sin avisos ni «reparar» (en la computadora con Windows)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "office"))
+import office_abre
+_r = office_abre.abrir([ruta], "expo").get(os.path.basename(ruta))
+print("powerpoint:", "abre sin avisos" if office_abre.bien(_r) else ("NO: " + str(_r)[:300] if _r else "sin la computadora con Windows"))
 # Importar el mismo archivo de vuelta
 r2 = ev("""async (b64) => {
   const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);

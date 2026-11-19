@@ -974,7 +974,9 @@
 .wd-recorte-vista { display: grid; place-items: center; padding: 10px; background: repeating-conic-gradient(#eee 0 25%, #fff 0 50%) 0 0 / 16px 16px; border-radius: var(--r-s); min-height: 120px; }
 /* 8.2 paginación: corte de párrafo entre páginas, notas al pie y ecuaciones */
 .wd-corte { display: inline-block; width: 100%; vertical-align: top; pointer-events: none; user-select: none; }
-.wd-notas { position: absolute; font-size: 9pt; line-height: 1.25; color: #222; border-top: 1px solid #999; padding-top: 4px; }
+.wd-notas { position: absolute; font-size: 9pt; line-height: 1.25; color: #222; padding-top: 4px; }
+/* la raya de Word antes de las notas: corta (2 pulgadas), no de todo el ancho */
+.wd-notas::before { content: ""; position: absolute; left: 0; top: 0; width: 192px; max-width: 100%; border-top: .75pt solid #000; }
 .wd-notas .wd-nota-pie { margin: 0 0 2px; text-align: left; white-space: normal; }
 .wd-nota[data-obj] { cursor: pointer; color: #1F4E9E; }
 /* Objeto de Word que se conserva sin poder editarse aquí (cuadro de texto, forma, gráfico) */
@@ -1247,6 +1249,21 @@
 /* Justificado como Word 2013 y después: los espacios pueden encogerse hasta un 20 % de su ancho para que quepa
    una palabra más; luego el justificado reparte lo que sobra. --ae es el ancho del espacio de la fuente (em). */
 .wd-cuerpo.encoge { --encoger: 0.2; }
+/* Renglones cortados donde Word (modo-texto.js, acomodarComoWord): el corte es un <br> de pantalla. En justificado los
+   espacios van encogidos un 26 % y cada renglón se estira hasta el margen; el último lleva un relleno (.wd-relleno). */
+.wd-cuerpo > .wd-acomodo[data-alin="just"] { text-align-last: justify; }
+.wd-cuerpo > .wd-acomodo[data-alin="just"] span { word-spacing: inherit !important; }
+.wd-cuerpo > .wd-acomodo:not([data-alin]), .wd-cuerpo > .wd-acomodo[data-alin="izq"] { margin-right: -1px; }
+.wd-relleno { display: inline-block; height: 0; user-select: none; pointer-events: none; }
+/* Tabulaciones de Word (acomodarComoWord): la tabulación no mide nada y un espacio de pantalla lleva su ancho y su relleno
+   (puntos, guiones o raya) alineado a la parada. */
+.wd-cuerpo > .wd-acomodo.con-tab { tab-size: 0; }
+/* (sin overflow: con overflow oculto la línea base de un inline-block baja a su borde de abajo: los puntos subían y el
+   renglón crecía) */
+.wd-tabw { display: inline-block; white-space: nowrap; text-align: right; vertical-align: baseline; text-indent: 0; user-select: none; pointer-events: none; text-decoration: none; }
+.wd-tabw:empty::before { content: "\200b"; }
+.wd-tabw[data-lider="underscore"] { border-bottom: 0.75pt solid currentColor; }
+.wd-tabw[data-lider="heavy"] { border-bottom: 1.5pt solid currentColor; }
 .wd-cuerpo.encoge > [data-alin="just"], .wd-cuerpo.encoge > [data-alin="just"] span[style*="--ae"] { word-spacing: calc(var(--ae, 0.25) * var(--encoger) * -1em); }
 
 /* ---- Hoja en modo Excel (libro importado de Excel): se ve como en Excel ----------------------------
@@ -1388,3 +1405,15 @@
 /* avance de la conversión de video y audio (medios-convertir.js) */
 .mc-barra { height: 8px; border-radius: var(--r-pill); background: var(--sup-hundida); border: 1px solid var(--borde); overflow: hidden; }
 .mc-barra i { display: block; height: 100%; width: 0; background: var(--llama); transition: width var(--t-corto) linear; }
+/* Objeto incrustado de Word (ecuación vieja, hoja, diapositiva): su vista previa (EMF/WMF dibujado por js/emf.js) */
+.wd-objeto.con-vista[data-obj] { display: inline; text-indent: 0; }
+.wd-objeto.con-vista[data-obj] > img.wd-obj-vista { display: inline; max-width: none; border: 0; padding: 0; margin: 0; }
+@media print { .wd-objeto.con-vista[data-obj] { display: inline; } }
+/* Campos de Word (fecha, número de página, SEQ, REF…): su valor, con la letra del texto; con Alt+F9, su código */
+.wd-obj.wd-campo { display: inline; text-indent: 0; }
+.wd-obj.wd-campo > .wd-campo-v { display: inline; padding: 0; margin: 0; border: 0; background: none; font: inherit; color: inherit; white-space: pre-wrap; }
+.wd-obj.wd-campo.codigo > .wd-campo-v { background: #e8e8ee; font-family: var(--mono, monospace); }
+.wd-obj.wd-campo:hover > .wd-campo-v { background: rgba(0, 0, 0, .06); }
+@media print { .wd-obj.wd-campo:hover > .wd-campo-v { background: none; } }
+/* Marcadores de Word (los que usa algún campo): no se ven */
+.wd-obj.wd-marcador { display: inline; width: 0; overflow: hidden; }

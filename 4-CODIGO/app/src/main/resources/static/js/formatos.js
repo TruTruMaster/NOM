@@ -79,7 +79,7 @@
   /** Notas al pie de la exportación a HTML (se listan al final). */
   let notasHtml = [];
   function objetoHtml(e, ps) {
-    if (e.tipo === "imagen") return e.src ? `<figure style="margin:0;display:inline-block"><img src="${NOM.esc(e.src)}" alt="${NOM.esc(e.alt || "")}" style="max-width:100%;width:${+e.w || 320}px">${e.pie ? `<figcaption style="font-style:italic;text-align:center">${NOM.esc(e.pie)}</figcaption>` : ""}</figure>` : "";
+    if (e.tipo === "imagen") return e.src ? `<figure style="margin:0;display:inline-block"><img src="${NOM.esc(NOM.srcExport ? NOM.srcExport(e.src) : e.src)}" alt="${NOM.esc(e.alt || "")}" style="max-width:100%;width:${+e.w || 320}px">${e.pie ? `<figcaption style="font-style:italic;text-align:center">${NOM.esc(e.pie)}</figcaption>` : ""}</figure>` : "";
     if (e.tipo === "tabla") {
       let h = `<table style="border-collapse:collapse">`;
       const tapadas = new Set();
@@ -190,8 +190,12 @@ ${h}</body></html>`;
         if (b.estilo === "tarea") return `<p>${b.hecho ? "☑" : "☐"} ${b.html || ""}</p>`;
         return `<${tag}>${b.html || ""}</${tag}>`;
       }
-      if (b.tipo === "tabla") return "<table>" + celdasDe(b).map((r) => "<tr>" + r.map((v) => `<td>${NOM.esc(v)}</td>`).join("") + "</tr>").join("") + "</table>";
-      if (b.tipo === "imagen") return `<p><img src="${NOM.esc(b.src)}" alt="${NOM.esc(b.alt || "")}"></p>`;
+      if (b.tipo === "tabla") {
+        // (las imágenes que flotan sobre una hoja de Excel van después de su tabla)
+        const imgs = Array.isArray(b.dib) ? b.dib.filter((d) => d && d.tipo === "imagen" && d.src).map((d) => `<p><img src="${NOM.esc(NOM.srcExport ? NOM.srcExport(d.src) : d.src)}" alt=""></p>`).join("") : "";
+        return "<table>" + celdasDe(b).map((r) => "<tr>" + r.map((v) => `<td>${NOM.esc(v)}</td>`).join("") + "</tr>").join("") + "</table>" + imgs;
+      }
+      if (b.tipo === "imagen") return `<p><img src="${NOM.esc(NOM.srcExport ? NOM.srcExport(b.src) : b.src)}" alt="${NOM.esc(b.alt || "")}"></p>`;
       if (b.tipo === "forma") return `<p><em>[${NOM.esc(b.figura)}]</em> ${NOM.esc(b.texto || "")}</p>`;
       return "";
     }).join("\n").replace(/<\/ul>\n<ul>/g, "\n");
@@ -405,6 +409,9 @@ ${formas.join("\n")}
       ["dx", "bx", "tx", "bm"].forEach((k) => { if (!cuerpo[k].length) delete cuerpo[k]; });
       if (!Object.keys(bq).length) delete cuerpo.bq;
     } else cuerpo = foto;
+    // lo del almacén de binarios va dentro del .nom (con sus bytes: el archivo se abre en cualquier lado, sin servidor);
+    // ya precargado por exportarListo
+    if (NOM.binarios) cuerpo = NOM.binarios.conDatos(cuerpo);
     Object.assign(json, O.sacarDatos(cuerpo, adj, enOrigen, new Map()));
     return NOM.paquete.empacar(json, adj);
   }
@@ -467,15 +474,24 @@ ${formas.join("\n")}
     return aviso ? aviso.replace(/[.\s]*$/, ". ") + t + "." : t + ".";
   }
   /** Guarda dentro del documento recién importado el archivo de Office del que vino (y sus huellas). */
+  /**
+   * Las huellas de lo recién importado: al exportar dicen qué cambió la persona y qué sale idéntico del original. Se
+   * vuelven a calcular cuando las imágenes pasan al almacén de binarios (binarios.js), porque el documento ya no lleva
+   * sus datos sino su referencia.
+   */
+  function huellasOrigen(fmt, nombre, modo, ops) {
+    const tmp = docDeOps(nombre, modo, ops.filter((o) => o.bloque !== (NOM.origen ? NOM.origen.BLOQUE : "_origen"))), h = huellasDe(fotoModelo(tmp));
+    if (fmt === "docx" && NOM.ooxml.huellasDocx && NOM.textoRico) h.u = NOM.ooxml.huellasDocx(tmp);
+    if (fmt === "pptx" && NOM.ooxml.huellasPptx) {
+      h.pp = NOM.ooxml.huellasPptx(tmp); h.q = {};
+      tmp.vivos().forEach((b) => { if (b.ox != null) h.q[b.id] = NOM.ooxml.parcialesPptx(b); });
+    }
+    return h;
+  }
   function conOrigen(fmt, nombre, modo, ops, archivo) {
     if (!archivo || !NOM.origen) return ops;
     try {
-      const tmp = docDeOps(nombre, modo, ops), h = huellasDe(fotoModelo(tmp));
-      if (fmt === "docx" && NOM.ooxml.huellasDocx && NOM.textoRico) h.u = NOM.ooxml.huellasDocx(tmp);
-      if (fmt === "pptx" && NOM.ooxml.huellasPptx) {
-        h.pp = NOM.ooxml.huellasPptx(tmp); h.q = {};
-        tmp.vivos().forEach((b) => { if (b.ox != null) h.q[b.id] = NOM.ooxml.parcialesPptx(b); });
-      }
+      const h = huellasOrigen(fmt, nombre, modo, ops);
       const og = NOM.origen.crearOps(fmt, archivo, h);
       return og.length ? ops.concat(og) : ops;
     } catch (e) { if (typeof console !== "undefined") console.warn("No se pudo guardar el archivo de origen", e); return ops; }
@@ -518,6 +534,15 @@ ${formas.join("\n")}
   }
 
   /** Devuelve un aviso si algo se aproximó (CU-29 3a), o lanza si no hay qué exportar. */
+  /**
+   * Igual que exportar, pero antes trae a la memoria lo que el documento tiene en el almacén de binarios (imágenes y
+   * el Office original): los escritores de Office y del .nom los necesitan ya. Sin red y sin tenerlos en este equipo,
+   * avisa en vez de descargar un archivo incompleto.
+   */
+  async function exportarListo(doc, formato, nombre, pagina, opcTipo, opc) {
+    if (NOM.binarios && NOM.binarios.refsDoc(doc).size) await NOM.binarios.precargar(doc);
+    return exportar(doc, formato, nombre, pagina, opcTipo, opc);
+  }
   function exportar(doc, formato, nombre, pagina, opcTipo, opc) {
     const base = limpioNombre(nombre);
     switch (formato) {
@@ -748,8 +773,12 @@ ${formas.join("\n")}
         }
         if (t.e.tipo === "tabla") { ops.push({ id: "imp:b" + ref, bloque: ref, campos: Object.assign({ tipo: "tabla", enTexto: true, filasTexto: t.e.filas, colsTexto: t.e.cols }, t.e.celdas), t: 1, n: "importar" }); return { e: { tipo: "tabla", ref } }; }
         if (t.e.tipo === "nota" || t.e.tipo === "ecuacion") { ops.push({ id: "imp:b" + ref, bloque: ref, campos: Object.assign({ enTexto: true }, t.e), t: 1, n: "importar" }); return { e: { tipo: t.e.tipo, ref } }; }
+        // campo de Word (su código y su último valor: «Actualizar campos» lo cambia) y marcador (donde empieza o
+        // termina; solo los que usa algún campo)
+        if (t.e.tipo === "campo") { ops.push({ id: "imp:b" + ref, bloque: ref, campos: limpio({ tipo: "campo", enTexto: true, instr: t.e.instr, res: t.e.res, a: limpio(t.e.a), idioma: t.e.idioma, orig: t.e.orig || undefined }), t: 1, n: "importar" }); return { e: { tipo: "campo", ref } }; }
+        if (t.e.tipo === "marcador") return { e: { tipo: "marcador", nombre: t.e.nombre, lado: t.e.lado } };
         // (un gráfico de Word lleva además su modelo de Office y su tamaño, para dibujarlo como Word)
-        return { e: limpio({ tipo: t.e.tipo, oe: t.e.oe, que: t.e.que, txt: t.e.txt, g: t.e.g, w: t.e.w, h: t.e.h, forma: t.e.forma, grupo: t.e.grupo, libre: t.e.libre, x: t.e.x, y: t.e.y, detras: t.e.detras, franja: t.e.franja, z: t.e.z, fl: t.e.fl }) };
+        return { e: limpio({ tipo: t.e.tipo, oe: t.e.oe, que: t.e.que, txt: t.e.txt, img: t.e.img, g: t.e.g, w: t.e.w, h: t.e.h, forma: t.e.forma, grupo: t.e.grupo, libre: t.e.libre, x: t.e.x, y: t.e.y, detras: t.e.detras, franja: t.e.franja, z: t.e.z, fl: t.e.fl }) };
       });
       ps.push({ tramos, a: limpio(p.pa) });
     });
@@ -815,5 +844,5 @@ ${formas.join("\n")}
     });
   }
 
-  NOM.formatos = { IMPORTABLES, ACEPTAR, EXPORTABLES, paraTipo, exportar, importar, aNom, aNomBytes, deNomBytes, fotoModelo, docDeOps, huellaBloque, imagenADataUrl, elegirArchivo, aHtml, aMarkdown, aSvg, textoPlano, descargar, descargarBytes, MIME, limpioNombre };
+  NOM.formatos = { IMPORTABLES, ACEPTAR, EXPORTABLES, paraTipo, exportar, exportarListo, importar, huellasOrigen, aNom, aNomBytes, deNomBytes, fotoModelo, docDeOps, huellaBloque, imagenADataUrl, elegirArchivo, aHtml, aMarkdown, aSvg, textoPlano, descargar, descargarBytes, MIME, limpioNombre };
 })();

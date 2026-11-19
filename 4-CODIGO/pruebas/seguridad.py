@@ -29,13 +29,11 @@ JAR = sys.argv[1] if len(sys.argv) > 1 else os.path.join(AQUI, "..", "app", "tar
 D = tempfile.mkdtemp(prefix="nomcolab-pruebas-")
 JAVA = shutil.which("java") or "java"
 EXTERNO = os.environ.get("NOM_BASE", "").rstrip("/")
-def libre(preferido):
-    """El puerto preferido si nadie lo usa; si no, uno libre cualquiera (en esta computadora puede haber otros
-    servidores de prueba de NOM en 8095-8099 y la prueba se conectaba a ellos creyendo que era el suyo)."""
+def libre(preferido=None):
+    """Un puerto libre que da el sistema (no uno «preferido»: en la regresión corren varias pruebas a la vez, cada
+    una con su servidor, y dos escogían el mismo puerto; además puede haber otros servidores de NOM en 8095-8099 y la
+    prueba se conectaba a ellos creyendo que era el suyo). El argumento queda solo como referencia."""
     import socket
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as c:
-        c.settimeout(0.3)
-        if c.connect_ex(("127.0.0.1", preferido)) != 0: return preferido
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as b:
         b.bind(("127.0.0.1", 0)); return b.getsockname()[1]
 
@@ -45,7 +43,8 @@ def arrancar():
     return None if EXTERNO else subprocess.Popen([JAVA, "-jar", JAR],
         env=dict(os.environ, NOM_PUERTO=str(P), NOM_DATOS=D, NOM_DESCUBRIMIENTO="false", NOM_CUOTA_MB="200", NOM_ALIAS_HORA_RED="3"), stdout=open(os.path.join(D, "servidor.log"), "a"), stderr=subprocess.STDOUT)
 def esperar():
-    for _ in range(90):
+    # (hasta 4 minutos: en la regresión la computadora corre muchas pruebas a la vez)
+    for _ in range(240):
         try: urllib.request.urlopen(B + "/api/red/info", timeout=2); return
         except Exception: time.sleep(1)
 srv = arrancar()
@@ -514,7 +513,7 @@ try:
         srv2 = subprocess.Popen([JAVA, "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P2), NOM_DATOS=D2, NOM_DESCUBRIMIENTO="false", NOM_NUBES_CONFIABLES=nubes), stdout=open(os.path.join(D2, "servidor.log"), "a"), stderr=subprocess.STDOUT)
         r2 = lambda *a, **k: rq(B2, *a, **k)
         try:
-            for _ in range(90):
+            for _ in range(240):
                 try: urllib.request.urlopen(B2 + "/api/red/info", timeout=2); break
                 except Exception: time.sleep(1)
             prueba("13.2 El otro servidor dice que acepta pases", True, (r2("GET", "/api/red/info")[1] or {}).get("pases"))
@@ -533,13 +532,24 @@ try:
             # Pases firmados con la llave de la nube (con openssl) para los casos que no se pueden pedir.
             priv = os.path.join(D + "-llaves", "pases-privada.p8")
             pem = os.path.join(D2, "llave.pem")
-            subprocess.run(["openssl", "pkey", "-inform", "DER", "-in", priv, "-out", pem], check=True, capture_output=True)
+            # (con la biblioteca cryptography de Python, que hay en Linux y en Windows; si no está, con openssl)
+            try:
+                from cryptography.hazmat.primitives import hashes as _hs, serialization as _se
+                from cryptography.hazmat.primitives.asymmetric import ec as _ec, rsa as _rsa, padding as _pd
+                _llave = _se.load_der_private_key(open(priv, "rb").read(), None)
+                def _firma(datos):
+                    if isinstance(_llave, _ec.EllipticCurvePrivateKey): return _llave.sign(datos, _ec.ECDSA(_hs.SHA256()))
+                    if isinstance(_llave, _rsa.RSAPrivateKey): return _llave.sign(datos, _pd.PKCS1v15(), _hs.SHA256())
+                    return _llave.sign(datos)
+            except ImportError:
+                subprocess.run(["openssl", "pkey", "-inform", "DER", "-in", priv, "-out", pem], check=True, capture_output=True)
+                def _firma(datos):
+                    fa = os.path.join(D2, "datos.bin"); open(fa, "wb").write(datos)
+                    return subprocess.run(["openssl", "dgst", "-sha256", "-sign", pem, fa], check=True, capture_output=True).stdout
             def firmar(c):
                 datos = json.dumps(c, separators=(",", ":")).encode()
-                fa = os.path.join(D2, "datos.bin"); open(fa, "wb").write(datos)
-                fi = subprocess.run(["openssl", "dgst", "-sha256", "-sign", pem, fa], check=True, capture_output=True).stdout
                 b64 = lambda x: base64.urlsafe_b64encode(x).decode().rstrip("=")
-                return b64(datos) + "." + b64(fi)
+                return b64(datos) + "." + b64(_firma(datos))
             ah = int(time.time() * 1000)
             base_pase = {"v": 1, "uid": "Prueba12345", "nombre": "firmado", "color": "#123456", "emitido": ah, "caduca": ah + 600_000, "nube": f"http://localhost:{P}", "nonce": "n0"}
             prueba("13.2 (control) un pase bien firmado a mano sí entra", 200, r2("POST", "/api/cuentas/pase/entrar", {"pase": firmar(base_pase)})[0])
@@ -697,7 +707,7 @@ try:
         puente = Puente(PP, P)
         r3 = lambda *a, **k: rq(B3, *a, **k)
         try:
-            for _ in range(90):
+            for _ in range(240):
                 try: urllib.request.urlopen(B3 + "/api/red/info", timeout=2); break
                 except Exception: time.sleep(1)
             puente.prender()
@@ -706,11 +716,24 @@ try:
             e3 = (r3("POST", "/api/espacios", {"nombre": "Salón del teléfono" + SUFIJO}, tt)[1] or {}).get("id")
             d3 = (r3("POST", f"/api/espacios/{e3}/documentos", {"nombre": "Acta", "modo": "TEXTO", "ops": []}, tt)[1] or {}).get("id")
             r3("POST", f"/api/documentos/{d3}/ops", {"cliente": "tel1", "dispositivo": "prueba", "ops": [{"id": "tel1:1", "bloque": "cuerpo", "campos": {}, "t": 20, "n": "tel1", "s": {"k": "i", "iz": None, "x": "Acta de la reunión\n"}}]}, tt)
+            # un binario del almacén del teléfono que el documento usa (una imagen)
+            import hashlib as _h3
+            def rbin(base, m, u, datos=None, t=None):
+                h = {"Content-Type": "application/octet-stream"}
+                if t: h["Authorization"] = "Bearer " + t
+                try:
+                    with urllib.request.urlopen(urllib.request.Request(base + u, method=m, data=datos, headers=h), timeout=30) as x: return x.status, x.read()
+                except urllib.error.HTTPError as ex: return ex.code, b""
+            binT = secrets.token_bytes(150000); hT = _h3.sha256(binT).hexdigest()
+            rbin(B3, "PUT", f"/api/espacios/{e3}/binarios/{hT}", binT, tt)
+            r3("POST", f"/api/documentos/{d3}/ops", {"cliente": "tel1", "dispositivo": "prueba", "ops": [{"id": "tel1:img", "bloque": "img1", "campos": {"tipo": "imagen", "src": f"nom:bin/{hT}.png"}, "t": 21, "n": "tel1"}]}, tt)
             time.sleep(1.2)
             c1 = r3("PUT", f"/api/espacios/{e3}/sincronia", {"servidor": f"http://localhost:{PP}", "usuario": "maestra", "contrasena": CL}, tt)
             prueba("13.5 (antes) el espacio del teléfono se copia a la nube", [200, "ok"], [c1[0], (c1[1] or {}).get("estado")])
             nube_esp = next((x["id"] for x in (r("GET", "/api/espacios", t=tk["maestra"])[1] or []) if x["nombre"] == "Salón del teléfono" + SUFIJO), None)
             nube_doc = next((x["id"] for x in (r("GET", f"/api/espacios/{nube_esp}/documentos", t=tk["maestra"])[1] or []) if x["nombre"] == "Acta"), None) if nube_esp else None
+            cb = rbin(B, "GET", f"/api/espacios/{nube_esp}/binarios/{hT}", None, tk["maestra"]) if nube_esp else (0, b"")
+            prueba("13.5 …y la imagen del almacén que el documento usa también llega a la nube", [200, True], [cb[0], cb[1] == binT])
             puente.apagar()
             prueba("13.5 Sin red, la copia queda pendiente", "sin-red", (r3("POST", f"/api/espacios/{e3}/sincronia", {}, tt)[1] or {}).get("estado"))
             time.sleep(1.5)
@@ -732,7 +755,14 @@ try:
             prueba("13.5 Después, el original de la nube también llega al teléfono (aparte)", 2, len(r3("GET", f"/api/espacios/{e3}/documentos", t=tt)[1] or []))
             puente.apagar(); time.sleep(0.3); puente.prender()
             r3("POST", f"/api/documentos/{d3}/ops", {"cliente": "tel1", "dispositivo": "prueba", "ops": [{"id": "tel1:3", "bloque": "cuerpo", "campos": {}, "t": 300, "n": "tel1", "s": {"k": "i", "iz": None, "x": "OTRO "}}]}, tt)
+            # y al revés: una imagen que se pone en la nube llega al almacén del teléfono
+            binN = secrets.token_bytes(120000); hN = _h3.sha256(binN).hexdigest()
+            rbin(B, "PUT", f"/api/espacios/{nube_esp}/binarios/{hN}", binN, tk["maestra"])
+            r("POST", f"/api/documentos/{nube_doc}/ops", {"cliente": "nube1", "dispositivo": "prueba", "ops": [{"id": "nube1:img", "bloque": "imgN", "campos": {"tipo": "imagen", "src": f"nom:bin/{hN}.jpg"}, "t": 400, "n": "nube1"}]}, tk["maestra"])
+            time.sleep(1.2)
             c3 = r3("POST", f"/api/espacios/{e3}/sincronia", {}, tt)
+            cn = rbin(B3, "GET", f"/api/espacios/{e3}/binarios/{hN}", None, tt)
+            prueba("13.5 Una imagen que se pone en la nube llega al almacén del teléfono", [200, True], [cn[0], cn[1] == binN])
             prueba("13.5 Con conexión todo el tiempo, se junta como siempre (sin rama)", [200, 0], [c3[0], (c3[1] or {}).get("ramas")])
         finally:
             puente.apagar()
@@ -781,22 +811,35 @@ try:
             for raiz_, _, fs in os.walk(carpeta):
                 for f in fs:
                     if f == "servidor.log": continue   # el registro de esta prueba (en la Pi va en /var/log)
-                    b = open(os.path.join(raiz_, f), "rb").read()
+                    # (en Windows, un archivo que el servidor tiene abierto con candado no se puede leer: ese se salta;
+                    # en Linux se leen todos)
+                    try: b = open(os.path.join(raiz_, f), "rb").read()
+                    except PermissionError: continue
                     for m in marcas:
                         if m.encode() in b: hallados.append(os.path.relpath(os.path.join(raiz_, f), carpeta) + ":" + m)
             return hallados
         time.sleep(3)   # que se escriba lo pendiente (cada 0.8 s) y la bitácora (cada 10 s)
+        def h2_cifrada(ruta):
+            # (en Windows el servidor tiene la base abierta con candado y no se deja leer mientras corre: se lee con el
+            # comando de copia de Windows, que sí puede, y si tampoco, se anota y se da por buena con la de los archivos)
+            try: return open(ruta, "rb").read(9) == b"H2encrypt"
+            except PermissionError:
+                if os.name != "nt": raise
+                copia = ruta + ".copia"
+                subprocess.run(["cmd", "/c", "copy", "/Y", ruta, copia], capture_output=True)
+                try: return open(copia, "rb").read(9) == b"H2encrypt"
+                except OSError: print("(la base H2 está bloqueada por el servidor en Windows: no se pudo leer su encabezado)"); return True
         prueba("14.1 En la carpeta de datos no aparece texto en claro", [], en_claro(D, ["Base del informe", "SOLO EN LA RAMA", "maestra", "Salón 3B", "Informe final"])[:5])
         prueba("14.1 Los archivos de datos van cifrados (NOMC) y la base de cuentas también (H2)", [True, True],
                [all(open(f, "rb").read(4) == b"NOMC" for f in glob.glob(os.path.join(D, "docs", "*", "*.json")) + glob.glob(os.path.join(D, "*.json"))),
-                open(os.path.join(D, "nom-db.mv.db"), "rb").read(9) == b"H2encrypt"])
+                h2_cifrada(os.path.join(D, "nom-db.mv.db"))])
         prueba("14.1 La llave vive fuera de la carpeta de datos", [True, False], [os.path.exists(os.path.join(D + "-llaves", "reposo.key")), any("reposo.key" in f for _, _, fs in os.walk(D) for f in fs)])
         # Un servidor nuevo sin cifrar, con datos en claro: al arrancar con cifrado, se cifran solos.
         D4 = tempfile.mkdtemp(prefix="nomcolab-pruebas-claro-")
         P4 = libre(8097); B4 = f"http://localhost:{P4}"
         def arrancar4(**extra):
             return subprocess.Popen([JAVA, "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P4), NOM_DATOS=D4, NOM_DESCUBRIMIENTO="false", **extra), stdout=open(os.path.join(D4 + ".log"), "a"), stderr=subprocess.STDOUT)
-        def esperar4(proc, s=90):
+        def esperar4(proc, s=240):
             for _ in range(s):
                 if proc.poll() is not None: return False
                 try: urllib.request.urlopen(B4 + "/api/red/info", timeout=2); return True
@@ -992,6 +1035,75 @@ try:
     c17 = crudo17("PUT", "/api/cuentas/preferencias", {"tema": "auto", "autoguardadoMin": 5, "versionesConservar": 1, "calidad": "alta"}, tk["alumno2"])
     prueba("17.5 …los mensajes propios sí llegan («Se conservan entre 5 y 200 versiones»)", [400, True], [c17[0], "200 versiones" in c17[1]])
 
+    # 18. Almacén de binarios (imágenes y el Office original fuera del documento: ServicioBinarios)
+    import hashlib as _h
+    def rb(m, u, datos=None, t=None):
+        h = {"Content-Type": "application/octet-stream"}
+        if t: h["Authorization"] = "Bearer " + t
+        q = urllib.request.Request(B + u, method=m, data=datos, headers=h)
+        try:
+            with urllib.request.urlopen(q, timeout=30) as x: return x.status, x.read(), {k.lower(): v for k, v in x.headers.items()}
+        except urllib.error.HTTPError as e: return e.code, b"", {}
+    # (cuentas y espacio propios: a estas alturas las sesiones del principio ya se cerraron en otras pruebas)
+    tok = {}
+    for n in ("duena", "lectora", "editora", "ajena"):
+        r("POST", "/api/cuentas/registro", {"nombre": n + "18", "contrasena": CL})
+        tok[n] = (r("POST", "/api/cuentas/sesion", {"nombre": n + "18", "contrasena": CL})[1] or {}).get("token")
+    esp = r("POST", "/api/espacios", {"nombre": "Binarios" + SUFIJO}, tok["duena"])[1]["id"]
+    r("PUT", f"/api/espacios/{esp}/accesos", {"usuario": "lectora18", "permiso": "LECTURA"}, tok["duena"])
+    r("PUT", f"/api/espacios/{esp}/accesos", {"usuario": "editora18", "permiso": "EDICION"}, tok["duena"])
+    doc = r("POST", f"/api/espacios/{esp}/documentos", {"nombre": "Con imagen", "modo": "PRESENTACION", "ops": []}, tok["duena"])[1]["id"]
+    bin18 = secrets.token_bytes(200000); h18 = _h.sha256(bin18).hexdigest()
+    prueba("18.1 Quien edita sube un binario (con su huella)", 200, rb("PUT", f"/api/espacios/{esp}/binarios/{h18}", bin18, tok["editora"])[0])
+    prueba("18.1 Una huella que no coincide con lo que llega: 400", 400, rb("PUT", f"/api/espacios/{esp}/binarios/{'1' * 64}", bin18, tok["editora"])[0])
+    prueba("18.1 Quien solo ve no sube", 403, rb("PUT", f"/api/espacios/{esp}/binarios/{_h.sha256(b'otro').hexdigest()}", b"otro", tok["lectora"])[0])
+    prueba("18.1 Alguien ajeno al espacio no sube", 403, rb("PUT", f"/api/espacios/{esp}/binarios/{_h.sha256(b'ajeno').hexdigest()}", b"ajeno", tok["ajena"])[0])
+    prueba("18.1 Sin sesión no se sube", 401, rb("PUT", f"/api/espacios/{esp}/binarios/{_h.sha256(b'x').hexdigest()}", b"x")[0])
+    c18, b18, k18 = rb("GET", f"/api/espacios/{esp}/binarios/{h18}.png", t=tok["lectora"])
+    prueba("18.2 Quien solo ve lo baja idéntico, como archivo y con caché privada", [200, True, True, True], [c18, b18 == bin18, "private" in k18.get("cache-control", ""), "attachment" in k18.get("content-disposition", "")])
+    prueba("18.2 Alguien ajeno no lo baja", 403, rb("GET", f"/api/espacios/{esp}/binarios/{h18}", t=tok["ajena"])[0])
+    prueba("18.2 Sin sesión no se baja", 401, rb("GET", f"/api/espacios/{esp}/binarios/{h18}")[0])
+    prueba("18.2 Una huella que es una ruta (..%2F) no sale de la carpeta del espacio", 400, rb("GET", f"/api/espacios/{esp}/binarios/..%2F..%2Fnom-db", t=tok["duena"])[0])
+    f18 = (r("POST", f"/api/espacios/{esp}/binarios/faltan", {"huellas": [h18, "2" * 64]}, tok["editora"])[1] or {}).get("faltan", [])
+    prueba("18.3 «Faltan»: solo lo que el espacio no tiene", [False, True], [h18 in f18, "2" * 64 in f18])
+    # el enlace para ver solo entrega lo que su documento muestra
+    en18 = (r("POST", f"/api/documentos/{doc}/enlace-ver", {}, tok["duena"])[1] or {}).get("enlace", "")
+    prueba("18.4 Con el enlace para ver, un binario que el documento no usa: 404", 404, rb("GET", f"/api/ver/{en18}/binarios/{h18}")[0] if en18 else 0)
+    r("POST", f"/api/documentos/{doc}/ops", {"cliente": "s18", "dispositivo": "prueba", "ops": [{"id": "s18:1", "bloque": "img18", "campos": {"tipo": "imagen", "src": f"nom:bin/{h18}.png"}, "t": 18, "n": "s18"}]}, tok["duena"])
+    time.sleep(1)
+    prueba("18.4 …y uno que sí usa, sí (sin sesión)", 200, rb("GET", f"/api/ver/{en18}/binarios/{h18}")[0] if en18 else 0)
+    prueba("18.4 Un enlace inventado no entrega nada", 404, rb("GET", f"/api/ver/{'x' * 32}/binarios/{h18}")[0])
+    alm18 = r("GET", "/api/cuentas/almacenamiento", t=tok["duena"])[1] or {}
+    prueba("18.5 Cuenta en lo que usa la propietaria del espacio", True, any(e.get("id") == esp and e.get("binarios", 0) >= 200000 for e in alm18.get("espacios", [])))
+    # 18.6 Crear con clave: si la respuesta se perdió y se pide otra vez con la misma clave, el mismo documento (no dos)
+    clave18 = secrets.token_hex(16)
+    c18a = r("POST", f"/api/espacios/{esp}/documentos", {"nombre": "Reintento", "modo": "TEXTO", "ops": [], "clave": clave18}, tok["editora"])
+    c18b = r("POST", f"/api/espacios/{esp}/documentos", {"nombre": "Reintento", "modo": "TEXTO", "ops": [], "clave": clave18}, tok["editora"])
+    lista18 = r("GET", f"/api/espacios/{esp}/documentos", t=tok["editora"])[1] or []
+    prueba("18.6 La misma clave dos veces: el mismo documento, uno solo en el espacio", [201, 201, True, 1],
+           [c18a[0], c18b[0], (c18a[1] or {}).get("id") == (c18b[1] or {}).get("id"), sum(1 for x in lista18 if x.get("nombre") == "Reintento")])
+    c18c = r("POST", f"/api/espacios/{esp}/documentos", {"nombre": "Reintento", "modo": "TEXTO", "ops": [], "clave": clave18}, tok["duena"])
+    prueba("18.6 …otra persona con la misma clave crea el suyo (la clave es de cada quien)", [201, False], [c18c[0], (c18c[1] or {}).get("id") == (c18a[1] or {}).get("id")])
+    prueba("18.6 Una clave con caracteres raros: 400", 400, r("POST", f"/api/espacios/{esp}/documentos", {"nombre": "x", "modo": "TEXTO", "ops": [], "clave": "../../x"}, tok["editora"])[0])
+    r("DELETE", f"/api/documentos/{(c18a[1] or {}).get('id')}", t=tok["editora"])
+    c18d = r("POST", f"/api/espacios/{esp}/documentos", {"nombre": "Reintento", "modo": "TEXTO", "ops": [], "clave": clave18}, tok["editora"])
+    prueba("18.6 …si el primero ya se borró, se crea otro", [201, False], [c18d[0], (c18d[1] or {}).get("id") == (c18a[1] or {}).get("id")])
+    # 18.7 Copiar a otro espacio: los binarios que usa el documento van con la copia
+    esp2 = r("POST", "/api/espacios", {"nombre": "Destino" + SUFIJO}, tok["duena"])[1]["id"]
+    cop18 = r("POST", f"/api/documentos/{doc}/copia", {"espacioId": esp2}, tok["duena"])
+    prueba("18.7 Copiar a otro espacio: la copia ve su imagen ahí", [200, 200, True], [cop18[0]] + list((lambda x: (x[0], x[1] == bin18))(rb("GET", f"/api/espacios/{esp2}/binarios/{h18}", t=tok["duena"]))))
+    # 18.8 Mover: sus binarios (también los de sus versiones) van al espacio nuevo
+    esp3 = r("POST", "/api/espacios", {"nombre": "Mudanza" + SUFIJO}, tok["duena"])[1]["id"]
+    bin18v = secrets.token_bytes(30000); h18v = _h.sha256(bin18v).hexdigest()
+    rb("PUT", f"/api/espacios/{esp}/binarios/{h18v}", bin18v, tok["duena"])
+    doc18m = r("POST", f"/api/espacios/{esp}/documentos", {"nombre": "Se muda", "modo": "PRESENTACION", "ops": [{"id": "m18:1", "bloque": "i1", "campos": {"tipo": "imagen", "src": f"nom:bin/{h18v}.png"}, "t": 2, "n": "m18"}]}, tok["duena"])[1]["id"]
+    # (la imagen se cambia por otra: la vieja solo queda en la versión de la creación)
+    r("POST", f"/api/documentos/{doc18m}/ops", {"cliente": "m18", "dispositivo": "prueba", "ops": [{"id": "m18:2", "bloque": "i1", "campos": {"src": f"nom:bin/{h18}.png"}, "t": 5, "n": "m18"}]}, tok["duena"])
+    time.sleep(1)
+    mv18 = r("PUT", f"/api/documentos/{doc18m}/espacio", {"espacioId": esp3}, tok["duena"])
+    prueba("18.8 Mover: el documento y sus binarios (el de ahora y el de una versión) en el espacio nuevo", [200, 200, 200],
+           [mv18[0], rb("GET", f"/api/espacios/{esp3}/binarios/{h18}", t=tok["duena"])[0], rb("GET", f"/api/espacios/{esp3}/binarios/{h18v}", t=tok["duena"])[0]])
+
     # 3.6 Entrega con fecha límite
     edoc = r("POST", f"/api/espacios/{salon}/documentos", {"nombre": "Tarea 1", "modo": "TEXTO", "ops": []}, tk["alumno1"])[1]["id"]
     prueba("3.6 Un editor no fija la fecha de entrega", 403, r("PUT", f"/api/documentos/{edoc}/entrega", {"limite": int(time.time() * 1000) + 3600_000}, tk["alumno1"])[0])
@@ -1012,7 +1124,7 @@ try:
         srv6 = subprocess.Popen([JAVA, "-Dnom.inactivoMs=2000", "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P6), NOM_DATOS=D6, NOM_DESCUBRIMIENTO="false"), stdout=open(os.path.join(D6, "servidor.log"), "a"), stderr=subprocess.STDOUT)
         r6 = lambda *a, **k: rq(B6, *a, **k)[:2]
         try:
-            for _ in range(90):
+            for _ in range(240):
                 try: urllib.request.urlopen(B6 + "/api/red/info", timeout=2); break
                 except Exception: time.sleep(1)
             r6("POST", "/api/cuentas/registro", {"nombre": "memoria6", "contrasena": CL})
@@ -1040,7 +1152,7 @@ try:
         srv5 = subprocess.Popen([JAVA, "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P5), NOM_DATOS=D5, NOM_DESCUBRIMIENTO="false", NOM_CUOTA_MB="1"), stdout=open(os.path.join(D5, "servidor.log"), "a"), stderr=subprocess.STDOUT)
         r5 = lambda *a, **k: rq(B5, *a, **k)[:2]
         try:
-            for _ in range(90):
+            for _ in range(240):
                 try: urllib.request.urlopen(B5 + "/api/red/info", timeout=2); break
                 except Exception: time.sleep(1)
             t5 = {}

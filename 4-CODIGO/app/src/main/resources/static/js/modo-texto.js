@@ -118,6 +118,8 @@
     "sx",
     // entre páginas, como Word: salto de página antes, con el siguiente (1/0), líneas juntas y control de viudas (0 = sin)
     "saltoAntes", "conSig", "juntas", "viudas",
+    // (sinGuiones, tm y fm —«no dividir con guiones» y la letra de la marca ¶ de Word— NO van aquí: no se escriben en la
+    // pantalla, y lo que está en esta lista y no en la pantalla, el lector lo daba por borrado con cada tecla)
     // letra capital de Word: "drop|3|4" (dentro del texto o "margin", renglones que abarca, distancia al texto en pt)
     "capital"];
   const VINETAS = ["•", "◦", "▪", "–", "➢", "✓", "★", "♦"];
@@ -324,6 +326,7 @@
         if (n.nodeType !== 1) continue;
         const tag = n.tagName;
         if (n.hasAttribute("data-obj")) { out.push({ c: OBJ, id: n.getAttribute("data-id"), a }); enParrafo++; continue; }
+        if (n.classList && (n.classList.contains("wd-guion") || n.classList.contains("wd-pintado"))) continue;   // (de pantalla: no es del documento)
         if (OMITIR.has(tag) || n.hidden || (n.style && n.style.display === "none")) continue;
         if (tag === "BR") { out.push({ c: SALTO, a, br: true }); enParrafo++; continue; }
         if (tag === "IMG") {
@@ -414,8 +417,10 @@
     return n + ".";
   }
 
+  /** División automática de palabras del documento que se está pintando ({ idioma, mayus } o null): js/guiones.js. */
+  let guionesPintar = null;
   function envolver(txt, a) {
-    let h = esc(txt).replace(/\u2028/g, "<br>");
+    let h = (guionesPintar && NOM.guiones ? NOM.guiones.marcar(txt, esc, guionesPintar) : esc(txt)).replace(/\u2028/g, "<br>");
     let st = "";
     if (a.color) st += `color:${a.color};`;
     if (a.fondo) st += `background-color:${a.fondo};`;
@@ -426,6 +431,12 @@
     if (+a.esp) st += `letter-spacing:${+a.esp}pt;`;
     // elevado o bajado de Word (w:position): como Word, el renglón crece si hace falta
     if (+a.pos) st += `vertical-align:${+a.pos}pt;`;
+    // escala de caracteres de Word (w:w): las letras más anchas o angostas; cada palabra con su espacio va aparte para que
+    // el renglón se pueda cortar entre palabras, y su avance real se pone al pintar (ajustarEscalas)
+    if (+a.esc && +a.esc !== 100) {
+      const k = Math.max(0.01, +a.esc / 100);
+      h = h.split(/(?<= )/).map((pz) => `<span class="wd-escala" data-k="${k}" style="display:inline-block;white-space:pre;transform:scaleX(${k});transform-origin:0 0">${pz}</span>`).join("");
+    }
     if (st) h = `<span style="${esc(st)}">${h}</span>`;
     // texto oculto de Word (w:vanish): no se ve ni se imprime, como en Word; se conserva al descargar
     if (a.oc) h = `<span class="wd-oculto" style="display:none">${h}</span>`;
@@ -439,6 +450,8 @@
     if (a.sugBorrar) h = `<span class="wd-sugb" data-sugb="${esc(JSON.stringify(a.sugBorrar))}" style="--c:${esc(a.sugBorrar.c || "#C2372B")}" title="${esc((a.sugBorrar.n || "") + " propone borrarlo")}">${h}</span>`;
     return h;
   }
+  /** Los guiones automáticos del documento que se pinta ahora (los fija el editor al pintar): { idioma, mayus } o null. */
+  let guionesDocActual = () => null;
   const BLOQUE_OBJ = new Set(["tabla", "salto", "saltocol", "linea", "indice"]);
   function htmlObjeto(it) {
     const t = (it.e && it.e.tipo) || "x";
@@ -446,6 +459,8 @@
   }
   function htmlParrafo(vis, p) {
     const pa = S().attrs(p.mark);
+    const gDoc = guionesDocActual();
+    guionesPintar = gDoc && !pa.sinGuiones && NOM.guiones && NOM.guiones.listo(gDoc.idioma) ? gDoc : null;
     const tag = pa.estilo === "h1" || pa.estilo === "h2" || pa.estilo === "h3" ? pa.estilo : "p";
     let at = ` data-k="${esc(p.k)}"`, st = "";
     if (pa.estilo && tag === "p") at += ` data-estilo="${esc(pa.estilo)}"`;
@@ -483,6 +498,27 @@
     if (pa.lista && pa.numfmts) at += ` data-numfmts="${esc(pa.numfmts)}"`;
     if (pa.lista && pa.numid) at += ` data-numid="${esc(pa.numid)}"`;
     if (pa.interlineado) { at += ` data-li="${+pa.interlineado}"`; st += `--li:${+pa.interlineado};`; }
+    if (Array.isArray(pa.tabs) && pa.tabs.length) at += ` data-tabs="${esc(JSON.stringify(pa.tabs))}"`;
+    if (+pa.francesa) at += ` data-fr="1"`;
+    // Alto de los renglones como Word: cada renglón mide lo que su letra más grande (la marca ¶ cuenta solo en el
+    // último). En el navegador todo renglón mide al menos lo que la letra del párrafo: si todo el texto lleva su propia
+    // letra y tamaño (y la marca también), el párrafo toma los de la marca, que en Word son casi siempre los del texto.
+    if (+pa.tm || pa.fm) {
+      // (solo con texto: en un párrafo vacío lo que se escribe tomaría la letra de la marca y el lector la confundía
+      // con un cambio de formato)
+      let tamTodos = true, fuenteTodos = true, hay = false;
+      for (let i = p.ini; i < p.fin && (tamTodos || fuenteTodos); i++) {
+        const x = vis[i];
+        if (!x || x.e || x.c === "\n") continue;
+        hay = true;
+        const a = S().attrs(x);
+        if (!+a.tam) tamTodos = false;
+        if (!a.fuente) fuenteTodos = false;
+      }
+      if (!hay) tamTodos = fuenteTodos = false;
+      if (+pa.tm && tamTodos) st += `font-size:${+pa.tm}pt;`;
+      if (pa.fm && fuenteTodos) st += `font-family:${cssFuente(pa.fm)};--af:${altoFuente(pa.fm)};`;
+    }
     if (pa.antes != null) { at += ` data-antes="${+pa.antes}"`; st += `--antes:${+pa.antes}pt;`; }
     if (pa.despues != null) { at += ` data-desp="${+pa.despues}"`; st += `--desp:${+pa.despues}pt;`; }
     if (pa.ox != null && pa.ox !== "") at += ` data-ox="${esc(pa.ox)}"`;
@@ -554,6 +590,23 @@
         if (u && u.x != null && claveA(u.a) === claveA(a)) u.x += it.c; else tramos.push({ x: it.c, a });
       }
       r.push({ pa: S().attrs(p.mark), tramos, num: p.num });
+    });
+    return r;
+  }
+
+  /** Los párrafos con cada elemento y su id (para los campos de Word: en qué orden van, dónde está cada marcador y en
+      qué página cae): [{ pa, items: [{ id, c, e, bl }] }]. */
+  function recorrido(doc) {
+    asegurarSecuencia(doc, true);
+    const sec = doc.secuencia(B), vis = sec.visibles(), r = [];
+    calcularParrafos(sec).forEach((p) => {
+      const items = [];
+      for (let i = p.ini; i < p.fin; i++) {
+        const it = vis[i];
+        if (it.e) items.push({ id: it.id, e: it.e, bl: it.e.ref ? doc.bloque(it.e.ref) : null });
+        else items.push({ id: it.id, c: it.c });
+      }
+      r.push({ pa: S().attrs(p.mark), items });
     });
     return r;
   }
@@ -643,13 +696,24 @@
 
       function actualizarPintado() { visPintado = sec().visibles(); psPintado = calcularParrafos(sec()); }
 
+      /** Guiones automáticos de Word de este documento ({ idioma, mayus } o null); si faltan los patrones, se cargan y se
+          vuelve a pintar. */
+      function configGuiones() {
+        const g = doc().valor("_doc", "guiones");
+        if (!g || !NOM.guiones || window.__sinGuiones) return null;
+        const conf = { idioma: doc().valor("_doc", "idioma") || "es-MX", mayus: g.mayus, zona: g.zona };
+        if (!NOM.guiones.listo(conf.idioma)) NOM.guiones.cargar(conf.idioma).then((ok) => { if (ok && cuerpo.isConnected) { cache.clear(); reconciliar(); } });
+        return conf;
+      }
       function reconciliar() {
         pintando = true;
+        const gConf = configGuiones();
+        guionesDocActual = () => gConf;
         // Texto suelto fuera de los párrafos (lo deja el navegador al reemplazar todo con Ctrl+A):
         // ya se leyó al modelo, así que se quita y se vuelve a pintar dentro de su párrafo.
         for (const n of [...cuerpo.childNodes]) if (n.nodeType !== 1) n.remove();
         actualizarPintado();
-        const vis = visPintado, ps = psPintado, vivos = new Set();
+        const vis = visPintado, ps = psPintado, vivos = new Set(), medir = [];
         for (let i = 0; i < ps.length; i++) {
           const p = ps[i];
           vivos.add(p.k);
@@ -664,10 +728,14 @@
             elems.set(p.k, el);
             cache.set(p.k, h);
             llenarObjetos(el);
+            medir.push(el);
           }
           const actual = cuerpo.children[i];
           if (actual !== el) cuerpo.insertBefore(el, actual || null);
         }
+        // (ya en la página, donde se pueden medir: el avance de la escala de caracteres y la zona de división de Word)
+        for (const el of medir) { ajustarEscalas(el); ajustarGuiones(el); }
+        acomodarComoWord(medir);
         while (cuerpo.children.length > ps.length) cuerpo.lastElementChild.remove();
         for (const k of [...elems.keys()]) if (!vivos.has(k)) { elems.delete(k); cache.delete(k); }
         ajustarEspacios();
@@ -717,6 +785,377 @@
       let tMarcas = null;
       function programarMarcas() { clearTimeout(tMarcas); tMarcas = setTimeout(() => { if (resaltado) aplicarResaltado(); pintarComentarios(); }, 80); }
 
+      /**
+       * Zona de división de Word: una palabra se parte al final del renglón solo si, sin partirla, quedaría un hueco mayor
+       * que la zona entre la última palabra y el margen. Donde el navegador partió y el hueco sería menor, los guiones de
+       * esa palabra se apagan y se mide otra vez (el renglón se queda más corto y la palabra baja entera, como en Word).
+       */
+      function ajustarGuiones(el) {
+        const g0 = el.querySelector(".wd-guion");
+        if (!g0) return;
+        const conf = guionesDocActual();
+        const zonaPt = conf && conf.zona != null ? +conf.zona : 18;
+        const cs = getComputedStyle(el), caja = el.getBoundingClientRect(), k = caja.width / (el.offsetWidth || 1) || 1;
+        // (medido contra Word en w13-guiones: con la zona completa Word parte palabras que aquí no se partirían; con la mitad
+        // o menos coincide: 46.4 → 57.1 % de renglones idénticos)
+        const derecha = caja.right - (parseFloat(cs.paddingRight) || 0) * k, zona = zonaPt * (96 / 72) * k * (window.__zonaFactor != null ? window.__zonaFactor : 0.5);
+        const r = document.createRange();
+        const rectLetra = (n, i) => { r.setStart(n, i); r.setEnd(n, i + 1); const q = r.getClientRects(); return q.length ? q[q.length - 1] : null; };
+        const textoAntes = (g) => { let n = g.previousSibling; while (n && n.nodeType !== 3) n = n.lastChild || n.previousSibling; return n && n.nodeValue.length ? n : null; };
+        const textoDespues = (g) => { let n = g.nextSibling; while (n && n.nodeType !== 3) n = n.firstChild || n.nextSibling; return n && n.nodeValue.length ? n : null; };
+        for (let vuelta = 0; vuelta < 40; vuelta++) {
+          let cambio = false;
+          for (const g of el.querySelectorAll(".wd-guion")) {
+            const a = textoAntes(g), d = textoDespues(g);
+            if (!a || !d) continue;
+            const ra = rectLetra(a, a.nodeValue.length - 1), rd = rectLetra(d, 0);
+            if (!ra || !rd || rd.top < ra.bottom - 1) continue;   // aquí no se partió el renglón
+            // el principio de la palabra en ese renglón: hacia atrás hasta un espacio
+            let n = a, i = a.nodeValue.length - 1, x0 = ra.left;
+            for (let paso = 0; paso < 200 && n; paso++) {
+              const t = n.nodeValue;
+              let j = i;
+              while (j >= 0 && !/\s/.test(t[j])) j--;
+              if (j >= 0) { const q = rectLetra(n, j); x0 = q ? q.left : x0; break; }   // el espacio de antes: donde acaba la palabra anterior
+              const ant = textoAntes(n.parentElement && n.parentElement.classList.contains("wd-guion") ? n.parentElement : n);
+              if (!ant || ant === n) { x0 = (rectLetra(n, 0) || ra).left; break; }
+              const q = rectLetra(ant, ant.nodeValue.length - 1);
+              if (!q || q.top < ra.top - 1) { x0 = (rectLetra(n, 0) || ra).left; break; }   // la palabra empieza el renglón
+              n = ant; i = ant.nodeValue.length - 1;
+            }
+            if (derecha - x0 < zona) {
+              // sin partir quedaría un hueco menor que la zona: esta palabra no se parte (sus guiones se apagan)
+              let w = g;
+              while (w && w.previousSibling && (w.previousSibling.nodeType !== 3 || !/\s/.test(w.previousSibling.nodeValue))) w = w.previousSibling;
+              const quitar = [];
+              for (let y = w; y; y = y.nextSibling) { if (y.nodeType === 3 && /\s/.test(y.nodeValue)) break; if (y.nodeType === 1 && y.classList.contains("wd-guion")) quitar.push(y); }
+              quitar.forEach((q) => { q.classList.add("apagado"); q.textContent = ""; });
+              cambio = true;
+              break;
+            }
+          }
+          if (!cambio) break;
+        }
+      }
+      /**
+       * Renglones cortados donde los corta Word. Medido contra Word 2024 real (pruebas/office/windows/hacer_renglones.py
+       * y analisis/acomodo_word.py: 920 cortes de 144 párrafos en 8 fuentes, 3 tamaños y 3 anchos):
+       *  - A la izquierda (y centrado o a la derecha) Word mete en el renglón todo lo que cabe con los anchos EXACTOS de
+       *    la fuente, sin tolerancia (una palabra que se pasa 0.012 pt baja). El navegador mide el texto hasta un 0.1 %
+       *    más angosto (redondea el tamaño de la letra a 1/64 de píxel) y metía palabras que Word baja.
+       *  - Justificado (Word 2013 y después): Word mete la palabra que no cabe encogiendo los espacios solo si se pasa
+       *    del margen a lo más la MITAD del hueco que quedaría sin ella y cada espacio se encoge a lo más un 25 %
+       *    (0 errores en 559 decisiones). En modo de compatibilidad (Word 2010 y antes) no encoge.
+       *  - Word también corta después de un guion o una raya pegados a la palabra siguiente («A-|12», «—|guion—»).
+       * Aquí se calcula cada corte con los anchos de la fuente (lienzo a 1000 px) y se fuerza con un <br> que es solo de
+       * pantalla (.wd-pintado: el lector del DOM lo ignora). En justificado, los espacios van encogidos un 26 % de base
+       * y el navegador estira cada renglón hasta el margen (text-align-last); el último renglón lleva un relleno de
+       * pantalla del ancho que le sobra, para que no se estire. Se mide todo primero y se escribe después (sin volver a
+       * acomodar la página por cada párrafo).
+       */
+      const avancesW = new Map();   // «fuente|letra» o «fuente|k|palabra» → ancho a 1000 px
+      const cargandoW = new Set();  // fuentes que se están cargando para medir
+      const sinCargaW = new Set();  // fuentes que no cargaron (sus párrafos los acomoda el navegador)
+      let lienzoW = null;
+      const ESP_W = /[ 　]/;
+      function anchoW(fuente, kern, txt) {
+        if (!lienzoW) lienzoW = document.createElement("canvas").getContext("2d");
+        const c = lienzoW;
+        if (kern) {
+          const k = fuente + "|k|" + txt;
+          let w = avancesW.get(k);
+          if (w == null) { c.font = fuente; c.fontKerning = "normal"; w = c.measureText(txt).width; avancesW.set(k, w); }
+          return w;
+        }
+        let t = 0;
+        for (const ch of txt) {
+          const k = fuente + "|" + ch;
+          let w = avancesW.get(k);
+          if (w == null) { c.font = fuente; c.fontKerning = "none"; w = c.measureText(ch).width; avancesW.set(k, w); }
+          t += w;
+        }
+        return t;
+      }
+      /** Quita lo de pantalla de un acomodo anterior (cortes y relleno) y junta el texto que se partió. */
+      function quitarAcomodo(el) {
+        const pint = el.querySelectorAll(".wd-rompe, .wd-relleno, .wd-tabw");
+        if (!pint.length && !el.classList.contains("wd-acomodo")) return;
+        pint.forEach((x) => x.remove());
+        el.classList.remove("wd-acomodo", "con-tab");
+        el.style.wordSpacing = "";
+        delete el.dataset.acw;
+        el.normalize();
+      }
+      /** Lo que hay que leer de un párrafo para acomodarlo (todo lectura: no cambia nada). null si no se acomoda. */
+      function leerAcomodo(el, compat15) {
+        if (el.tagName !== "P" || el.dataset.capital != null || el.dir === "rtl") return null;
+        if (el.querySelector(".wd-guion, .wd-escala, .wd-tab, img, table")) return null;
+        // (un salto de renglón manual sí cuenta; el <br> del final, que solo le da alto al párrafo, no)
+        if ([...el.querySelectorAll("br:not(.wd-pintado)")].some((b) => b !== el.lastChild)) return null;
+        // (el texto que se aparta de un objeto que flota cambia de ancho renglón por renglón: ese lo acomoda el navegador)
+        if (el.querySelector(":scope > .wd-excl")) return null;
+        const alin = el.dataset.alin || "izq";
+        if (!["izq", "just", "centro", "der"].includes(alin)) return null;
+        const er = el.getBoundingClientRect(), z = er.width / (el.offsetWidth || 1) || 1;
+        if (!er.width) return null;
+        const cs = getComputedStyle(el);
+        const izq = er.left + (parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth)) * z;
+        const der = er.right - (parseFloat(cs.paddingRight) + parseFloat(cs.borderRightWidth)) * z;
+        const fichas = [];   // { t, w (px css), esp, rompe (se puede cortar después), nodo, fin (posición después de la ficha) }
+        const estilos = new Map();
+        let primero = null, mal = false;
+        let espera = false;
+        const fuenteDe = (p) => {
+          let f = estilos.get(p);
+          if (f) return f;
+          const s = getComputedStyle(p);
+          if (s.fontVariantCaps !== "normal" || (s.textTransform !== "none" && s.textTransform !== "uppercase") || s.display === "none") { mal = true; return null; }
+          // (con la fuente todavía sin cargar, el lienzo mediría con la de reemplazo: se espera a que llegue)
+          // (solo la primera familia: con toda la lista, check() da falso si una de reemplazo que no hace falta no cargó)
+          const fam0 = (s.fontFamily.split(",")[0] || "").replace(/["']/g, "").trim();
+          const css16 = `${s.fontStyle} ${s.fontWeight} 16px "${fam0}"`;
+          if (document.fonts && !sinCargaW.has(css16) && !document.fonts.check(css16)) {
+            espera = mal = true;
+            // (se carga una vez; si aun así no está, se da por perdida y el párrafo lo acomoda el navegador: sin esto se
+            // volvía a paginar sin fin)
+            if (!cargandoW.has(css16)) { cargandoW.add(css16); document.fonts.load(css16).then(() => { cargandoW.delete(css16); if (!document.fonts.check(css16)) sinCargaW.add(css16); programarPaginar(); }, () => { cargandoW.delete(css16); sinCargaW.add(css16); }); }
+            return null;
+          }
+          if (sinCargaW.has(css16)) { mal = true; return null; }
+          const tam = parseFloat(s.fontSize) || 16;
+          f = { css: `${s.fontStyle} ${s.fontWeight} 1000px ${s.fontFamily}`, k: tam / 1000, kern: s.fontKerning === "normal", ls: parseFloat(s.letterSpacing) || 0, may: s.textTransform === "uppercase" };
+          estilos.set(p, f);
+          return f;
+        };
+        (function rec(n) {
+          for (let c = n.firstChild; c && !mal; c = c.nextSibling) {
+            if (c.nodeType === 3) {
+              if (!c.nodeValue.length) continue;
+              const f = fuenteDe(c.parentElement);
+              if (!f) return;
+              if (!primero) primero = { nodo: c };
+              // fichas: espacios, y lo demás partido después de cada guion o raya que va pegado a algo
+              const v = c.nodeValue, RAYA = /[-\u2010\u2013\u2014]/;
+              for (let i = 0; i < v.length;) {
+                let j = i;
+                if (v[i] === "\t") {
+                  fichas.push({ t: "\t", w: 0, esp: false, rompe: false, tab: true, nodo: c, fin: i + 1, punto: anchoW(f.css, false, ".") * f.k });
+                  i++;
+                  continue;
+                }
+                const esp = ESP_W.test(v[i]);
+                if (esp) while (j < v.length && ESP_W.test(v[j])) j++;
+                else while (j < v.length && !ESP_W.test(v[j]) && v[j] !== "\t") { const ch = v[j++]; if (RAYA.test(ch) && j < v.length && !ESP_W.test(v[j]) && !RAYA.test(v[j])) break; }
+                const t = v.slice(i, j), txt = f.may ? t.toUpperCase() : t;
+                const w = anchoW(f.css, f.kern && !esp, txt) * f.k + f.ls * [...t].length;
+                fichas.push({ t, w, esp, rompe: !esp && RAYA.test(t[t.length - 1]) && j < v.length && !ESP_W.test(v[j]), nodo: c, fin: j });
+                i = j;
+              }
+              continue;
+            }
+            if (c.nodeType !== 1) continue;
+            if (c.classList.contains("wd-pintado")) continue;
+            if (c.classList.contains("wd-oculto") || c.style.display === "none") continue;
+            if (c.hasAttribute("data-obj")) {
+              const r = c.getBoundingClientRect();
+              if (!primero) primero = { obj: c };
+              fichas.push({ t: "", w: r.width / z, esp: false, rompe: false, obj: c });
+              continue;
+            }
+            rec(c);
+          }
+        })(el);
+        if (espera) return { espera: true };
+        if (mal || fichas.length < 2) return null;
+        const hayTab = fichas.some((f) => f.tab);
+        // (con tabulaciones solo a la izquierda: en justificado Word estira solo lo de después de la última)
+        if (hayTab && alin !== "izq") return null;
+        // dónde empieza el primer renglón (sangría de primera línea, número de lista)
+        let x0 = izq;
+        if (primero.nodo) { const rg = document.createRange(); rg.setStart(primero.nodo, 0); rg.setEnd(primero.nodo, Math.min(1, primero.nodo.nodeValue.length)); const q = rg.getClientRects()[0]; if (q) x0 = q.left; }
+        else if (primero.obj) x0 = primero.obj.getBoundingClientRect().left;
+        // Tabulaciones: se miden desde el margen (el borde del párrafo; la sangría no las mueve, como en Word)
+        let tabs = null;
+        if (hayTab) {
+          let lista = [];
+          try { lista = JSON.parse(el.dataset.tabs || "[]"); } catch (e) { lista = []; }
+          const pt = 96 / 72, orig = er.left - (parseFloat(cs.marginLeft) - (parseFloat(cs.getPropertyValue("--sx")) || 0)) * z;
+          tabs = { lista: lista.map(([p, tp, r]) => [p * pt, tp, r]), def: (+doc().valor("_doc", "tabDef") || 36) * pt, x0: (x0 - orig) / z, izq: (izq - orig) / z, fr: el.dataset.fr === "1" };
+          // lo que sigue a cada tabulación hasta la siguiente (para las de derecha, centro y decimal)
+          for (let k = 0; k < fichas.length; k++) {
+            if (!fichas[k].tab) continue;
+            let w = 0, dec = null;
+            for (let q = k + 1; q < fichas.length && !fichas[q].tab; q++) {
+              const t = fichas[q];
+              if (dec == null && !t.esp && /[.,]/.test(t.t)) { const m = t.t.search(/[.,]/); dec = w + t.w * (m / Math.max(1, t.t.length)); }
+              w += t.w;
+            }
+            let q2 = fichas.length - 1;
+            fichas[k].sig = w; fichas[k].dec = dec == null ? w : dec;
+            void q2;
+          }
+        }
+        return { el, alin, fichas, A1: (der - x0) / z, A: (der - izq) / z, ancho: (der - izq) / z, encoge: compat15 && alin === "just", tabs, hayTab };
+      }
+      /** Dónde corta Word: índices de las fichas después de las cuales termina cada renglón (menos el último). */
+      function cortesWord(L) {
+        const F = L.fichas, n = F.length, cortes = [];
+        let ini = 0, renglon = 0;
+        while (ini < n) {
+          while (ini < n && F[ini].esp) ini++;   // (los espacios de después de un corte se quedan en el renglón de arriba)
+          if (ini >= n) break;
+          const A = (renglon === 0 ? L.A1 : L.A) + 1e-6;
+          // w: lo escrito sin los espacios del final; ult: el último lugar donde se puede cortar con lo de antes dentro
+          let w = 0, pend = 0, ult = -1, wUlt = 0, pasa = false;
+          const x0 = L.tabs ? (renglon === 0 ? L.tabs.x0 : L.tabs.izq) : 0;
+          for (let j = ini; j < n; j++) {
+            const t = F[j];
+            if (t.tab) { t.w = anchoTab(L.tabs, x0 + w + pend, t, x0 + (renglon === 0 ? L.A1 : L.A)); w += pend + t.w; pend = 0; continue; }
+            if (t.esp) {
+              if (!pend) { if (w <= A) { ult = j; wUlt = w; } else { pasa = true; break; } }
+              pend += t.w;
+              continue;
+            }
+            w += pend + t.w; pend = 0;
+            if (t.rompe) { if (w <= A) { ult = j; wUlt = w; } else { pasa = true; break; } }
+          }
+          if (!pasa && w <= A) break;   // lo que queda cabe: es el último renglón
+          if (ult < 0) return null;     // una palabra más ancha que el renglón: que la parta el navegador
+          let corte = ult;
+          if (L.encoge) {
+            // ¿Word mete la palabra siguiente encogiendo los espacios? (si se pasa a lo más la mitad del hueco y cada
+            // espacio se encoge a lo más un 25 %)
+            let k = ult + 1;
+            while (k < n && F[k].esp) k++;
+            while (k < n && !F[k].esp && !F[k].rompe) k++;
+            const finC = k < n && F[k].rompe ? k : k - 1;
+            let wc = 0, ec = 0, pc = 0;
+            for (let q = ini; q <= finC; q++) { if (F[q].esp) { pc += F[q].w; continue; } wc += pc + F[q].w; ec += pc; pc = 0; }
+            const sobra = wc - A, hueco = A - wUlt;
+            if (sobra <= hueco / 2 && sobra <= 0.25 * ec) {
+              if (finC >= n - 1 || k >= n) break;   // con ella se acaba el párrafo: era el último renglón
+              corte = k;
+            }
+          }
+          cortes.push(corte);
+          ini = corte + 1;
+          renglon++;
+        }
+        return cortes;
+      }
+      /**
+       * Ancho de una tabulación de Word que empieza en x (px desde el margen): va a la siguiente parada (las del párrafo; la
+       * sangría francesa; las de siempre cada «tabDef», solo después de la última del párrafo). Izquierda: el texto empieza
+       * en la parada; derecha: termina en ella; centro: se centra; decimal: el punto queda en ella.
+       */
+      function anchoTab(T, x, t, fin) {
+        let parada = null;
+        for (const p of T.lista) if (p[0] > x + 0.01 && p[1] !== "b") { parada = p; break; }
+        if (T.fr && T.izq > x + 0.01 && (!parada || T.izq < parada[0])) parada = [T.izq, "i"];
+        if (!parada) {
+          const ult = T.lista.length ? T.lista[T.lista.length - 1][0] : 0;
+          const desde = Math.max(x, ult);
+          parada = [Math.floor(desde / T.def + 1e-6) * T.def + T.def, "i"];
+        }
+        let fx = parada[0];
+        if (parada[1] === "d") fx -= t.sig;
+        else if (parada[1] === "c") fx -= t.sig / 2;
+        else if (parada[1] === "p") fx -= t.dec;
+        // (una parada más allá del margen: Word la deja en el margen)
+        if (parada[1] === "i" && fx > fin) fx = Math.max(x, fin);
+        t.lider = parada[2];
+        return Math.max(0, fx - x);
+      }
+      /** Escribe los cortes de Word en el párrafo (de atrás hacia adelante: las posiciones de antes no se mueven). */
+      function escribirAcomodo(L, cortes) {
+        const el = L.el, F = L.fichas;
+        // lo que se pone en pantalla, de atrás hacia adelante (así cada texto se parte después de lo que falta poner):
+        // los cortes de renglón y el espacio de cada tabulación (la tabulación misma no mide nada: tab-size 0)
+        const puntos = cortes.map((c) => { while (c + 1 < F.length && F[c + 1].esp) c++; return [c, "br"]; });
+        F.forEach((f, q) => { if (f.tab) puntos.push([q, "tab"]); });
+        puntos.sort((a, b) => b[0] - a[0]);
+        for (const [q, tipo] of puntos) {
+          const f = F[q];
+          let nuevo;
+          if (tipo === "br") { nuevo = document.createElement("br"); nuevo.className = "wd-rompe wd-pintado"; }
+          else {
+            nuevo = document.createElement("span");
+            nuevo.className = "wd-tabw wd-pintado";
+            nuevo.style.width = f.w.toFixed(2) + "px";
+            if (f.lider) {
+              const ch = { dot: ".", hyphen: "-", middleDot: "·" }[f.lider];
+              nuevo.dataset.lider = f.lider;
+              // (los que caben, pegados a la parada; lo que sobra, menos de un punto, queda a la izquierda)
+              if (ch) nuevo.textContent = ch.repeat(Math.max(0, Math.floor(f.w / Math.max(1, f.punto || 4) - 0.02)));
+            }
+          }
+          if (f.obj) { f.obj.after(nuevo); continue; }
+          if (f.fin >= f.nodo.nodeValue.length) f.nodo.after(nuevo);
+          else f.nodo.splitText(f.fin).before(nuevo);
+        }
+        if (L.hayTab) el.classList.add("con-tab");
+        el.classList.add("wd-acomodo");
+        el.dataset.acw = L.ancho.toFixed(2);
+        if (L.alin === "just") {
+          // los espacios, encogidos más de lo que Word encoge (25 %) en todas las fuentes del párrafo: así cada renglón
+          // cabe hasta su corte y el navegador lo estira hasta el margen
+          let mx = 0;
+          for (const f of F) if (f.esp) mx = Math.max(mx, f.w / [...f.t].length);
+          el.style.wordSpacing = (-0.3 * mx).toFixed(3) + "px";
+          // el último renglón no se estira: un relleno de pantalla del ancho que le sobra (con sus espacios naturales)
+          const u = cortes.length ? cortes[cortes.length - 1] + 1 : 0;
+          let w = 0, fin = F.length;
+          while (fin > u && F[fin - 1].esp) fin--;
+          for (let q = u; q < fin; q++) w += F[q].w;
+          const A = cortes.length ? L.A : L.A1;
+          const r = document.createElement("span");
+          r.className = "wd-relleno wd-pintado";
+          r.contentEditable = "false";
+          r.style.width = Math.max(0, A - w - 1).toFixed(2) + "px";
+          const u2 = el.lastChild;
+          if (u2 && u2.nodeName === "BR" && !u2.classList.contains("wd-pintado")) el.insertBefore(r, u2); else el.append(r);
+        }
+      }
+      /** Acomoda como Word los párrafos que se acaban de pintar (solo en la vista de páginas). */
+      function acomodarComoWord(els) {
+        if (vista !== "paginas" || window.__sinAcomodo) { els.forEach(quitarAcomodo); return; }
+        const compat15 = cuerpo.classList.contains("encoge");
+        els.forEach(quitarAcomodo);
+        const leidos = els.map((el) => { try { return leerAcomodo(el, compat15); } catch (e) { return null; } });
+        els.forEach((el, i) => { if (leidos[i] && leidos[i].espera) delete el.dataset.acv; else el.dataset.acv = anchoContenido(el).toFixed(2); });
+        for (const L of leidos) {
+          if (!L || L.espera) continue;
+          const cortes = cortesWord(L);
+          if (!cortes || (!cortes.length && L.alin !== "just" && !L.hayTab)) continue;
+          escribirAcomodo(L, cortes);
+        }
+      }
+      const anchoContenido = (el) => { const cs = getComputedStyle(el); return el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight); };
+      /**
+       * Después de paginar: los párrafos que cambiaron de ancho (columnas, otra sección, otros márgenes) o que no se han
+       * revisado (se cambió a la vista de páginas) se acomodan otra vez; fuera de la vista de páginas se quita el acomodo.
+       * Devuelve si cambió algo (hay que paginar otra vez).
+       */
+      function revisarAcomodos() {
+        const quitar = vista !== "paginas" || window.__sinAcomodo;
+        const cambiaron = [];
+        let otro = false;
+        for (const el of cuerpo.children) {
+          if (quitar) { if (el.dataset.acw) otro = true; if (el.dataset.acw || el.dataset.acv) { quitarAcomodo(el); delete el.dataset.acv; } continue; }
+          // (al paginar, un objeto que flota aparta el texto de este párrafo: el acomodo ya no sirve)
+          if (el.dataset.acw && el.querySelector(":scope > .wd-excl")) { quitarAcomodo(el); otro = true; continue; }
+          if (el.dataset.acv == null || Math.abs(anchoContenido(el) - +el.dataset.acv) > 0.5) cambiaron.push(el);
+        }
+        const antes = cambiaron.map((el) => !!el.dataset.acw);
+        if (cambiaron.length) acomodarComoWord(cambiaron);
+        // (los cambios de pantalla de aquí no son del usuario: que el observador no los lea como escritos)
+        tomarRegistros();
+        return otro || cambiaron.some((el, i) => antes[i] || !!el.dataset.acw);
+      }
+      /** Escala de caracteres de Word: la palabra estirada ocupa en el renglón lo que mide estirada (margen a la derecha). */
+      function ajustarEscalas(raizEl) {
+        raizEl.querySelectorAll(".wd-escala").forEach((s) => { const k = +s.dataset.k || 1; s.style.marginRight = ""; s.style.marginRight = (s.offsetWidth * (k - 1)).toFixed(2) + "px"; });
+      }
       /** Lo que se dibuja dentro de los objetos (no forma parte del html del párrafo). */
       function llenarObjetos(raizEl) {
         const franjas = new Set();   // párrafos con formas de Word «arriba y abajo»: su franja aparta el texto
@@ -729,7 +1168,7 @@
             const w = (bl && bl.w) || e.w || 320;
             // 8.2 Recorte, giro, pie de imagen numerado y texto alrededor (cuadrado a la izquierda o derecha).
             const pie = bl && bl.pie ? `<span class="wd-img-pie"><b>Figura ${numeroFigura(o.dataset.id)}.</b> ${esc(bl.pie)}</span>` : "";
-            o.innerHTML = `<span class="wd-img-caja"><img src="${esc(src)}" alt="${esc((bl && bl.alt) || "")}" draggable="false" style="width:${+w}px"></span>${pie}${ed.soloLectura ? "" : '<span class="wd-tirador" data-tirador title="Arrastra para cambiar el tamaño"></span>'}`;
+            o.innerHTML = `<span class="wd-img-caja"><img src="${esc(NOM.srcBin ? NOM.srcBin(src) : src)}" alt="${esc((bl && bl.alt) || "")}" draggable="false" style="width:${+w}px"></span>${pie}${ed.soloLectura ? "" : '<span class="wd-tirador" data-tirador title="Arrastra para cambiar el tamaño"></span>'}`;
             if (bl && (bl.recorte || +bl.rot)) acomodarImagen($(".wd-img-caja", o), +w, bl.recorte, +bl.rot || 0);
             if (bl && bl.fl && +bl.w > 0) {
               // anclada como en Word: su lugar en la hoja y el texto apartado se calculan al paginar (ver «lo que flota»)
@@ -759,7 +1198,13 @@
             o.style.zIndex = libre && !bl.detras && +bl.z ? String(2 + +bl.z) : "";
             o.title = ed.soloLectura ? "" : libre ? "Arrastra para moverla a cualquier lugar" : "Arrastra para moverla a otro lugar del texto";
           } else if (e.tipo === "tabla") pintarTabla(o, bl, e.ref);
-          else if (e.tipo === "nota") { o.innerHTML = `<sup>${numerosNotas().get(o.dataset.id) || "*"}</sup>`; o.title = bl && bl.texto ? "Nota: " + bl.texto : "Nota al pie (toca para escribirla)"; }
+          else if (e.tipo === "nota") {
+            const fin = !!(bl && bl.final);
+            o.classList.toggle("final", fin);
+            const num = (fin ? numerosFinales() : numerosNotas()).get(o.dataset.id);
+            o.innerHTML = `<sup>${num === "" ? "" : num || "*"}</sup>`;
+            o.title = bl && bl.texto ? (fin ? "Nota al final: " : "Nota: ") + bl.texto : "Nota al pie (toca para escribirla)";
+          }
           else if (e.tipo === "ecuacion") { o.innerHTML = NOM.ecuaciones ? NOM.ecuaciones.html((bl && bl.tex) || "", !!(bl && bl.bloque)) : esc((bl && bl.tex) || ""); o.classList.toggle("en-bloque", !!(bl && bl.bloque)); o.title = ed.soloLectura ? "" : "Toca para editar la ecuación"; }
           else if (e.tipo === "objeto" && e.g && NOM.graficaOffice && +e.w > 0 && +e.h > 0) {
             // gráfico de Word: dibujado como Word, de su tamaño (no se edita aquí; al descargar sale el original)
@@ -790,6 +1235,20 @@
             o.style.zIndex = e.libre && !e.detras && +e.z ? String(2 + +e.z) : "";
             o.title = e.grupo ? "Grupo de formas del archivo de Word. Aquí no se edita, pero al descargar en Word sale completo." : "Forma del archivo de Word. Aquí no se edita, pero al descargar en Word sale completa.";
           }
+          else if (e.tipo === "campo") {
+            // campo de Word: su último valor (la fecha y la hora, al día), con la letra de su texto; Alt+F9: su código
+            const txt = verCodigos ? `{ ${(bl && bl.instr) || ""} }` : NOM.campos ? NOM.campos.textoVisible(bl, { idioma: doc().valor("_doc", "idioma") }) : String((bl && bl.res) || "");
+            o.innerHTML = `<span class="wd-campo-v">${envolver(txt, (bl && bl.a) || {})}</span>`;
+            o.classList.toggle("codigo", verCodigos);
+            o.title = ed.soloLectura ? "" : `Campo de Word: ${(bl && bl.instr) || ""}. «Actualizar campos» (F9) lo calcula otra vez; Alt+F9 muestra los códigos.`;
+          }
+          else if (e.tipo === "marcador") { o.innerHTML = ""; o.dataset.marcador = e.nombre || ""; }
+          else if (e.tipo === "objeto" && e.img && +e.w > 0 && +e.h > 0) {
+            // objeto incrustado de Word (ecuación vieja, hoja, diapositiva…): su vista previa, como la muestra Word
+            o.innerHTML = `<img class="wd-obj-vista" src="${esc(NOM.srcBin ? NOM.srcBin(e.img) : e.img)}" alt="${esc(e.que || "Objeto")}" style="width:${+e.w}px;height:${+e.h}px;vertical-align:baseline" draggable="false">`;
+            o.classList.add("con-vista");
+            o.title = (e.que === "Ecuación" ? "Ecuación del archivo de Word" : "Objeto incrustado del archivo de Word") + ". Aquí no se edita, pero al descargar en Word sale completo.";
+          }
           else if (e.tipo === "objeto") {
             // Lo que aquí no se dibuja (cuadro de texto, SmartArt, gráfico): su texto sí se lee.
             o.innerHTML = e.txt ? `<span class="wd-obj-caja"><b>${esc(e.que || "Objeto")}</b><span>${esc(e.txt)}</span></span>` : `<span>${esc(e.que || "Objeto")}</span>`;
@@ -816,14 +1275,21 @@
 
       /** 8.2 Notas al pie: su número (en el orden del documento) y su texto. */
       let cacheNotas = null;
+      const esFinal = (it) => { const b = it && it.e && it.e.ref ? doc().bloque(it.e.ref) : null; return !!(b && b.final); };
       function numerosNotas() {
         if (cacheNotas && cacheNotas.vis === visPintado) return cacheNotas.m;
-        const m = new Map();
-        let n = 0;
-        for (const it of visPintado) if (it.e && it.e.tipo === "nota") m.set(it.id, ++n);
-        cacheNotas = { vis: visPintado, m };
+        const m = new Map(), f = new Map();
+        let n = 0, k = 0;
+        // (las notas al final se numeran aparte, en números romanos chicos como Word: i, ii, iii…)
+        for (const it of visPintado) if (it.e && it.e.tipo === "nota") {
+          const b = it.e.ref ? doc().bloque(it.e.ref) : null;
+          if (b && b.propia) { m.set(it.id, ""); continue; }   // marca propia: sin número (la marca va en el texto)
+          if (esFinal(it)) f.set(it.id, romano(++k)); else m.set(it.id, ++n);
+        }
+        cacheNotas = { vis: visPintado, m, f };
         return m;
       }
+      function numerosFinales() { numerosNotas(); return cacheNotas.f; }
       const textoNota = (id) => { const it = sec().item(id), b = it && it.e && it.e.ref ? doc().bloque(it.e.ref) : null; return (b && b.texto) || ""; };
       /** Inserta un objeto en línea (nota, ecuación, cita, campo) donde está el cursor. */
       function insertarEnLinea(campos, meta) {
@@ -934,7 +1400,7 @@
         const it = sec().item(id), ref = it && it.e && it.e.ref, b = ref ? doc().bloque(ref) : null;
         if (!b) return;
         const r = Object.assign({ iz: 0, d: 0, s: 0, i: 0 }, b.recorte || {});
-        const cuerpoH = html(`<form class="col"><div class="wd-recorte-vista"><span class="wd-img-caja"><img src="${esc(b.src)}" alt=""></span></div>
+        const cuerpoH = html(`<form class="col"><div class="wd-recorte-vista"><span class="wd-img-caja"><img src="${esc(NOM.srcBin ? NOM.srcBin(b.src) : b.src)}" alt=""></span></div>
           ${[["s", "Arriba"], ["i", "Abajo"], ["iz", "Izquierda"], ["d", "Derecha"]].map(([k, t]) => `<div class="lz-desl"><span>${t}</span><input type="range" min="0" max="45" step="1" value="${Math.round(r[k] * 100)}" data-k="${k}"><output>${Math.round(r[k] * 100)}%</output></div>`).join("")}</form>`);
         const pie = html(`<div style="display:contents"><button class="btn" type="button" data-quitar>Sin recorte</button><span class="crece"></span><button class="btn" type="button" data-no>Cancelar</button><button class="btn primario" data-si>Recortar</button></div>`);
         const h = NOM.hoja({ titulo: "Recortar imagen", icono: "image", cuerpo: cuerpoH, pie });
@@ -988,6 +1454,7 @@
           for (let c = n.firstChild; c; c = c.nextSibling) {
             if (c.nodeType === 3) r.push(c);
             else if (c.nodeType === 1) {
+              if (c.classList.contains("wd-guion") || c.classList.contains("wd-pintado")) continue;   // (de pantalla: no cuenta)
               if (c.hasAttribute("data-obj") || c.tagName === "BR" || c.tagName === "IMG") r.push(c);
               else rec(c);
             }
@@ -1665,6 +2132,11 @@
         return pos;
       }
       this.textoApi = {
+        /** Campos de Word: actualizar (F9), ver códigos (Alt+F9), insertar uno. */
+        actualizarCampos: () => actualizarCampos(),
+        alternarGuiones: () => alternarGuiones(),
+        alternarCodigos: () => alternarCodigos(),
+        insertarCampo: () => insertarCampo(),
         /** Inserta texto con formato donde quedó el cursor (reemplaza lo elegido). */
         insertarTramos(tramos, meta) {
           if (ed.soloLectura) return false;
@@ -1894,7 +2366,10 @@
           if (x.m != null) st.push(`padding-left:${iz}px;text-indent:-${fr}px`);
           const marca = x.m != null ? `<span class="wd-cel-marca" style="min-width:${fr}px">${esc(String(x.m))}</span>` : "";
           const runs = (x.r || []).map((t) => {
-            if (t.img) { const w0 = Math.max(4, Math.min(2000, +t.w || 40)), h0 = Math.max(4, Math.min(3000, +t.h || +t.w || 40)); return IMG_OK.test(t.img) ? `<img class="wd-cel-img" src="${t.img}" alt="" style="width:${w0}px;aspect-ratio:${w0} / ${h0};height:auto">` : ""; }
+            if (t.img) { const w0 = Math.max(4, Math.min(2000, +t.w || 40)), h0 = Math.max(4, Math.min(3000, +t.h || +t.w || 40)); const esRef = NOM.binarios && NOM.binarios.esRef(t.img);
+              // (un EMF o WMF —la vista previa de una ecuación vieja u otro objeto— se dibuja convertido: emf.js)
+              const meta = NOM.emf && NOM.emf.esDatos(t.img);
+              return IMG_OK.test(t.img) || esRef || meta ? `<img class="wd-cel-img" src="${esRef || meta ? NOM.esc(NOM.srcBin(t.img)) : t.img}" alt="" style="width:${w0}px;aspect-ratio:${w0} / ${h0};height:auto">` : ""; }
             return envolver(String(t.x || ""), t.a || {});
           }).join("");
           return `<div class="wd-cel-p"${st.length ? ` style="${st.join(";")}"` : ""}>${marca}${runs || "<br>"}</div>`;
@@ -2424,6 +2899,7 @@
         if (mod && e.altKey && k === "v") { e.preventDefault(); if (brocha) aplicarBrocha(); return; }
         if (mod && (k === "f" || k === "h")) { e.preventDefault(); buscar(k === "h"); return; }
         if (e.shiftKey && e.key === "F3") { e.preventDefault(); cambiarMayusculas(); return; }
+        if (e.key === "F9" && !mod) { e.preventDefault(); if (e.altKey) alternarCodigos(); else actualizarCampos(); return; }
         if (e.key === "Tab" && !mod && !e.altKey) {
           e.preventDefault();
           const s = leerSel(), pa = S().attrs(psPintado[parrafoEn(s.ini)].mark);
@@ -2502,12 +2978,40 @@
       let pegadoManejado = false;
       // Lo último que se copió o cortó aquí. "Pegar" de la ruedita lo usa cuando el navegador no deja
       // leer el portapapeles (en http de la red del salón no existe navigator.clipboard).
-      const guardarCopia = () => {
+      /** El texto de un pedazo copiado, con un salto entre párrafos (como lo copia el navegador). */
+      function textoPlano(raiz) {
+        let out = "";
+        (function rec(n) {
+          for (let c = n.firstChild; c; c = c.nextSibling) {
+            if (c.nodeType === 3) { out += c.nodeValue; continue; }
+            if (c.nodeType !== 1) continue;
+            if (c.tagName === "BR") { out += "\n"; continue; }
+            const bloque = /^(P|H[1-6]|LI|DIV|TR|BLOCKQUOTE|PRE)$/.test(c.tagName);
+            if (bloque && out && !out.endsWith("\n")) out += "\n";
+            rec(c);
+            if (bloque && out && !out.endsWith("\n")) out += "\n";
+          }
+        })(raiz);
+        return out.replace(/\n+$/, "");
+      }
+      const guardarCopia = (e) => {
         const sl = getSelection();
         if (!sl.rangeCount || sl.isCollapsed) return;
         const d = document.createElement("div");
         d.append(sl.getRangeAt(0).cloneContents());
-        NOM._portaTexto = { html: d.innerHTML, texto: sl.toString() };
+        // lo que es solo de pantalla (los cortes de renglón de Word, los guiones automáticos, el relleno) no se copia:
+        // si lo había, lo que va al portapapeles se arma aquí (si no, lo copia el navegador como siempre)
+        const pint = d.querySelectorAll(".wd-pintado, .wd-guion");
+        if (!pint.length) { NOM._portaTexto = { html: d.innerHTML, texto: sl.toString() }; return; }
+        pint.forEach((x) => x.remove());
+        const texto = textoPlano(d);
+        NOM._portaTexto = { html: d.innerHTML, texto };
+        if (e && e.clipboardData) {
+          e.preventDefault();
+          e.clipboardData.setData("text/plain", texto);
+          e.clipboardData.setData("text/html", d.innerHTML);
+          if (e.type === "cut" && !ed.soloLectura) document.execCommand("delete");
+        }
       };
       cuerpo.addEventListener("copy", guardarCopia);
       cuerpo.addEventListener("cut", guardarCopia);
@@ -2783,10 +3287,13 @@
         const fondoHoja = (p) => p.top + p.g.h - p.g.m[1] - reservado(p);
         const xDe = (p, c) => p.x0 + p.g.m[2] + c.x;
         const ponerX = (el, p, c) => { const x = xDe(p, c); el.style.setProperty("--sx", x + "px"); el.style.setProperty("--sr", Math.max(0, Wmax - x - c.w) + "px"); };
-        const mt = (el) => parseFloat(getComputedStyle(el).marginTop) || 0, mb = (el) => parseFloat(getComputedStyle(el).marginBottom) || 0;
+        // mt: el espacio de antes del párrafo SIN lo que ya se le empujó al paginar (al equilibrar columnas se prueba
+        // varias veces: con el margen ya empujado, la prueba siguiente lo tomaba como espacio y encimaba los párrafos)
+        const mtActual = (el) => parseFloat(getComputedStyle(el).marginTop) || 0;
+        const mt = (el) => mtActual(el) - (+(el.dataset.empuje || 0)), mb = (el) => parseFloat(getComputedStyle(el).marginBottom) || 0;
         const empujar = (el, d) => {
           if (Math.abs(d) < 0.25) return;
-          el.style.marginTop = mt(el) + d + "px";
+          el.style.marginTop = mtActual(el) + d + "px";
           el.dataset.empuje = (+(el.dataset.empuje || 0) + d).toFixed(2);
         };
         // alineación vertical: lo de la hoja que se cierra baja (centrada) o se pega abajo
@@ -2830,7 +3337,9 @@
          * `abajo` (o el fondo de la hoja). `sigue`: lo que quedó de un párrafo partido, que va primero. Devuelve
          * { i, sigue, bajo, lleno, hechos: [elementos, copias] }.
          */
+        let sigContinuaRegion = false;   // (la sección que se acomoda termina en un salto continuo)
         function colocarRegion(p, cols, arriba, abajo, i, hasta, sigue, conEspacio, estricto) {
+          const desdeRegion = i;
           let ci = 0, y = arriba, bajo = arriba, primero = true;
           const hechos = [], copias = [], saltos = [];
           const lim = () => Math.min(abajo == null ? Infinity : abajo, fondoHoja(p));
@@ -2846,12 +3355,18 @@
               if (!sigCol()) { return { i, sigue: null, bajo, lleno: true, hechos, copias, saltos }; }
             }
             const col = cols[ci];
+            // el párrafo vacío que solo lleva el salto de sección continuo, al final de la sección: Word no le da renglón
+            // al equilibrar las columnas (con 4 entradas deja 2 y 2)
+            if (!esCopia && i === hasta - 1 && i > desdeRegion && !el.textContent.trim() && !el.querySelector("[data-obj], img") && sigContinuaRegion) {
+              ponerX(el, p, col); empujar(el, y - el.offsetTop); hechos.push(el); i++;
+              continue;
+            }
             // en su columna, debajo de lo anterior (arriba de la columna: sin su espacio de antes, como Word)
             const antes = esCopia ? 0 : !primero ? mt(el) : conEspacio && ci === 0 && y === arriba ? mt(el) : 0;
             if (esCopia) colocarCopia(el, p, col, y);
             else { ponerX(el, p, col); empujar(el, y + antes - el.offsetTop); }
             const top = esCopia ? y : el.offsetTop, h = el.offsetHeight;
-            const notasEl = esCopia ? [] : $$(".wd-nota[data-obj]", el), med = medidorDe(p.g), altoNotas = notasEl.reduce((s, o) => s + med(o.dataset.id), 0);
+            const notasEl = esCopia ? [] : $$(".wd-nota[data-obj]:not(.final)", el), med = medidorDe(p.g), altoNotas = notasEl.reduce((s, o) => s + med(o.dataset.id), 0);
             const tope = lim() - (altoNotas ? altoNotas + (p.notas.length ? 0 : 14) : 0);
             if (top + h <= tope + 1) {
               // cabe
@@ -2900,6 +3415,7 @@
         for (let s = 0; s < secs.length; s++) {
           const g = secs[s].g, desde = secs[s].i, hasta = s + 1 < secs.length ? secs[s + 1].i : n, cols = columnasDe(g);
           const sigContinua = s + 1 < secs.length && secs[s + 1].g.t === "c" && Math.abs(secs[s + 1].g.w - g.w) < 1 && Math.abs(secs[s + 1].g.h - g.h) < 1;
+          sigContinuaRegion = sigContinua;
           let arriba, conEspacio = false;
           if (p && g.t === "c" && Math.abs(p.g.w - g.w) < 1 && Math.abs(p.g.h - g.h) < 1) {
             arriba = p.finSeccion != null ? p.finSeccion : p.bajo != null ? p.bajo : p.top + p.g.m[0];
@@ -2933,7 +3449,7 @@
                 // lo que flota (Word): sus objetos en esta hoja y el texto apartado
                 if (flot) flotarEnHoja(el, pags.indexOf(p));
                 const top = el.offsetTop, h = el.offsetHeight;
-                const notasEl = $$(".wd-nota[data-obj]", el), med = medidorDe(p.g), altoNotas = notasEl.reduce((sm, o) => sm + med(o.dataset.id), 0);
+                const notasEl = $$(".wd-nota[data-obj]:not(.final)", el), med = medidorDe(p.g), altoNotas = notasEl.reduce((sm, o) => sm + med(o.dataset.id), 0);
                 const tope = fondoHoja(p) - (altoNotas ? altoNotas + (p.notas.length ? 0 : 14) : 0);
                 // «conservar con el siguiente»: si el principio del que sigue no cabe, este baja con él
                 if (!primero && r.i + 1 < hasta && conSiguiente(el)) {
@@ -2982,7 +3498,9 @@
                   deshacer(t);
                   if (!t.lleno && !t.sigue && t.i >= hasta) { hi = m; mejor = m; } else lo = m;
                 }
-                r = colocarRegion(p, cols, arriba, mejor != null ? hi : null, i, hasta, sigue, false);
+                // (2 px de holgura: la búsqueda llega justo al borde y las posiciones se redondean a píxel entero, así que
+                // al colocar de verdad lo que en la prueba cabía podía quedar 1 px fuera)
+                r = colocarRegion(p, cols, arriba, mejor != null ? hi + 2 : null, i, hasta, sigue, false);
               }
               if (g.l) p.regiones.push({ top: arriba, bajo: Math.max(arriba, Math.min(r.bajo, fondoHoja(p))), cols });
               i = r.i; sigue = r.sigue;
@@ -3045,6 +3563,26 @@
           }
         }
         tomarRegistros();
+        // Notas al final (Word): después del último renglón, con su raya; si no caben, siguen en hojas nuevas
+        const finPag = new Map();
+        const finales = [...numerosFinales().entries()];
+        if (finales.length && pags.length) {
+          let k = pags.length - 1, q = pags[k];
+          const med = medirNotas(q.g.w - q.g.m[2] - q.g.m[3]);
+          const hueco = (qq) => qq.top + qq.g.h - qq.g.m[1] - (qq.notas.length ? qq.notas.reduce((s2, x) => s2 + (x.alto || 0), 0) + 14 : 0);
+          let y = Math.max(cuerpo.offsetHeight, q.top + q.g.m[0]) + 14;
+          for (const [id, n] of finales) {
+            const alto = med(id);
+            if (y + alto > hueco(q) && y > q.top + q.g.m[0] + 14) {
+              k++;
+              if (!pags[k]) pags.push({ top: q.top + q.g.h + GAP, g: q.g, x0: q.x0, num: q.num + 1, fmt: q.fmt, regiones: [], notas: [], primero: null, bajo: null });
+              q = pags[k]; y = q.top + q.g.m[0] + 14;
+            }
+            if (!finPag.has(k)) finPag.set(k, []);
+            finPag.get(k).push({ n, texto: textoNota(id), y: y - q.top });
+            y += alto;
+          }
+        }
         numPaginas = Math.max(1, pags.length);
         const ultima = pags[pags.length - 1];
         cuerpo.style.minHeight = (ultima ? ultima.top + ultima.g.h : 0) + "px";
@@ -3063,7 +3601,9 @@
         let h = "";
         pags.forEach((q, i) => {
           const g = q.g, vacia = q.vacia || (e.primera && i === 0);
-          const bloqueNotas = q.notas.length ? `<div class="wd-notas" style="left:${g.m[2]}px;right:${g.m[3]}px;bottom:${g.m[1]}px">${q.notas.map((x) => `<div class="wd-nota-pie"><sup>${x.n}</sup> ${esc(x.texto)}</div>`).join("")}</div>` : "";
+          const finI = finPag.get(i) || [];
+          const bloqueNotas = (q.notas.length ? `<div class="wd-notas" style="left:${g.m[2]}px;right:${g.m[3]}px;bottom:${g.m[1]}px">${q.notas.map((x) => `<div class="wd-nota-pie">${x.n === "" ? "" : `<sup>${x.n}</sup> `}${esc(x.texto)}</div>`).join("")}</div>` : "")
+            + (finI.length ? `<div class="wd-notas wd-notas-fin" style="left:${g.m[2]}px;right:${g.m[3]}px;top:${finI[0].y - 14}px">${finI.map((x) => `<div class="wd-nota-pie"><sup>${esc(x.n)}</sup> ${esc(x.texto)}</div>`).join("")}</div>` : "");
           // la línea entre columnas (Word: «línea entre columnas»), del alto de lo escrito en ellas
           const lineas = q.regiones.map((r) => r.cols.slice(1).map((c, k) => { const a = r.cols[k], x = g.m[2] + (a.x + a.w + c.x) / 2; return `<div class="wd-col-linea" style="left:${x.toFixed(2)}px;top:${(r.top - q.top).toFixed(2)}px;height:${Math.max(0, r.bajo - r.top).toFixed(2)}px"></div>`; }).join("")).join("");
           const ep = g.ep, encT = ep ? ep.e : e.enc, encA = ep ? ep.ea || "izq" : e.encAl, pieT = ep ? ep.p : e.pie, pieA = ep ? ep.pa || "izq" : e.pieAl;
@@ -3090,7 +3630,12 @@
         hoja.style.setProperty("--miz", pg.m.iz + "px");
         hoja.style.setProperty("--md", pg.m.d + "px");
       }
+      /** Pagina; si con la paginación algún párrafo cambió de ancho, se vuelve a acomodar y se pagina otra vez (una vez). */
       function paginar() {
+        paginarBase();
+        if (revisarAcomodos()) paginarBase();
+      }
+      function paginarBase() {
         clearTimeout(tPag); tPag = null;
         const t0 = performance.now();
         quitarPaginacion();
@@ -3136,7 +3681,23 @@
         const { notasPag, forzar } = r;
         tomarRegistros();
         const fin = cuerpo.offsetHeight;
-        numPaginas = Math.max(1, Math.ceil((fin + 1) / paso));
+        // Notas al final (Word): después del último renglón, con su raya; si no caben, siguen en hojas nuevas
+        const notasFinPag = {};
+        let finNotas = fin;
+        const finales = [...numerosFinales().entries()];
+        if (finales.length) {
+          const med = medirNotas(pg.w - pg.m.iz - pg.m.d);
+          let p = Math.max(0, Math.floor(Math.max(0, fin - 1) / paso)), y = fin + 14;
+          const hueco = (q) => q * paso + pg.h - pg.m.i - ((notasPag[q] || []).reduce((s2, x) => s2 + x.alto, 0) + ((notasPag[q] || []).length ? 14 : 0));
+          for (const [id, n] of finales) {
+            const alto = med(id);
+            if (y + alto > hueco(p) && y > p * paso + pg.m.s + 1) { p++; y = p * paso + pg.m.s; }
+            (notasFinPag[p] = notasFinPag[p] || []).push({ n, texto: textoNota(id), y: y - p * paso });
+            y += alto;
+          }
+          finNotas = y;
+        }
+        numPaginas = Math.max(1, Math.ceil((Math.max(fin, finNotas) + 1) / paso));
         if (forzar != null) numPaginas = Math.max(numPaginas, Math.round((forzar - pg.m.s) / paso) + 1);
         cuerpo.style.minHeight = numPaginas * paso - GAP + "px";
         const e = encPie(), fb = formatoBase();
@@ -3149,7 +3710,7 @@
           if (e.nums && zonaNum === zona) slots[alNum] += (slots[alNum] ? "&emsp;" : "") + esc(textoNumero(n + e.inicio - 1, numPaginas + e.inicio - 1, e.fmt));
           return `<div class="wd-${zona === "enc" ? "enc" : "pie"}">${extra || ""}<span class="izq">${slots.izq}</span><span class="centro">${slots.centro}</span><span class="der">${slots.der}</span></div>`;
         };
-        const logo = e.logo && e.logo.src ? `<img class="wd-logo" src="${esc(e.logo.src)}" alt="" style="height:${Math.min(80, +e.logo.alto || 36)}px">` : "";
+        const logo = e.logo && e.logo.src ? `<img class="wd-logo" src="${esc(NOM.srcBin ? NOM.srcBin(e.logo.src) : e.logo.src)}" alt="" style="height:${Math.min(80, +e.logo.alto || 36)}px">` : "";
         const estiloEP = `font-family:${esc(fb.fuente ? cssFuente(fb.fuente) : "Calibri, Carlito, sans-serif")};font-size:${Math.min(12, +fb.tam || 11)}pt`;
         // Borde de página (de Word): a su distancia del canto de la hoja, o pegado al texto.
         const bp = pg.borde && /^(solid|double|dotted|dashed)$/.test(pg.borde.e) && /^#[0-9a-fA-F]{6}$/.test(pg.borde.c) ? pg.borde : null;
@@ -3161,7 +3722,9 @@
         for (let i = 0; i < numPaginas; i++) {
           const vacia = e.primera && i === 0;
           const notas = notasPag[i] || [];
-          const bloqueNotas = notas.length ? `<div class="wd-notas" style="left:${pg.m.iz}px;right:${pg.m.d}px;bottom:${pg.m.i}px">${notas.map((x) => `<div class="wd-nota-pie"><sup>${x.n}</sup> ${esc(x.texto)}</div>`).join("")}</div>` : "";
+          const finI = notasFinPag[i] || [];
+          const bloqueNotas = (notas.length ? `<div class="wd-notas" style="left:${pg.m.iz}px;right:${pg.m.d}px;bottom:${pg.m.i}px">${notas.map((x) => `<div class="wd-nota-pie">${x.n === "" ? "" : `<sup>${x.n}</sup> `}${esc(x.texto)}</div>`).join("")}</div>` : "")
+            + (finI.length ? `<div class="wd-notas wd-notas-fin" style="left:${pg.m.iz}px;right:${pg.m.d}px;top:${finI[0].y - 14}px">${finI.map((x) => `<div class="wd-nota-pie"><sup>${esc(x.n)}</sup> ${esc(x.texto)}</div>`).join("")}</div>` : "");
           h += `<div class="wd-pagina${bp && bp.hoja ? " con-borde" : ""}" style="top:${i * paso}px;${estiloEP}${bp && bp.hoja ? `;--bpe:${pg.m.s - dentroBorde >= 20 ? dentroBorde : 0}px;--bpp:${pg.m.i - dentroBorde >= 20 ? dentroBorde : 0}px` : ""}">${cajaBorde}${vacia ? "" : fila("enc", e.enc, e.encAl, i + 1, logo) + fila("pie", e.pie, e.pieAl, i + 1)}${bloqueNotas}${e.marca ? `<div class="wd-marca-agua">${esc(e.marca)}</div>` : ""}</div>`;
         }
         // (la letra capital, con su párrafo ya en su hoja)
@@ -3494,7 +4057,7 @@
           const pi = Math.floor(top / paso), arriba = pi * paso + pg.m.s;
           // lo que flota (Word): sus objetos en su lugar de esta hoja y el texto apartado (cambia el alto del párrafo)
           if (!calcular && flot) { const dh = flotarEnHoja(el, pi); h += dh; corr += dh; }
-          const notasEl = $$(".wd-nota[data-obj]", el);
+          const notasEl = $$(".wd-nota[data-obj]:not(.final)", el);
           const altoNotasEl = notasEl.reduce((s, o) => s + medidor(o.dataset.id), 0);
           const abajo = pi * paso + H - pg.m.i - reservado(pi) - (altoNotasEl ? altoNotasEl + (reservado(pi) ? 0 : 14) : 0);
           let destino = null, partido = null;
@@ -4094,6 +4657,8 @@
             });
           });
           $$(".wd-imagen[data-obj]", cuerpo).forEach((o) => { const it = sec().item(o.dataset.id); if (it && it.e && it.e.ref === c.bloque) llenarObjetos(o.parentNode); });
+          // (un campo que alguien actualizó: su valor nuevo)
+          $$(".wd-campo[data-obj]", cuerpo).forEach((o) => { const it = sec().item(o.dataset.id); if (it && it.e && it.e.ref === c.bloque) llenarObjetos(o.parentNode); });
         });
         if (seq) programarRemoto(lista, origen);
       };
@@ -4217,6 +4782,43 @@
         p.addEventListener("pointerdown", (e) => e.preventDefault());
         p.addEventListener("click", (e) => { const b = e.target.closest("[data-s]"); if (!b) return; cerrar(); cuerpo.focus({ preventScroll: true }); ponerSel(s.a, s.f); insertarTexto(b.dataset.s); });
       }
+      // ------------------------------------------------------------ campos de Word (F9, Alt+F9)
+      let verCodigos = false;
+      /** Página en la que cae un elemento del texto (por su id), según la paginación de la vista. */
+      function paginaDeItem(id) {
+        const el = id ? $(`[data-id="${CSS.escape(id)}"]`, cuerpo) : null;
+        const pags = $$(".wd-pagina", ed.vista);
+        if (!el || !pags.length) return 1;
+        const y = el.getBoundingClientRect().top + 1;
+        let n = 1;
+        pags.forEach((pg, i) => { if (pg.getBoundingClientRect().top <= y) n = i + 1; });
+        return n;
+      }
+      /** «Actualizar campos» (F9): calcula todos los campos en el orden del documento y guarda los valores que cambian. */
+      function actualizarCampos() {
+        if (!NOM.campos) return;
+        sincronizar();
+        const ctx = NOM.campos.contexto(doc(), { paginaDe: paginaDeItem, paginas: $$(".wd-pagina", ed.vista).length || 1, nombre: (doc().valor("_doc", "nombre") || ""), usuario: ((NOM.api && NOM.api.usuario && NOM.api.usuario()) || {}).nombre || "" });
+        if (!ctx.campos.length) { NOM.aviso("Este documento no tiene campos de Word", { tipo: "info" }); return; }
+        let n = 0;
+        for (const { campo, valor } of NOM.campos.calcularTodos(ctx)) {
+          if (valor == null || !campo.ref || ed.soloLectura) continue;
+          const bl = doc().bloque(campo.ref) || {};
+          if (String(bl.res) !== String(valor)) { doc().cambiar(campo.ref, { res: valor }, { origen: "comando" }); n++; }
+        }
+        repintar();
+        NOM.aviso(n ? `Se actualizaron ${n} campo(s)` : "Los campos ya estaban al día", { tipo: "ok" });
+      }
+      /** Vuelve a dibujar los campos (con su valor o su código) y pagina otra vez (un número más largo mueve el texto). */
+      function repintar() { $$(".wd-campo[data-obj]", cuerpo).forEach((o) => llenarObjetos(o.parentNode)); programarPaginar(); }
+      function alternarCodigos() { verCodigos = !verCodigos; repintar(); }
+      /** Insertar un campo de Word con su código (Insertar → Campo…). */
+      async function insertarCampo() {
+        const instr = await NOM.pedirTexto("Insertar campo", { etiqueta: "Código del campo (como en Word)", ph: "PAGE  ·  SEQ Figura  ·  DATE \\@ dd/MM/yyyy", si: "Insertar" });
+        if (!instr || !NOM.campos) return;
+        const r = insertarEnLinea({ tipo: "campo", instr: instr.trim(), res: "", a: attrsEnCursor().a || {} });
+        if (r) actualizarCampos();
+      }
       function menuInsertar(b) {
         NOM.menu(b, [
           { titulo: "Insertar" },
@@ -4230,6 +4832,9 @@
           { texto: "Nota al pie…", icono: "superscript", fn: () => dialogoNota(null) },
           { texto: "Columnas (dos lado a lado)", icono: "columns-3", fn: () => insertarColumnas(2) },
           { texto: "Fecha de hoy", icono: "calendar", fn: () => insertarTexto(new Date().toLocaleDateString("es-MX", { dateStyle: "long" })) },
+          { texto: "Campo (como en Word)…", icono: "braces", fn: insertarCampo },
+          { texto: "Actualizar campos", icono: "refresh-cw", atajo: "F9", fn: actualizarCampos },
+          { texto: verCodigos ? "Ver los valores de los campos" : "Ver los códigos de los campos", icono: "code", atajo: "Alt+F9", fn: alternarCodigos },
           { texto: "Símbolo…", icono: "omega", fn: () => menuSimbolos(b) },
           "-",
           // Fase 9: citas y referencias en APA, y un reporte armado con las fichas.
@@ -4254,9 +4859,18 @@
           { texto: pa.antes ? "Quitar espacio antes del párrafo" : "Agregar espacio antes del párrafo", icono: "arrow-up", fn: () => formatoParrafo({ antes: pa.antes ? null : 12 }) },
           { texto: pa.despues === 0 ? "Agregar espacio después del párrafo" : "Quitar espacio después del párrafo", icono: "arrow-down", fn: () => formatoParrafo({ despues: pa.despues === 0 ? null : 0 }) }]);
       }
+      /** «Guiones automáticos» de Word (Disposición → Guiones): parte las palabras al final del renglón. */
+      function alternarGuiones() {
+        if (ed.soloLectura) return;
+        const g = doc().valor("_doc", "guiones");
+        doc().cambiar("_doc", { guiones: g ? null : { zona: 18 } }, { origen: "comando" });
+        cache.clear(); reconciliar();
+        NOM.aviso(g ? "Sin guiones automáticos" : "Guiones automáticos: las palabras se parten al final del renglón, como en Word", { tipo: "ok" });
+      }
       function menuMas(b) {
         NOM.menu(b, [
           { titulo: "Formato" },
+          { texto: "Guiones automáticos (dividir palabras)", icono: "minus", marcado: !!doc().valor("_doc", "guiones"), fn: alternarGuiones },
           { texto: "Tachado", icono: "strikethrough", atajo: "Ctrl+Mayús+X", fn: () => alternar("s") },
           { texto: "Superíndice", icono: "superscript", atajo: "Ctrl+Mayús++", fn: () => formato({ va: attrsEnCursor().a.va === "sup" ? null : "sup" }) },
           { texto: "Subíndice", icono: "subscript", atajo: "Ctrl+=", fn: () => formato({ va: attrsEnCursor().a.va === "sub" ? null : "sub" }) },
@@ -4543,6 +5157,8 @@
             { texto: "Borrar formato", icono: "remove-formatting", mantener: true, fn: con(borrarFormato) },
             { texto: "Tachado", icono: "strikethrough", marcado: !!a.s, mantener: true, fn: con(() => alternar("s")) },
             { texto: "Comentar", icono: "message-square", fn: con(() => NOM.comentarios && NOM.comentarios.nuevo(ed)) },
+            ...(cuerpo.querySelector(".wd-campo[data-obj]") ? [{ texto: "Actualizar campos", corto: "Campos", icono: "refresh-cw", fn: con(() => actualizarCampos()) },
+              { texto: verCodigos ? "Ver valores de campos" : "Ver códigos de campos", corto: "Códigos", icono: "code", fn: con(() => alternarCodigos()) }] : []),
             ctx.propietario ? { texto: "Asignar párrafo a…", corto: "Asignar", icono: "user-check", fn: con(() => asignarParrafos(parrafosDeSel(s))) }
               : { texto: modoSug ? "Apagar sugerencias" : "Sugerir cambios", corto: modoSug ? "Sin sugerir" : "Sugerir", icono: "pen-line", marcado: modoSug, fn: con(() => alternarSugerencias()) }] },
         ];
@@ -4710,6 +5326,12 @@
     herramientas() { return this._herr || []; },
     acciones() {
       const a = [];
+      if (this.textoApi && NOM.campos) {
+        a.push({ texto: "Guiones automáticos (dividir palabras al final del renglón)", icono: "minus", fn: () => this.textoApi.alternarGuiones(), claves: "guiones dividir partir palabras silabas hyphenation word disposicion" });
+        a.push({ texto: "Actualizar campos (F9)", icono: "refresh-cw", fn: () => this.textoApi.actualizarCampos(), claves: "campos word fecha seq ref pageref numero pagina actualizar f9" });
+        a.push({ texto: "Ver los códigos de los campos (Alt+F9)", icono: "code", fn: () => this.textoApi.alternarCodigos(), claves: "campos codigos word alt f9" });
+        a.push({ texto: "Insertar un campo (como en Word)…", icono: "braces", fn: () => this.textoApi.insertarCampo(), claves: "campo word fecha page seq ref insertar" });
+      }
       if (NOM.citas && this.textoApi) {
         const ed = NOM.editorActual;
         a.push({ texto: "Investigar (Wikipedia, libros y artículos)", icono: "book-open", fn: () => NOM.citas.abrir(ed), claves: "buscar fuentes fichas citar wikipedia libros articulos investigacion" });
@@ -4728,5 +5350,5 @@
     },
   };
 
-  NOM.textoRico = { parrafosDe, asegurarSecuencia, tokens, envolver, BLOQUE: B, cssFuente, cssBorde, FUENTES, altoFuente };
+  NOM.textoRico = { parrafosDe, recorrido, asegurarSecuencia, tokens, envolver, BLOQUE: B, cssFuente, cssBorde, FUENTES, altoFuente };
 })();

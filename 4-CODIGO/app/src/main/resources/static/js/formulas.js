@@ -834,6 +834,8 @@
     "NUMERO.ROMANO MULTIPLO.SUPERIOR MULTIPLO.INFERIOR MULTIPLO.SUPERIOR.MAT MULTIPLO.INFERIOR.MAT REDOND.MULT REDONDEA.PAR REDONDEA.IMPAR FACT " +
     "COMBINAT PERMUTACIONES COCIENTE ASENO ACOS ATAN ATAN2 SENOH COSH TANH DIRECCION ALEATORIO.ENTRE PAGO VF VA NPER PAGOINT PAGOPRIN SLN " +
     "INT.EFECTIVO TASA.NOMINAL").split(" ").forEach((n) => { LEVANTA[n] = true; });
+  "IMAGINARIO IM.REAL IM.ABS IM.ANGULO IM.CONJUGADA IM.COS IM.SENO IM.COSH IM.SENOH IM.TAN IM.COT IM.SEC IM.CSC IM.SECH IM.CSCH IM.EXP IM.LN IM.LOG10 IM.LOG2 IM.RAIZ2 IM.POT IM.DIV IM.SUSTR COMPLEJO BESSELJ BESSELY BESSELI BESSELK DISTR.BINOM.SERIE INV.BINOM DISTR.HIPERGEOM.N DISTR.HIPERGEOM NEGBINOM.DIST NEGBINOMDIST DISTR.LOGNORM INV.LOGNORM DISTR.LOG.NORM DISTR.LOG.INV DISTR.WEIBULL DIST.WEIBULL VALOR.NUMERO URLCODIF ASC DBCS CUPON.DIAS.L1 CUPON.DIAS CUPON.DIAS.L2 CUPON.FECHA.L2 CUPON.FECHA.L1 CUPON.NUM PRECIO RENDTO DURACION DURACION.MODIF TASA.DESC TASA.INT PRECIO.DESCUENTO CANTIDAD.RECIBIDA RENDTO.DESC PRECIO.VENCIMIENTO RENDTO.VENCTO INT.ACUM INT.ACUM.V LETRA.DE.TES.PRECIO LETRA.DE.TES.RENDTO LETRA.DE.TES.EQV.A.BONO AMORTIZ.LIN AMORTIZ.PROGRE".split(" ").forEach((n) => { LEVANTA[n] = true; });
+  "ACOSH ASENOH ATANH ACOT ACOTH COT COTH CSC CSCH SEC SECH MULTIPLO.SUPERIOR.EXACTO MULTIPLO.INFERIOR.EXACTO MULTIPLO.SUPERIOR.ISO COMBINA PERMUTACIONES.A FACT.DOBLE RAIZ2PI FRAC.AÑO NORMALIZACION FISHER PRUEBA.FISHER.INV FI GAUSS GAMMA GAMMA.LN GAMMA.LN.EXACTO FUN.ERROR.EXACTO FUN.ERROR.COMPL FUN.ERROR.COMPL.EXACTO DISTR.NORM.N DISTR.NORM.ESTAND.N INV.NORM INV.NORM.ESTAND DISTR.EXP.N DISTR.BINOM.N POISSON.DIST DISTR.GAMMA.N INV.GAMMA DISTR.CHICUAD DISTR.CHICUAD.CD INV.CHICUAD INV.CHICUAD.CD DISTR.T.N DISTR.T.2C DISTR.T.CD INV.T INV.T.2C DISTR.F.N DISTR.F.CD INV.F INV.F.CD DISTR.BETA.N INV.BETA.N SYD DDB DB P.DURACION RRI MONEDA.DEC MONEDA.FRAC BIN.A.HEX BIN.A.OCT HEX.A.BIN HEX.A.OCT OCT.A.BIN OCT.A.HEX BIT.Y BIT.O BIT.XO BIT.DESPLIZQDA BIT.DESPLDCHA DELTA MAYOR.O.IGUAL".split(" ").forEach((n) => { LEVANTA[n] = true; });
   Object.assign(LEVANTA, { BUSCARV: [0], BUSCARH: [0], BUSCARX: [0], COINCIDIR: [0], COINCIDIRX: [0], "CONTAR.SI": [1], "SUMAR.SI": [1],
     "PROMEDIO.SI": [1], INDICE: [1, 2], ELEGIR: [0], "K.ESIMO.MAYOR": [1], "K.ESIMO.MENOR": [1], JERARQUIA: [0], PERCENTIL: [1], CUARTIL: [1], CAMBIAR: [0] });
   /** Llama a una función con la regla de Excel 365 para las matrices en los argumentos de un valor. */
@@ -1091,9 +1093,9 @@
   /** Funciones que solo existen con matrices dinámicas: la fórmula se guarda en Excel como fórmula de matriz. */
   const DINAMICAS = new Set(["ORDENAR", "ORDENARPOR", "FILTRAR", "UNICOS", "SECUENCIA", "MATRIZALEAT", "APILARV", "APILARH", "TOMAR", "EXCLUIR",
     "ELEGIRCOLS", "ELEGIRFILAS", "ENCOL", "ENFILA", "AJUSTARFILAS", "AJUSTARCOLS", "EXPANDIR", "DIVIDIRTEXTO", "BYROW", "BYCOL", "MAP", "REDUCE",
-    "SCAN", "MAKEARRAY"]);
+    "SCAN", "MAKEARRAY", "ESTIMACION.LINEAL", "ESTIMACION.LOGARITMICA", "CRECIMIENTO", "MODA.VARIOS"]);
   /** Funciones que trabajan con la referencia y no con su valor (las resuelve el evaluador). */
-  const DE_REFERENCIA = new Set(["FILA", "COLUMNA", "FILAS", "COLUMNAS", "INDIRECTO", "DESREF"]);
+  const DE_REFERENCIA = new Set(["FILA", "COLUMNA", "FILAS", "COLUMNAS", "INDIRECTO", "DESREF", "ESFORMULA"]);
   DE_REFERENCIA.forEach((n) => { FUNCS[n] = () => E("#VALOR!"); });
   const ALIAS = {
     SUM: "SUMA", AVERAGE: "PROMEDIO", COUNT: "CONTAR", COUNTA: "CONTARA", COUNTBLANK: "CONTAR.BLANCO", PRODUCT: "PRODUCTO", SUMPRODUCT: "SUMAPRODUCTO",
@@ -1138,6 +1140,911 @@
     TOCOL: "ENCOL", TOROW: "ENFILA", WRAPROWS: "AJUSTARFILAS", WRAPCOLS: "AJUSTARCOLS", EXPAND: "EXPANDIR", TEXTSPLIT: "DIVIDIRTEXTO",
     FREQUENCY: "FRECUENCIA", MUNIT: "M.UNIDAD", MINVERSE: "MINVERSA",
   };
+  // ================================================================== más funciones de Excel (18-nov-2026), medidas contra Excel 2024
+  // ---- funciones especiales (con la precisión de Excel: ~1e-14)
+  const LANCZOS = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+  function lnGamma(x) {
+    if (x < 0.5) return Math.log(Math.PI / Math.abs(Math.sin(Math.PI * x))) - lnGamma(1 - x);
+    x -= 1;
+    let a = LANCZOS[0];
+    const t = x + 7.5;
+    for (let i = 1; i < 9; i++) a += LANCZOS[i] / (x + i);
+    return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
+  }
+  function gamma(x) {
+    if (x === Math.floor(x)) { if (x <= 0) throw E("#NUM!"); if (x <= 171) return factorial(x - 1); }
+    if (x < 0.5) return Math.PI / (Math.sin(Math.PI * x) * gamma(1 - x));
+    return Math.exp(lnGamma(x));
+  }
+  /** P(a, x): gamma incompleta regularizada (serie o fracción continua). */
+  function gammaP(a, x) {
+    if (x <= 0) return 0;
+    if (x < a + 1) {
+      let s = 1 / a, t = s;
+      for (let n = 1; n < 1000; n++) { t *= x / (a + n); s += t; if (Math.abs(t) < Math.abs(s) * 1e-17) break; }
+      return s * Math.exp(-x + a * Math.log(x) - lnGamma(a));
+    }
+    return 1 - gammaQcf(a, x);
+  }
+  function gammaQcf(a, x) {
+    let b = x + 1 - a, c = 1 / 1e-300, d = 1 / b, h = d;
+    for (let i = 1; i < 1000; i++) {
+      const an = -i * (i - a); b += 2;
+      d = an * d + b; if (Math.abs(d) < 1e-300) d = 1e-300;
+      c = b + an / c; if (Math.abs(c) < 1e-300) c = 1e-300;
+      d = 1 / d; const del = d * c; h *= del;
+      if (Math.abs(del - 1) < 1e-16) break;
+    }
+    return Math.exp(-x + a * Math.log(x) - lnGamma(a)) * h;
+  }
+  /** I_x(a, b): beta incompleta regularizada. */
+  function betaI(x, a, b) {
+    if (x <= 0) return 0; if (x >= 1) return 1;
+    const bt = Math.exp(lnGamma(a + b) - lnGamma(a) - lnGamma(b) + a * Math.log(x) + b * Math.log(1 - x));
+    const cf = (x2, a2, b2) => {
+      let c = 1, d = 1 - ((a2 + b2) * x2) / (a2 + 1); if (Math.abs(d) < 1e-300) d = 1e-300; d = 1 / d; let h = d;
+      for (let m = 1; m < 3000; m++) {
+        const m2 = 2 * m;
+        let aa = (m * (b2 - m) * x2) / ((a2 + m2 - 1) * (a2 + m2));
+        d = 1 + aa * d; if (Math.abs(d) < 1e-300) d = 1e-300; c = 1 + aa / c; if (Math.abs(c) < 1e-300) c = 1e-300; d = 1 / d; h *= d * c;
+        aa = (-(a2 + m) * (a2 + b2 + m) * x2) / ((a2 + m2) * (a2 + m2 + 1));
+        d = 1 + aa * d; if (Math.abs(d) < 1e-300) d = 1e-300; c = 1 + aa / c; if (Math.abs(c) < 1e-300) c = 1e-300; d = 1 / d;
+        const del = d * c; h *= del; if (Math.abs(del - 1) < 1e-16) break;
+      }
+      return h;
+    };
+    return x < (a + 1) / (a + b + 2) ? (bt * cf(x, a, b)) / a : 1 - (bt * cf(1 - x, b, a)) / b;
+  }
+  const erf = (x) => (x >= 0 ? gammaP(0.5, x * x) : -gammaP(0.5, x * x));
+  const erfc = (x) => (x >= 0 ? (x * x < 1.5 ? 1 - gammaP(0.5, x * x) : gammaQcf(0.5, x * x)) : 1 + gammaP(0.5, x * x));
+  const normS = (z) => 0.5 * erfc(-z / Math.SQRT2);
+  const normSdens = (z) => Math.exp(-0.5 * z * z) / Math.sqrt(2 * Math.PI);
+  /** Inversa de una distribución acumulada creciente en [lo, hi] (bisección y luego Newton si hay densidad). */
+  function inversa(cdf, p, lo, hi) {
+    let a = lo, b = hi;
+    for (let i = 0; i < 300; i++) { const m = (a + b) / 2; if (cdf(m) < p) a = m; else b = m; if (b - a <= Math.abs(m) * 1e-16) break; }
+    return (a + b) / 2;
+  }
+  /** Normal estándar inversa (Acklam refinado con Newton). */
+  function normSinv(p) {
+    if (p <= 0 || p >= 1) throw E("#NUM!");
+    const a = [-3.969683028665376e1, 2.209460984245205e2, -2.759285104469687e2, 1.38357751867269e2, -3.066479806614716e1, 2.506628277459239];
+    const b = [-5.447609879822406e1, 1.615858368580409e2, -1.556989798598866e2, 6.680131188771972e1, -1.328068155288572e1];
+    const c = [-7.784894002430293e-3, -3.223964580411365e-1, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783];
+    const d = [7.784695709041462e-3, 3.224671290700398e-1, 2.445134137142996, 3.754408661907416];
+    let x;
+    if (p < 0.02425) { const q = Math.sqrt(-2 * Math.log(p)); x = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+    else if (p > 1 - 0.02425) { const q = Math.sqrt(-2 * Math.log(1 - p)); x = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+    else { const q = p - 0.5, r = q * q; x = ((((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q) / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1); }
+    for (let i = 0; i < 4; i++) { const e = normS(x) - p; x -= e / normSdens(x); }
+    return x;
+  }
+  const tCdf = (t, v) => { const x = v / (v + t * t), ib = 0.5 * betaI(x, v / 2, 0.5); return t >= 0 ? 1 - ib : ib; };
+  const tDens = (t, v) => Math.exp(lnGamma((v + 1) / 2) - lnGamma(v / 2) - 0.5 * Math.log(v * Math.PI) - ((v + 1) / 2) * Math.log(1 + (t * t) / v));
+  const chiCdf = (x, k) => gammaP(k / 2, x / 2);
+  const fCdf = (x, d1, d2) => (x <= 0 ? 0 : betaI((d1 * x) / (d1 * x + d2), d1 / 2, d2 / 2));
+  const acum = (a, i) => a[i] !== undefined && verdad(a[i]) && a[i] !== 0;
+  const pos = (v, cero) => { const n = num(v); if (cero ? n < 0 : n <= 0) throw E("#NUM!"); return n; };
+  const prob = (v) => { const p = num(v); if (p <= 0 || p >= 1) throw E("#NUM!"); return p; };
+  /** Fines de semana de .INTL: número (1-7, 11-17) o texto de 7 ceros y unos (lunes a domingo). */
+  function finesDeSemana(v) {
+    if (v === undefined || v === "") return [6, 0];
+    if (typeof v === "string" && /^[01]{7}$/.test(v)) { const r = []; for (let i = 0; i < 7; i++) if (v[i] === "1") r.push((i + 1) % 7); if (r.length === 7) throw E("#VALOR!"); return r; }
+    const n = Math.floor(num(v));
+    const T = { 1: [6, 0], 2: [0, 1], 3: [1, 2], 4: [2, 3], 5: [3, 4], 6: [4, 5], 7: [5, 6], 11: [0], 12: [1], 13: [2], 14: [3], 15: [4], 16: [5], 17: [6] };
+    if (!T[n]) throw E("#NUM!");
+    return T[n];
+  }
+  const laboralIntl = (serie, fest, fines) => !fines.includes(fechaDe(serie).getUTCDay()) && !fest.has(serie);
+  /** FRAC.AÑO: base 0 (30/360 US), 1 (real/real), 2 (real/360), 3 (real/365), 4 (30/360 europeo). */
+  function fracAnio(i, f, base) {
+    if (i > f) [i, f] = [f, i];
+    const di = fechaDe(i), df = fechaDe(f);
+    let y1 = di.getUTCFullYear(), m1 = di.getUTCMonth() + 1, d1 = di.getUTCDate(), y2 = df.getUTCFullYear(), m2 = df.getUTCMonth() + 1, d2 = df.getUTCDate();
+    const bisiesto = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+    const ultimo = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+    if (base === 0) {
+      // (el orden exacto de Excel para FRAC.AÑO: distinto del de DIAS360; el día 31 del final solo baja a 30 si el
+      // inicio ya era 30 o 31 antes de ajustar febrero)
+      const finFeb1 = m1 === 2 && d1 === ultimo(y1, 2), finFeb2 = m2 === 2 && d2 === ultimo(y2, 2);
+      if (d1 === 31 && d2 === 31) { d1 = 30; d2 = 30; }
+      else if (d1 === 31) d1 = 30;
+      else if (d1 === 30 && d2 === 31) d2 = 30;
+      else if (finFeb1 && finFeb2) { d1 = 30; d2 = 30; }
+      else if (finFeb1) d1 = 30;
+      return ((y2 - y1) * 360 + (m2 - m1) * 30 + (d2 - d1)) / 360;
+    }
+    if (base === 4) { if (d1 === 31) d1 = 30; if (d2 === 31) d2 = 30; return ((y2 - y1) * 360 + (m2 - m1) * 30 + (d2 - d1)) / 360; }
+    if (base === 2) return (f - i) / 360;
+    if (base === 3) return (f - i) / 365;
+    if (base === 1) {
+      if (y1 === y2 || (y2 === y1 + 1 && (m1 > m2 || (m1 === m2 && d1 >= d2)))) {
+        let dias = 365;
+        if (y1 === y2) { if (bisiesto(y1)) dias = 366; }
+        else if ((bisiesto(y1) && (m1 < 3)) || (bisiesto(y2) && (m2 > 2 || (m2 === 2 && d2 === 29)))) dias = 366;
+        return (f - i) / dias;
+      }
+      let tot = 0; for (let y = y1; y <= y2; y++) tot += bisiesto(y) ? 366 : 365;
+      return (f - i) / (tot / (y2 - y1 + 1));
+    }
+    throw E("#NUM!");
+  }
+  /** Funciones de base de datos (BDSUMA…): las filas de la base que cumplen los criterios (O entre filas, Y entre columnas). */
+  function bdValores(a) {
+    const base = tabla(a[0]), crit = tabla(a[2]);
+    if (!base.length || !crit.length) throw E("#VALOR!");
+    const enc = base[0].map((h) => texto(h).toLowerCase());
+    let col;
+    if (a[1] === undefined || a[1] === "") col = null;
+    else if (esNum(a[1])) { col = Math.floor(num(a[1])) - 1; if (col < 0 || col >= enc.length) throw E("#VALOR!"); }
+    else { col = enc.indexOf(texto(a[1]).toLowerCase()); if (col < 0) throw E("#VALOR!"); }
+    const cEnc = crit[0].map((h) => enc.indexOf(texto(h).toLowerCase()));
+    const conds = crit.slice(1).map((fila) => fila.map((v, j) => (v === "" || v == null || cEnc[j] < 0 ? null : [cEnc[j], criterio(v)])).filter(Boolean));
+    const filas = base.slice(1).filter((fila) => !conds.length || conds.some((cs) => cs.every(([j, p]) => p(fila[j]))));
+    return { filas, col };
+  }
+  const bdNums = (a) => { const { filas, col } = bdValores(a); return filas.map((f) => (col == null ? null : f[col])).filter(esNum).map((v) => +v); };
+  const varN = (n, m) => { if (n.length < 2 + (m ? -1 : 0)) throw E("#DIV/0!"); const mu = media(n); return n.reduce((s, v) => s + (v - mu) * (v - mu), 0) / (n.length - (m ? 0 : 1)); };
+  /** Depreciación: saldo decreciente doble (o con factor) del período per. */
+  function ddb(costo, resid, vida, per, fac) {
+    if (costo < 0 || resid < 0 || vida <= 0 || per <= 0 || per > vida || fac <= 0) throw E("#NUM!");
+    let valor = costo, dep = 0;
+    for (let p = 1; p <= per; p++) { dep = Math.min(valor * (fac / vida), Math.max(0, valor - resid)); valor -= dep; }
+    return dep;
+  }
+  /** Bases para BIN/OCT/HEX: de texto a número (con el complemento a 2 de 10 dígitos de Excel) y de vuelta. */
+  function deBase(t, b) {
+    // (un número llega tal cual: 11111011, no con el formato de la celda)
+    t = (typeof t === "number" ? String(t) : texto(t)).trim().toUpperCase();
+    if (t === "") return 0;
+    if (t.length > 10 || !new RegExp("^[" + "0123456789ABCDEF".slice(0, b) + "]+$").test(t)) throw E("#NUM!");
+    let n = parseInt(t, b);
+    if (t.length === 10 && parseInt(t[0], b) >= b / 2) n -= Math.pow(b, 10);
+    return n;
+  }
+  function aBase(n, b, lugares) {
+    n = Math.trunc(n);
+    const lim = Math.pow(b, 10) / 2;
+    if (n < -lim || n >= lim) throw E("#NUM!");
+    let t = (n < 0 ? n + Math.pow(b, 10) : n).toString(b).toUpperCase();
+    if (lugares !== undefined && n >= 0) { const l = Math.floor(num(lugares)); if (l < t.length || l > 10) throw E("#NUM!"); t = t.padStart(l, "0"); }
+    return t;
+  }
+  Object.assign(FUNCS, {
+    // matemáticas y trigonometría
+    ACOSH: (a) => { const x = num(a[0]); if (x < 1) throw E("#NUM!"); return Math.acosh(x); },
+    ASENOH: (a) => Math.asinh(num(a[0])),
+    ATANH: (a) => { const x = num(a[0]); if (x <= -1 || x >= 1) throw E("#NUM!"); return Math.atanh(x); },
+    ACOT: (a) => Math.PI / 2 - Math.atan(num(a[0])),
+    ACOTH: (a) => { const x = num(a[0]); if (Math.abs(x) <= 1) throw E("#NUM!"); return 0.5 * Math.log((x + 1) / (x - 1)); },
+    COT: (a) => { const x = num(a[0]); if (x === 0) throw E("#DIV/0!"); return 1 / Math.tan(x); },
+    COTH: (a) => { const x = num(a[0]); if (x === 0) throw E("#DIV/0!"); return 1 / Math.tanh(x); },
+    CSC: (a) => { const x = num(a[0]); if (x === 0) throw E("#DIV/0!"); return 1 / Math.sin(x); },
+    CSCH: (a) => { const x = num(a[0]); if (x === 0) throw E("#DIV/0!"); return 1 / Math.sinh(x); },
+    SEC: (a) => 1 / Math.cos(num(a[0])),
+    SECH: (a) => 1 / Math.cosh(num(a[0])),
+    "MULTIPLO.SUPERIOR.EXACTO": (a) => { const n = num(a[0]), m = Math.abs(a[1] === undefined ? 1 : num(a[1])); return m === 0 ? 0 : Math.ceil(n / m - 1e-10) * m; },
+    "MULTIPLO.INFERIOR.EXACTO": (a) => { const n = num(a[0]), m = Math.abs(a[1] === undefined ? 1 : num(a[1])); return m === 0 ? 0 : Math.floor(n / m + 1e-10) * m; },
+    "MULTIPLO.SUPERIOR.ISO": (a) => { const n = num(a[0]), m = Math.abs(a[1] === undefined ? 1 : num(a[1])); return m === 0 ? 0 : Math.ceil(n / m - 1e-10) * m; },
+    COMBINA: (a) => { const n = Math.floor(num(a[0])), k = Math.floor(num(a[1])); if (n < 0 || k < 0 || n + k - 1 < 0) throw E("#NUM!"); if (k === 0) return 1; return FUNCS.COMBINAT([n + k - 1, k]); },
+    "PERMUTACIONES.A": (a) => { const n = Math.floor(num(a[0])), k = Math.floor(num(a[1])); if (n < 0 || k < 0) throw E("#NUM!"); return Math.pow(n, k); },
+    "FACT.DOBLE": (a) => { const n = Math.floor(num(a[0])); if (n < -1) throw E("#NUM!"); let r = 1; for (let i = n; i > 1; i -= 2) r *= i; return r; },
+    MULTINOMIAL: (a) => { const n = nums(a).map(Math.floor); if (n.some((v) => v < 0)) throw E("#NUM!"); const t = n.reduce((x, y) => x + y, 0); return Math.round(Math.exp(lnGamma(t + 1) - n.reduce((s, v) => s + lnGamma(v + 1), 0))); },
+    "SUMA.SERIES": (a) => { const x = num(a[0]), n = num(a[1]), m = num(a[2]); return plano([a[3]]).filter(esNum).reduce((s, c, i) => s + +c * Math.pow(x, n + i * m), 0); },
+    RAIZ2PI: (a) => { const x = num(a[0]); if (x < 0) throw E("#NUM!"); return Math.sqrt(x * Math.PI); },
+    SUMAX2MENOSY2: (a) => { const x = plano([a[0]]), y = plano([a[1]]); if (x.length !== y.length) throw E("#N/A"); let s = 0; x.forEach((v, i) => { if (esNum(v) && esNum(y[i])) s += v * v - y[i] * y[i]; }); return s; },
+    SUMAX2MASY2: (a) => { const x = plano([a[0]]), y = plano([a[1]]); if (x.length !== y.length) throw E("#N/A"); let s = 0; x.forEach((v, i) => { if (esNum(v) && esNum(y[i])) s += v * v + y[i] * y[i]; }); return s; },
+    SUMAXMENOSY2: (a) => { const x = plano([a[0]]), y = plano([a[1]]); if (x.length !== y.length) throw E("#N/A"); let s = 0; x.forEach((v, i) => { if (esNum(v) && esNum(y[i])) s += (v - y[i]) * (v - y[i]); }); return s; },
+    // fecha
+    "DIAS.LAB.INTL": (a) => {
+      let i = entero(a[0]), f = entero(a[1]), sg = 1;
+      if (f < i) { [i, f] = [f, i]; sg = -1; }
+      const fines = finesDeSemana(a[2]), fest = festivos(a[3]);
+      let n = 0;
+      for (let s = i; s <= f && s - i < 200000; s++) if (laboralIntl(s, fest, fines)) n++;
+      return n * sg;
+    },
+    "DIA.LAB.INTL": (a) => {
+      let s = entero(a[0]), faltan = Math.trunc(num(a[1]));
+      const fines = finesDeSemana(a[2]), fest = festivos(a[3]), paso = faltan < 0 ? -1 : 1;
+      for (let k = 0; faltan !== 0 && k < 200000; k++) { s += paso; if (laboralIntl(s, fest, fines)) faltan -= paso; }
+      return new FechaF(s);
+    },
+    "FRAC.AÑO": (a) => fracAnio(entero(a[0]), entero(a[1]), a[2] === undefined ? 0 : Math.floor(num(a[2]))),
+    // estadística
+    DESVIA2: (a) => { const n = nums(a); if (!n.length) throw E("#NUM!"); const m = media(n); return n.reduce((s, v) => s + (v - m) * (v - m), 0); },
+    CURTOSIS: (a) => { const n = nums(a), k = n.length; if (k < 4) throw E("#DIV/0!"); const m = media(n), s = Math.sqrt(varN(n)); if (!s) throw E("#DIV/0!"); const q = n.reduce((t, v) => t + Math.pow((v - m) / s, 4), 0); return ((k * (k + 1)) / ((k - 1) * (k - 2) * (k - 3))) * q - (3 * (k - 1) * (k - 1)) / ((k - 2) * (k - 3)); },
+    "COEFICIENTE.ASIMETRIA": (a) => { const n = nums(a), k = n.length; if (k < 3) throw E("#DIV/0!"); const m = media(n), s = Math.sqrt(varN(n)); if (!s) throw E("#DIV/0!"); return (k / ((k - 1) * (k - 2))) * n.reduce((t, v) => t + Math.pow((v - m) / s, 3), 0); },
+    "COEFICIENTE.ASIMETRIA.P": (a) => { const n = nums(a), k = n.length; if (k < 1) throw E("#DIV/0!"); const m = media(n), s = Math.sqrt(varN(n, true)); if (!s) throw E("#DIV/0!"); return n.reduce((t, v) => t + Math.pow((v - m) / s, 3), 0) / k; },
+    "MEDIA.ACOTADA": (a) => { const n = nums([a[0]]).sort((x, y) => x - y), p = num(a[1]); if (p < 0 || p >= 1) throw E("#NUM!"); const q = Math.floor((n.length * p) / 2); const r = n.slice(q, n.length - q); return media(r); },
+    NORMALIZACION: (a) => { const s = num(a[2]); if (s <= 0) throw E("#NUM!"); return (num(a[0]) - num(a[1])) / s; },
+    FISHER: (a) => { const x = num(a[0]); if (x <= -1 || x >= 1) throw E("#NUM!"); return 0.5 * Math.log((1 + x) / (1 - x)); },
+    "PRUEBA.FISHER.INV": (a) => Math.tanh(num(a[0])),
+    FI: (a) => normSdens(num(a[0])),
+    GAUSS: (a) => normS(num(a[0])) - 0.5,
+    GAMMA: (a) => gamma(num(a[0])),
+    "GAMMA.LN": (a) => lnGamma(pos(a[0])),
+    "GAMMA.LN.EXACTO": (a) => lnGamma(pos(a[0])),
+    "FUN.ERROR": (a) => (a[1] === undefined ? erf(num(a[0])) : erf(num(a[1])) - erf(num(a[0]))),
+    "FUN.ERROR.EXACTO": (a) => erf(num(a[0])),
+    "FUN.ERROR.COMPL": (a) => erfc(num(a[0])),
+    "FUN.ERROR.COMPL.EXACTO": (a) => erfc(num(a[0])),
+    "DISTR.NORM.N": (a) => { const x = num(a[0]), m = num(a[1]), s = num(a[2]); if (s <= 0) throw E("#NUM!"); const z = (x - m) / s; return acum(a, 3) ? normS(z) : normSdens(z) / s; },
+    "DISTR.NORM.ESTAND.N": (a) => { const z = num(a[0]); return acum(a, 1) ? normS(z) : normSdens(z); },
+    "INV.NORM": (a) => { const s = num(a[2]); if (s <= 0) throw E("#NUM!"); return num(a[1]) + s * normSinv(prob(a[0])); },
+    "INV.NORM.ESTAND": (a) => normSinv(prob(a[0])),
+    "DISTR.EXP.N": (a) => { const x = num(a[0]), l = num(a[1]); if (x < 0 || l <= 0) throw E("#NUM!"); return acum(a, 2) ? 1 - Math.exp(-l * x) : l * Math.exp(-l * x); },
+    "DISTR.BINOM.N": (a) => {
+      const k = Math.floor(num(a[0])), n = Math.floor(num(a[1])), p = num(a[2]);
+      if (k < 0 || k > n || p < 0 || p > 1) throw E("#NUM!");
+      const f = (j) => Math.exp(lnGamma(n + 1) - lnGamma(j + 1) - lnGamma(n - j + 1) + (j ? j * Math.log(p) : 0) + (n - j ? (n - j) * Math.log(1 - p) : 0));
+      if (!acum(a, 3)) return f(k);
+      let s = 0; for (let j = 0; j <= k; j++) s += f(j); return Math.min(1, s);
+    },
+    "POISSON.DIST": (a) => {
+      const k = Math.floor(num(a[0])), m = num(a[1]);
+      if (k < 0 || m < 0) throw E("#NUM!");
+      if (acum(a, 2)) return 1 - gammaP(k + 1, m);
+      return Math.exp(-m + k * Math.log(m || 1e-300) - lnGamma(k + 1)) * (m === 0 ? (k === 0 ? 1 : 0) : 1);
+    },
+    "DISTR.GAMMA.N": (a) => { const x = num(a[0]), al = pos(a[1]), be = pos(a[2]); if (x < 0) throw E("#NUM!"); return acum(a, 3) ? gammaP(al, x / be) : Math.exp((al - 1) * Math.log(x) - x / be - lnGamma(al) - al * Math.log(be)); },
+    "INV.GAMMA": (a) => { const p = num(a[0]), al = pos(a[1]), be = pos(a[2]); if (p < 0 || p >= 1) throw E("#NUM!"); if (p === 0) return 0; return be * inversa((x) => gammaP(al, x), p, 0, Math.max(1, al) * 100 + 100); },
+    "DISTR.CHICUAD": (a) => { const x = num(a[0]), k = Math.floor(num(a[1])); if (x < 0 || k < 1) throw E("#NUM!"); return acum(a, 2) ? chiCdf(x, k) : Math.exp((k / 2 - 1) * Math.log(x) - x / 2 - (k / 2) * Math.LN2 - lnGamma(k / 2)); },
+    "DISTR.CHICUAD.CD": (a) => { const x = num(a[0]), k = Math.floor(num(a[1])); if (x < 0 || k < 1) throw E("#NUM!"); return x === 0 ? 1 : x / 2 < k / 2 + 1 ? 1 - gammaP(k / 2, x / 2) : gammaQcf(k / 2, x / 2); },
+    "INV.CHICUAD": (a) => { const p = num(a[0]), k = Math.floor(num(a[1])); if (p < 0 || p >= 1 || k < 1) throw E("#NUM!"); return inversa((x) => chiCdf(x, k), p, 0, k * 50 + 1000); },
+    "INV.CHICUAD.CD": (a) => { const p = num(a[0]), k = Math.floor(num(a[1])); if (p <= 0 || p > 1 || k < 1) throw E("#NUM!"); return inversa((x) => chiCdf(x, k), 1 - p, 0, k * 50 + 1000); },
+    "DISTR.T.N": (a) => { const t = num(a[0]), v = Math.floor(num(a[1])); if (v < 1) throw E("#DIV/0!"); return acum(a, 2) ? tCdf(t, v) : tDens(t, v); },
+    "DISTR.T.2C": (a) => { const t = num(a[0]), v = Math.floor(num(a[1])); if (t < 0 || v < 1) throw E("#NUM!"); return betaI(v / (v + t * t), v / 2, 0.5); },
+    "DISTR.T.CD": (a) => { const t = num(a[0]), v = Math.floor(num(a[1])); if (v < 1) throw E("#NUM!"); return 1 - tCdf(t, v); },
+    "INV.T": (a) => { const p = prob(a[0]), v = Math.floor(num(a[1])); if (v < 1) throw E("#NUM!"); return inversa((t) => tCdf(t, v), p, -1e6, 1e6); },
+    "INV.T.2C": (a) => { const p = num(a[0]), v = Math.floor(num(a[1])); if (p <= 0 || p > 1 || v < 1) throw E("#NUM!"); return inversa((t) => tCdf(t, v), 1 - p / 2, 0, 1e6); },
+    "DISTR.F.N": (a) => { const x = num(a[0]), d1 = Math.floor(num(a[1])), d2 = Math.floor(num(a[2])); if (x < 0 || d1 < 1 || d2 < 1) throw E("#NUM!"); if (acum(a, 3)) return fCdf(x, d1, d2); return Math.exp(0.5 * (d1 * Math.log(d1 * x) + d2 * Math.log(d2) - (d1 + d2) * Math.log(d1 * x + d2)) - Math.log(x) - (lnGamma(d1 / 2) + lnGamma(d2 / 2) - lnGamma((d1 + d2) / 2))); },
+    "DISTR.F.CD": (a) => { const x = num(a[0]), d1 = Math.floor(num(a[1])), d2 = Math.floor(num(a[2])); if (x < 0 || d1 < 1 || d2 < 1) throw E("#NUM!"); return x === 0 ? 1 : betaI(d2 / (d2 + d1 * x), d2 / 2, d1 / 2); },
+    "INV.F": (a) => { const p = num(a[0]), d1 = Math.floor(num(a[1])), d2 = Math.floor(num(a[2])); if (p < 0 || p >= 1 || d1 < 1 || d2 < 1) throw E("#NUM!"); return inversa((x) => fCdf(x, d1, d2), p, 0, 1e7); },
+    "INV.F.CD": (a) => { const p = num(a[0]), d1 = Math.floor(num(a[1])), d2 = Math.floor(num(a[2])); if (p <= 0 || p > 1 || d1 < 1 || d2 < 1) throw E("#NUM!"); return inversa((x) => fCdf(x, d1, d2), 1 - p, 0, 1e7); },
+    "DISTR.BETA.N": (a) => {
+      const x = num(a[0]), al = pos(a[1]), be = pos(a[2]), A = a[4] === undefined ? 0 : num(a[4]), B = a[5] === undefined ? 1 : num(a[5]);
+      if (x < A || x > B || A === B) throw E("#NUM!");
+      const z = (x - A) / (B - A);
+      return acum(a, 3) ? betaI(z, al, be) : Math.exp((al - 1) * Math.log(z) + (be - 1) * Math.log(1 - z) - (lnGamma(al) + lnGamma(be) - lnGamma(al + be))) / (B - A);
+    },
+    "INV.BETA.N": (a) => { const p = num(a[0]), al = pos(a[1]), be = pos(a[2]), A = a[3] === undefined ? 0 : num(a[3]), B = a[4] === undefined ? 1 : num(a[4]); if (p <= 0 || p > 1) throw E("#NUM!"); return A + (B - A) * inversa((z) => betaI(z, al, be), p, 0, 1); },
+    "INTERVALO.CONFIANZA.NORM": (a) => { const al = prob(a[0]), s = pos(a[1]), n = Math.floor(num(a[2])); if (n < 1) throw E("#NUM!"); return (normSinv(1 - al / 2) * s) / Math.sqrt(n); },
+    "INTERVALO.CONFIANZA.T": (a) => { const al = prob(a[0]), s = pos(a[1]), n = Math.floor(num(a[2])); if (n < 2) throw E("#DIV/0!"); return (inversa((t) => tCdf(t, n - 1), 1 - al / 2, 0, 1e6) * s) / Math.sqrt(n); },
+    "PERCENTIL.EXC": (a) => { const n = nums([a[0]]).sort((x, y) => x - y), k = num(a[1]), r = k * (n.length + 1); if (r < 1 || r > n.length) throw E("#NUM!"); const i = Math.floor(r); return i >= n.length ? n[n.length - 1] : n[i - 1] + (r - i) * (n[i] - n[i - 1]); },
+    "CUARTIL.EXC": (a) => { const q = Math.floor(num(a[1])); if (q < 1 || q > 3) throw E("#NUM!"); return FUNCS["PERCENTIL.EXC"]([a[0], q / 4]); },
+    // bases de datos
+    BDSUMA: (a) => bdNums(a).reduce((x, y) => x + y, 0),
+    BDPROMEDIO: (a) => { const n = bdNums(a); if (!n.length) throw E("#DIV/0!"); return media(n); },
+    BDCONTAR: (a) => bdNums(a).length,
+    BDCONTARA: (a) => { const { filas, col } = bdValores(a); return col == null ? filas.length : filas.filter((f) => f[col] !== "" && f[col] != null).length; },
+    BDMAX: (a) => { const n = bdNums(a); return n.length ? Math.max(...n) : 0; },
+    BDMIN: (a) => { const n = bdNums(a); return n.length ? Math.min(...n) : 0; },
+    BDPRODUCTO: (a) => bdNums(a).reduce((x, y) => x * y, 1),
+    BDEXTRAER: (a) => { const { filas, col } = bdValores(a); if (!filas.length) throw E("#VALOR!"); if (filas.length > 1) throw E("#NUM!"); return filas[0][col]; },
+    BDDESVEST: (a) => Math.sqrt(varN(bdNums(a))),
+    BDDESVESTP: (a) => Math.sqrt(varN(bdNums(a), true)),
+    BDVAR: (a) => varN(bdNums(a)),
+    BDVARP: (a) => varN(bdNums(a), true),
+    // financieras
+    SYD: (a) => { const c = num(a[0]), r = num(a[1]), v = num(a[2]), p = num(a[3]); if (v <= 0 || p <= 0 || p > v) throw E("#NUM!"); return ((c - r) * (v - p + 1) * 2) / (v * (v + 1)); },
+    DDB: (a) => ddb(num(a[0]), num(a[1]), num(a[2]), num(a[3]), a[4] === undefined ? 2 : num(a[4])),
+    DB: (a) => {
+      const c = num(a[0]), r = num(a[1]), v = num(a[2]), p = Math.floor(num(a[3])), mes = a[4] === undefined ? 12 : Math.floor(num(a[4]));
+      if (c < 0 || r < 0 || v <= 0 || p <= 0 || mes < 1 || mes > 12 || p > v + 1) throw E("#NUM!");
+      const tasa = c === 0 ? 0 : Math.round((1 - Math.pow(r / c, 1 / v)) * 1000) / 1000;
+      let total = (c * tasa * mes) / 12;
+      if (p === 1) return total;
+      let dep = 0;
+      for (let k = 2; k <= p; k++) { dep = k === v + 1 ? ((c - total) * tasa * (12 - mes)) / 12 : (c - total) * tasa; total += dep; }
+      return dep;
+    },
+    DVS: (a) => {
+      const c = num(a[0]), r = num(a[1]), v = num(a[2]), ini = num(a[3]), fin = num(a[4]), fac = a[5] === undefined ? 2 : num(a[5]), sinCambio = a[6] !== undefined && verdad(a[6]);
+      if (c < 0 || r < 0 || v <= 0 || ini < 0 || fin < ini || fin > v) throw E("#NUM!");
+      let valor = c, total = 0;
+      const n = Math.ceil(fin);
+      for (let p = 1; p <= n; p++) {
+        const d = valor * (fac / v), recta = (valor - r) / (v - p + 1);
+        let dep = !sinCambio && recta > d ? recta : d;
+        dep = Math.max(0, Math.min(dep, valor - r));
+        const desde = Math.max(ini, p - 1), hasta = Math.min(fin, p);
+        if (hasta > desde) total += dep * (hasta - desde);
+        valor -= dep;
+      }
+      return total;
+    },
+    "VNA.NO.PER": (a) => { const r = num(a[0]), v = plano([a[1]]).map(num), d = plano([a[2]]).map(num); if (v.length !== d.length) throw E("#NUM!"); return v.reduce((s, x, i) => s + x / Math.pow(1 + r, (d[i] - d[0]) / 365), 0); },
+    "TIR.NO.PER": (a) => {
+      const v = plano([a[0]]).map(num), d = plano([a[1]]).map(num);
+      if (v.length !== d.length || !v.some((x) => x > 0) || !v.some((x) => x < 0)) throw E("#NUM!");
+      const f = (r) => v.reduce((s, x, i) => s + x / Math.pow(1 + r, (d[i] - d[0]) / 365), 0);
+      const df = (r) => v.reduce((s, x, i) => s - ((d[i] - d[0]) / 365) * x / Math.pow(1 + r, (d[i] - d[0]) / 365 + 1), 0);
+      let r = a[2] === undefined ? 0.1 : num(a[2]);
+      for (let k = 0; k < 100; k++) { const y = f(r), dy = df(r); if (!dy) break; const n2 = r - y / dy; if (Math.abs(n2 - r) < 1e-12) { r = n2; break; } r = n2 <= -1 ? (r - 1) / 2 : n2; }
+      if (Math.abs(f(r)) > 1e-6) throw E("#NUM!");
+      return r;
+    },
+    TIRM: (a) => { const v = nums([a[0]]), fr = num(a[1]), rr = num(a[2]), n = v.length; const vpN = v.reduce((s, x, i) => (x < 0 ? s + x / Math.pow(1 + fr, i) : s), 0), vfP = v.reduce((s, x, i) => (x > 0 ? s + x * Math.pow(1 + rr, n - 1 - i) : s), 0); if (vpN === 0 || vfP === 0) throw E("#DIV/0!"); return Math.pow(-vfP / vpN, 1 / (n - 1)) - 1; },
+    "P.DURACION": (a) => { const r = num(a[0]), va = num(a[1]), vf = num(a[2]); if (r <= 0 || va <= 0 || vf <= 0) throw E("#NUM!"); return (Math.log(vf) - Math.log(va)) / Math.log(1 + r); },
+    RRI: (a) => { const n = num(a[0]), va = num(a[1]), vf = num(a[2]); if (n <= 0 || va === 0) throw E("#NUM!"); return Math.pow(vf / va, 1 / n) - 1; },
+    "VF.PLAN": (a) => plano([a[1]]).reduce((s, t) => s * (1 + num(t)), num(a[0])),
+    "INT.PAGO.DIR": (a) => { const r = num(a[0]), p = num(a[1]), n = num(a[2]), va = num(a[3]); return -va * r * (1 - p / n); },
+    "MONEDA.DEC": (a) => { const x = num(a[0]), f = Math.floor(num(a[1])); if (f < 0) throw E("#NUM!"); if (f === 0) throw E("#DIV/0!"); const e = Math.trunc(x), dig = Math.pow(10, Math.ceil(Math.log10(f))); return e + ((x - e) * dig) / f; },
+    "MONEDA.FRAC": (a) => { const x = num(a[0]), f = Math.floor(num(a[1])); if (f < 0) throw E("#NUM!"); if (f === 0) throw E("#DIV/0!"); const e = Math.trunc(x), dig = Math.pow(10, Math.ceil(Math.log10(f))); return e + ((x - e) * f) / dig; },
+    // ingeniería
+    "BIN.A.HEX": (a) => aBase(deBase(a[0], 2), 16, a[1]),
+    "BIN.A.OCT": (a) => aBase(deBase(a[0], 2), 8, a[1]),
+    "HEX.A.BIN": (a) => { const n = deBase(a[0], 16); if (n < -512 || n > 511) throw E("#NUM!"); return aBase(n, 2, a[1]); },
+    "HEX.A.OCT": (a) => aBase(deBase(a[0], 16), 8, a[1]),
+    "OCT.A.BIN": (a) => { const n = deBase(a[0], 8); if (n < -512 || n > 511) throw E("#NUM!"); return aBase(n, 2, a[1]); },
+    "OCT.A.HEX": (a) => aBase(deBase(a[0], 8), 16, a[1]),
+    "BIT.Y": (a) => { const x = num(a[0]), y = num(a[1]); if (x < 0 || y < 0 || x >= 2 ** 48 || y >= 2 ** 48 || x % 1 || y % 1) throw E("#NUM!"); return Number(BigInt(x) & BigInt(y)); },
+    "BIT.O": (a) => { const x = num(a[0]), y = num(a[1]); if (x < 0 || y < 0 || x >= 2 ** 48 || y >= 2 ** 48 || x % 1 || y % 1) throw E("#NUM!"); return Number(BigInt(x) | BigInt(y)); },
+    "BIT.XO": (a) => { const x = num(a[0]), y = num(a[1]); if (x < 0 || y < 0 || x >= 2 ** 48 || y >= 2 ** 48 || x % 1 || y % 1) throw E("#NUM!"); return Number(BigInt(x) ^ BigInt(y)); },
+    "BIT.DESPLIZQDA": (a) => { const x = num(a[0]), k = Math.trunc(num(a[1])); if (x < 0 || x >= 2 ** 48 || x % 1 || Math.abs(k) > 53) throw E("#NUM!"); const r = k >= 0 ? x * 2 ** k : Math.floor(x / 2 ** -k); if (r >= 2 ** 48) throw E("#NUM!"); return r; },
+    "BIT.DESPLDCHA": (a) => { const x = num(a[0]), k = Math.trunc(num(a[1])); if (x < 0 || x >= 2 ** 48 || x % 1 || Math.abs(k) > 53) throw E("#NUM!"); const r = k >= 0 ? Math.floor(x / 2 ** k) : x * 2 ** -k; if (r >= 2 ** 48) throw E("#NUM!"); return r; },
+    DELTA: (a) => (num(a[0]) === (a[1] === undefined ? 0 : num(a[1])) ? 1 : 0),
+    "MAYOR.O.IGUAL": (a) => (num(a[0]) >= (a[1] === undefined ? 0 : num(a[1])) ? 1 : 0),
+  });
+  // compatibilidad (los nombres viejos de Excel 2007)
+  Object.assign(FUNCS, {
+    "DISTR.NORM": (a) => FUNCS["DISTR.NORM.N"](a), "DISTR.NORM.ESTAND": (a) => normS(num(a[0])), "DISTR.NORM.INV": (a) => FUNCS["INV.NORM"](a),
+    "DISTR.NORM.ESTAND.INV": (a) => FUNCS["INV.NORM.ESTAND"](a), "DISTR.EXP": (a) => FUNCS["DISTR.EXP.N"](a), "DISTR.BINOM": (a) => FUNCS["DISTR.BINOM.N"](a),
+    POISSON: (a) => FUNCS["POISSON.DIST"](a), "DISTR.CHI": (a) => FUNCS["DISTR.CHICUAD.CD"](a), "PRUEBA.CHI.INV": (a) => FUNCS["INV.CHICUAD.CD"](a),
+    "DISTR.T": (a) => { const t = num(a[0]), v = Math.floor(num(a[1])), colas = Math.floor(num(a[2])); if (t < 0 || v < 1 || (colas !== 1 && colas !== 2)) throw E("#NUM!"); const u = 1 - tCdf(t, v); return colas === 1 ? u : 2 * u; },
+    "DISTR.T.INV": (a) => FUNCS["INV.T.2C"](a), "DISTR.F": (a) => FUNCS["DISTR.F.CD"](a), "DISTR.F.INV": (a) => FUNCS["INV.F.CD"](a),
+    "INTERVALO.CONFIANZA": (a) => FUNCS["INTERVALO.CONFIANZA.NORM"](a), "DISTR.GAMMA": (a) => FUNCS["DISTR.GAMMA.N"](a), "DISTR.GAMMA.INV": (a) => FUNCS["INV.GAMMA"](a),
+    "DISTR.BETA": (a) => FUNCS["DISTR.BETA.N"]([a[0], a[1], a[2], true, a[3], a[4]]), "DISTR.BETA.INV": (a) => FUNCS["INV.BETA.N"](a),
+  });
+  Object.assign(ALIAS, {
+    ACOSH: "ACOSH", ASINH: "ASENOH", ATANH: "ATANH", ACOT: "ACOT", ACOTH: "ACOTH", COT: "COT", COTH: "COTH", CSC: "CSC", CSCH: "CSCH", SEC: "SEC", SECH: "SECH",
+    "CEILING.PRECISE": "MULTIPLO.SUPERIOR.EXACTO", "FLOOR.PRECISE": "MULTIPLO.INFERIOR.EXACTO", "ISO.CEILING": "MULTIPLO.SUPERIOR.ISO", COMBINA: "COMBINA", PERMUTATIONA: "PERMUTACIONES.A",
+    FACTDOUBLE: "FACT.DOBLE", MULTINOMIAL: "MULTINOMIAL", SERIESSUM: "SUMA.SERIES", SQRTPI: "RAIZ2PI", SUMX2MY2: "SUMAX2MENOSY2", SUMX2PY2: "SUMAX2MASY2", SUMXMY2: "SUMAXMENOSY2",
+    "NETWORKDAYS.INTL": "DIAS.LAB.INTL", "WORKDAY.INTL": "DIA.LAB.INTL", YEARFRAC: "FRAC.AÑO", "DÍAS.LAB.INTL": "DIAS.LAB.INTL", "DÍA.LAB.INTL": "DIA.LAB.INTL",
+    DEVSQ: "DESVIA2", KURT: "CURTOSIS", SKEW: "COEFICIENTE.ASIMETRIA", "SKEW.P": "COEFICIENTE.ASIMETRIA.P", TRIMMEAN: "MEDIA.ACOTADA", STANDARDIZE: "NORMALIZACION", "NORMALIZACIÓN": "NORMALIZACION",
+    FISHER: "FISHER", FISHERINV: "PRUEBA.FISHER.INV", PHI: "FI", GAUSS: "GAUSS", GAMMA: "GAMMA", GAMMALN: "GAMMA.LN", "GAMMALN.PRECISE": "GAMMA.LN.EXACTO",
+    ERF: "FUN.ERROR", "ERF.PRECISE": "FUN.ERROR.EXACTO", ERFC: "FUN.ERROR.COMPL", "ERFC.PRECISE": "FUN.ERROR.COMPL.EXACTO",
+    "NORM.DIST": "DISTR.NORM.N", "NORM.S.DIST": "DISTR.NORM.ESTAND.N", "NORM.INV": "INV.NORM", "NORM.S.INV": "INV.NORM.ESTAND", "EXPON.DIST": "DISTR.EXP.N", "BINOM.DIST": "DISTR.BINOM.N",
+    "POISSON.DIST": "POISSON.DIST", "GAMMA.DIST": "DISTR.GAMMA.N", "GAMMA.INV": "INV.GAMMA", "CHISQ.DIST": "DISTR.CHICUAD", "CHISQ.DIST.RT": "DISTR.CHICUAD.CD", "CHISQ.INV": "INV.CHICUAD",
+    "CHISQ.INV.RT": "INV.CHICUAD.CD", "T.DIST": "DISTR.T.N", "T.DIST.2T": "DISTR.T.2C", "T.DIST.RT": "DISTR.T.CD", "T.INV": "INV.T", "T.INV.2T": "INV.T.2C",
+    "F.DIST": "DISTR.F.N", "F.DIST.RT": "DISTR.F.CD", "F.INV": "INV.F", "F.INV.RT": "INV.F.CD", "BETA.DIST": "DISTR.BETA.N", "BETA.INV": "INV.BETA.N",
+    "CONFIDENCE.NORM": "INTERVALO.CONFIANZA.NORM", "CONFIDENCE.T": "INTERVALO.CONFIANZA.T", "PERCENTILE.EXC": "PERCENTIL.EXC", "QUARTILE.EXC": "CUARTIL.EXC",
+    DSUM: "BDSUMA", DAVERAGE: "BDPROMEDIO", DCOUNT: "BDCONTAR", DCOUNTA: "BDCONTARA", DMAX: "BDMAX", DMIN: "BDMIN", DPRODUCT: "BDPRODUCTO", DGET: "BDEXTRAER",
+    DSTDEV: "BDDESVEST", DSTDEVP: "BDDESVESTP", DVAR: "BDVAR", DVARP: "BDVARP",
+    SYD: "SYD", DDB: "DDB", DB: "DB", VDB: "DVS", XNPV: "VNA.NO.PER", XIRR: "TIR.NO.PER", MIRR: "TIRM", PDURATION: "P.DURACION", "P.DURACIÓN": "P.DURACION", RRI: "RRI",
+    FVSCHEDULE: "VF.PLAN", ISPMT: "INT.PAGO.DIR", DOLLARDE: "MONEDA.DEC", DOLLARFR: "MONEDA.FRAC",
+    BIN2HEX: "BIN.A.HEX", BIN2OCT: "BIN.A.OCT", HEX2BIN: "HEX.A.BIN", HEX2OCT: "HEX.A.OCT", OCT2BIN: "OCT.A.BIN", OCT2HEX: "OCT.A.HEX",
+    BITAND: "BIT.Y", BITOR: "BIT.O", BITXOR: "BIT.XO", BITLSHIFT: "BIT.DESPLIZQDA", BITRSHIFT: "BIT.DESPLDCHA", DELTA: "DELTA", GESTEP: "MAYOR.O.IGUAL",
+    NORMDIST: "DISTR.NORM", NORMSDIST: "DISTR.NORM.ESTAND", NORMINV: "DISTR.NORM.INV", NORMSINV: "DISTR.NORM.ESTAND.INV", EXPONDIST: "DISTR.EXP", BINOMDIST: "DISTR.BINOM",
+    CHIDIST: "DISTR.CHI", CHIINV: "PRUEBA.CHI.INV", TDIST: "DISTR.T", TINV: "DISTR.T.INV", FDIST: "DISTR.F", FINV: "DISTR.F.INV", CONFIDENCE: "INTERVALO.CONFIANZA",
+    GAMMADIST: "DISTR.GAMMA", GAMMAINV: "DISTR.GAMMA.INV", BETADIST: "DISTR.BETA", BETAINV: "DISTR.BETA.INV",
+  });
+  // ================================================================== lote 2 (18-nov-2026): lo que faltaba de Excel 2024
+  const ERR_EN = { "#VALOR!": "#VALUE!", "#NOMBRE?": "#NAME?", "#NULO!": "#NULL!", "#¡VALOR!": "#VALUE!", "#¿NOMBRE?": "#NAME?" };
+  /** Un valor como texto, como lo escribe Excel en inglés (VALORATEXTO, MATRIZATEXTO): número general, TRUE/FALSE. */
+  const textoIngles = (v) => (v == null || v === "" ? "" : v instanceof ErrorF ? ERR_EN[v.codigo] || v.codigo : typeof v === "boolean" ? (v ? "TRUE" : "FALSE") : v instanceof FechaF ? numComplejo(+v) : typeof v === "number" ? numComplejo(v) : String(v));
+  // ---- números complejos («a+bi» o con j), como Excel: hasta 15 cifras
+  function leerComplejo(v) {
+    if (typeof v === "number") return { re: v, im: 0, suf: "i" };
+    if (typeof v === "boolean") throw E("#VALOR!");
+    const t = texto(v).trim();
+    if (t === "") return { re: 0, im: 0, suf: "i" };
+    const n = /^[+-]?(\d+\.?\d*|\.\d+)(E[+-]?\d+)?$/i;
+    if (n.test(t)) return { re: parseFloat(t), im: 0, suf: "i" };
+    const m = /^([+-]?(?:\d+\.?\d*|\.\d+)(?:E[+-]?\d+)?)?([+-](?:\d+\.?\d*|\.\d+)?(?:E[+-]?\d+)?)?([ij])$/i.exec(t);
+    if (!m || (!m[1] && !m[2] && !m[3])) throw E("#NUM!");
+    let re = 0, im;
+    if (m[1] !== undefined && m[2] !== undefined) { re = parseFloat(m[1]); im = m[2] === "+" ? 1 : m[2] === "-" ? -1 : parseFloat(m[2]); }
+    else if (m[1] !== undefined) { im = parseFloat(m[1]); }   // «4i»
+    else if (m[2] !== undefined) { im = m[2] === "+" ? 1 : m[2] === "-" ? -1 : parseFloat(m[2]); }
+    else im = 1;   // «i»
+    if (!Number.isFinite(re) || !Number.isFinite(im)) throw E("#NUM!");
+    return { re, im, suf: m[3] };
+  }
+  /** Un número como lo escribe Excel en un complejo (general, 15 cifras). */
+  function numComplejo(x) {
+    if (x === 0) return "0";
+    let t = Number(x.toPrecision(15)).toString();
+    if (/e/.test(t)) { const [b, e] = t.split("e"); t = b + "E" + (+e < 0 ? "-" : "+") + String(Math.abs(+e)).padStart(2, "0"); }
+    return t;
+  }
+  function escribirComplejo(re, im, suf) {
+    suf = suf || "i";
+    const r = Math.abs(re) < 1e-300 ? 0 : re, i = Math.abs(im) < 1e-300 ? 0 : im;
+    if (i === 0) return numComplejo(r);
+    const ti = i === 1 ? "" : i === -1 ? "-" : numComplejo(i);
+    if (r === 0) return ti + suf;
+    return numComplejo(r) + (i > 0 ? "+" : "") + ti + suf;
+  }
+  const sufijoDe = (...cs) => { const s = cs.map((c) => c.suf).filter((x) => x); if (s.some((x) => x !== s[0]) && cs.filter((c) => c.im !== 0).length > 1) throw E("#VALOR!"); return s.find((x, k) => cs[k].im !== 0) || "i"; };
+  const C = (re, im, suf) => escribirComplejo(re, im, suf);
+  const cMul = (a, b) => ({ re: a.re * b.re - a.im * b.im, im: a.re * b.im + a.im * b.re });
+  const cDiv = (a, b) => { const d = b.re * b.re + b.im * b.im; if (d === 0) throw E("#NUM!"); return { re: (a.re * b.re + a.im * b.im) / d, im: (a.im * b.re - a.re * b.im) / d }; };
+  const cExp = (a) => ({ re: Math.exp(a.re) * Math.cos(a.im), im: Math.exp(a.re) * Math.sin(a.im) });
+  const cLn = (a) => { if (a.re === 0 && a.im === 0) throw E("#NUM!"); return { re: Math.log(Math.hypot(a.re, a.im)), im: Math.atan2(a.im, a.re) }; };
+  const cSin = (a) => ({ re: Math.sin(a.re) * Math.cosh(a.im), im: Math.cos(a.re) * Math.sinh(a.im) });
+  const cCos = (a) => ({ re: Math.cos(a.re) * Math.cosh(a.im), im: -Math.sin(a.re) * Math.sinh(a.im) });
+  const cSinh = (a) => ({ re: Math.sinh(a.re) * Math.cos(a.im), im: Math.cosh(a.re) * Math.sin(a.im) });
+  const cCosh = (a) => ({ re: Math.cosh(a.re) * Math.cos(a.im), im: Math.sinh(a.re) * Math.sin(a.im) });
+  const uno = { re: 1, im: 0 };
+  const im1 = (f) => (a) => { const c = leerComplejo(a[0]), r = f(c); return C(r.re, r.im, c.suf); };
+  const listaComplejos = (a) => plano(a).filter((v) => v !== "" && v != null).map(leerComplejo);
+  // ---- Bessel (las aproximaciones polinomiales clásicas)
+  function besselJ0(x) {
+    const ax = Math.abs(x);
+    if (ax < 8) { const y = x * x; return (57568490574.0 + y * (-13362590354.0 + y * (651619640.7 + y * (-11214424.18 + y * (77392.33017 + y * -184.9052456))))) / (57568490411.0 + y * (1029532985.0 + y * (9494680.718 + y * (59272.64853 + y * (267.8532712 + y))))); }
+    const z = 8 / ax, y = z * z, xx = ax - 0.785398164;
+    return Math.sqrt(0.636619772 / ax) * (Math.cos(xx) * (1 + y * (-0.1098628627e-2 + y * (0.2734510407e-4 + y * (-0.2073370639e-5 + y * 0.2093887211e-6)))) - z * Math.sin(xx) * (-0.1562499995e-1 + y * (0.1430488765e-3 + y * (-0.6911147651e-5 + y * (0.7621095161e-6 - y * 0.934935152e-7)))));
+  }
+  function besselJ1(x) {
+    const ax = Math.abs(x);
+    if (ax < 8) { const y = x * x; return (x * (72362614232.0 + y * (-7895059235.0 + y * (242396853.1 + y * (-2972611.439 + y * (15704.48260 + y * -30.16036606)))))) / (144725228442.0 + y * (2300535178.0 + y * (18583304.74 + y * (99447.43394 + y * (376.9991397 + y))))); }
+    const z = 8 / ax, y = z * z, xx = ax - 2.356194491;
+    const r = Math.sqrt(0.636619772 / ax) * (Math.cos(xx) * (1 + y * (0.183105e-2 + y * (-0.3516396496e-4 + y * (0.2457520174e-5 + y * -0.240337019e-6)))) - z * Math.sin(xx) * (0.04687499995 + y * (-0.2002690873e-3 + y * (0.8449199096e-5 + y * (-0.88228987e-6 + y * 0.105787412e-6)))));
+    return x < 0 ? -r : r;
+  }
+  function besselJ(x, n) {
+    if (n === 0) return besselJ0(x); if (n === 1) return besselJ1(x);
+    const ax = Math.abs(x); if (ax === 0) return 0;
+    let ans;
+    if (ax > n) { const tox = 2 / ax; let bjm = besselJ0(ax), bj = besselJ1(ax); for (let j = 1; j < n; j++) { const bjp = j * tox * bj - bjm; bjm = bj; bj = bjp; } ans = bj; }
+    else {
+      const tox = 2 / ax, m = 2 * Math.floor((n + Math.floor(Math.sqrt(40 * n))) / 2);
+      let jsum = false, bjp = 0, sum = 0, bj = 1; ans = 0;
+      for (let j = m; j > 0; j--) { const bjm = j * tox * bj - bjp; bjp = bj; bj = bjm; if (Math.abs(bj) > 1e10) { bj *= 1e-10; bjp *= 1e-10; ans *= 1e-10; sum *= 1e-10; } if (jsum) sum += bj; jsum = !jsum; if (j === n) ans = bjp; }
+      sum = 2 * sum - bj; ans /= sum;
+    }
+    return x < 0 && n & 1 ? -ans : ans;
+  }
+  function besselY0(x) {
+    if (x < 8) { const y = x * x; return (-2957821389.0 + y * (7062834065.0 + y * (-512359803.6 + y * (10879881.29 + y * (-86327.92757 + y * 228.4622733))))) / (40076544269.0 + y * (745249964.8 + y * (7189466.438 + y * (47447.26470 + y * (226.1030244 + y))))) + 0.636619772 * besselJ0(x) * Math.log(x); }
+    const z = 8 / x, y = z * z, xx = x - 0.785398164;
+    return Math.sqrt(0.636619772 / x) * (Math.sin(xx) * (1 + y * (-0.1098628627e-2 + y * (0.2734510407e-4 + y * (-0.2073370639e-5 + y * 0.2093887211e-6)))) + z * Math.cos(xx) * (-0.1562499995e-1 + y * (0.1430488765e-3 + y * (-0.6911147651e-5 + y * (0.7621095161e-6 + y * -0.934945152e-7)))));
+  }
+  function besselY1(x) {
+    if (x < 8) { const y = x * x; return (x * (-0.4900604943e13 + y * (0.1275274390e13 + y * (-0.5153438139e11 + y * (0.7349264551e9 + y * (-0.4237922726e7 + y * 0.8511937935e4)))))) / (0.2499580570e14 + y * (0.4244419664e12 + y * (0.3733650367e10 + y * (0.2245904002e8 + y * (0.1020426050e6 + y * (0.3549632885e3 + y)))))) + 0.636619772 * (besselJ1(x) * Math.log(x) - 1 / x); }
+    const z = 8 / x, y = z * z, xx = x - 2.356194491;
+    return Math.sqrt(0.636619772 / x) * (Math.sin(xx) * (1 + y * (0.183105e-2 + y * (-0.3516396496e-4 + y * (0.2457520174e-5 + y * -0.240337019e-6)))) + z * Math.cos(xx) * (0.04687499995 + y * (-0.2002690873e-3 + y * (0.8449199096e-5 + y * (-0.88228987e-6 + y * 0.105787412e-6)))));
+  }
+  function besselY(x, n) { if (n === 0) return besselY0(x); if (n === 1) return besselY1(x); const tox = 2 / x; let by = besselY1(x), bym = besselY0(x); for (let j = 1; j < n; j++) { const byp = j * tox * by - bym; bym = by; by = byp; } return by; }
+  function besselI0(x) { const ax = Math.abs(x); if (ax < 3.75) { const y = (x / 3.75) ** 2; return 1 + y * (3.5156229 + y * (3.0899424 + y * (1.2067492 + y * (0.2659732 + y * (0.360768e-1 + y * 0.45813e-2))))); } const y = 3.75 / ax; return (Math.exp(ax) / Math.sqrt(ax)) * (0.39894228 + y * (0.1328592e-1 + y * (0.225319e-2 + y * (-0.157565e-2 + y * (0.916281e-2 + y * (-0.2057706e-1 + y * (0.2635537e-1 + y * (-0.1647633e-1 + y * 0.392377e-2)))))))); }
+  function besselI1(x) { const ax = Math.abs(x); let ans; if (ax < 3.75) { const y = (x / 3.75) ** 2; ans = ax * (0.5 + y * (0.87890594 + y * (0.51498869 + y * (0.15084934 + y * (0.2658733e-1 + y * (0.301532e-2 + y * 0.32411e-3)))))); } else { const y = 3.75 / ax; ans = 0.2282967e-1 + y * (-0.2895312e-1 + y * (0.1787654e-1 - y * 0.420059e-2)); ans = 0.39894228 + y * (-0.3988024e-1 + y * (-0.362018e-2 + y * (0.163801e-2 + y * (-0.1031555e-1 + y * ans)))); ans *= Math.exp(ax) / Math.sqrt(ax); } return x < 0 ? -ans : ans; }
+  function besselI(x, n) {
+    if (n === 0) return besselI0(x); if (n === 1) return besselI1(x); if (x === 0) return 0;
+    const tox = 2 / Math.abs(x); let bip = 0, bi = 1, ans = 0;
+    for (let j = 2 * (n + Math.floor(Math.sqrt(40 * n))); j > 0; j--) { const bim = bip + j * tox * bi; bip = bi; bi = bim; if (Math.abs(bi) > 1e10) { ans *= 1e-10; bi *= 1e-10; bip *= 1e-10; } if (j === n) ans = bip; }
+    ans *= besselI0(x) / bi;
+    return x < 0 && n & 1 ? -ans : ans;
+  }
+  function besselK0(x) { if (x <= 2) { const y = (x * x) / 4; return -Math.log(x / 2) * besselI0(x) + (-0.57721566 + y * (0.42278420 + y * (0.23069756 + y * (0.3488590e-1 + y * (0.262698e-2 + y * (0.10750e-3 + y * 0.74e-5)))))); } const y = 2 / x; return (Math.exp(-x) / Math.sqrt(x)) * (1.25331414 + y * (-0.7832358e-1 + y * (0.2189568e-1 + y * (-0.1062446e-1 + y * (0.587872e-2 + y * (-0.251540e-2 + y * 0.53208e-3)))))); }
+  function besselK1(x) { if (x <= 2) { const y = (x * x) / 4; return Math.log(x / 2) * besselI1(x) + (1 / x) * (1 + y * (0.15443144 + y * (-0.67278579 + y * (-0.18156897 + y * (-0.1919402e-1 + y * (-0.110404e-2 + y * -0.4686e-4)))))); } const y = 2 / x; return (Math.exp(-x) / Math.sqrt(x)) * (1.25331414 + y * (0.23498619 + y * (-0.3655620e-1 + y * (0.1504268e-1 + y * (-0.780353e-2 + y * (0.325614e-2 + y * -0.68245e-3)))))); }
+  function besselK(x, n) { if (n === 0) return besselK0(x); if (n === 1) return besselK1(x); const tox = 2 / x; let bkm = besselK0(x), bk = besselK1(x); for (let j = 1; j < n; j++) { const bkp = bkm + j * tox * bk; bkm = bk; bk = bkp; } return bk; }
+  const ordenBessel = (v) => { const n = Math.trunc(num(v)); if (n < 0) throw E("#NUM!"); return n; };
+  // ---- regresión lineal múltiple (ESTIMACION.LINEAL): mínimos cuadrados con la estadística de Excel
+  function regresion(ys, xs, conCte) {
+    // ys: n valores; xs: n filas de k variables
+    const n = ys.length, k = xs[0] ? xs[0].length : 0, p = k + (conCte ? 1 : 0);
+    const X = xs.map((f) => (conCte ? f.concat([1]) : f.slice()));
+    // ecuaciones normales con eliminación de Gauss-Jordan (pivote parcial)
+    const A = Array.from({ length: p }, (_, i) => Array.from({ length: p + 1 }, (_, j) => (j < p ? X.reduce((s, f) => s + f[i] * f[j], 0) : X.reduce((s, f, r) => s + f[i] * ys[r], 0))));
+    for (let c = 0; c < p; c++) {
+      let mx = c; for (let r = c + 1; r < p; r++) if (Math.abs(A[r][c]) > Math.abs(A[mx][c])) mx = r;
+      [A[c], A[mx]] = [A[mx], A[c]];
+      if (Math.abs(A[c][c]) < 1e-300) throw E("#NUM!");
+      for (let r = 0; r < p; r++) if (r !== c) { const f = A[r][c] / A[c][c]; for (let j = c; j <= p; j++) A[r][j] -= f * A[c][j]; }
+    }
+    const beta = A.map((f, i) => f[p] / f[i]);
+    // la inversa de X'X (para los errores estándar)
+    const M = Array.from({ length: p }, (_, i) => Array.from({ length: 2 * p }, (_, j) => (j < p ? X.reduce((s, f) => s + f[i] * f[j], 0) : j - p === i ? 1 : 0)));
+    for (let c = 0; c < p; c++) {
+      let mx = c; for (let r = c + 1; r < p; r++) if (Math.abs(M[r][c]) > Math.abs(M[mx][c])) mx = r;
+      [M[c], M[mx]] = [M[mx], M[c]];
+      const d = M[c][c]; for (let j = 0; j < 2 * p; j++) M[c][j] /= d;
+      for (let r = 0; r < p; r++) if (r !== c) { const f = M[r][c]; for (let j = 0; j < 2 * p; j++) M[r][j] -= f * M[c][j]; }
+    }
+    const inv = M.map((f) => f.slice(p));
+    const pred = X.map((f) => f.reduce((s, v, j) => s + v * beta[j], 0));
+    const ssres = ys.reduce((s, y, i) => s + (y - pred[i]) ** 2, 0);
+    const my = conCte ? media(ys) : 0;
+    const sstot = ys.reduce((s, y) => s + (y - my) ** 2, 0);
+    const df = n - p;
+    const se2 = df > 0 ? ssres / df : 0;
+    return { beta, se: inv.map((f, i) => Math.sqrt(Math.max(0, se2 * f[i]))), r2: sstot ? 1 - ssres / sstot : 1, sey: Math.sqrt(se2), F: df > 0 && p - (conCte ? 1 : 0) > 0 ? ((sstot - ssres) / (p - (conCte ? 1 : 0))) / se2 : E("#NUM!"), df, ssreg: sstot - ssres, ssres };
+  }
+  function datosRegresion(a, logY) {
+    const ty = tabla(a[0]), ys = plano([a[0]]).map(num);
+    if (logY && ys.some((y) => y <= 0)) throw E("#NUM!");
+    const yv = logY ? ys.map(Math.log) : ys;
+    let xs;
+    if (a[1] === undefined || a[1] === "") xs = ys.map((_, i) => [i + 1]);
+    else {
+      const tx = tabla(a[1]);
+      const filasY = ty.length, colsY = (ty[0] || []).length;
+      if (colsY === 1 && tx.length === filasY) xs = tx.map((f) => f.map(num));
+      else if (filasY === 1 && (tx[0] || []).length === colsY) xs = (tx[0] || []).map((_, j) => tx.map((f) => num(f[j])));
+      else if (plano([a[1]]).length === ys.length) xs = plano([a[1]]).map((v) => [num(v)]);
+      else throw E("#REF!");
+    }
+    return { ys: yv, xs };
+  }
+  // ---- días entre fechas con la base de Excel (para los bonos)
+  function diasBase(i, f, base) {
+    if (base === 0 || base === 4) {
+      const di = fechaDe(i), df = fechaDe(f);
+      let d1 = di.getUTCDate(), d2 = df.getUTCDate();
+      const m1 = di.getUTCMonth() + 1, m2 = df.getUTCMonth() + 1, y1 = di.getUTCFullYear(), y2 = df.getUTCFullYear();
+      if (base === 0) {
+        const ultimoF = (y, m, d) => m === 2 && d === new Date(Date.UTC(y, 2, 0)).getUTCDate();
+        if (ultimoF(y1, m1, d1) && ultimoF(y2, m2, d2)) d2 = 30;
+        if (ultimoF(y1, m1, d1)) d1 = 30;
+        if (d2 === 31 && d1 >= 30) d2 = 30;
+        if (d1 === 31) d1 = 30;
+      } else { if (d1 === 31) d1 = 30; if (d2 === 31) d2 = 30; }
+      return (y2 - y1) * 360 + (m2 - m1) * 30 + (d2 - d1);
+    }
+    return f - i;
+  }
+  const anioBase = (base, y) => (base === 3 ? 365 : base === 1 ? ((y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 366 : 365) : 360);
+  /** Fechas de cupón: la anterior y la siguiente a la liquidación (contando hacia atrás desde el vencimiento). */
+  function cupones(liq, venc, frec) {
+    const v = fechaDe(venc), meses = 12 / frec, fin = v.getUTCDate() === new Date(Date.UTC(v.getUTCFullYear(), v.getUTCMonth() + 1, 0)).getUTCDate();
+    const fecha = (k) => {   // k cupones antes del vencimiento
+      const tm = v.getUTCFullYear() * 12 + v.getUTCMonth() - k * meses, y = Math.floor(tm / 12), m = tm - y * 12;
+      const ult = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+      const d = fin ? ult : Math.min(v.getUTCDate(), ult);
+      return Math.round((Date.UTC(y, m, d) - BASE) / DIA);
+    };
+    let k = 0;
+    while (fecha(k) > liq) k++;
+    return { pcd: fecha(k), ncd: fecha(k - 1), num: k };
+  }
+  function cuponValidar(a, conFrec) {
+    const liq = entero(a[0]), venc = entero(a[1]);
+    const frec = conFrec ? Math.floor(num(a[2])) : 0, base = a[conFrec ? 3 : 2] === undefined ? 0 : Math.floor(num(a[conFrec ? 3 : 2]));
+    if (liq >= venc || (conFrec && ![1, 2, 4].includes(frec)) || base < 0 || base > 4) throw E("#NUM!");
+    return { liq, venc, frec, base };
+  }
+  const cupDias = (c, frec, base) => (base === 1 ? c.ncd - c.pcd : base === 3 ? 365 / frec : 360 / frec);
+  const cupDiasBS = (c, liq, base) => diasBase(c.pcd, liq, base);
+  const cupDiasNC = (c, liq, frec, base) => (base === 0 ? cupDias(c, frec, base) - cupDiasBS(c, liq, base) : base === 4 ? diasBase(liq, c.ncd, 4) : c.ncd - liq);
+  function precioBono(liq, venc, tasa, rend, red, frec, base) {
+    const c = cupones(liq, venc, frec), E2 = cupDias(c, frec, base), A = cupDiasBS(c, liq, base), DSC = cupDiasNC(c, liq, frec, base), N = c.num;
+    const cup = (100 * tasa) / frec, r = rend / frec;
+    if (N === 1) return (red + cup) / (1 + (DSC / E2) * r) - (cup * A) / E2;
+    let p = red / Math.pow(1 + r, N - 1 + DSC / E2);
+    for (let k = 1; k <= N; k++) p += cup / Math.pow(1 + r, k - 1 + DSC / E2);
+    return p - (cup * A) / E2;
+  }
+  function duracionBono(liq, venc, tasa, rend, frec, base) {
+    const c = cupones(liq, venc, frec), E2 = cupDias(c, frec, base), DSC = cupDiasNC(c, liq, frec, base), N = c.num;
+    const cup = (100 * tasa) / frec, r = rend / frec;
+    let pv = 0, t = 0;
+    for (let k = 1; k <= N; k++) { const tk = k - 1 + DSC / E2, flujo = cup + (k === N ? 100 : 0), d = flujo / Math.pow(1 + r, tk); pv += d; t += tk * d; }
+    return t / pv / frec;
+  }
+  Object.assign(FUNCS, {
+    // búsqueda
+    BUSCAR: (a) => {
+      const vec = a[1], x = a[0];
+      let busca, devuelve;
+      const t = tabla(vec);
+      if (a[2] !== undefined) { busca = plano([vec]); devuelve = plano([a[2]]); }
+      else if ((t[0] || []).length > t.length) { busca = t[0]; devuelve = t[t.length - 1]; }
+      else { busca = t.map((f) => f[0]); devuelve = t.map((f) => f[f.length - 1]); }
+      const num0 = esNum(x), cmp = (v) => (num0 ? (esNum(v) ? (+v < +x ? -1 : +v > +x ? 1 : 0) : null) : esNum(v) || typeof v === "boolean" ? null : texto(v).toLowerCase().localeCompare(texto(x).toLowerCase()));
+      // búsqueda binaria como Excel (supone el vector ordenado): el último que no pasa de x
+      let lo = 0, hi = busca.length - 1, res = -1;
+      while (lo <= hi) { const m = (lo + hi) >> 1, c = cmp(busca[m]); if (c === null) { let j = m - 1; while (j >= lo && cmp(busca[j]) === null) j--; if (j < lo) { lo = m + 1; continue; } const c2 = cmp(busca[j]); if (c2 <= 0) { res = j; lo = m + 1; } else hi = j - 1; continue; } if (c <= 0) { res = m; lo = m + 1; } else hi = m - 1; }
+      if (res < 0) return E("#N/A");
+      return devuelve[Math.min(res, devuelve.length - 1)];
+    },
+    // texto
+    "VALOR.NUMERO": (a) => {
+      let t = texto(a[0]).replace(/\s+/g, "");
+      const dec = a[1] === undefined ? "." : texto(a[1])[0], grp = a[2] === undefined ? "," : texto(a[2])[0];
+      if (t === "") return 0;
+      let pct = 0; while (t.endsWith("%")) { pct++; t = t.slice(0, -1); }
+      const i = t.indexOf(dec);
+      if (i >= 0 && t.indexOf(dec, i + 1) >= 0) throw E("#VALOR!");
+      let ent = i >= 0 ? t.slice(0, i) : t, fr = i >= 0 ? t.slice(i + 1) : "";
+      if (grp && fr.includes(grp)) throw E("#VALOR!");
+      ent = ent.split(grp).join("");
+      const s = ent + (fr ? "." + fr : "");
+      if (!/^[+-]?(\d+\.?\d*|\.\d+)(E[+-]?\d+)?$/i.test(s)) throw E("#VALOR!");
+      return parseFloat(s) / Math.pow(100, pct);
+    },
+    VALORATEXTO: (a) => { const v = a[0], f = a[1] === undefined ? 0 : Math.floor(num(a[1])); if (f !== 0 && f !== 1) throw E("#VALOR!"); if (v instanceof ErrorF) return ERR_EN[v.codigo] || v.codigo; return f === 1 && typeof v === "string" ? '"' + v.replace(/"/g, '""') + '"' : textoIngles(v); },
+    MATRIZATEXTO: (a) => {
+      const t = tabla(a[0]), f = a[1] === undefined ? 0 : Math.floor(num(a[1]));
+      if (f !== 0 && f !== 1) throw E("#VALOR!");
+      const val = (v) => (v instanceof ErrorF ? ERR_EN[v.codigo] || v.codigo : f === 1 && typeof v === "string" ? '"' + v.replace(/"/g, '""') + '"' : textoIngles(v));
+      if (f === 0) return t.flat().map(val).join(", ");
+      return "{" + t.map((r) => r.map(val).join(",")).join(";") + "}";
+    },
+    URLCODIF: (a) => Array.from(new TextEncoder().encode(texto(a[0]))).map((b) => (/[A-Za-z0-9\-_.~]/.test(String.fromCharCode(b)) && b < 128 ? String.fromCharCode(b) : "%" + b.toString(16).toUpperCase().padStart(2, "0"))).join(""),
+    // (Excel solo convierte el ancho de las letras si el idioma de edición es de doble byte —japonés, chino, coreano—;
+    // en español o inglés devuelve el texto igual)
+    ASC: (a) => texto(a[0]),
+    DBCS: (a) => texto(a[0]),
+    // complejos
+    COMPLEJO: (a) => { const s = a[2] === undefined || a[2] === "" ? "i" : texto(a[2]); if (s !== "i" && s !== "j") throw E("#VALOR!"); return C(num(a[0]), num(a[1]), s); },
+    IMAGINARIO: (a) => leerComplejo(a[0]).im,
+    "IM.REAL": (a) => leerComplejo(a[0]).re,
+    "IM.ABS": (a) => { const c = leerComplejo(a[0]); return Math.hypot(c.re, c.im); },
+    "IM.ANGULO": (a) => { const c = leerComplejo(a[0]); if (c.re === 0 && c.im === 0) throw E("#DIV/0!"); return Math.atan2(c.im, c.re); },
+    "IM.CONJUGADA": im1((c) => ({ re: c.re, im: -c.im })),
+    "IM.COS": im1(cCos), "IM.SENO": im1(cSin), "IM.COSH": im1(cCosh), "IM.SENOH": im1(cSinh),
+    // (tangente, cotangente y secante con las fórmulas del ángulo doble: así salen las mismas 15 cifras que en Excel)
+    "IM.TAN": im1((c) => { const d = Math.cos(2 * c.re) + Math.cosh(2 * c.im); if (d === 0) throw E("#NUM!"); return { re: Math.sin(2 * c.re) / d, im: Math.sinh(2 * c.im) / d }; }),
+    "IM.COT": im1((c) => { const d = Math.cosh(2 * c.im) - Math.cos(2 * c.re); if (d === 0) throw E("#NUM!"); return { re: Math.sin(2 * c.re) / d, im: -Math.sinh(2 * c.im) / d }; }),
+    "IM.SEC": im1((c) => { const d = Math.cos(2 * c.re) + Math.cosh(2 * c.im); if (d === 0) throw E("#NUM!"); return { re: (2 * Math.cos(c.re) * Math.cosh(c.im)) / d, im: (2 * Math.sin(c.re) * Math.sinh(c.im)) / d }; }), "IM.CSC": im1((c) => cDiv(uno, cSin(c))), "IM.SECH": im1((c) => cDiv(uno, cCosh(c))), "IM.CSCH": im1((c) => cDiv(uno, cSinh(c))),
+    "IM.EXP": im1(cExp), "IM.LN": im1(cLn),
+    "IM.LOG10": im1((c) => { const l = cLn(c); return { re: l.re / Math.LN10, im: l.im / Math.LN10 }; }),
+    "IM.LOG2": im1((c) => { const l = cLn(c); return { re: l.re / Math.LN2, im: l.im / Math.LN2 }; }),
+    "IM.RAIZ2": im1((c) => { const r = Math.sqrt(Math.hypot(c.re, c.im)), t = Math.atan2(c.im, c.re) / 2; return { re: r * Math.cos(t), im: r * Math.sin(t) }; }),
+    "IM.POT": (a) => { const c = leerComplejo(a[0]), n = num(a[1]); if (c.re === 0 && c.im === 0) { if (n <= 0) throw E("#NUM!"); return "0"; } const r = Math.pow(Math.hypot(c.re, c.im), n), t = Math.atan2(c.im, c.re) * n; return C(r * Math.cos(t), r * Math.sin(t), c.suf); },
+    "IM.DIV": (a) => { const x = leerComplejo(a[0]), y = leerComplejo(a[1]), s = sufijoDe(x, y); const r = cDiv(x, y); return C(r.re, r.im, s); },
+    "IM.SUSTR": (a) => { const x = leerComplejo(a[0]), y = leerComplejo(a[1]), s = sufijoDe(x, y); return C(x.re - y.re, x.im - y.im, s); },
+    "IM.SUM": (a) => { const l = listaComplejos(a), s = sufijoDe(...l); return C(l.reduce((t, c) => t + c.re, 0), l.reduce((t, c) => t + c.im, 0), s); },
+    "IM.PRODUCT": (a) => { const l = listaComplejos(a), s = sufijoDe(...l); const r = l.reduce((t, c) => cMul(t, c), uno); return C(r.re, r.im, s); },
+    // Bessel
+    BESSELJ: (a) => besselJ(num(a[0]), ordenBessel(a[1])),
+    BESSELY: (a) => { const x = num(a[0]); if (x <= 0) throw E("#NUM!"); return besselY(x, ordenBessel(a[1])); },
+    BESSELI: (a) => besselI(num(a[0]), ordenBessel(a[1])),
+    BESSELK: (a) => { const x = num(a[0]); if (x <= 0) throw E("#NUM!"); return besselK(x, ordenBessel(a[1])); },
+    // estadística
+    "DISTR.BINOM.SERIE": (a) => {
+      const n = Math.floor(num(a[0])), p = num(a[1]), s = Math.floor(num(a[2])), s2 = a[3] === undefined ? s : Math.floor(num(a[3]));
+      if (n < 0 || p < 0 || p > 1 || s < 0 || s > n || s2 < s || s2 > n) throw E("#NUM!");
+      let t = 0; for (let k = s; k <= s2; k++) t += Math.exp(lnGamma(n + 1) - lnGamma(k + 1) - lnGamma(n - k + 1) + (k ? k * Math.log(p) : 0) + (n - k ? (n - k) * Math.log(1 - p) : 0));
+      return t;
+    },
+    "INV.BINOM": (a) => {
+      const n = Math.floor(num(a[0])), p = num(a[1]), al = num(a[2]);
+      if (n < 0 || p < 0 || p > 1 || al < 0 || al > 1) throw E("#NUM!");
+      let s = 0; for (let k = 0; k <= n; k++) { s += Math.exp(lnGamma(n + 1) - lnGamma(k + 1) - lnGamma(n - k + 1) + (k ? k * Math.log(p) : 0) + (n - k ? (n - k) * Math.log(1 - p) : 0)); if (s >= al * (1 - 1e-15)) return k; }
+      return n;
+    },
+    "DISTR.HIPERGEOM.N": (a) => {
+      const k = Math.floor(num(a[0])), n = Math.floor(num(a[1])), K = Math.floor(num(a[2])), N = Math.floor(num(a[3]));
+      if (k < 0 || n <= 0 || K <= 0 || N <= 0 || n > N || K > N || k > n || k > K || n - k > N - K) throw E("#NUM!");
+      const lc = (x, y) => lnGamma(x + 1) - lnGamma(y + 1) - lnGamma(x - y + 1);
+      const f = (j) => (j < Math.max(0, n - (N - K)) ? 0 : Math.exp(lc(K, j) + lc(N - K, n - j) - lc(N, n)));
+      if (!acum(a, 4)) return f(k);
+      let s = 0; for (let j = 0; j <= k; j++) s += f(j); return Math.min(1, s);
+    },
+    "DISTR.HIPERGEOM": (a) => FUNCS["DISTR.HIPERGEOM.N"]([a[0], a[1], a[2], a[3], false]),
+    "NEGBINOM.DIST": (a) => {
+      const f = Math.floor(num(a[0])), s = Math.floor(num(a[1])), p = num(a[2]);
+      if (f < 0 || s < 1 || p < 0 || p > 1) throw E("#NUM!");
+      const g = (x) => Math.exp(lnGamma(x + s) - lnGamma(x + 1) - lnGamma(s) + s * Math.log(p) + (x ? x * Math.log(1 - p) : 0));
+      if (!acum(a, 3)) return g(f);
+      return betaI(p, s, f + 1);
+    },
+    NEGBINOMDIST: (a) => FUNCS["NEGBINOM.DIST"]([a[0], a[1], a[2], false]),
+    "DISTR.LOGNORM": (a) => { const x = num(a[0]), m = num(a[1]), s = num(a[2]); if (x <= 0 || s <= 0) throw E("#NUM!"); const z = (Math.log(x) - m) / s; return acum(a, 3) ? normS(z) : normSdens(z) / (x * s); },
+    "INV.LOGNORM": (a) => { const p = prob(a[0]), m = num(a[1]), s = num(a[2]); if (s <= 0) throw E("#NUM!"); return Math.exp(m + s * normSinv(p)); },
+    "DISTR.LOG.NORM": (a) => FUNCS["DISTR.LOGNORM"]([a[0], a[1], a[2], true]),
+    "DISTR.LOG.INV": (a) => FUNCS["INV.LOGNORM"](a),
+    "DISTR.WEIBULL": (a) => { const x = num(a[0]), al = num(a[1]), be = num(a[2]); if (x < 0 || al <= 0 || be <= 0) throw E("#NUM!"); return acum(a, 3) ? 1 - Math.exp(-Math.pow(x / be, al)) : (al / Math.pow(be, al)) * Math.pow(x, al - 1) * Math.exp(-Math.pow(x / be, al)); },
+    "DIST.WEIBULL": (a) => FUNCS["DISTR.WEIBULL"](a),
+    "PRUEBA.T.N": (a) => {
+      const x = nums([a[0]]), y = nums([a[1]]), colas = Math.floor(num(a[2])), tipo = Math.floor(num(a[3]));
+      if ((colas !== 1 && colas !== 2) || tipo < 1 || tipo > 3) throw E("#NUM!");
+      let t, df;
+      if (tipo === 1) {
+        const px = plano([a[0]]), py = plano([a[1]]); if (px.length !== py.length) throw E("#N/A");
+        const d = []; px.forEach((v, i) => { if (esNum(v) && esNum(py[i])) d.push(v - py[i]); });
+        const n = d.length; if (n < 2) throw E("#DIV/0!"); const md = media(d), sd = Math.sqrt(d.reduce((s, v) => s + (v - md) ** 2, 0) / (n - 1)); if (!sd) throw E("#DIV/0!");
+        t = md / (sd / Math.sqrt(n)); df = n - 1;
+      } else {
+        const n1 = x.length, n2 = y.length; if (n1 < 2 || n2 < 2) throw E("#DIV/0!");
+        const m1 = media(x), m2 = media(y), v1 = x.reduce((s, v) => s + (v - m1) ** 2, 0) / (n1 - 1), v2 = y.reduce((s, v) => s + (v - m2) ** 2, 0) / (n2 - 1);
+        if (tipo === 2) { df = n1 + n2 - 2; const sp = ((n1 - 1) * v1 + (n2 - 1) * v2) / df; t = (m1 - m2) / Math.sqrt(sp * (1 / n1 + 1 / n2)); }
+        else { const a1 = v1 / n1, a2 = v2 / n2; t = (m1 - m2) / Math.sqrt(a1 + a2); df = (a1 + a2) ** 2 / (a1 * a1 / (n1 - 1) + a2 * a2 / (n2 - 1)); }
+      }
+      const u = betaI(df / (df + t * t), df / 2, 0.5) / 2;   // una cola de |t|
+      return colas === 1 ? u : 2 * u;
+    },
+    "PRUEBA.T": (a) => FUNCS["PRUEBA.T.N"](a),
+    "PRUEBA.F.N": (a) => {
+      const x = nums([a[0]]), y = nums([a[1]]); if (x.length < 2 || y.length < 2) throw E("#DIV/0!");
+      const v = (l) => { const m = media(l); return l.reduce((s, q) => s + (q - m) ** 2, 0) / (l.length - 1); };
+      const v1 = v(x), v2 = v(y); if (!v1 || !v2) throw E("#DIV/0!");
+      const f = v1 / v2, c = fCdf(f, x.length - 1, y.length - 1);
+      return 2 * Math.min(c, 1 - c);
+    },
+    "PRUEBA.F": (a) => FUNCS["PRUEBA.F.N"](a),
+    "PRUEBA.CHICUAD": (a) => {
+      const ob = tabla(a[0]), es = tabla(a[1]);
+      if (ob.length !== es.length || (ob[0] || []).length !== (es[0] || []).length) throw E("#N/A");
+      let chi = 0; ob.forEach((f, i) => f.forEach((v, j) => { const e = num(es[i][j]); if (e === 0) throw E("#DIV/0!"); chi += (num(v) - e) ** 2 / e; }));
+      const r = ob.length, c = (ob[0] || []).length, df = r > 1 && c > 1 ? (r - 1) * (c - 1) : r * c - 1;
+      if (df < 1) throw E("#N/A");
+      return chi / 2 < df / 2 + 1 ? 1 - gammaP(df / 2, chi / 2) : gammaQcf(df / 2, chi / 2);
+    },
+    "PRUEBA.CHI": (a) => FUNCS["PRUEBA.CHICUAD"](a),
+    "PRUEBA.Z.N": (a) => { const x = nums([a[0]]), mu = num(a[1]); if (!x.length) throw E("#N/A"); const s = a[2] === undefined ? Math.sqrt(varN(x)) : num(a[2]); if (!s) throw E("#DIV/0!"); return 1 - normS((media(x) - mu) / (s / Math.sqrt(x.length))); },
+    "PRUEBA.Z": (a) => FUNCS["PRUEBA.Z.N"](a),
+    "MODA.VARIOS": (a) => {
+      const n = nums(a), cuenta = new Map(); n.forEach((v) => cuenta.set(v, (cuenta.get(v) || 0) + 1));
+      const mx = Math.max(...cuenta.values()); if (mx < 2) return E("#N/A");
+      return deFilas([...cuenta.entries()].filter(([, c]) => c === mx).map(([v]) => [v]));
+    },
+    "RANGO.PERCENTIL.INC": (a) => {
+      const l = nums([a[0]]).sort((x, y) => x - y), x = num(a[1]), sig = a[2] === undefined ? 3 : Math.floor(num(a[2]));
+      if (!l.length || sig < 1) throw E("#NUM!");
+      if (x < l[0] || x > l[l.length - 1]) return E("#N/A");
+      let r;
+      const i = l.findIndex((v) => v >= x);
+      if (l[i] === x) r = l.filter((v) => v < x).length / (l.length - 1 || 1);
+      else { const lo = i - 1; r = (lo + (x - l[lo]) / (l[i] - l[lo])) / (l.length - 1); }
+      const k = Math.pow(10, sig); return Math.floor(r * k + 1e-9) / k;
+    },
+    "RANGO.PERCENTIL.EXC": (a) => {
+      const l = nums([a[0]]).sort((x, y) => x - y), x = num(a[1]), sig = a[2] === undefined ? 3 : Math.floor(num(a[2]));
+      if (!l.length || sig < 1) throw E("#NUM!");
+      if (x < l[0] || x > l[l.length - 1]) return E("#N/A");
+      let r;
+      const i = l.findIndex((v) => v >= x);
+      if (l[i] === x) r = (l.filter((v) => v < x).length + 1) / (l.length + 1);
+      else { const lo = i - 1; r = (lo + 1 + (x - l[lo]) / (l[i] - l[lo])) / (l.length + 1); }
+      const k = Math.pow(10, sig); return Math.floor(r * k + 1e-9) / k;
+    },
+    "RANGO.PERCENTIL": (a) => FUNCS["RANGO.PERCENTIL.INC"](a),
+    PROBABILIDAD: (a) => {
+      const x = plano([a[0]]), p = plano([a[1]]), lo = num(a[2]), hi = a[3] === undefined ? lo : num(a[3]);
+      if (x.length !== p.length) throw E("#N/A");
+      const ps = p.map(num); if (ps.some((q) => q < 0 || q > 1) || Math.abs(ps.reduce((s, q) => s + q, 0) - 1) > 1e-6) throw E("#NUM!");
+      let s = 0; x.forEach((v, i) => { const xv = num(v); if (xv >= lo && xv <= hi) s += ps[i]; }); return s;
+    },
+    "ERROR.TIPICO.XY": (a) => { const y = plano([a[0]]), x = plano([a[1]]); if (x.length !== y.length) throw E("#N/A"); const px = [], py = []; x.forEach((v, i) => { if (esNum(v) && esNum(y[i])) { px.push(+v); py.push(+y[i]); } }); if (px.length < 3) throw E("#DIV/0!"); const mx = media(px), my = media(py); let sxx = 0, syy = 0, sxy = 0; px.forEach((v, i) => { sxx += (v - mx) ** 2; syy += (py[i] - my) ** 2; sxy += (v - mx) * (py[i] - my); }); return Math.sqrt((syy - (sxy * sxy) / sxx) / (px.length - 2)); },
+    "ESTIMACION.LINEAL": (a) => {
+      const { ys, xs } = datosRegresion(a, false), cte = a[2] === undefined || a[2] === "" || verdad(a[2]), est = a[3] !== undefined && verdad(a[3]);
+      const r = regresion(ys, xs, cte), k = xs[0].length;
+      const coefs = r.beta.slice(0, k).reverse().concat([cte ? r.beta[k] : 0]);
+      if (!est) return deFilas([coefs]);
+      const se = r.se.slice(0, k).reverse().concat([cte ? r.se[k] : E("#N/A")]);
+      const relleno = (fila) => fila.concat(Array(Math.max(0, coefs.length - fila.length)).fill(E("#N/A")));
+      return deFilas([coefs, se, relleno([r.r2, r.sey]), relleno([r.F, r.df]), relleno([r.ssreg, r.ssres])]);
+    },
+    "ESTIMACION.LOGARITMICA": (a) => {
+      const { ys, xs } = datosRegresion(a, true), cte = a[2] === undefined || a[2] === "" || verdad(a[2]), est = a[3] !== undefined && verdad(a[3]);
+      const r = regresion(ys, xs, cte), k = xs[0].length;
+      const coefs = r.beta.slice(0, k).reverse().map(Math.exp).concat([cte ? Math.exp(r.beta[k]) : 1]);
+      if (!est) return deFilas([coefs]);
+      const se = r.se.slice(0, k).reverse().concat([cte ? r.se[k] : E("#N/A")]);
+      const relleno = (fila) => fila.concat(Array(Math.max(0, coefs.length - fila.length)).fill(E("#N/A")));
+      return deFilas([coefs, se, relleno([r.r2, r.sey]), relleno([r.F, r.df]), relleno([r.ssreg, r.ssres])]);
+    },
+    CRECIMIENTO: (a) => {
+      const { ys, xs } = datosRegresion(a, true), cte = a[3] === undefined || a[3] === "" || verdad(a[3]);
+      const r = regresion(ys, xs, cte), k = xs[0].length;
+      const nuevos = a[2] === undefined || a[2] === "" ? xs : tabla(a[2]).map((f) => f.map(num)).flatMap((f) => (k === 1 ? f.map((v) => [v]) : [f]));
+      const out = nuevos.map((f) => Math.exp(f.reduce((s, v, j) => s + v * r.beta[j], cte ? r.beta[k] : 0)));
+      return out.length === 1 ? out[0] : deFilas(out.map((v) => [v]));
+    },
+    // financieras: pagos acumulados
+    "PAGO.INT.ENTRE": (a) => {
+      const r = num(a[0]), n = num(a[1]), va = num(a[2]), i = Math.floor(num(a[3])), f = Math.floor(num(a[4])), t = num(a[5]);
+      if (r <= 0 || n <= 0 || va <= 0 || i < 1 || f < i || f > n || (t !== 0 && t !== 1)) throw E("#NUM!");
+      let s = 0; for (let p = i; p <= f; p++) s += FUNCS.PAGOINT([r, p, n, va, 0, t]); return s;
+    },
+    "PAGO.PRINC.ENTRE": (a) => {
+      const r = num(a[0]), n = num(a[1]), va = num(a[2]), i = Math.floor(num(a[3])), f = Math.floor(num(a[4])), t = num(a[5]);
+      if (r <= 0 || n <= 0 || va <= 0 || i < 1 || f < i || f > n || (t !== 0 && t !== 1)) throw E("#NUM!");
+      let s = 0; for (let p = i; p <= f; p++) s += FUNCS.PAGOPRIN([r, p, n, va, 0, t]); return s;
+    },
+    // bonos, cupones y letras
+    "CUPON.DIAS.L1": (a) => { const v = cuponValidar(a, true); return cupDiasBS(cupones(v.liq, v.venc, v.frec), v.liq, v.base); },
+    "CUPON.DIAS": (a) => { const v = cuponValidar(a, true); return cupDias(cupones(v.liq, v.venc, v.frec), v.frec, v.base); },
+    "CUPON.DIAS.L2": (a) => { const v = cuponValidar(a, true); return cupDiasNC(cupones(v.liq, v.venc, v.frec), v.liq, v.frec, v.base); },
+    "CUPON.FECHA.L2": (a) => { const v = cuponValidar(a, true); return new FechaF(cupones(v.liq, v.venc, v.frec).ncd); },
+    "CUPON.FECHA.L1": (a) => { const v = cuponValidar(a, true); return new FechaF(cupones(v.liq, v.venc, v.frec).pcd); },
+    "CUPON.NUM": (a) => { const v = cuponValidar(a, true); return cupones(v.liq, v.venc, v.frec).num; },
+    PRECIO: (a) => {
+      const liq = entero(a[0]), venc = entero(a[1]), tasa = num(a[2]), rend = num(a[3]), red = num(a[4]), frec = Math.floor(num(a[5])), base = a[6] === undefined ? 0 : Math.floor(num(a[6]));
+      if (liq >= venc || tasa < 0 || rend < 0 || red <= 0 || ![1, 2, 4].includes(frec) || base < 0 || base > 4) throw E("#NUM!");
+      return precioBono(liq, venc, tasa, rend, red, frec, base);
+    },
+    RENDTO: (a) => {
+      const liq = entero(a[0]), venc = entero(a[1]), tasa = num(a[2]), pr = num(a[3]), red = num(a[4]), frec = Math.floor(num(a[5])), base = a[6] === undefined ? 0 : Math.floor(num(a[6]));
+      if (liq >= venc || tasa < 0 || pr <= 0 || red <= 0 || ![1, 2, 4].includes(frec) || base < 0 || base > 4) throw E("#NUM!");
+      const c = cupones(liq, venc, frec);
+      if (c.num === 1) {
+        const E2 = cupDias(c, frec, base), A = cupDiasBS(c, liq, base), DSR = E2 - A, cup = (100 * tasa) / frec;
+        return ((red / 100 + tasa / frec - (pr / 100 + (A / E2) * (tasa / frec))) / (pr / 100 + (A / E2) * (tasa / frec))) * ((frec * E2) / DSR);
+      }
+      let r = 0.05;
+      for (let k = 0; k < 100; k++) { const p = precioBono(liq, venc, tasa, r, red, frec, base) - pr, h = 1e-7, d = (precioBono(liq, venc, tasa, r + h, red, frec, base) - precioBono(liq, venc, tasa, r - h, red, frec, base)) / (2 * h); const n = r - p / d; if (Math.abs(n - r) < 1e-12) return n; r = n; }
+      return r;
+    },
+    DURACION: (a) => { const liq = entero(a[0]), venc = entero(a[1]), tasa = num(a[2]), rend = num(a[3]), frec = Math.floor(num(a[4])), base = a[5] === undefined ? 0 : Math.floor(num(a[5])); if (liq >= venc || tasa < 0 || rend < 0 || ![1, 2, 4].includes(frec) || base < 0 || base > 4) throw E("#NUM!"); return duracionBono(liq, venc, tasa, rend, frec, base); },
+    "DURACION.MODIF": (a) => { const liq = entero(a[0]), venc = entero(a[1]), tasa = num(a[2]), rend = num(a[3]), frec = Math.floor(num(a[4])), base = a[5] === undefined ? 0 : Math.floor(num(a[5])); if (liq >= venc || tasa < 0 || rend < 0 || ![1, 2, 4].includes(frec) || base < 0 || base > 4) throw E("#NUM!"); return duracionBono(liq, venc, tasa, rend, frec, base) / (1 + rend / frec); },
+    "TASA.DESC": (a) => { const liq = entero(a[0]), venc = entero(a[1]), pr = num(a[2]), red = num(a[3]), base = a[4] === undefined ? 0 : Math.floor(num(a[4])); if (liq >= venc || pr <= 0 || red <= 0) throw E("#NUM!"); return ((red - pr) / red) / fracAnio(liq, venc, base); },
+    "TASA.INT": (a) => { const liq = entero(a[0]), venc = entero(a[1]), inv = num(a[2]), red = num(a[3]), base = a[4] === undefined ? 0 : Math.floor(num(a[4])); if (liq >= venc || inv <= 0 || red <= 0) throw E("#NUM!"); return ((red - inv) / inv) / fracAnio(liq, venc, base); },
+    "PRECIO.DESCUENTO": (a) => { const liq = entero(a[0]), venc = entero(a[1]), d = num(a[2]), red = num(a[3]), base = a[4] === undefined ? 0 : Math.floor(num(a[4])); if (liq >= venc || d <= 0 || red <= 0) throw E("#NUM!"); return red - d * red * fracAnio(liq, venc, base); },
+    "CANTIDAD.RECIBIDA": (a) => { const liq = entero(a[0]), venc = entero(a[1]), inv = num(a[2]), d = num(a[3]), base = a[4] === undefined ? 0 : Math.floor(num(a[4])); if (liq >= venc || inv <= 0 || d <= 0) throw E("#NUM!"); return inv / (1 - d * fracAnio(liq, venc, base)); },
+    "RENDTO.DESC": (a) => { const liq = entero(a[0]), venc = entero(a[1]), pr = num(a[2]), red = num(a[3]), base = a[4] === undefined ? 0 : Math.floor(num(a[4])); if (liq >= venc || pr <= 0 || red <= 0) throw E("#NUM!"); return ((red - pr) / pr) / fracAnio(liq, venc, base); },
+    "PRECIO.VENCIMIENTO": (a) => {
+      const liq = entero(a[0]), venc = entero(a[1]), em = entero(a[2]), tasa = num(a[3]), rend = num(a[4]), base = a[5] === undefined ? 0 : Math.floor(num(a[5]));
+      if (liq >= venc || tasa < 0 || rend < 0) throw E("#NUM!");
+      const B = anioBase(base, fechaDe(liq).getUTCFullYear()), DIM = diasBase(em, venc, base), DSM = diasBase(liq, venc, base), A = diasBase(em, liq, base);
+      return (100 + (DIM / B) * tasa * 100) / (1 + (DSM / B) * rend) - (A / B) * tasa * 100;
+    },
+    "RENDTO.VENCTO": (a) => {
+      const liq = entero(a[0]), venc = entero(a[1]), em = entero(a[2]), tasa = num(a[3]), pr = num(a[4]), base = a[5] === undefined ? 0 : Math.floor(num(a[5]));
+      if (liq >= venc || tasa < 0 || pr <= 0) throw E("#NUM!");
+      const B = anioBase(base, fechaDe(liq).getUTCFullYear()), DIM = diasBase(em, venc, base), DSM = diasBase(liq, venc, base), A = diasBase(em, liq, base);
+      return ((1 + (DIM / B) * tasa - (pr / 100 + (A / B) * tasa)) / (pr / 100 + (A / B) * tasa)) * (B / DSM);
+    },
+    "INT.ACUM": (a) => {
+      const em = entero(a[0]), liq = entero(a[2]), tasa = num(a[3]), par = a[4] === undefined || a[4] === "" ? 1000 : num(a[4]), frec = Math.floor(num(a[5])), base = a[6] === undefined ? 0 : Math.floor(num(a[6]));
+      if (em >= liq || tasa <= 0 || par <= 0 || ![1, 2, 4].includes(frec) || base < 0 || base > 4) throw E("#NUM!");
+      return par * tasa * fracAnio(em, liq, base);
+    },
+    "INT.ACUM.V": (a) => {
+      const em = entero(a[0]), liq = entero(a[1]), tasa = num(a[2]), par = a[3] === undefined || a[3] === "" ? 1000 : num(a[3]), base = a[4] === undefined ? 0 : Math.floor(num(a[4]));
+      if (em >= liq || tasa <= 0 || par <= 0 || base < 0 || base > 4) throw E("#NUM!");
+      return par * tasa * fracAnio(em, liq, base);
+    },
+    "LETRA.DE.TES.PRECIO": (a) => { const liq = entero(a[0]), venc = entero(a[1]), d = num(a[2]); if (liq >= venc || venc - liq > 366 || d <= 0) throw E("#NUM!"); return 100 * (1 - (d * (venc - liq)) / 360); },
+    "LETRA.DE.TES.RENDTO": (a) => { const liq = entero(a[0]), venc = entero(a[1]), pr = num(a[2]); if (liq >= venc || venc - liq > 366 || pr <= 0) throw E("#NUM!"); return ((100 - pr) / pr) * (360 / (venc - liq)); },
+    "LETRA.DE.TES.EQV.A.BONO": (a) => {
+      const liq = entero(a[0]), venc = entero(a[1]), d = num(a[2]), dsm = venc - liq;
+      if (liq >= venc || dsm > 366 || d <= 0) throw E("#NUM!");
+      if (dsm <= 182) return (365 * d) / (360 - d * dsm);
+      // más de medio año: el rendimiento de un bono semestral equivalente (P(1 + r/2)(1 + r(t − ½)) = 100)
+      const pr = 100 * (1 - (d * dsm) / 360), t = dsm / 365, qa = (t - 0.5) / 2, qb = t, qc = 1 - 100 / pr;
+      return (-qb + Math.sqrt(qb * qb - 4 * qa * qc)) / (2 * qa);
+    },
+    "AMORTIZ.LIN": (a) => {
+      const c = num(a[0]), fecha = entero(a[1]), primer = entero(a[2]), res = num(a[3]), per = Math.floor(num(a[4])), tasa = num(a[5]), base = a[6] === undefined ? 0 : Math.floor(num(a[6]));
+      if (c < 0 || res < 0 || tasa < 0 || per < 0 || base === 2) throw E("#NUM!");
+      const uno1 = c * tasa, delta = c - res, cero = fracAnio(fecha, primer, base) * tasa * c, llenos = Math.floor((c - res - cero) / uno1);
+      if (per === 0) return cero;
+      if (per <= llenos) return uno1;
+      if (per === llenos + 1) return delta - uno1 * llenos - cero;
+      return 0;
+    },
+    "AMORTIZ.PROGRE": (a) => {
+      let c = num(a[0]); const fecha = entero(a[1]), primer = entero(a[2]), res = num(a[3]), per = Math.floor(num(a[4])); let tasa = num(a[5]); const base = a[6] === undefined ? 0 : Math.floor(num(a[6]));
+      if (c < 0 || res < 0 || tasa < 0 || per < 0 || base === 2) throw E("#NUM!");
+      const usa = 1 / tasa, coef = usa < 3 ? 1 : usa < 5 ? 1.5 : usa <= 6 ? 2 : 2.5;
+      tasa *= coef;
+      let nr = Math.round(fracAnio(fecha, primer, base) * tasa * c);
+      c -= nr;
+      let resto = c - res;
+      for (let n = 0; n < per; n++) {
+        nr = Math.round(tasa * c);
+        resto -= nr;
+        if (resto < 0) return per - n === 0 || per - n === 1 ? Math.round(c * 0.5) : 0;
+        c -= nr;
+      }
+      return nr;
+    },
+  });
+  // (ESFORMULA la resuelve el evaluador: necesita la celda, no su valor)
+  Object.assign(FUNCS, { ESFORMULA: () => false, USDOLLAR: (a) => FUNCS.MONEDA(a), ENCONTRARB: (a) => FUNCS.ENCONTRAR(a), HALLARB: (a) => FUNCS.HALLAR(a), REEMPLAZARB: (a) => FUNCS.REEMPLAZAR(a) });
+  Object.assign(ALIAS, {
+    ISFORMULA: "ESFORMULA", "ESFÓRMULA": "ESFORMULA", LOOKUP: "BUSCAR", NUMBERVALUE: "VALOR.NUMERO", "VALOR.NÚMERO": "VALOR.NUMERO", VALUETOTEXT: "VALORATEXTO", ARRAYTOTEXT: "MATRIZATEXTO", ENCODEURL: "URLCODIF", ASC: "ASC", DBCS: "DBCS",
+    FINDB: "ENCONTRARB", SEARCHB: "HALLARB", REPLACEB: "REEMPLAZARB", USDOLLAR: "USDOLLAR",
+    COMPLEX: "COMPLEJO", IMAGINARY: "IMAGINARIO", IMREAL: "IM.REAL", IMABS: "IM.ABS", IMARGUMENT: "IM.ANGULO", "IM.ÁNGULO": "IM.ANGULO", IMCONJUGATE: "IM.CONJUGADA",
+    IMCOS: "IM.COS", IMSIN: "IM.SENO", IMCOSH: "IM.COSH", IMSINH: "IM.SENOH", IMTAN: "IM.TAN", IMCOT: "IM.COT", IMSEC: "IM.SEC", IMCSC: "IM.CSC", IMSECH: "IM.SECH", IMCSCH: "IM.CSCH",
+    IMEXP: "IM.EXP", IMLN: "IM.LN", IMLOG10: "IM.LOG10", IMLOG2: "IM.LOG2", IMSQRT: "IM.RAIZ2", IMPOWER: "IM.POT", IMDIV: "IM.DIV", IMSUB: "IM.SUSTR", IMSUM: "IM.SUM", IMPRODUCT: "IM.PRODUCT",
+    BESSELJ: "BESSELJ", BESSELY: "BESSELY", BESSELI: "BESSELI", BESSELK: "BESSELK",
+    "BINOM.DIST.RANGE": "DISTR.BINOM.SERIE", "BINOM.INV": "INV.BINOM", CRITBINOM: "INV.BINOM", "HYPGEOM.DIST": "DISTR.HIPERGEOM.N", HYPGEOMDIST: "DISTR.HIPERGEOM",
+    "NEGBINOM.DIST": "NEGBINOM.DIST", NEGBINOMDIST: "NEGBINOMDIST", "LOGNORM.DIST": "DISTR.LOGNORM", "LOGNORM.INV": "INV.LOGNORM", LOGNORMDIST: "DISTR.LOG.NORM", LOGINV: "DISTR.LOG.INV",
+    "WEIBULL.DIST": "DISTR.WEIBULL", WEIBULL: "DIST.WEIBULL", "T.TEST": "PRUEBA.T.N", TTEST: "PRUEBA.T", "F.TEST": "PRUEBA.F.N", FTEST: "PRUEBA.F", "CHISQ.TEST": "PRUEBA.CHICUAD",
+    CHITEST: "PRUEBA.CHI", "Z.TEST": "PRUEBA.Z.N", ZTEST: "PRUEBA.Z", "MODE.MULT": "MODA.VARIOS", "PERCENTRANK.INC": "RANGO.PERCENTIL.INC", "PERCENTRANK.EXC": "RANGO.PERCENTIL.EXC",
+    PERCENTRANK: "RANGO.PERCENTIL", PROB: "PROBABILIDAD", STEYX: "ERROR.TIPICO.XY", "ERROR.TÍPICO.XY": "ERROR.TIPICO.XY", LINEST: "ESTIMACION.LINEAL", "ESTIMACIÓN.LINEAL": "ESTIMACION.LINEAL",
+    LOGEST: "ESTIMACION.LOGARITMICA", "ESTIMACIÓN.LOGARÍTMICA": "ESTIMACION.LOGARITMICA", GROWTH: "CRECIMIENTO",
+    CUMIPMT: "PAGO.INT.ENTRE", CUMPRINC: "PAGO.PRINC.ENTRE", COUPDAYBS: "CUPON.DIAS.L1", COUPDAYS: "CUPON.DIAS", COUPDAYSNC: "CUPON.DIAS.L2", COUPNCD: "CUPON.FECHA.L2",
+    COUPPCD: "CUPON.FECHA.L1", COUPNUM: "CUPON.NUM", PRICE: "PRECIO", YIELD: "RENDTO", DURATION: "DURACION", "DURACIÓN": "DURACION", MDURATION: "DURACION.MODIF", "DURACIÓN.MODIF": "DURACION.MODIF",
+    DISC: "TASA.DESC", INTRATE: "TASA.INT", PRICEDISC: "PRECIO.DESCUENTO", RECEIVED: "CANTIDAD.RECIBIDA", YIELDDISC: "RENDTO.DESC", PRICEMAT: "PRECIO.VENCIMIENTO", YIELDMAT: "RENDTO.VENCTO",
+    ACCRINT: "INT.ACUM", ACCRINTM: "INT.ACUM.V", TBILLPRICE: "LETRA.DE.TES.PRECIO", TBILLYIELD: "LETRA.DE.TES.RENDTO", TBILLEQ: "LETRA.DE.TES.EQV.A.BONO", AMORLINC: "AMORTIZ.LIN", AMORDEGRC: "AMORTIZ.PROGRE",
+  });
   const NOMBRES = Object.keys(FUNCS);
   /** Nombre en inglés para Excel (.xlsx); las funciones nuevas de Excel llevan el prefijo _xlfn. */
   const INGLES = {};
@@ -1145,6 +2052,10 @@
   Object.assign(INGLES, { MIN: "MIN", MAX: "MAX", ABS: "ABS", PI: "PI", EXP: "EXP", LN: "LN", LOG: "LOG", LOG10: "LOG10", COS: "COS", TAN: "TAN",
     "SI.CONJUNTO": "_xlfn.IFS", BUSCARX: "_xlfn.XLOOKUP", CONCAT: "_xlfn.CONCAT", UNIRCADENAS: "_xlfn.TEXTJOIN", "MAX.SI.CONJUNTO": "_xlfn.MAXIFS",
     "MIN.SI.CONJUNTO": "_xlfn.MINIFS", DIAS: "_xlfn.DAYS", CONCATENAR: "CONCATENATE", DESVEST: "STDEV", DESVESTP: "STDEVP", VAR: "VAR", VARP: "VARP", JERARQUIA: "RANK", MODA: "MODE" });
+  // (18-nov-2026: los nombres con dígitos y los de Excel 2010 en adelante, con _xlfn.)
+  Object.assign(INGLES, { "ACOT": "_xlfn.ACOT", "ACOTH": "_xlfn.ACOTH", "COT": "_xlfn.COT", "COTH": "_xlfn.COTH", "CSC": "_xlfn.CSC", "CSCH": "_xlfn.CSCH", "SEC": "_xlfn.SEC", "SECH": "_xlfn.SECH", "MULTIPLO.SUPERIOR.EXACTO": "_xlfn.CEILING.PRECISE", "MULTIPLO.INFERIOR.EXACTO": "_xlfn.FLOOR.PRECISE", "MULTIPLO.SUPERIOR.ISO": "_xlfn.ISO.CEILING", "COMBINA": "_xlfn.COMBINA", "PERMUTACIONES.A": "_xlfn.PERMUTATIONA", "SUMAX2MENOSY2": "SUMX2MY2", "SUMAX2MASY2": "SUMX2PY2", "SUMAXMENOSY2": "SUMXMY2", "DIAS.LAB.INTL": "_xlfn.NETWORKDAYS.INTL", "DIA.LAB.INTL": "_xlfn.WORKDAY.INTL", "COEFICIENTE.ASIMETRIA.P": "_xlfn.SKEW.P", "FI": "_xlfn.PHI", "GAUSS": "_xlfn.GAUSS", "GAMMA": "_xlfn.GAMMA", "GAMMA.LN.EXACTO": "_xlfn.GAMMALN.PRECISE", "FUN.ERROR.EXACTO": "_xlfn.ERF.PRECISE", "FUN.ERROR.COMPL.EXACTO": "_xlfn.ERFC.PRECISE", "DISTR.NORM.N": "_xlfn.NORM.DIST", "DISTR.NORM.ESTAND.N": "_xlfn.NORM.S.DIST", "INV.NORM": "_xlfn.NORM.INV", "INV.NORM.ESTAND": "_xlfn.NORM.S.INV", "DISTR.EXP.N": "_xlfn.EXPON.DIST", "DISTR.BINOM.N": "_xlfn.BINOM.DIST", "POISSON.DIST": "_xlfn.POISSON.DIST", "DISTR.GAMMA.N": "_xlfn.GAMMA.DIST", "INV.GAMMA": "_xlfn.GAMMA.INV", "DISTR.CHICUAD": "_xlfn.CHISQ.DIST", "DISTR.CHICUAD.CD": "_xlfn.CHISQ.DIST.RT", "INV.CHICUAD": "_xlfn.CHISQ.INV", "INV.CHICUAD.CD": "_xlfn.CHISQ.INV.RT", "DISTR.T.N": "_xlfn.T.DIST", "DISTR.T.2C": "_xlfn.T.DIST.2T", "DISTR.T.CD": "_xlfn.T.DIST.RT", "INV.T": "_xlfn.T.INV", "INV.T.2C": "_xlfn.T.INV.2T", "DISTR.F.N": "_xlfn.F.DIST", "DISTR.F.CD": "_xlfn.F.DIST.RT", "INV.F": "_xlfn.F.INV", "INV.F.CD": "_xlfn.F.INV.RT", "DISTR.BETA.N": "_xlfn.BETA.DIST", "INV.BETA.N": "_xlfn.BETA.INV", "INTERVALO.CONFIANZA.NORM": "_xlfn.CONFIDENCE.NORM", "INTERVALO.CONFIANZA.T": "_xlfn.CONFIDENCE.T", "PERCENTIL.EXC": "_xlfn.PERCENTILE.EXC", "CUARTIL.EXC": "_xlfn.QUARTILE.EXC", "P.DURACION": "_xlfn.PDURATION", "RRI": "_xlfn.RRI", "BIN.A.HEX": "BIN2HEX", "BIN.A.OCT": "BIN2OCT", "HEX.A.BIN": "HEX2BIN", "HEX.A.OCT": "HEX2OCT", "OCT.A.BIN": "OCT2BIN", "OCT.A.HEX": "OCT2HEX", "BIT.Y": "_xlfn.BITAND", "BIT.O": "_xlfn.BITOR", "BIT.XO": "_xlfn.BITXOR", "BIT.DESPLIZQDA": "_xlfn.BITLSHIFT", "BIT.DESPLDCHA": "_xlfn.BITRSHIFT" });
+  Object.assign(INGLES, { "BUSCAR": "LOOKUP", "VALOR.NUMERO": "_xlfn.NUMBERVALUE", "VALORATEXTO": "_xlfn.VALUETOTEXT", "MATRIZATEXTO": "_xlfn.ARRAYTOTEXT", "URLCODIF": "_xlfn.ENCODEURL", "ENCONTRARB": "FINDB", "HALLARB": "SEARCHB", "REEMPLAZARB": "REPLACEB", "COMPLEJO": "COMPLEX", "IMAGINARIO": "IMAGINARY", "IM.REAL": "IMREAL", "IM.ABS": "IMABS", "IM.ANGULO": "IMARGUMENT", "IM.CONJUGADA": "IMCONJUGATE", "IM.COS": "IMCOS", "IM.SENO": "IMSIN", "IM.COSH": "_xlfn.IMCOSH", "IM.SENOH": "_xlfn.IMSINH", "IM.TAN": "_xlfn.IMTAN", "IM.COT": "_xlfn.IMCOT", "IM.SEC": "_xlfn.IMSEC", "IM.CSC": "_xlfn.IMCSC", "IM.SECH": "_xlfn.IMSECH", "IM.CSCH": "_xlfn.IMCSCH", "IM.EXP": "IMEXP", "IM.LN": "IMLN", "IM.LOG10": "IMLOG10", "IM.LOG2": "IMLOG2", "IM.RAIZ2": "IMSQRT", "IM.POT": "IMPOWER", "IM.DIV": "IMDIV", "IM.SUSTR": "IMSUB", "IM.SUM": "IMSUM", "IM.PRODUCT": "IMPRODUCT", "DISTR.BINOM.SERIE": "_xlfn.BINOM.DIST.RANGE", "INV.BINOM": "_xlfn.BINOM.INV", "DISTR.HIPERGEOM.N": "_xlfn.HYPGEOM.DIST", "DISTR.HIPERGEOM": "HYPGEOMDIST", "NEGBINOM.DIST": "_xlfn.NEGBINOM.DIST", "DISTR.LOGNORM": "_xlfn.LOGNORM.DIST", "INV.LOGNORM": "_xlfn.LOGNORM.INV", "DISTR.LOG.NORM": "LOGNORMDIST", "DISTR.LOG.INV": "LOGINV", "DISTR.WEIBULL": "_xlfn.WEIBULL.DIST", "DIST.WEIBULL": "WEIBULL", "PRUEBA.T.N": "_xlfn.T.TEST", "PRUEBA.T": "TTEST", "PRUEBA.F.N": "_xlfn.F.TEST", "PRUEBA.F": "FTEST", "PRUEBA.CHICUAD": "_xlfn.CHISQ.TEST", "PRUEBA.CHI": "CHITEST", "PRUEBA.Z.N": "_xlfn.Z.TEST", "PRUEBA.Z": "ZTEST", "MODA.VARIOS": "_xlfn.MODE.MULT", "RANGO.PERCENTIL.INC": "_xlfn.PERCENTRANK.INC", "RANGO.PERCENTIL.EXC": "_xlfn.PERCENTRANK.EXC", "RANGO.PERCENTIL": "PERCENTRANK", "PROBABILIDAD": "PROB", "ERROR.TIPICO.XY": "STEYX", "ESTIMACION.LINEAL": "LINEST", "ESTIMACION.LOGARITMICA": "LOGEST", "CRECIMIENTO": "GROWTH", "PAGO.INT.ENTRE": "CUMIPMT", "PAGO.PRINC.ENTRE": "CUMPRINC", "CUPON.DIAS.L1": "COUPDAYBS", "CUPON.DIAS": "COUPDAYS", "CUPON.DIAS.L2": "COUPDAYSNC", "CUPON.FECHA.L2": "COUPNCD", "CUPON.FECHA.L1": "COUPPCD", "CUPON.NUM": "COUPNUM", "PRECIO": "PRICE", "RENDTO": "YIELD", "DURACION": "DURATION", "DURACION.MODIF": "MDURATION", "TASA.DESC": "DISC", "TASA.INT": "INTRATE", "PRECIO.DESCUENTO": "PRICEDISC", "CANTIDAD.RECIBIDA": "RECEIVED", "RENDTO.DESC": "YIELDDISC", "PRECIO.VENCIMIENTO": "PRICEMAT", "RENDTO.VENCTO": "YIELDMAT", "INT.ACUM": "ACCRINT", "INT.ACUM.V": "ACCRINTM", "LETRA.DE.TES.PRECIO": "TBILLPRICE", "LETRA.DE.TES.RENDTO": "TBILLYIELD", "LETRA.DE.TES.EQV.A.BONO": "TBILLEQ", "AMORTIZ.LIN": "AMORLINC", "AMORTIZ.PROGRE": "AMORDEGRC" });
+  Object.assign(INGLES, { ESFORMULA: "_xlfn.ISFORMULA" });
   Object.assign(INGLES, { SUBTOTALES: "SUBTOTAL", AGREGAR: "_xlfn.AGGREGATE", COINCIDIRX: "_xlfn.XMATCH", CONVERTIR: "CONVERT", "DEC.A.BIN": "DEC2BIN", "DEC.A.OCT": "DEC2OCT",
     "DEC.A.HEX": "DEC2HEX", "BIN.A.DEC": "BIN2DEC", "OCT.A.DEC": "OCT2DEC", "HEX.A.DEC": "HEX2DEC", "NUMERO.ARABE": "_xlfn.ARABIC", BASE: "_xlfn.BASE" });
   Object.assign(INGLES, { DIAS360: "DAYS360", "ISO.NUM.DE.SEMANA": "_xlfn.ISOWEEKNUM", "SI.ND": "_xlfn.IFNA", CAMBIAR: "_xlfn.SWITCH", XO: "_xlfn.XOR", N: "N", T: "T",
@@ -1274,6 +2185,209 @@
     MAP: ["matriz1; [matriz2]; …; LAMBDA", "Aplica la función a cada valor."], REDUCE: ["[inicial]; matriz; LAMBDA(acumulado; valor)", "Acumula todos los valores en uno."],
     SCAN: ["[inicial]; matriz; LAMBDA(acumulado; valor)", "Cada paso del acumulado."], MAKEARRAY: ["filas; columnas; LAMBDA(fila; columna)", "Arma una matriz con la función."],
     ISOMITTED: ["parámetro", "VERDADERO si al llamar la LAMBDA no se dio ese parámetro."],
+    // 18-nov-2026 (comprobadas contra Excel 2024)
+    "ACOSH": ["número", "Coseno hiperbólico inverso."],
+    "ASENOH": ["número", "Seno hiperbólico inverso."],
+    "ATANH": ["número", "Tangente hiperbólica inversa."],
+    "ACOT": ["número", "Arco cotangente."],
+    "ACOTH": ["número", "Cotangente hiperbólica inversa."],
+    "COT": ["ángulo", "Cotangente."],
+    "COTH": ["número", "Cotangente hiperbólica."],
+    "CSC": ["ángulo", "Cosecante."],
+    "CSCH": ["número", "Cosecante hiperbólica."],
+    "SEC": ["ángulo", "Secante."],
+    "SECH": ["número", "Secante hiperbólica."],
+    "MULTIPLO.SUPERIOR.EXACTO": ["número; [múltiplo]", "Redondea hacia arriba al múltiplo, sin importar el signo."],
+    "MULTIPLO.INFERIOR.EXACTO": ["número; [múltiplo]", "Redondea hacia abajo al múltiplo, sin importar el signo."],
+    "MULTIPLO.SUPERIOR.ISO": ["número; [múltiplo]", "Redondea hacia arriba (norma ISO)."],
+    "COMBINA": ["número; tamaño", "Combinaciones con repetición."],
+    "PERMUTACIONES.A": ["número; tamaño", "Permutaciones con repetición."],
+    "FACT.DOBLE": ["número", "Factorial doble."],
+    "MULTINOMIAL": ["número1; …", "Coeficiente multinomial."],
+    "SUMA.SERIES": ["x; n; m; coeficientes", "Suma de una serie de potencias."],
+    "RAIZ2PI": ["número", "Raíz de (número × pi)."],
+    "SUMAX2MENOSY2": ["matriz_x; matriz_y", "Suma de x² − y²."],
+    "SUMAX2MASY2": ["matriz_x; matriz_y", "Suma de x² + y²."],
+    "SUMAXMENOSY2": ["matriz_x; matriz_y", "Suma de (x − y)²."],
+    "DIAS.LAB.INTL": ["inicio; fin; [fin_de_semana]; [festivos]", "Días hábiles con otros días de descanso."],
+    "DIA.LAB.INTL": ["inicio; días; [fin_de_semana]; [festivos]", "La fecha tras tantos días hábiles, con otros días de descanso."],
+    "FRAC.AÑO": ["inicio; fin; [base]", "Qué fracción del año hay entre dos fechas."],
+    "DESVIA2": ["número1; …", "Suma de los cuadrados de las desviaciones."],
+    "CURTOSIS": ["número1; …", "Curtosis."],
+    "COEFICIENTE.ASIMETRIA": ["número1; …", "Asimetría de una muestra."],
+    "COEFICIENTE.ASIMETRIA.P": ["número1; …", "Asimetría de una población."],
+    "MEDIA.ACOTADA": ["matriz; porcentaje", "Promedio sin los extremos."],
+    "NORMALIZACION": ["x; media; desv", "Valor normalizado (z)."],
+    "FISHER": ["x", "Transformación de Fisher."],
+    "PRUEBA.FISHER.INV": ["y", "Inversa de la transformación de Fisher."],
+    "FI": ["x", "Densidad normal estándar."],
+    "GAUSS": ["x", "Probabilidad normal estándar entre la media y x."],
+    "GAMMA": ["número", "Función gamma."],
+    "GAMMA.LN": ["número", "Logaritmo de la función gamma."],
+    "GAMMA.LN.EXACTO": ["número", "Logaritmo de la función gamma."],
+    "FUN.ERROR": ["inferior; [superior]", "Función de error."],
+    "FUN.ERROR.EXACTO": ["x", "Función de error."],
+    "FUN.ERROR.COMPL": ["x", "Función de error complementaria."],
+    "FUN.ERROR.COMPL.EXACTO": ["x", "Función de error complementaria."],
+    "DISTR.NORM.N": ["x; media; desv; acumulado", "Distribución normal."],
+    "DISTR.NORM.ESTAND.N": ["z; acumulado", "Distribución normal estándar."],
+    "INV.NORM": ["probabilidad; media; desv", "Inversa de la normal."],
+    "INV.NORM.ESTAND": ["probabilidad", "Inversa de la normal estándar."],
+    "DISTR.EXP.N": ["x; lambda; acumulado", "Distribución exponencial."],
+    "DISTR.BINOM.N": ["éxitos; ensayos; probabilidad; acumulado", "Distribución binomial."],
+    "POISSON.DIST": ["x; media; acumulado", "Distribución de Poisson."],
+    "DISTR.GAMMA.N": ["x; alfa; beta; acumulado", "Distribución gamma."],
+    "INV.GAMMA": ["probabilidad; alfa; beta", "Inversa de la gamma."],
+    "DISTR.CHICUAD": ["x; grados; acumulado", "Distribución ji cuadrada (cola izquierda)."],
+    "DISTR.CHICUAD.CD": ["x; grados", "Distribución ji cuadrada (cola derecha)."],
+    "INV.CHICUAD": ["probabilidad; grados", "Inversa de la ji cuadrada."],
+    "INV.CHICUAD.CD": ["probabilidad; grados", "Inversa de la ji cuadrada (cola derecha)."],
+    "DISTR.T.N": ["x; grados; acumulado", "Distribución t de Student."],
+    "DISTR.T.2C": ["x; grados", "t de Student, dos colas."],
+    "DISTR.T.CD": ["x; grados", "t de Student, cola derecha."],
+    "INV.T": ["probabilidad; grados", "Inversa de la t."],
+    "INV.T.2C": ["probabilidad; grados", "Inversa de la t, dos colas."],
+    "DISTR.F.N": ["x; grados1; grados2; acumulado", "Distribución F."],
+    "DISTR.F.CD": ["x; grados1; grados2", "Distribución F, cola derecha."],
+    "INV.F": ["probabilidad; grados1; grados2", "Inversa de la F."],
+    "INV.F.CD": ["probabilidad; grados1; grados2", "Inversa de la F, cola derecha."],
+    "DISTR.BETA.N": ["x; alfa; beta; acumulado; [A]; [B]", "Distribución beta."],
+    "INV.BETA.N": ["probabilidad; alfa; beta; [A]; [B]", "Inversa de la beta."],
+    "INTERVALO.CONFIANZA.NORM": ["alfa; desv; tamaño", "Intervalo de confianza (normal)."],
+    "INTERVALO.CONFIANZA.T": ["alfa; desv; tamaño", "Intervalo de confianza (t de Student)."],
+    "PERCENTIL.EXC": ["matriz; k", "Percentil (exclusivo)."],
+    "CUARTIL.EXC": ["matriz; cuartil", "Cuartil (exclusivo)."],
+    "BDSUMA": ["base; campo; criterios", "Suma lo que cumple los criterios."],
+    "BDPROMEDIO": ["base; campo; criterios", "Promedio de lo que cumple."],
+    "BDCONTAR": ["base; campo; criterios", "Cuenta los números que cumplen."],
+    "BDCONTARA": ["base; campo; criterios", "Cuenta lo no vacío que cumple."],
+    "BDMAX": ["base; campo; criterios", "El mayor de lo que cumple."],
+    "BDMIN": ["base; campo; criterios", "El menor de lo que cumple."],
+    "BDPRODUCTO": ["base; campo; criterios", "Multiplica lo que cumple."],
+    "BDEXTRAER": ["base; campo; criterios", "El único valor que cumple."],
+    "BDDESVEST": ["base; campo; criterios", "Desviación (muestra) de lo que cumple."],
+    "BDDESVESTP": ["base; campo; criterios", "Desviación (población) de lo que cumple."],
+    "BDVAR": ["base; campo; criterios", "Varianza (muestra) de lo que cumple."],
+    "BDVARP": ["base; campo; criterios", "Varianza (población) de lo que cumple."],
+    "SYD": ["costo; residual; vida; período", "Depreciación por suma de dígitos."],
+    "DDB": ["costo; residual; vida; período; [factor]", "Depreciación por saldo doblemente decreciente."],
+    "DB": ["costo; residual; vida; período; [mes]", "Depreciación por saldo fijo decreciente."],
+    "DVS": ["costo; residual; vida; inicio; fin; [factor]; [sin_cambio]", "Depreciación de un tramo (saldo decreciente variable)."],
+    "VNA.NO.PER": ["tasa; valores; fechas", "Valor neto actual con fechas."],
+    "TIR.NO.PER": ["valores; fechas; [estimación]", "Tasa interna de retorno con fechas."],
+    "TIRM": ["valores; tasa_fin; tasa_reinversión", "TIR modificada."],
+    "P.DURACION": ["tasa; va; vf", "Períodos para llegar a un valor."],
+    "RRI": ["períodos; va; vf", "Tasa equivalente de crecimiento."],
+    "VF.PLAN": ["capital; tasas", "Valor futuro con tasas variables."],
+    "INT.PAGO.DIR": ["tasa; período; períodos; va", "Interés de un período (amortización constante)."],
+    "MONEDA.DEC": ["fracción; divisor", "Precio fraccionario a decimal."],
+    "MONEDA.FRAC": ["decimal; divisor", "Precio decimal a fraccionario."],
+    "BIN.A.HEX": ["número; [lugares]", "Binario a hexadecimal."],
+    "BIN.A.OCT": ["número; [lugares]", "Binario a octal."],
+    "HEX.A.BIN": ["número; [lugares]", "Hexadecimal a binario."],
+    "HEX.A.OCT": ["número; [lugares]", "Hexadecimal a octal."],
+    "OCT.A.BIN": ["número; [lugares]", "Octal a binario."],
+    "OCT.A.HEX": ["número; [lugares]", "Octal a hexadecimal."],
+    "BIT.Y": ["número1; número2", "Y bit a bit."],
+    "BIT.O": ["número1; número2", "O bit a bit."],
+    "BIT.XO": ["número1; número2", "O exclusivo bit a bit."],
+    "BIT.DESPLIZQDA": ["número; posiciones", "Desplaza bits a la izquierda."],
+    "BIT.DESPLDCHA": ["número; posiciones", "Desplaza bits a la derecha."],
+    "DELTA": ["número1; [número2]", "1 si son iguales."],
+    "MAYOR.O.IGUAL": ["número; [paso]", "1 si número ≥ paso."],
+    "BUSCAR": ["valor; vector_o_matriz; [vector_resultado]", "Busca en una fila o columna ordenada."],
+    "VALOR.NUMERO": ["texto; [decimal]; [grupo]", "Texto a número con otros separadores."],
+    "VALORATEXTO": ["valor; [formato]", "Un valor como texto."],
+    "MATRIZATEXTO": ["matriz; [formato]", "Una matriz como texto."],
+    "URLCODIF": ["texto", "Codifica para una dirección web."],
+    "ASC": ["texto", "Letras de ancho completo a medio ancho (idiomas de doble byte)."],
+    "DBCS": ["texto", "Letras de medio ancho a ancho completo (idiomas de doble byte)."],
+    "COMPLEJO": ["real; imaginario; [sufijo]", "Arma un número complejo."],
+    "IMAGINARIO": ["complejo", "Parte imaginaria."],
+    "IM.REAL": ["complejo", "Parte real."],
+    "IM.ABS": ["complejo", "Módulo."],
+    "IM.ANGULO": ["complejo", "Argumento (en radianes)."],
+    "IM.CONJUGADA": ["complejo", "Conjugado."],
+    "IM.COS": ["complejo", "Coseno."],
+    "IM.SENO": ["complejo", "Seno."],
+    "IM.COSH": ["complejo", "Coseno hiperbólico."],
+    "IM.SENOH": ["complejo", "Seno hiperbólico."],
+    "IM.TAN": ["complejo", "Tangente."],
+    "IM.COT": ["complejo", "Cotangente."],
+    "IM.SEC": ["complejo", "Secante."],
+    "IM.CSC": ["complejo", "Cosecante."],
+    "IM.SECH": ["complejo", "Secante hiperbólica."],
+    "IM.CSCH": ["complejo", "Cosecante hiperbólica."],
+    "IM.EXP": ["complejo", "Exponencial."],
+    "IM.LN": ["complejo", "Logaritmo natural."],
+    "IM.LOG10": ["complejo", "Logaritmo base 10."],
+    "IM.LOG2": ["complejo", "Logaritmo base 2."],
+    "IM.RAIZ2": ["complejo", "Raíz cuadrada."],
+    "IM.POT": ["complejo; potencia", "Potencia."],
+    "IM.DIV": ["complejo1; complejo2", "Cociente."],
+    "IM.SUSTR": ["complejo1; complejo2", "Resta."],
+    "IM.SUM": ["complejo1; …", "Suma."],
+    "IM.PRODUCT": ["complejo1; …", "Producto."],
+    "BESSELJ": ["x; n", "Función de Bessel J."],
+    "BESSELY": ["x; n", "Función de Bessel Y."],
+    "BESSELI": ["x; n", "Función de Bessel modificada I."],
+    "BESSELK": ["x; n", "Función de Bessel modificada K."],
+    "DISTR.BINOM.SERIE": ["ensayos; probabilidad; éxitos; [éxitos2]", "Probabilidad binomial de un rango de éxitos."],
+    "INV.BINOM": ["ensayos; probabilidad; alfa", "El menor número de éxitos que acumula alfa."],
+    "DISTR.HIPERGEOM.N": ["éxitos_muestra; muestra; éxitos_población; población; acumulado", "Distribución hipergeométrica."],
+    "DISTR.HIPERGEOM": ["éxitos_muestra; muestra; éxitos_población; población", "Hipergeométrica (versión anterior)."],
+    "NEGBINOM.DIST": ["fracasos; éxitos; probabilidad; acumulado", "Binomial negativa."],
+    "NEGBINOMDIST": ["fracasos; éxitos; probabilidad", "Binomial negativa (versión anterior)."],
+    "DISTR.LOGNORM": ["x; media; desv; acumulado", "Lognormal."],
+    "INV.LOGNORM": ["probabilidad; media; desv", "Inversa de la lognormal."],
+    "DISTR.LOG.NORM": ["x; media; desv", "Lognormal acumulada (versión anterior)."],
+    "DISTR.LOG.INV": ["probabilidad; media; desv", "Inversa lognormal (versión anterior)."],
+    "DISTR.WEIBULL": ["x; alfa; beta; acumulado", "Weibull."],
+    "DIST.WEIBULL": ["x; alfa; beta; acumulado", "Weibull (versión anterior)."],
+    "PRUEBA.T.N": ["matriz1; matriz2; colas; tipo", "Prueba t de Student."],
+    "PRUEBA.T": ["matriz1; matriz2; colas; tipo", "Prueba t (versión anterior)."],
+    "PRUEBA.F.N": ["matriz1; matriz2", "Prueba F."],
+    "PRUEBA.F": ["matriz1; matriz2", "Prueba F (versión anterior)."],
+    "PRUEBA.CHICUAD": ["observado; esperado", "Prueba ji cuadrada."],
+    "PRUEBA.CHI": ["observado; esperado", "Prueba ji cuadrada (versión anterior)."],
+    "PRUEBA.Z.N": ["matriz; x; [sigma]", "Prueba z (una cola)."],
+    "PRUEBA.Z": ["matriz; x; [sigma]", "Prueba z (versión anterior)."],
+    "MODA.VARIOS": ["número1; …", "Todas las modas."],
+    "RANGO.PERCENTIL.INC": ["matriz; x; [cifras]", "Lugar porcentual (incluyente)."],
+    "RANGO.PERCENTIL.EXC": ["matriz; x; [cifras]", "Lugar porcentual (excluyente)."],
+    "RANGO.PERCENTIL": ["matriz; x; [cifras]", "Lugar porcentual."],
+    "PROBABILIDAD": ["valores; probabilidades; inferior; [superior]", "Probabilidad de un intervalo."],
+    "ERROR.TIPICO.XY": ["conocido_y; conocido_x", "Error típico de la regresión."],
+    "ESTIMACION.LINEAL": ["conocido_y; [conocido_x]; [constante]; [estadística]", "Regresión lineal (coeficientes y estadística)."],
+    "ESTIMACION.LOGARITMICA": ["conocido_y; [conocido_x]; [constante]; [estadística]", "Regresión exponencial."],
+    "CRECIMIENTO": ["conocido_y; [conocido_x]; [nueva_x]; [constante]", "Pronóstico de crecimiento exponencial."],
+    "PAGO.INT.ENTRE": ["tasa; períodos; va; inicio; fin; tipo", "Interés acumulado entre dos períodos."],
+    "PAGO.PRINC.ENTRE": ["tasa; períodos; va; inicio; fin; tipo", "Capital acumulado entre dos períodos."],
+    "CUPON.DIAS.L1": ["liquidación; vencimiento; frecuencia; [base]", "Días desde el cupón anterior."],
+    "CUPON.DIAS": ["liquidación; vencimiento; frecuencia; [base]", "Días del período del cupón."],
+    "CUPON.DIAS.L2": ["liquidación; vencimiento; frecuencia; [base]", "Días hasta el siguiente cupón."],
+    "CUPON.FECHA.L2": ["liquidación; vencimiento; frecuencia; [base]", "Fecha del siguiente cupón."],
+    "CUPON.FECHA.L1": ["liquidación; vencimiento; frecuencia; [base]", "Fecha del cupón anterior."],
+    "CUPON.NUM": ["liquidación; vencimiento; frecuencia; [base]", "Cupones por pagar."],
+    "PRECIO": ["liquidación; vencimiento; tasa; rendimiento; reembolso; frecuencia; [base]", "Precio de un bono."],
+    "RENDTO": ["liquidación; vencimiento; tasa; precio; reembolso; frecuencia; [base]", "Rendimiento de un bono."],
+    "DURACION": ["liquidación; vencimiento; cupón; rendimiento; frecuencia; [base]", "Duración de Macaulay."],
+    "DURACION.MODIF": ["liquidación; vencimiento; cupón; rendimiento; frecuencia; [base]", "Duración modificada."],
+    "TASA.DESC": ["liquidación; vencimiento; precio; reembolso; [base]", "Tasa de descuento."],
+    "TASA.INT": ["liquidación; vencimiento; inversión; reembolso; [base]", "Tasa de interés de una inversión total."],
+    "PRECIO.DESCUENTO": ["liquidación; vencimiento; descuento; reembolso; [base]", "Precio de un valor con descuento."],
+    "CANTIDAD.RECIBIDA": ["liquidación; vencimiento; inversión; descuento; [base]", "Lo que se recibe al vencimiento."],
+    "RENDTO.DESC": ["liquidación; vencimiento; precio; reembolso; [base]", "Rendimiento de un valor con descuento."],
+    "PRECIO.VENCIMIENTO": ["liquidación; vencimiento; emisión; tasa; rendimiento; [base]", "Precio de un valor que paga al vencimiento."],
+    "RENDTO.VENCTO": ["liquidación; vencimiento; emisión; tasa; precio; [base]", "Rendimiento de un valor que paga al vencimiento."],
+    "INT.ACUM": ["emisión; primer_interés; liquidación; tasa; [par]; frecuencia; [base]", "Interés acumulado de un valor con pagos periódicos."],
+    "INT.ACUM.V": ["emisión; liquidación; tasa; [par]; [base]", "Interés acumulado al vencimiento."],
+    "LETRA.DE.TES.PRECIO": ["liquidación; vencimiento; descuento", "Precio de una letra del Tesoro."],
+    "LETRA.DE.TES.RENDTO": ["liquidación; vencimiento; precio", "Rendimiento de una letra del Tesoro."],
+    "LETRA.DE.TES.EQV.A.BONO": ["liquidación; vencimiento; descuento", "Rendimiento equivalente a un bono."],
+    "AMORTIZ.LIN": ["costo; compra; primer_período; residual; período; tasa; [base]", "Depreciación lineal (sistema francés)."],
+    "AMORTIZ.PROGRE": ["costo; compra; primer_período; residual; período; tasa; [base]", "Depreciación degresiva (sistema francés)."],
+    "ESFORMULA": ["referencia", "VERDADERO si la celda tiene una fórmula."]
   };
 
   function num(v) {
@@ -1694,6 +2808,14 @@
           const v = expr(); toma(")");
           if (!Array.isArray(v)) return 1;
           return nombre === "FILAS" ? filasDe(v) : colsDe(v);
+        }
+        if (nombre === "ESFORMULA") {
+          // ¿la celda tiene una fórmula? (se mira lo que tiene escrito, no su valor)
+          const r = refSola();
+          if (!r) throw E("#VALOR!");
+          toma(")");
+          const hh = hojaDe(r.hoja, h), c = cajaDeRef(r), raw = hh && hh.obtener ? hh.obtener(c.c1, c.f1) : "";
+          return typeof raw === "string" && raw.trim().startsWith("=");
         }
         if (nombre === "INDIRECTO") {
           const t = texto(expr()).trim(); resto();
@@ -2225,15 +3347,30 @@
     }).join(";");
   }
   /** Lo que alguien escribe en una celda: el valor a guardar y el formato que conviene ponerle. */
+  /**
+   * Lo que alguien escribe en una celda, como lo entiende Excel (con los formatos que Excel pone solo; comparado con
+   * Excel 2024 en pruebas/office/datos_excel.py): 10% (0%; con decimales 0.00%), $25 ($#,##0_);($#,##0), con decimales
+   * .00), 1,250 (#,##0; con decimales #,##0.00), 1e3 (0.00E+00), (7) → −7, 12-03-2026 → la fecha (día-mes-año, como en
+   * México; NOM lee fechas con /).
+   */
   function leerEntrada(t) {
     const s = String(t == null ? "" : t).trim();
     if (!s || s[0] === "=") return { crudo: t, formato: null };
     let m = /^-?\d+(?:([.,])(\d+))?%$/.exec(s);
-    if (m) return { crudo: s, formato: m[2] ? "0." + "0".repeat(Math.min(4, m[2].length)) + "%" : "0%" };
+    if (m) return { crudo: s, formato: m[2] ? "0.00%" : "0%" };
     m = /^(-?)\$\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?$/.exec(s);
-    if (m) return { crudo: m[1] + m[2].replace(/,/g, "") + (m[3] ? "." + m[3] : ""), formato: "$#,##0.00" };
+    if (m) return { crudo: m[1] + m[2].replace(/,/g, "") + (m[3] ? "." + m[3] : ""), formato: m[3] ? "$#,##0.00_);($#,##0.00)" : "$#,##0_);($#,##0)" };
     m = /^(-?)(\d{1,3}(?:,\d{3})+)(?:\.(\d+))?$/.exec(s);
-    if (m) return { crudo: m[1] + m[2].replace(/,/g, "") + (m[3] ? "." + m[3] : ""), formato: m[3] ? "#,##0." + "0".repeat(Math.min(4, m[3].length)) : "#,##0" };
+    if (m) return { crudo: m[1] + m[2].replace(/,/g, "") + (m[3] ? "." + m[3] : ""), formato: m[3] ? "#,##0.00" : "#,##0" };
+    // notación científica
+    m = /^[+-]?(?:\d+\.?\d*|\.\d+)[eE][+-]?\d+$/.exec(s);
+    if (m && isFinite(+s)) return { crudo: String(+s), formato: "0.00E+00" };
+    // negativo entre paréntesis (contabilidad)
+    m = /^\((\$?)\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?\)$/.exec(s);
+    if (m) return { crudo: "-" + m[2].replace(/,/g, "") + (m[3] ? "." + m[3] : ""), formato: m[1] ? (m[3] ? "$#,##0.00_);($#,##0.00)" : "$#,##0_);($#,##0)") : null };
+    // fecha con guiones (día-mes-año) → como la escribe NOM (día/mes/año)
+    m = /^(\d{1,2})-(\d{1,2})-(\d{4})$/.exec(s);
+    if (m && +m[2] >= 1 && +m[2] <= 12 && +m[1] >= 1 && +m[1] <= 31) return { crudo: `${m[1]}/${m[2]}/${m[3]}`, formato: null };
     return { crudo: t, formato: null };
   }
 

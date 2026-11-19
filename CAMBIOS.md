@@ -2,6 +2,46 @@
 
 Lo que cambió en cada versión, en corto (es la página «Novedades» de la ayuda; la escribe `4-CODIGO/ayuda/generar.py`). El diario completo, día por día, está en `LOG.md`.
 
+## 0.17.0 — noviembre de 2026
+
+- **Las imágenes y el archivo de Office original van aparte del documento** (un almacén por espacio): un
+  PowerPoint de 10 MB que antes pasaba del tope de 25 MB (pesaba 30 MB dentro de NOM) ahora entra y el documento
+  queda chico. La misma imagen usada en muchas diapositivas se guarda una sola vez. Al descargar sale igual que
+  antes, y ya no se pierde el original de los Office de más de 14 MB (hasta 48 MB por archivo).
+- Funciona con todo lo demás: **sin Internet** (lo importado se ve y se sube al volver la red), en los **espacios
+  cifrados** (las imágenes salen de tu equipo ya cifradas: el servidor no las puede ver), en el **teléfono que
+  comparte**, en la sincronía con la nube, en el **enlace para ver** y en el proyector, y dentro del **.nom** que
+  descargas (lleva las imágenes, para abrirlo en cualquier lado).
+- **Copiar o mover** un documento a otro espacio se lleva sus imágenes. Lo que ya ningún documento usa (ni sus
+  versiones ni la papelera) se borra solo a los 30 días, y lo que ocupa cuenta en el espacio de tu cuenta.
+- Si la red se corta justo al crear o subir un documento, al reintentar **ya no queda dos veces**.
+- **Campos de Word que se actualizan, como en Word:** la fecha, el número de página, los títulos numerados
+  («Figura 1», «Tabla II»), las referencias a un marcador y a su página, las condiciones (IF), las fórmulas (=) y las
+  propiedades del documento. Se ve su último valor y **Actualizar campos (F9)** los calcula otra vez; Alt+F9 muestra
+  sus códigos; **Insertar → Campo** pone uno nuevo. Comprobado contra Word 2024: los 55 campos de prueba dan lo mismo.
+- **Imágenes EMF y WMF** (los dibujos de Windows) se ven, también las **ecuaciones viejas** de Word (Editor de
+  ecuaciones 3.0 y MathType) y los **objetos incrustados** con su vista previa, como en Word. Al descargar sale el
+  archivo original, idéntico.
+- **Los renglones de un Word se cortan donde los corta Word.** Se midió en Word 2024 cómo decide (a la izquierda y
+  justificado, en ocho fuentes): ahora un documento de Word se ve con las mismas palabras en cada renglón y en cada
+  página (en las pruebas, de 85 % a más de 99 % de renglones idénticos). El alto de cada renglón también sale como
+  en Word cuando el texto lleva otra letra que la del estilo.
+- **Tabulaciones de Word:** las tablas de contenido y los índices importados se ven con sus puntos y el número de
+  página alineado a la derecha, como en Word (también las tabulaciones de centro y decimales). Las columnas de una
+  sección continua (por ejemplo, un índice a dos columnas) se reparten parejas, como en Word.
+- **Guiones automáticos:** si el Word los tiene activados («Disposición → Guiones»), las palabras se parten al final
+  del renglón con las reglas del español o del inglés; se activan y desactivan en **Más → Guiones automáticos**.
+- **PowerPoint:** el texto de cada cuadro queda a la misma altura que en PowerPoint (se midió dónde pone cada renglón en
+  12 fuentes y 8 interlineados), también al presentar y en el proyector.
+- **Notas al final** (las de Word, numeradas aparte: i, ii, iii) y la **escala de caracteres** (texto estirado o
+  angosto) se ven como en Word.
+- **Hoja:** 224 funciones más de Excel (454 en total): estadística, ingeniería, finanzas, fechas, números complejos y
+  bases de datos. Comprobadas contra Excel 2024: 499 de 500 fórmulas dan lo mismo.
+- **Hoja: Quitar duplicados y Texto en columnas** (en el menú de la columna), como en Excel. Lo que escribes en una
+  celda se entiende como en Excel: 1e3, (7), fechas con guiones y los formatos de moneda y porcentaje que pone Excel.
+- **Arreglos:** el enlace para ver de un texto o una hoja muestra sus imágenes; un Word guardado como .nom y vuelto
+  a abrir ya no reescribe al descargar los párrafos con ecuaciones (salen idénticos al original).
+
 ## 0.16.0 — noviembre de 2026
 
 - **Se llama NOM.** Antes NOM-COLAB. La dirección principal es **www.nom.qd.je**; la de antes

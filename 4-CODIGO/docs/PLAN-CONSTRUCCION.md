@@ -738,6 +738,9 @@ sesión anterior: `./desplegar.sh roles` para las columnas nuevas de usuarios.
 
 ## Orden recomendado para la siguiente sesión
 
+**Desde el 18 de noviembre de 2026 (tarde):** leer primero `docs/RELEVO-18NOV-TARDE.md` (0.17.0: almacén de binarios,
+EMF/WMF, campos de Word, notas al final; pruebas contra Office real y regresión en la PC de Windows).
+
 **Desde el 18 de noviembre de 2026 (madrugada):** leer primero `docs/RELEVO-18NOV.md` (la Raspberry quedó apagada
 tras probar el kernel con NVMe; lo comprobado para la 0.16.0; el almacén de binarios y el acomodo de Word como
 siguientes bloques).

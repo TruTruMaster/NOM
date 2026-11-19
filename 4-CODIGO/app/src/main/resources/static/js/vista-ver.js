@@ -21,6 +21,8 @@
     try {
       r = await NOM.api.get("/api/ver/" + encodeURIComponent(token), undefined, { sin401: true, ms: 15000 });
       if (llave && NOM.e2e) { r.estado = await NOM.e2e.estadoConLlave(llave, r.estado); r.documento.nombre = await NOM.e2e.valorConLlave(llave, r.documento.nombre); }
+      // imágenes y medios del almacén de binarios: por la ruta del enlace (sin sesión) y con la llave del documento
+      if (NOM.binarios) NOM.binarios.contexto({ ver: token, llave: llave ? NOM.binarios.llaveDeTexto(llave) : null });
       // El nombre del espacio va cifrado con la llave del espacio, que este enlace no trae.
       if (/^e2e:/.test(String(r.espacio || ""))) r.espacio = "";
     }
@@ -41,7 +43,9 @@
     const limpiar = [];
 
     if (modo === "TEXTO" || modo === "HOJA") {
-      // En un marco aislado y sin scripts: se ve igual que el documento exportado a HTML.
+      // En un marco aislado y sin scripts: se ve igual que el documento exportado a HTML. Las imágenes del almacén de
+      // binarios van dentro (como datos): se traen antes por la ruta del enlace.
+      if (NOM.binarios && NOM.binarios.refsDoc(doc).size) { try { await NOM.binarios.precargar(doc); } catch (e) { /* lo que falte sale vacío */ } }
       const f = document.createElement("iframe");
       f.className = "ver-marco";
       f.title = d.nombre || "Documento";
@@ -60,6 +64,7 @@
         <figcaption>${i + 1} / ${doc.paginas().length}</figcaption></figure>`).join("")}</div>`;
       const escalar = () => $$(".ver-diapo-caja", cuerpo).forEach((c) => { c.firstElementChild.style.transform = `scale(${c.clientWidth / T.w})`; });
       escalar();
+      if (NOM.diapo && NOM.diapo.ajustarRenglones) NOM.diapo.ajustarRenglones(cuerpo);
       addEventListener("resize", escalar);
       limpiar.push(() => removeEventListener("resize", escalar));
       imprimir.hidden = false;

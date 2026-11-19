@@ -70,7 +70,12 @@ class Pagina:
         return self.ev("(s) => { const e = [...document.querySelectorAll(s)].find(x => x.offsetParent || x.getClientRects().length) || null; if (!e) return null; e.scrollIntoView({block: e.tagName === 'TD' ? 'center' : 'nearest', inline: e.tagName === 'TD' ? 'center' : 'nearest'}); const r = e.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }", sel)
 
     def clic(self, sel, **k):
-        c = self.centro(sel)
+        # (espera a que aparezca: con varias pruebas a la vez la página tarda un poco más)
+        c = None
+        for _ in range(40):
+            c = self.centro(sel)
+            if c: break
+            self.t(250)
         if not c: raise AssertionError("no está: " + sel)
         self.p.mouse.click(c[0], c[1], **k); self.t(250)
 
@@ -94,10 +99,17 @@ class Pagina:
         self.p.mouse.click(*c); self.t(350)
 
     def boton(self, texto, dentro=".velo .hoja"):
-        c = self.ev("""([t, d]) => { const b = [...document.querySelectorAll(d + ' button, ' + d + ' a.btn, ' + d + ' [role=tab]')].find(x => x.offsetParent && x.textContent.trim().replace(/\\s+/g, ' ').startsWith(t));
-            if (!b) return null; const r = b.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }""", [texto, dentro])
+        c = None
+        for _ in range(40):
+            c = self._boton(texto, dentro)
+            if c: break
+            self.t(250)
         if not c: raise AssertionError(f"no hay botón «{texto}» en {dentro}")
         self.p.mouse.click(*c); self.t(400)
+
+    def _boton(self, texto, dentro):
+        return self.ev("""([t, d]) => { const b = [...document.querySelectorAll(d + ' button, ' + d + ' a.btn, ' + d + ' [role=tab]')].find(x => x.offsetParent && x.textContent.trim().replace(/\\s+/g, ' ').startsWith(t));
+            if (!b) return null; const r = b.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }""", [texto, dentro])
 
     def hoja_abierta(self):
         return self.ev("() => (document.querySelector('.velo .hoja h2') || {}).textContent || null")
@@ -135,6 +147,13 @@ def prueba_hoja(P, c, e):
     datos = [["Nombre", "Cal", "Faltas", "Grupo"], ["Ana", "9", "1", "A"], ["Luis", "7.5", "3", "B"], ["Eva", "10", "0", "A"], ["Juan", "6", "5", "B"]]
     for i, fila in enumerate(datos):
         for j, v in enumerate(fila): escribir(P, j, i, v)
+    # (con muchas pruebas a la vez, en Firefox a veces se perdía una celda al pasar de un renglón al otro: lo que no
+    # quedó se escribe otra vez; lo que se prueba aquí son las fórmulas, no la captura)
+    for _ in range(3):
+        faltan = [(i, j, v) for i, fila in enumerate(datos) for j, v in enumerate(fila) if (visto(P, j, i) or "") != v]
+        if not faltan: break
+        for i, j, v in faltan: escribir(P, j, i, v); P.t(150)
+    check("los datos de la hoja quedaron escritos", not faltan, faltan)
     casos = [  # (fórmula, esperado)
         ("=SUMA(B2:B5)", "32.5"), ("=SUM(B2:B5)", "32.5"), ("=PROMEDIO(B2:B5)", "8.125"), ("=MIN(B2:B5)", "6"), ("=MAX(B2:B5)", "10"),
         ("=CONTAR(B2:B5)", "4"), ('=SI(B2>=8;"Aprobado";"Repite")', "Aprobado"), ("=REDONDEAR(B3/3;2)", "2.5"),
@@ -451,7 +470,11 @@ def prueba_colaboracion(P, c, e, salida):
     check("Invitar abre «Código de invitación»", (P.hoja_abierta() or "").startswith("Código"), P.hoja_abierta())
     P.clic('.velo .hoja input[data-invitados]') if P.ev("() => !!document.querySelector('.velo .hoja input[data-invitados]')") else None
     P.ev("() => { const i = document.querySelector('.velo .hoja input[data-invitados]'); if (i && !i.checked) { i.checked = true; i.dispatchEvent(new Event('change', {bubbles: true})); } }")
-    P.boton("Crear el código"); P.t(800)
+    P.boton("Crear el código")
+    # (el código lo da el servidor: con varias pruebas a la vez puede tardar varios segundos)
+    try: p.wait_for_function("() => ((document.querySelector('.qr-codigo') || {}).textContent || '').replace('-', '').trim().length >= 8", timeout=30000)
+    except Exception: pass
+    P.t(300)
     codigo = P.ev("() => (document.querySelector('.qr-codigo') || {}).textContent || ''").replace("-", "").strip()
     url_vista = P.ev("() => (document.querySelector('.qr-url') || {}).textContent || ''")
     check("se crea un código de 8 letras", len(codigo) == 8, codigo)
@@ -463,6 +486,9 @@ def prueba_colaboracion(P, c, e, salida):
     B = otra_pagina(movil=True)
     enlace = (qr or "").replace("http://" + (qr or "x/").split("/")[2], OTRO["base_local"]) if qr else OTRO["base_local"] + "/unirse?c=" + codigo
     B.p.goto(enlace); B.t(1500)
+    # (la página de la invitación pide los datos del código al servidor: con la computadora ocupada tarda más)
+    try: B.p.wait_for_function("(n) => document.body.innerText.includes(n)", arg=esp["nombre"], timeout=20000)
+    except Exception: pass
     check("el enlace del QR abre «Te invitan a…» con el nombre del espacio", esp["nombre"] in (B.ev("() => document.body.innerText") or ""), (B.ev("() => document.body.innerText") or "")[:200])
     # Fase 13: ya no se escribe un apodo (nadie se hace pasar por otro): se entra con un alias al azar.
     check("no hay campo para escribir un apodo", not B.ev("() => !!document.querySelector('#ap')"), "hay #ap")

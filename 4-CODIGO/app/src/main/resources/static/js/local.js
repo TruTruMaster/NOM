@@ -88,7 +88,14 @@
     /** Sube el documento a un espacio; si sale bien, se borra la copia local. */
     async subir(id, espacioId) {
       const m = local.meta(id);
-      const d = await NOM.api.post(`/api/espacios/${espacioId}/documentos`, { nombre: m.nombre, modo: m.modo, ops: local.opsDe(id) }, { ms: 60000 });
+      // La misma clave en cada intento: si la red se cae justo después de crearlo, al volver no queda dos veces.
+      let clave = m.claveCrear;
+      if (!clave && NOM.binarios) { clave = NOM.binarios.claveNueva(); local.actualizarMeta(id, { claveCrear: clave }); }
+      // Por el almacén de binarios (imágenes y el Office original van aparte: un Office grande cabe) y, en un espacio
+      // cifrado, con la llave del documento. Sin cambiar el contexto del documento que esté abierto.
+      const d = NOM.binarios
+        ? await NOM.binarios.crearEnEspacio({ id: espacioId }, m.nombre, m.modo, local.opsDe(id), { clave, sinContexto: true })
+        : await NOM.api.post(`/api/espacios/${espacioId}/documentos`, { nombre: m.nombre, modo: m.modo, ops: local.opsDe(id) }, { ms: 60000 });
       local.eliminar(id);
       // Si alguien lo tenía abierto (otra pestaña o el editor), sabe a dónde se fue.
       if (conCuenta()) { const sub = NOM.leer(NOM.api.clave("subidos"), {}) || {}; sub[id] = { doc: d.id, t: Date.now() }; NOM.guardar(NOM.api.clave("subidos"), sub); }

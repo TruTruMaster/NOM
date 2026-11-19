@@ -64,7 +64,7 @@ if [ "$MODO" != rapido ]; then
                            "$R/xlsx/ms-plantilla-tablas-dinamicas.xlsx" "$R/pptx/ms-plantilla-presentacion-basica.pptx" "$R/pptx/lo-group-rot.pptx" \
                            "$CACHE/corpus/docx/ms-complex2010.docx"
   corre office_raros     "$PY" pruebas/office/raros.py
-  corre funciones_lo     "$PY" pruebas/office/funciones_lo.py     # las funciones de la hoja contra LibreOffice
+  corre funciones_excel  "$PY" pruebas/office/funciones_excel.py  # las funciones de la hoja contra Excel 2024 real
   # Lo editado y exportado, con el validador oficial de Microsoft (Open XML SDK): 0 errores nuevos contra el original.
   if [ -x "$HOME/.dotnet/dotnet" ]; then corre office_openxml python3 pruebas/office/validar_openxml.py "$CACHE/office-ediciones"
   else echo "AVISO: sin .NET 8 en ~/.dotnet no corre el validador de Microsoft (ver pruebas/office/validar_openxml.py)" | tee -a "$RES"; fi
