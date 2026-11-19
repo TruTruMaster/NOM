@@ -40,7 +40,9 @@ try:
         for j in range(1, u.Column + u.Columns.Count + 1):
             c = h.Columns(j)
             if c.OutlineLevel > 1 or c.Hidden: cols[str(j)] = {"nivel": c.OutlineLevel, "oculta": bool(c.Hidden)}
-        hojas.append({"nombre": h.Name, "celdas": celdas, "filas": filas, "columnas": cols})
+        try: h.Activate(); vf = bool(wb.Windows(1).DisplayFormulas)
+        except Exception: vf = None
+        hojas.append({"nombre": h.Name, "celdas": celdas, "filas": filas, "columnas": cols, "formulas_visibles": vf})
     res["hojas"] = hojas
     wb.Close(False)
 except Exception as e:

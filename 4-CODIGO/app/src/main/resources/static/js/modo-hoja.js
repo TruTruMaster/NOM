@@ -1171,7 +1171,19 @@
       // ------------------------------------------------------------ pintar
       let faseX = 0, faseY = 0;   // dónde empieza la celda que se pinta, desde la esquina de A1 (para las tramas)
       /** Cómo se ve una celda: texto con su formato, estilos y clases. */
+      /**
+       * «Mostrar fórmulas» (Ctrl+`, como Excel; vf en la hoja, showFormulas al descargar): cada celda muestra lo que tiene
+       * escrito —la fórmula, o el valor tal cual— en vez de su resultado con formato.
+       */
       function aspecto(c, f, ev, conds, cfx) {
+        const a = aspectoBase(c, f, ev, conds, cfx);
+        if (!t || !t.vf) return a;
+        const cr = String(crudo(c, f));
+        if (cr === "") return a;
+        return Object.assign({}, a, { txt: cr, num: !cr.startsWith("=") && a.num, err: false, gato: false, relleno: null });
+      }
+      function alternarFormulas() { if (t && !ed.soloLectura) cambiarT({ vf: t.vf ? null : true }); }
+      function aspectoBase(c, f, ev, conds, cfx) {
         const ref = F().ref(c, f), v = ev.valor(c, f), fmt = t["f:" + ref];
         const st = [];
         let color = t["k:" + ref] || "", fondo = t["r:" + ref] || "", negrita = !!t["n:" + ref];
@@ -1941,6 +1953,8 @@
         if (e.key === "Enter") { e.preventDefault(); e.shiftKey ? mover(0, -1) : abrirEditor(null, true); return; }
         if (e.key === "Tab") { e.preventDefault(); conTab(e.shiftKey); return; }
         if (e.key === "F2") { e.preventDefault(); abrirEditor(null, true); return; }
+        // Ctrl+` muestra u oculta las fórmulas (como Excel)
+        if (mod && (e.key === "`" || e.code === "Backquote")) { e.preventDefault(); alternarFormulas(); return; }
         if (e.shiftKey && e.altKey && (e.key === "ArrowRight" || e.key === "ArrowLeft") && !ed.soloLectura) { e.preventDefault(); agrupar(ejeElegido(), e.key === "ArrowRight" ? 1 : -1); return; }
         // F9 calcula todo el libro y Mayús+F9 la hoja (en cálculo manual; en automático no hace falta, como en Excel)
         if (e.key === "F9") { e.preventDefault(); calcularAhora(e.shiftKey); return; }
@@ -2830,6 +2844,7 @@
               { texto: "Buscar", icono: "search", fn: () => buscar(false) },
               { texto: "Buscar objetivo", corto: "Objetivo", icono: "target", off: lect, fn: () => dialogoObjetivo() },
               { texto: "Nombres", icono: "tags", fn: () => administradorNombres() },
+              { texto: t && t.vf ? "Ver resultados" : "Mostrar fórmulas", corto: t && t.vf ? "Resultados" : "Fórmulas", icono: "square-function", off: lect, fn: alternarFormulas },
               { texto: "Esquema", icono: "list-tree", off: lect, sub: [
                 { texto: "Agrupar filas", corto: "+ Filas", icono: "list-tree", fn: () => agrupar("f", 1) }, { texto: "Agrupar columnas", corto: "+ Col.", icono: "list-tree", fn: () => agrupar("c", 1) },
                 { texto: "Desagrupar filas", corto: "− Filas", icono: "list-x", fn: () => agrupar("f", -1) }, { texto: "Desagrupar columnas", corto: "− Col.", icono: "list-x", fn: () => agrupar("c", -1) },
@@ -2960,13 +2975,15 @@
           { texto: "Desagrupar columnas", icono: "list-x", fn: () => agrupar("c", -1) },
           { texto: "Ocultar detalle", icono: "minus-square", fn: () => detalle(false) },
           { texto: "Mostrar detalle", icono: "plus-square", fn: () => detalle(true) },
-          { texto: "Borrar esquema", icono: "eraser", fn: borrarEsquema },
+          { texto: "Mostrar fórmulas (Ctrl+`)", icono: "square-function", fn: () => { const a = NOM.editorActual.modoApi.api.formulasVisibles; if (a) a(); }, claves: "ver formulas mostrar formulas auditoria" },
+        { texto: "Borrar esquema", icono: "eraser", fn: borrarEsquema },
           { titulo: "Fórmulas" },
           { texto: "Cálculo automático", icono: "zap", marcado: modoCalculo() === "auto", fn: () => fijarModoCalculo("auto") },
           { texto: "Automático excepto tablas de datos", icono: "zap", marcado: modoCalculo() === "sinTablas", fn: () => fijarModoCalculo("sinTablas") },
           { texto: "Cálculo manual", icono: "hand", marcado: modoCalculo() === "manual", fn: () => fijarModoCalculo("manual") },
           { texto: "Calcular ahora", icono: "calculator", atajo: "F9", fn: () => calcularAhora(false) },
           { texto: "Calcular esta hoja", icono: "calculator", atajo: "Mayús+F9", fn: () => calcularAhora(true) },
+          { texto: "Mostrar fórmulas", icono: "square-function", atajo: "Ctrl+`", marcado: !!(t && t.vf), fn: alternarFormulas },
           { texto: "Definir nombre…", icono: "tag", fn: () => dialogoNombre(null, render) },
           { texto: "Administrador de nombres…", icono: "tags", fn: () => administradorNombres() },
           { titulo: "Hoja" },
@@ -3000,7 +3017,7 @@
       }
       /** ¿El cambio altera la forma de la tabla (columnas, filas, combinadas, anchos…)? Entonces se repinta todo. */
       // (el esquema —niveles y filas o columnas ocultas— cambia qué filas y columnas se dibujan)
-      const deForma = (k) => /^(filas|cols|fijasF|fijasC|vistaComun|nombre|tipo|eliminado)$/.test(k) || /^(m|aw|ah|dv|oh|ow|ol|olc):/.test(k);
+      const deForma = (k) => /^(filas|cols|fijasF|fijasC|vistaComun|nombre|tipo|eliminado|vf)$/.test(k) || /^(m|aw|ah|dv|oh|ow|ol|olc):/.test(k);
 
       this.cambios = (lista) => {
         const tId = t && t.id;
@@ -3051,6 +3068,7 @@
         dialogos: { duplicados: dialogoDuplicados, textoColumnas: dialogoTextoColumnas, objetivo: dialogoObjetivo, nombres: administradorNombres },
         calculo: { modo: modoCalculo, fijar: fijarModoCalculo, ahora: calcularAhora },
         esquema: { agrupar, alternar: alternarGrupo, nivel: mostrarNivel, detalle, borrar: borrarEsquema },
+        formulasVisibles: alternarFormulas,
         nombres: { guardar: guardarNombre, lista: nombresLibro, invalido: nombreInvalido } };
       void self;
 

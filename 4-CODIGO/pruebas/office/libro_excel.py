@@ -38,6 +38,15 @@ CASOS = {
           return mal; }""",
         "revisar": lambda x, r: [] if x.get("calculo") == "manual" else [f"Excel abrió en cálculo {x.get('calculo')}"],
     },
+    # Mostrar fórmulas (Ctrl+`): la hoja muestra la fórmula escrita y sale con showFormulas="1"
+    "mostrar-formulas": {
+        "celdas": {"A1": "2", "A2": "=A1*3", "A3": "=SUMA(A1:A2)"},
+        "js": """async (H, hoja) => { const mal = []; H.formulasVisibles(); await new Promise((r) => setTimeout(r, 400));
+          const td = document.querySelector('td[data-c="0"][data-f="1"]');
+          if (!td || td.textContent.trim() !== "=A1*3") mal.push("A2 muestra " + (td && td.textContent));
+          return mal; }""",
+        "revisar": lambda x, r: [] if x["hojas"][0].get("formulas_visibles") is True else [f"Excel: fórmulas visibles = {x['hojas'][0].get('formulas_visibles')}"],
+    },
     # Esquema: filas 2-6 en un grupo y 3-4 adentro (nivel 2), contraído; columnas B-C agrupadas y contraídas
     "esquema": {
         "celdas": {"A1": "Mes", "A2": "1", "A3": "2", "A4": "3", "A5": "4", "A6": "5", "A7": "=SUMA(A2:A6)", "B1": "x", "C1": "y", "D1": "=B1&C1"},

@@ -3504,7 +3504,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
   function parcharHoja(xml, base, t, fab, ev) {
     const O = NOM.origen;
     const celdas = new Map(), filasAlto = new Set(), colsCamb = new Set(), filasEsq = new Set(), colsAncho = new Set();
-    let cM = false, cPane = false, cCf = false, cDv = false, cProt = false;
+    let cM = false, cPane = false, cCf = false, cDv = false, cProt = false, cVf = false;
     const llaves = new Set(Object.keys(base));
     Object.keys(t).forEach((k) => llaves.add(k));
     llaves.forEach((k) => {
@@ -3521,9 +3521,10 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         else if (p === "cf") cCf = true;
         else if (p === "dv") cDv = true;
       } else if (k === "fijasF" || k === "fijasC") cPane = true;
+      else if (k === "vf") cVf = true;
       else if (k === "prot") cProt = true;
     });
-    if (!celdas.size && !filasAlto.size && !filasEsq.size && !colsCamb.size && !cM && !cPane && !cCf && !cDv && !cProt) return null;
+    if (!celdas.size && !filasAlto.size && !filasEsq.size && !colsCamb.size && !cM && !cPane && !cCf && !cDv && !cProt && !cVf) return null;
     // Matrices dinámicas: si la hoja cambió, lo que derrama cada fórmula se vuelve a escribir con sus valores de hoy
     // (y se borra lo que ya no alcanza); la fórmula, si cambió el tamaño de lo que derrama (su «ref»).
     if (celdas.size && ev.derrame) {
@@ -3657,13 +3658,22 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       const todas = fab.combinadas(t).map(pf).concat(fuera);
       S.pon("mergeCells", todas.length ? pf(`<mergeCells count="${todas.length}">`) + todas.join("") + pf("</mergeCells>") : "");
     }
+    if (cVf && !cPane) {
+      // «mostrar fórmulas»: solo el atributo de la vista de la hoja
+      const sv = S.una("sheetViews"), v1 = sv ? O.hijosXml(xml, sv.ci, sv.cf).find((h) => O.local(h.n) === "sheetView") : null;
+      if (v1) {
+        const attrs = quitaAttr(xml.slice(v1.a, v1.af).replace(/\/$/, ""), "showFormulas") + (t.vf ? ' showFormulas="1"' : "");
+        S.piezas.push([v1.i, v1.f, v1.ci === v1.f ? `<${v1.n}${attrs}/>` : `<${v1.n}${attrs}>${xml.slice(v1.ci, v1.cf)}</${v1.n}>`]);
+      } else if (t.vf) S.pon("sheetViews", pf('<sheetViews><sheetView showFormulas="1" workbookViewId="0"/></sheetViews>'));
+    }
     if (cPane) {
       const sv = S.una("sheetViews"), pane = fab.panel(t);
       const v1 = sv ? O.hijosXml(xml, sv.ci, sv.cf).find((h) => O.local(h.n) === "sheetView") : null;
       if (v1) {
         const resto = O.hijosXml(xml, v1.ci, v1.cf).filter((h) => !["pane", "selection"].includes(O.local(h.n))).map((h) => xml.slice(h.i, h.f)).join("");
-        S.piezas.push([v1.i, v1.f, `<${v1.n}${xml.slice(v1.a, v1.af)}>${pf(pane)}${resto}</${v1.n}>`]);
-      } else if (pane) S.pon("sheetViews", pf(`<sheetViews><sheetView workbookViewId="0">${pane}</sheetView></sheetViews>`));
+        const attrs = cVf ? quitaAttr(xml.slice(v1.a, v1.af).replace(/\/$/, ""), "showFormulas") + (t.vf ? ' showFormulas="1"' : "") : xml.slice(v1.a, v1.af).replace(/\/$/, "");
+        S.piezas.push([v1.i, v1.f, `<${v1.n}${attrs}>${pf(pane)}${resto}</${v1.n}>`]);
+      } else if (pane) S.pon("sheetViews", pf(`<sheetViews><sheetView${t.vf ? ' showFormulas="1"' : ""} workbookViewId="0">${pane}</sheetView></sheetViews>`));
     }
     if (cCf) {
       const viejas = S.todas("conditionalFormatting").map((h) => xml.slice(h.i, h.f)).join("");
@@ -3724,7 +3734,8 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     }
     const nvE = nivelesEsq(t), esqFmt = (nvE.f ? ` outlineLevelRow="${nvE.f}"` : "") + (nvE.c ? ` outlineLevelCol="${nvE.c}"` : "");
     const pane = fab.panel(t);
-    const vista = pane ? `<sheetView workbookViewId="0"${primera ? ' tabSelected="1"' : ""}>${pane}</sheetView>` : `<sheetView workbookViewId="0"${primera ? ' tabSelected="1"' : ""}/>`;
+    const vf = t.vf ? ' showFormulas="1"' : "";
+    const vista = pane ? `<sheetView${vf} workbookViewId="0"${primera ? ' tabSelected="1"' : ""}>${pane}</sheetView>` : `<sheetView${vf} workbookViewId="0"${primera ? ' tabSelected="1"' : ""}/>`;
     const combinadas = fab.combinadas(t);
     const reglas = Object.keys(t).filter((k) => k.startsWith("cf:")).map((k) => fab.regla(t[k])).join("");
     const validaciones = Object.keys(t).filter((k) => k.startsWith("dv:")).map((k) => fab.validacion(t[k])).filter(Boolean);
@@ -3997,8 +4008,8 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
   // 6 protección: la de cada hoja (prot), la de cada celda (pr: «u» sin bloquear, «h» fórmula oculta) y la del libro ·
   // 7 nombres definidos: las fórmulas los conservan (=B2*IVA, como Excel; antes se sustituían por su definición) y el
   // libro los guarda en «_doc» (nombres), para el Administrador de nombres · 8 esquema: el nivel de cada fila (ol:) y de
-  // cada columna (olc:) agrupada.
-  const VERSION_XL = 8;
+  // cada columna (olc:) agrupada · 9 «mostrar fórmulas» de la hoja (vf).
+  const VERSION_XL = 9;
   function modeloXlsx(z, version) {
     const V = version || VERSION_XL;
     const P = (t) => new DOMParser().parseFromString(t, "application/xml");
@@ -4649,6 +4660,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         campos.xl = { fuente: fuenteLibro.nombre || "Calibri", tam: fuenteLibro.sz || 11, w0, h0: Math.round((drh || 15) * 96 / 72),
           rejilla: !(sv && at(sv, "showGridLines") === "0"), rtl: !!(sv && at(sv, "rightToLeft") === "1"), zoom: sv && +at(sv, "zoomScale") ? +at(sv, "zoomScale") : 100,
           oculta: estado === "hidden" || estado === "veryHidden" };
+        if (V >= 9 && sv && /^(1|true)$/.test(at(sv, "showFormulas") || "")) campos.vf = true;
       }
       let maxF = 0, maxC = 0;
       const compartidas = {};
