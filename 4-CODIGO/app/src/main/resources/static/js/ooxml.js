@@ -3,6 +3,16 @@
    Un archivo OOXML es un .zip de XML; aquí se arma comprimido, sin librerías (compresion.js). */
 (function () {
   "use strict";
+  /**
+   * Un símbolo de Word (w:sym): con la fuente Symbol, su letra en Unicode (F06B → κ, como la dibuja Word; js/emf.js);
+   * con otra fuente, el carácter tal cual. (Antes quedaba la letra latina —«knbernaw» en lugar de «κνβερναω»— y al
+   * descargar un párrafo cambiado salía así en Word.)
+   */
+  function textoSym(fuente, codigo) {
+    const k = parseInt(codigo || "20", 16);
+    if (/^symbol$/i.test(fuente || "") && NOM.emf && NOM.emf.deSymbol) return NOM.emf.deSymbol(String.fromCharCode(k >= 0xF000 ? k : k + 0xF000));
+    return String.fromCharCode(k & 0xFFF);
+  }
   const NOM = window.NOM;
   const F = () => NOM.formulas;
   const enc = new TextEncoder();
@@ -734,7 +744,7 @@
                 if (cn === "t") t = c.ci === c.cf ? "" : O.desescapar(xp.slice(c.ci, c.cf));
                 else if (cn === "tab") t = "\t";
                 else if (cn === "br" || cn === "cr") { if (O.attr(xp, c, "w:type") === "page") R.raro = true; t = "\u2028"; }
-                else if (cn === "sym") t = String.fromCharCode(parseInt(O.attr(xp, c, "w:char") || "20", 16) & 0xFFF);
+                else if (cn === "sym") t = textoSym(O.attr(xp, c, "w:font"), O.attr(xp, c, "w:char"));
                 else if (["drawing", "pict", "AlternateContent", "object", "footnoteReference", "endnoteReference"].includes(cn)) obj = true;
                 if (t != null && /[<&]/.test(xp.slice(c.ci, c.cf)) && cn === "t" && /<!\[CDATA\[|<[a-zA-Z]/.test(xp.slice(c.ci, c.cf))) R.raro = true;
                 if (t == null && !obj && cn !== "lastRenderedPageBreak") R.fuera++;
@@ -2367,7 +2377,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
             } else if (cn === "endnoteReference") {
               const id = c.getAttributeNS(W, "id") || c.getAttribute("w:id");
               tramos.push({ e: { tipo: "nota", final: true, texto: notasFin[id] || "", oe: ordinal(c) }, a: {} });
-            } else if (cn === "sym") tramos.push({ x: String.fromCharCode(parseInt(c.getAttributeNS(W, "char") || c.getAttribute("w:char") || "20", 16) & 0xFFF), a });
+            } else if (cn === "sym") tramos.push({ x: textoSym(c.getAttributeNS(W, "font") || c.getAttribute("w:font"), c.getAttributeNS(W, "char") || c.getAttribute("w:char")), a });
             else if (cn === "fldChar" && parrafo) {
               // Campo de Word: { código | último valor }. Se guarda como campo (se ve su último valor, como en Word, y
               // «Actualizar campos» lo calcula otra vez); los que NOM no calcula se quedan como texto.

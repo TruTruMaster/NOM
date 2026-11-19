@@ -147,6 +147,13 @@ def prueba_hoja(P, c, e):
     datos = [["Nombre", "Cal", "Faltas", "Grupo"], ["Ana", "9", "1", "A"], ["Luis", "7.5", "3", "B"], ["Eva", "10", "0", "A"], ["Juan", "6", "5", "B"]]
     for i, fila in enumerate(datos):
         for j, v in enumerate(fila): escribir(P, j, i, v)
+    # (con muchas pruebas a la vez, en Firefox a veces se perdía una celda al pasar de un renglón al otro: lo que no
+    # quedó se escribe otra vez; lo que se prueba aquí son las fórmulas, no la captura)
+    for _ in range(3):
+        faltan = [(i, j, v) for i, fila in enumerate(datos) for j, v in enumerate(fila) if (visto(P, j, i) or "") != v]
+        if not faltan: break
+        for i, j, v in faltan: escribir(P, j, i, v); P.t(150)
+    check("los datos de la hoja quedaron escritos", not faltan, faltan)
     casos = [  # (fórmula, esperado)
         ("=SUMA(B2:B5)", "32.5"), ("=SUM(B2:B5)", "32.5"), ("=PROMEDIO(B2:B5)", "8.125"), ("=MIN(B2:B5)", "6"), ("=MAX(B2:B5)", "10"),
         ("=CONTAR(B2:B5)", "4"), ('=SI(B2>=8;"Aprobado";"Repite")', "Aprobado"), ("=REDONDEAR(B3/3;2)", "2.5"),

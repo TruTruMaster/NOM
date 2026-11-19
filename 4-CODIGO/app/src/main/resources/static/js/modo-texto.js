@@ -1142,6 +1142,8 @@
         }
         const antes = cambiaron.map((el) => !!el.dataset.acw);
         if (cambiaron.length) acomodarComoWord(cambiaron);
+        // (los cambios de pantalla de aquí no son del usuario: que el observador no los lea como escritos)
+        tomarRegistros();
         return otro || cambiaron.some((el, i) => antes[i] || !!el.dataset.acw);
       }
       /** Escala de caracteres de Word: la palabra estirada ocupa en el renglón lo que mide estirada (margen a la derecha). */
