@@ -1721,6 +1721,22 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       if (jc) r.jc = jc;
       const sg = hijo(ppr, "suppressAutoHyphens");
       if (sg) r.sinGuiones = !["0", "false", "off"].includes(val(sg) || "1");
+      // Tabulaciones de Word: [posición en pt desde el margen, tipo (i, c, d, p = decimal, b = barra), relleno]
+      const tbs = hijo(ppr, "tabs");
+      if (tbs) {
+        let lista = (r.tabs || []).slice();
+        const TIPO = { left: "i", start: "i", center: "c", right: "d", end: "d", decimal: "p", bar: "b", num: "i" };
+        for (const t of Array.from(tbs.childNodes).filter((n) => n.nodeType === 1 && n.localName === "tab")) {
+          const pos = +at(t, "pos") / 20, tipo = at(t, "val") || "left";
+          if (isNaN(pos)) continue;
+          lista = lista.filter((x) => Math.abs(x[0] - pos) > 0.05);
+          if (tipo === "clear") continue;
+          const rel = at(t, "leader");
+          lista.push([pos, TIPO[tipo] || "i", rel && rel !== "none" ? rel : undefined]);
+        }
+        lista.sort((a, b) => a[0] - b[0]);
+        r.tabs = lista;
+      }
       const ind = hijo(ppr, "ind");
       if (ind) {
         const g = (k) => { const v = at(ind, k); return v == null || v === "" || isNaN(+v) ? null : +v; };
@@ -2419,6 +2435,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         if (e) { pa.estilo = e; break; }
       }
       if (c.sinGuiones) pa.sinGuiones = true;
+      if (c.tabs && c.tabs.length) pa.tabs = c.tabs;
       // la marca de párrafo (¶) con su propia letra y tamaño: de ella sale el alto del renglón donde está
       const mr = hijo(ppr, "rPr");
       if (mr) { const am = attrsRun(mr, {}); if (+am.tam) pa.tm = +am.tam; if (am.fuente) pa.fm = am.fuente; }
@@ -2877,6 +2894,8 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         const tipo = { readOnly: "lectura", comments: "comentarios", trackedChanges: "cambios", forms: "formularios" }[ed];
         if (enf && tipo) docCampos.proteccion = { tipo, p: proteccionDe(dp, true) };
         if (wp) docCampos.modificar = { recomendada: /^(1|true|on)$/.test(wp.getAttributeNS(W, "recommended") || wp.getAttribute("w:recommended") || "") || undefined, p: proteccionDe(wp, false) };
+        const dts = x.getElementsByTagNameNS(W, "defaultTabStop")[0];
+        if (dts) { const v = +(dts.getAttributeNS(W, "val") || dts.getAttribute("w:val")) / 20; if (v > 0 && Math.abs(v - 36) > 0.01) docCampos.tabDef = v; }
         // «Guiones automáticos» de Word (Disposición → Guiones): la zona, el límite de guiones seguidos y las mayúsculas
         const ah = x.getElementsByTagNameNS(W, "autoHyphenation")[0];
         if (ah && !/^(0|false|off)$/.test(ah.getAttributeNS(W, "val") || ah.getAttribute("w:val") || "")) {

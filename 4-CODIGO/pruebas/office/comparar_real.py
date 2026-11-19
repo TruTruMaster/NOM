@@ -55,7 +55,7 @@ JS_RENGLONES = r"""
       const e = n.parentElement;
       // (las marcas del editor de un salto de página o de columna no son texto del documento)
       // (el guion de pantalla de la división automática: en la verdad de Word no es una letra del renglón)
-      if (!e || e.closest('.wd-corte, [data-obj] .wd-ctl, .wd-salto, .wd-saltocol, .wd-guion, script, style')) return NodeFilter.FILTER_REJECT;
+      if (!e || e.closest('.wd-corte, [data-obj] .wd-ctl, .wd-salto, .wd-saltocol, .wd-guion, .wd-pintado, script, style')) return NodeFilter.FILTER_REJECT;
       const cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden') return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT; } });
     let n, parrafo = null, numPar = -1, corte = null, pr = null, zz = 1;

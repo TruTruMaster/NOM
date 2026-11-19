@@ -498,6 +498,8 @@
     if (pa.lista && pa.numfmts) at += ` data-numfmts="${esc(pa.numfmts)}"`;
     if (pa.lista && pa.numid) at += ` data-numid="${esc(pa.numid)}"`;
     if (pa.interlineado) { at += ` data-li="${+pa.interlineado}"`; st += `--li:${+pa.interlineado};`; }
+    if (Array.isArray(pa.tabs) && pa.tabs.length) at += ` data-tabs="${esc(JSON.stringify(pa.tabs))}"`;
+    if (+pa.francesa) at += ` data-fr="1"`;
     // Alto de los renglones como Word: cada renglón mide lo que su letra más grande (la marca ¶ cuenta solo en el
     // último). En el navegador todo renglón mide al menos lo que la letra del párrafo: si todo el texto lleva su propia
     // letra y tamaño (y la marca también), el párrafo toma los de la marca, que en Word son casi siempre los del texto.
@@ -875,10 +877,10 @@
       }
       /** Quita lo de pantalla de un acomodo anterior (cortes y relleno) y junta el texto que se partió. */
       function quitarAcomodo(el) {
-        const pint = el.querySelectorAll(".wd-rompe, .wd-relleno");
+        const pint = el.querySelectorAll(".wd-rompe, .wd-relleno, .wd-tabw");
         if (!pint.length && !el.classList.contains("wd-acomodo")) return;
         pint.forEach((x) => x.remove());
-        el.classList.remove("wd-acomodo");
+        el.classList.remove("wd-acomodo", "con-tab");
         el.style.wordSpacing = "";
         delete el.dataset.acw;
         el.normalize();
@@ -886,7 +888,9 @@
       /** Lo que hay que leer de un párrafo para acomodarlo (todo lectura: no cambia nada). null si no se acomoda. */
       function leerAcomodo(el, compat15) {
         if (el.tagName !== "P" || el.dataset.capital != null || el.dir === "rtl") return null;
-        if (el.querySelector("br:not(.wd-pintado), .wd-guion, .wd-escala, .wd-tab, img, table")) return null;
+        if (el.querySelector(".wd-guion, .wd-escala, .wd-tab, img, table")) return null;
+        // (un salto de renglón manual sí cuenta; el <br> del final, que solo le da alto al párrafo, no)
+        if ([...el.querySelectorAll("br:not(.wd-pintado)")].some((b) => b !== el.lastChild)) return null;
         // (el texto que se aparta de un objeto que flota cambia de ancho renglón por renglón: ese lo acomoda el navegador)
         if (el.querySelector(":scope > .wd-excl")) return null;
         const alin = el.dataset.alin || "izq";
@@ -923,15 +927,19 @@
               if (!c.nodeValue.length) continue;
               const f = fuenteDe(c.parentElement);
               if (!f) return;
-              if (/\t/.test(c.nodeValue)) { mal = true; return; }
               if (!primero) primero = { nodo: c };
               // fichas: espacios, y lo demás partido después de cada guion o raya que va pegado a algo
               const v = c.nodeValue, RAYA = /[-\u2010\u2013\u2014]/;
               for (let i = 0; i < v.length;) {
                 let j = i;
+                if (v[i] === "\t") {
+                  fichas.push({ t: "\t", w: 0, esp: false, rompe: false, tab: true, nodo: c, fin: i + 1, punto: anchoW(f.css, false, ".") * f.k });
+                  i++;
+                  continue;
+                }
                 const esp = ESP_W.test(v[i]);
                 if (esp) while (j < v.length && ESP_W.test(v[j])) j++;
-                else while (j < v.length && !ESP_W.test(v[j])) { const ch = v[j++]; if (RAYA.test(ch) && j < v.length && !ESP_W.test(v[j]) && !RAYA.test(v[j])) break; }
+                else while (j < v.length && !ESP_W.test(v[j]) && v[j] !== "\t") { const ch = v[j++]; if (RAYA.test(ch) && j < v.length && !ESP_W.test(v[j]) && !RAYA.test(v[j])) break; }
                 const t = v.slice(i, j), txt = f.may ? t.toUpperCase() : t;
                 const w = anchoW(f.css, f.kern && !esp, txt) * f.k + f.ls * [...t].length;
                 fichas.push({ t, w, esp, rompe: !esp && RAYA.test(t[t.length - 1]) && j < v.length && !ESP_W.test(v[j]), nodo: c, fin: j });
@@ -953,11 +961,35 @@
         })(el);
         if (espera) return { espera: true };
         if (mal || fichas.length < 2) return null;
+        const hayTab = fichas.some((f) => f.tab);
+        // (con tabulaciones solo a la izquierda: en justificado Word estira solo lo de después de la última)
+        if (hayTab && alin !== "izq") return null;
         // dónde empieza el primer renglón (sangría de primera línea, número de lista)
         let x0 = izq;
         if (primero.nodo) { const rg = document.createRange(); rg.setStart(primero.nodo, 0); rg.setEnd(primero.nodo, Math.min(1, primero.nodo.nodeValue.length)); const q = rg.getClientRects()[0]; if (q) x0 = q.left; }
         else if (primero.obj) x0 = primero.obj.getBoundingClientRect().left;
-        return { el, alin, fichas, A1: (der - x0) / z, A: (der - izq) / z, ancho: (der - izq) / z, encoge: compat15 && alin === "just" };
+        // Tabulaciones: se miden desde el margen (el borde del párrafo; la sangría no las mueve, como en Word)
+        let tabs = null;
+        if (hayTab) {
+          let lista = [];
+          try { lista = JSON.parse(el.dataset.tabs || "[]"); } catch (e) { lista = []; }
+          const pt = 96 / 72, orig = er.left - (parseFloat(cs.marginLeft) - (parseFloat(cs.getPropertyValue("--sx")) || 0)) * z;
+          tabs = { lista: lista.map(([p, tp, r]) => [p * pt, tp, r]), def: (+doc().valor("_doc", "tabDef") || 36) * pt, x0: (x0 - orig) / z, izq: (izq - orig) / z, fr: el.dataset.fr === "1" };
+          // lo que sigue a cada tabulación hasta la siguiente (para las de derecha, centro y decimal)
+          for (let k = 0; k < fichas.length; k++) {
+            if (!fichas[k].tab) continue;
+            let w = 0, dec = null;
+            for (let q = k + 1; q < fichas.length && !fichas[q].tab; q++) {
+              const t = fichas[q];
+              if (dec == null && !t.esp && /[.,]/.test(t.t)) { const m = t.t.search(/[.,]/); dec = w + t.w * (m / Math.max(1, t.t.length)); }
+              w += t.w;
+            }
+            let q2 = fichas.length - 1;
+            fichas[k].sig = w; fichas[k].dec = dec == null ? w : dec;
+            void q2;
+          }
+        }
+        return { el, alin, fichas, A1: (der - x0) / z, A: (der - izq) / z, ancho: (der - izq) / z, encoge: compat15 && alin === "just", tabs, hayTab };
       }
       /** Dónde corta Word: índices de las fichas después de las cuales termina cada renglón (menos el último). */
       function cortesWord(L) {
@@ -969,8 +1001,10 @@
           const A = (renglon === 0 ? L.A1 : L.A) + 1e-6;
           // w: lo escrito sin los espacios del final; ult: el último lugar donde se puede cortar con lo de antes dentro
           let w = 0, pend = 0, ult = -1, wUlt = 0, pasa = false;
+          const x0 = L.tabs ? (renglon === 0 ? L.tabs.x0 : L.tabs.izq) : 0;
           for (let j = ini; j < n; j++) {
             const t = F[j];
+            if (t.tab) { t.w = anchoTab(L.tabs, x0 + w + pend, t, x0 + (renglon === 0 ? L.A1 : L.A)); w += pend + t.w; pend = 0; continue; }
             if (t.esp) {
               if (!pend) { if (w <= A) { ult = j; wUlt = w; } else { pasa = true; break; } }
               pend += t.w;
@@ -1003,21 +1037,57 @@
         }
         return cortes;
       }
+      /**
+       * Ancho de una tabulación de Word que empieza en x (px desde el margen): va a la siguiente parada (las del párrafo; la
+       * sangría francesa; las de siempre cada «tabDef», solo después de la última del párrafo). Izquierda: el texto empieza
+       * en la parada; derecha: termina en ella; centro: se centra; decimal: el punto queda en ella.
+       */
+      function anchoTab(T, x, t, fin) {
+        let parada = null;
+        for (const p of T.lista) if (p[0] > x + 0.01 && p[1] !== "b") { parada = p; break; }
+        if (T.fr && T.izq > x + 0.01 && (!parada || T.izq < parada[0])) parada = [T.izq, "i"];
+        if (!parada) {
+          const ult = T.lista.length ? T.lista[T.lista.length - 1][0] : 0;
+          const desde = Math.max(x, ult);
+          parada = [Math.floor(desde / T.def + 1e-6) * T.def + T.def, "i"];
+        }
+        let fx = parada[0];
+        if (parada[1] === "d") fx -= t.sig;
+        else if (parada[1] === "c") fx -= t.sig / 2;
+        else if (parada[1] === "p") fx -= t.dec;
+        // (una parada más allá del margen: Word la deja en el margen)
+        if (parada[1] === "i" && fx > fin) fx = Math.max(x, fin);
+        t.lider = parada[2];
+        return Math.max(0, fx - x);
+      }
       /** Escribe los cortes de Word en el párrafo (de atrás hacia adelante: las posiciones de antes no se mueven). */
       function escribirAcomodo(L, cortes) {
         const el = L.el, F = L.fichas;
-        for (let i = cortes.length - 1; i >= 0; i--) {
-          // después de la ficha del corte (si es un espacio, después de todos los espacios seguidos)
-          let c = cortes[i];
-          while (c + 1 < F.length && F[c + 1].esp) c++;
-          const f = F[c];
-          const br = document.createElement("br");
-          br.className = "wd-rompe wd-pintado";
-          if (f.obj) { f.obj.after(br); continue; }
-          const nodo = f.nodo;
-          if (f.fin >= nodo.nodeValue.length) nodo.after(br);
-          else { const resto = nodo.splitText(f.fin); resto.before(br); }
+        // lo que se pone en pantalla, de atrás hacia adelante (así cada texto se parte después de lo que falta poner):
+        // los cortes de renglón y el espacio de cada tabulación (la tabulación misma no mide nada: tab-size 0)
+        const puntos = cortes.map((c) => { while (c + 1 < F.length && F[c + 1].esp) c++; return [c, "br"]; });
+        F.forEach((f, q) => { if (f.tab) puntos.push([q, "tab"]); });
+        puntos.sort((a, b) => b[0] - a[0]);
+        for (const [q, tipo] of puntos) {
+          const f = F[q];
+          let nuevo;
+          if (tipo === "br") { nuevo = document.createElement("br"); nuevo.className = "wd-rompe wd-pintado"; }
+          else {
+            nuevo = document.createElement("span");
+            nuevo.className = "wd-tabw wd-pintado";
+            nuevo.style.width = f.w.toFixed(2) + "px";
+            if (f.lider) {
+              const ch = { dot: ".", hyphen: "-", middleDot: "·" }[f.lider];
+              nuevo.dataset.lider = f.lider;
+              // (de punta a punta, como Word: lo que sobra del primero queda cortado a la izquierda)
+              if (ch) nuevo.textContent = ch.repeat(Math.max(0, Math.ceil(f.w / Math.max(1, f.punto || 4))));
+            }
+          }
+          if (f.obj) { f.obj.after(nuevo); continue; }
+          if (f.fin >= f.nodo.nodeValue.length) f.nodo.after(nuevo);
+          else f.nodo.splitText(f.fin).before(nuevo);
         }
+        if (L.hayTab) el.classList.add("con-tab");
         el.classList.add("wd-acomodo");
         el.dataset.acw = L.ancho.toFixed(2);
         if (L.alin === "just") {
@@ -1036,7 +1106,8 @@
           r.className = "wd-relleno wd-pintado";
           r.contentEditable = "false";
           r.style.width = Math.max(0, A - w - 1).toFixed(2) + "px";
-          el.append(r);
+          const u2 = el.lastChild;
+          if (u2 && u2.nodeName === "BR" && !u2.classList.contains("wd-pintado")) el.insertBefore(r, u2); else el.append(r);
         }
       }
       /** Acomoda como Word los párrafos que se acaban de pintar (solo en la vista de páginas). */
@@ -1049,7 +1120,7 @@
         for (const L of leidos) {
           if (!L || L.espera) continue;
           const cortes = cortesWord(L);
-          if (!cortes || (!cortes.length && L.alin !== "just")) continue;
+          if (!cortes || (!cortes.length && L.alin !== "just" && !L.hayTab)) continue;
           escribirAcomodo(L, cortes);
         }
       }

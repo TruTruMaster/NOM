@@ -1255,6 +1255,13 @@
 .wd-cuerpo > .wd-acomodo[data-alin="just"] span { word-spacing: inherit !important; }
 .wd-cuerpo > .wd-acomodo:not([data-alin]), .wd-cuerpo > .wd-acomodo[data-alin="izq"] { margin-right: -1px; }
 .wd-relleno { display: inline-block; height: 0; user-select: none; pointer-events: none; }
+/* Tabulaciones de Word (acomodarComoWord): la tabulación no mide nada y un espacio de pantalla lleva su ancho y su relleno
+   (puntos, guiones o raya) alineado a la parada. */
+.wd-cuerpo > .wd-acomodo.con-tab { tab-size: 0; }
+.wd-tabw { display: inline-block; overflow: hidden; white-space: nowrap; text-align: right; vertical-align: baseline; text-indent: 0; user-select: none; pointer-events: none; text-decoration: none; }
+.wd-tabw:empty::before { content: "\200b"; }
+.wd-tabw[data-lider="underscore"] { border-bottom: 0.75pt solid currentColor; }
+.wd-tabw[data-lider="heavy"] { border-bottom: 1.5pt solid currentColor; }
 .wd-cuerpo.encoge > [data-alin="just"], .wd-cuerpo.encoge > [data-alin="just"] span[style*="--ae"] { word-spacing: calc(var(--ae, 0.25) * var(--encoger) * -1em); }
 
 /* ---- Hoja en modo Excel (libro importado de Excel): se ve como en Excel ----------------------------

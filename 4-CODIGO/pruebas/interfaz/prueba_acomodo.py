@@ -12,7 +12,7 @@ import base64, io, os, sys, zipfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import nomprueba as N
 from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT, WD_TAB_LEADER
 from docx.shared import Pt
 
 TEXTO = ("La colaboración en tiempo real permite que varias personas editen el mismo documento sin perder ningún "
@@ -33,6 +33,11 @@ def docx_prueba():
         p = d.add_paragraph()
         r = p.add_run(TEXTO); r.font.name = "Calibri"; r.font.size = Pt(11)
         p.alignment = alin
+    # como un índice: tabulación derecha con puntos en 6 pulgadas (432 pt desde el margen)
+    for t in ("Introducción\t4", "Marco teórico\t12"):
+        p = d.add_paragraph()
+        r = p.add_run(t); r.font.name = "Calibri"; r.font.size = Pt(11)
+        p.paragraph_format.tab_stops.add_tab_stop(Pt(432), WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS)
     b = io.BytesIO(); d.save(b); return b.getvalue()
 
 
@@ -57,6 +62,14 @@ def main():
             for (const par of el.children) { let t = ''; (function rec(n) { for (let c = n.firstChild; c; c = c.nextSibling) { if (c.nodeType === 3) t += c.nodeValue; else if (c.nodeType === 1 && !c.classList.contains('wd-pintado') && !c.classList.contains('wd-guion')) rec(c); } })(par); out.push(t); }
             return out; }""")
         check("el texto de cada párrafo es el del documento (los cortes no agregan nada)", modelo[:3] == [TEXTO] * 3, [m[:40] for m in modelo[:3]])
+        # tabulación derecha con puntos: el número termina en la parada y los puntos no son texto del documento
+        tab = p.evaluate("""() => { const ps = [...document.querySelectorAll('.wd-cuerpo > p')].filter((x) => /Introducción|Marco teórico/.test(x.textContent));
+            return ps.map((el) => { const sp = el.querySelector('.wd-tabw'); const r = el.getBoundingClientRect(), z = r.width / el.offsetWidth;
+              const tn = [...el.childNodes].concat([...el.querySelectorAll('span')].flatMap((s) => [...s.childNodes])).filter((n) => n.nodeType === 3 && /\\d/.test(n.nodeValue)).pop();
+              const rg = document.createRange(); rg.selectNodeContents(tn); const q = rg.getBoundingClientRect();
+              return { spacer: !!sp, puntos: sp ? sp.textContent.length : 0, finNumero: (q.right - r.left) / z * 0.75 }; }); }""")
+        check("tabulación derecha con puntos: hay relleno de puntos", all(t["spacer"] and t["puntos"] > 20 for t in tab), tab)
+        check("…y el número termina en la parada (432 pt)", all(abs(t["finNumero"] - 432) < 1.5 for t in tab), [round(t["finNumero"], 1) for t in tab])
         # 2. copiar cruzando un corte
         copiado = p.evaluate("""() => { const par = document.querySelector('.wd-cuerpo > p'); const br = par.querySelector('br.wd-rompe');
             const antes = br.previousSibling, despues = br.nextSibling;
