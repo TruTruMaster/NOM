@@ -29,6 +29,18 @@ solo se ve; (5) lo demás.
 | **PowerPoint: cada renglón donde lo pone PowerPoint** (`ajustarRenglones` en `diapositivas.js` con la tabla `PP_BASE`; el párrafo importado lleva la letra de su primer texto —sin eso el renglón crecía al mezclar fuentes—; interlineado exacto redondeado a puntos). Datos: `windows/hacer_interlineado.py [--mas]` → p12/p13; análisis `analisis/interlineado_ppt.py` (la tinta de la línea base: texto «HxxH», sin descendentes) | p12 ±0.5 pt (antes hasta 10); p01 mediana 2 → 1 px, p07 4 → 1.5 px; prueba_pptx, pptx2, pres1, diag1 bien; ediciones pptx 78/78 |
 | **Regresión en paralelo y en la PC de Windows** (20 hilos, 32 GB, Office ahí): `pruebas/regresion.py` (carriles con su propio servidor), `pruebas/regresion_windows.py` (manda código, jar y archivos y corre allá), `office/windows/preparar_windows.ps1` (Java 17, Playwright, .NET 8: ya instalados), `office/remoto.py` (Office por SSH o local) | 1.ª corrida completa: ~25 min contra ~70 en la laptop; fallas que eran del entorno, ya corregidas: candado de archivos en Windows (seguridad), `prueba_limites.py` con ruta fija, botones que no esperaban con carga |
 
+## 1b. Cierre de la sesión (18-nov, noche): 0.17.0 publicada
+
+- **Regresión en Windows** (34 pruebas, ~22 min): corridas 4 a 9. Todo pasa con el último commit: la 8.ª completa dio
+  32 bien y 2 fallas (prueba_pptx y prueba_pptx2: el editor no abría porque la espera de fuentes de las diapositivas
+  se reintentaba sin fin —arreglado—) y la 9.ª, dirigida a lo que cambió después (pptx, pptx2, pres1, diag1,
+  documento_grande, editar_real, funciones, funciones_firefox, prueba_acomodo, ayuda), 10 de 10.
+- **Publicada como 0.17.0** desde esta rama: unida a `main` y subida a GitHub, jar en la Pi (`humo.py`), APK con
+  `assembleRelease` + `publicar-apk.sh`, `avisar.py` (ver la sección 4 de abajo para lo que quedó pendiente de eso).
+- Lo que entró después del relevo de la tarde: renglones de Word con la regla medida (w09 98.2 %, w02 96.2 %,
+  w14 99.6 %), tabulaciones con puntos, columnas equilibradas, símbolos de la fuente Symbol, renglones de PowerPoint
+  (p01 2 → 1 px, p07 4 → 1.5 px), quitar duplicados y texto en columnas (10 de 10 contra Excel).
+
 ## 2. Cómo seguir
 
 - Servidores de esta sesión: 8099 (regresión vieja, ya no hace falta), 8096 (desarrollo, interfaz en vivo desde
@@ -41,23 +53,21 @@ solo se ve; (5) lo demás.
 
 ## 3. Lo que falta (en orden)
 
-1. **Unir a `main` como 0.17.0 y publicar** cuando la corrida completa en Windows salga bien (la 4.ª: 30 bien y 3
-   fallas que eran de las pruebas —ya corregidas—; la 5.ª va con los renglones de Word). Publicar: push a `main`,
-   Pi (`ssh pi5 /usr/local/sbin/nomcolab-pi actualizar`, con la ruta completa) + `humo.py`, APK `assembleRelease` +
-   `publicar-apk.sh`, `avisar.py`; el A55 cuando esté en la misma red. **La Pi es el DHCP y el DNS de la casa: no
-   reiniciarla.**
-2. Renglones de Word, lo que falta: párrafos con tabuladores, con guiones automáticos (combinar la zona con la regla
-   del justificado), con escala de caracteres o letra capital, junto a objetos que flotan (hoy los acomoda el
-   navegador) y el texto de tablas y cuadros de texto; w10 (texto español marcado en inglés: Word parte con su
-   diccionario, p. ej. «extra-ordinariamente», «con-exión»: juntar con Word real cientos de palabras partidas y
-   usarlas como excepciones); un renglón de Verdana 10 que Word deja pasar 0.13 pt.
-3. Punto 2 del pedido, lo demás: SmartArt contra el video; en PowerPoint, acomodar también las miniaturas y la imagen
-   PNG de cada diapositiva (`diapoPng` arma un SVG sin poder medir), y volver a acomodar el cuadro al terminar de
-   escribir en él (hoy espera al siguiente repintado). (Hechos el 18-nov: el interlineado por fuente en PowerPoint y el
-   índice a dos columnas.)
-4. Punto 3: `FORECAST.ETS*`, `ODDF*`/`ODDL*`, cálculo manual y F9, nombres, configurar página, rastrear precedentes,
-   evaluar fórmula, herramientas de datos.
-5. Puntos 4 y 5 (ver `PARIDAD-OFFICE.md`).
+1. **A55**: instalar la 0.17.0 (la depuración inalámbrica está apagada: hace falta que el dueño la active o use el
+   botón «Descarga la app»). Pendientes que se anotaron ahí: una letra perdida al teclear rápido en una celda (no se
+   pudo reproducir en la computadora ni con la CPU 6× más lenta).
+2. **Punto 3 (Excel), lo que sigue**: Buscar objetivo (la verdad de Excel ya está: `pruebas/office/datos_excel.py`,
+   casos obj-*; falta la herramienta en `modo-hoja.js` junto a `quitarDuplicados`/`textoEnColumnas`), definir nombres,
+   cálculo manual y F9, agrupar filas/columnas, rastrear precedentes, evaluar fórmula, relleno rápido, consolidar,
+   escenarios, tablas de datos, previsión; `FORECAST.ETS*` y `ODDF*/ODDL*`; configurar página e impresión.
+   Ojo: la PC de Windows tiene Excel en inglés de EE. UU. (fechas mes/día/año); NOM lee día/mes/año (México): en las
+   pruebas, fechas ISO o comparar el valor.
+3. **Renglones de Word**: párrafos justificados o centrados con tabuladores, guiones automáticos con justificado,
+   escala de caracteres, letra capital, texto junto a objetos que flotan, tablas y cuadros de texto (hoy los acomoda
+   el navegador); w10 (el diccionario de guiones de Word); alto de los párrafos vacíos con otra letra en la marca ¶.
+4. **PowerPoint**: acomodar también las miniaturas y el PNG de la diapositiva (`diapoPng`), volver a acomodar el cuadro
+   al terminar de escribir; SmartArt contra el video.
+5. Puntos 4 y 5 del pedido (crear lo que hoy solo se ve) y el resto de `PARIDAD-OFFICE.md`.
 
 ## 3b. Lo que se había escrito antes en esta sección (ya hecho o reacomodado arriba)
 

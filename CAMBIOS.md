@@ -37,6 +37,8 @@ Lo que cambió en cada versión, en corto (es la página «Novedades» de la ayu
   angosto) se ven como en Word.
 - **Hoja:** 224 funciones más de Excel (454 en total): estadística, ingeniería, finanzas, fechas, números complejos y
   bases de datos. Comprobadas contra Excel 2024: 499 de 500 fórmulas dan lo mismo.
+- **Hoja: Quitar duplicados y Texto en columnas** (en el menú de la columna), como en Excel. Lo que escribes en una
+  celda se entiende como en Excel: 1e3, (7), fechas con guiones y los formatos de moneda y porcentaje que pone Excel.
 - **Arreglos:** el enlace para ver de un texto o una hoja muestra sus imágenes; un Word guardado como .nom y vuelto
   a abrir ya no reescribe al descargar los párrafos con ecuaciones (salen idénticos al original).
 
