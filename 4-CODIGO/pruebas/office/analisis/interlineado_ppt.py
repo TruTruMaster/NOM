@@ -40,11 +40,9 @@ def main():
             y0, y1 = int(f["y"] * 2), int((f["lineas"][2]["y"] + f["lineas"][2]["h"]) * 2 + m["tam"] * 2)
             gp, gn = renglones(pp, x0, x1, y0, y1), renglones(nom, x0, x1, y0, y1)
             if len(gp) < 3 or len(gn) < 3: res[(m["fuente"], m["espacio"])].append((m["tam"], None)); continue
-            # (arriba del primero, abajo del tercero = línea base del tercero, paso entre la base 1→3)
-            d_arriba = (gn[0][0] - gp[0][0]) / 2
-            d_base3 = (gn[2][1] - gp[2][1]) / 2
-            res[(m["fuente"], m["espacio"])].append((m["tam"], (round(d_arriba, 1), round(d_base3, 1))))
-    print("NOM − PowerPoint en puntos: (arriba de la tinta del 1.er renglón, línea base del 3.º) por tamaño")
+            # (el texto no tiene descendentes ni acentos: abajo de la tinta de cada renglón = su línea base)
+            res[(m["fuente"], m["espacio"])].append((m["tam"], tuple(round((gn[k][1] - gp[k][1]) / 2, 1) for k in range(3))))
+    print("NOM − PowerPoint en puntos: línea base de los renglones 1, 2 y 3, por tamaño")
     for k in sorted(res):
         print(f"{k[0]:16s} {k[1]:12s}", "  ".join(f"{t}:{d}" for t, d in sorted(res[k], key=lambda x: x[0])))
 

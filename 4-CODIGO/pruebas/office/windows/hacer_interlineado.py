@@ -28,7 +28,7 @@ try:
                 tf.WordWrap = True
                 tf.VerticalAnchor = 1
                 tr = tf.TextRange
-                tr.Text = "Ágil bajo\rquinta línea\rÉxito final"
+                tr.Text = "HxxH xHHx\rxHHx HxxH\rHxxH xHHx"   # (sin descendentes ni acentos: abajo de la tinta = línea base)
                 tr.Font.Name = fuente
                 tr.Font.Size = tam
                 pf = tr.ParagraphFormat
