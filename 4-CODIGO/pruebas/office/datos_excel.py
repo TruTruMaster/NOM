@@ -28,11 +28,11 @@ CASOS = [
     {"id": "txt-punto-coma", "op": "texto_columnas", "rango": "A1:A4", "sep": {"punto_coma": True},
      "datos": [["uno;dos;tres"], ["'a;b';c"], ["10%;$25;1e3"], ["TRUE;FALSE;verdadero"]]},
     {"id": "txt-espacio-seguidos", "op": "texto_columnas", "rango": "A1:A3", "sep": {"espacio": True}, "seguidos": True,
-     "datos": [["Ana   Pérez  López"], ["  inicio con espacios"], ["5-  (7)  12-03-2026"]]},
+     "datos": [["Ana   Pérez  López"], ["  inicio con espacios"], ["5-  (7)  2026-03-12"]]},
     {"id": "txt-espacio", "op": "texto_columnas", "rango": "A1:A2", "sep": {"espacio": True}, "seguidos": False,
      "datos": [["a  b"], [" c d"]]},
     {"id": "txt-otro", "op": "texto_columnas", "rango": "A1:A3", "sep": {"otro": "|"},
-     "datos": [["2026-11-18|18/11/2026|11/18/2026"], ["a|b"], ["|vacío|"]]},
+     "datos": [["2026-11-18|2026-01-05|1e-2"], ["a|b"], ["|vacío|"]]},
     {"id": "txt-anchos", "op": "texto_columnas", "rango": "A1:A3", "anchos": [0, 4, 9],
      "datos": [["ABCD12345resto"], ["XY  9    final"], ["corto"]]},
     {"id": "obj-lineal", "op": "buscar_objetivo", "celda": "B2", "valor": 100, "cambiando": "B1", "datos": [["x", 1], ["2x+3", "=B1*2+3"]]},
@@ -53,7 +53,77 @@ def verdad_excel():
     return json.load(open(VERDAD, encoding="utf-8"))
 
 
+JS_CASO = r"""
+async (c) => {
+  const ed = NOM.editorActual, H = ed.modoApi.api, t = H.tabla(), F = NOM.formulas;
+  const campos = { filas: Math.max(30, c.datos.length + 5), cols: 10 };
+  for (let i = 0; i < 40; i++) for (let j = 0; j < 10; j++) campos["c:" + F.ref(j, i)] = null;
+  c.datos.forEach((fila, i) => fila.forEach((v, j) => { if (v !== null && v !== "") campos["c:" + F.ref(j, i)] = String(v); }));
+  ed.doc.cambiar(t.id, campos);
+  await new Promise((r) => setTimeout(r, 150));
+  const m = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(c.rango || "A1:A1");
+  const col = (x) => [...x].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0) - 1;
+  const r = { c1: col(m[1]), f1: +m[2] - 1, c2: col(m[3]), f2: +m[4] - 1 };
+  let res = null;
+  if (c.op === "quitar_duplicados") res = H.herramientas.quitarDuplicados(r, c.columnas.map((k) => r.c1 + k - 1), !!c.encabezado);
+  else if (c.op === "texto_columnas") res = H.herramientas.textoEnColumnas(r, c.anchos ? { anchos: c.anchos } : { sep: c.sep, seguidos: !!c.seguidos, calificador: c.calificador == null ? '"' : c.calificador });
+  else return { no: true };
+  await new Promise((r) => setTimeout(r, 150));
+  const ev = H.evaluar(), out = [], vals = [];
+  for (let f = 0; f < c.filasVer; f++) {
+    const fila = [], fv = [];
+    for (let k = 0; k < c.colsVer; k++) {
+      const td = document.querySelector(`td[data-c="${k}"][data-f="${f}"]`);
+      fila.push(td ? td.textContent.trim() : F.formatear(ev.valor(k, f)));
+      const v = ev.valor(k, f); fv.push(v == null || v === "" ? null : typeof v === "object" && v.valueOf ? +v : v);
+    }
+    out.push(fila); vals.push(fv);
+  }
+  return { res, celdas: out, valores: vals };
+}
+"""
+
+
+def con_nom(verdad):
+    sys.path.insert(0, str(AQUI.parent / "interfaz"))
+    import nomprueba as N
+    N.esperar_servidor()
+    a = N.cuenta(); esp = N.espacio(a["token"], "Datos")
+    nav = N.Navegador(movil=False); nav.entrar(a)
+    bien = mal = 0
+    try:
+        for c in CASOS:
+            v = verdad.get(c["id"], {})
+            if "celdas" not in v: continue
+            d = N.documento(a["token"], esp, "HOJA", c["id"])
+            nav.p.goto(N.B + "/#/doc/" + d); nav.p.wait_for_function("() => NOM.editorActual && NOM.editorActual.modoApi && NOM.editorActual.modoApi.api", timeout=30000)
+            nav.p.wait_for_timeout(500)
+            filas, cols = len(v["celdas"]), max(len(x) for x in v["celdas"])
+            r = nav.p.evaluate(JS_CASO, dict(c, filasVer=filas, colsVer=cols))
+            if r.get("no"): continue
+            xl = [[k["t"] for k in fila] for fila in v["celdas"]]
+            # (donde Excel muestra #### la columna no le cabe: se compara el valor)
+            def igual_celda(i, j):
+                x, n = v["celdas"][i][j], r["celdas"][i][j]
+                # (y las fechas: la PC de prueba muestra mes/día/año —Excel en inglés de EE. UU.— y NOM día/mes/año, como
+                # en México; se compara la fecha misma)
+                fecha = isinstance(x["v"], (int, float)) and "/" in x["t"]
+                if fecha or (x["t"].startswith("#") and set(x["t"]) == {"#"}):
+                    a, b = x["v"], r["valores"][i][j]
+                    return a == b or (isinstance(a, (int, float)) and isinstance(b, (int, float)) and abs(a - b) < 1e-9)
+                return x["t"].strip() == n.strip()
+            igual = all(igual_celda(i, j) for i in range(len(xl)) for j in range(len(xl[i])))
+            bien += igual; mal += not igual
+            print(("  bien " if igual else "  MAL  ") + c["id"] + ("" if igual else f"\n     Excel {xl}\n     NOM   {r['celdas']}"), flush=True)
+    finally:
+        nav.cerrar()
+    print(f"\nHerramientas de datos contra Excel 2024: {bien} bien, {mal} mal")
+    return mal
+
+
 def main():
+    if "--solo-nom" in sys.argv and VERDAD.exists():
+        return 1 if con_nom(json.load(open(VERDAD, encoding="utf-8"))) else 0
     v = verdad_excel()
     for c in CASOS:
         x = v.get(c["id"], {})
@@ -61,6 +131,7 @@ def main():
         for fila in x.get("celdas", []): print("   ", [f"{k['t']}" for k in fila])
         if "cambio" in x: print("    cambio:", x["cambio"], "resultado:", x.get("resultado"), "logrado:", x.get("logrado"))
     if "--solo-excel" in sys.argv: return 0
+    return 1 if con_nom(v) else 0
 
 
 if __name__ == "__main__":

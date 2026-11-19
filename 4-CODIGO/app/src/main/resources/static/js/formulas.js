@@ -3347,15 +3347,30 @@
     }).join(";");
   }
   /** Lo que alguien escribe en una celda: el valor a guardar y el formato que conviene ponerle. */
+  /**
+   * Lo que alguien escribe en una celda, como lo entiende Excel (con los formatos que Excel pone solo; comparado con
+   * Excel 2024 en pruebas/office/datos_excel.py): 10% (0%; con decimales 0.00%), $25 ($#,##0_);($#,##0), con decimales
+   * .00), 1,250 (#,##0; con decimales #,##0.00), 1e3 (0.00E+00), (7) → −7, 12-03-2026 → la fecha (día-mes-año, como en
+   * México; NOM lee fechas con /).
+   */
   function leerEntrada(t) {
     const s = String(t == null ? "" : t).trim();
     if (!s || s[0] === "=") return { crudo: t, formato: null };
     let m = /^-?\d+(?:([.,])(\d+))?%$/.exec(s);
-    if (m) return { crudo: s, formato: m[2] ? "0." + "0".repeat(Math.min(4, m[2].length)) + "%" : "0%" };
+    if (m) return { crudo: s, formato: m[2] ? "0.00%" : "0%" };
     m = /^(-?)\$\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?$/.exec(s);
-    if (m) return { crudo: m[1] + m[2].replace(/,/g, "") + (m[3] ? "." + m[3] : ""), formato: "$#,##0.00" };
+    if (m) return { crudo: m[1] + m[2].replace(/,/g, "") + (m[3] ? "." + m[3] : ""), formato: m[3] ? "$#,##0.00_);($#,##0.00)" : "$#,##0_);($#,##0)" };
     m = /^(-?)(\d{1,3}(?:,\d{3})+)(?:\.(\d+))?$/.exec(s);
-    if (m) return { crudo: m[1] + m[2].replace(/,/g, "") + (m[3] ? "." + m[3] : ""), formato: m[3] ? "#,##0." + "0".repeat(Math.min(4, m[3].length)) : "#,##0" };
+    if (m) return { crudo: m[1] + m[2].replace(/,/g, "") + (m[3] ? "." + m[3] : ""), formato: m[3] ? "#,##0.00" : "#,##0" };
+    // notación científica
+    m = /^[+-]?(?:\d+\.?\d*|\.\d+)[eE][+-]?\d+$/.exec(s);
+    if (m && isFinite(+s)) return { crudo: String(+s), formato: "0.00E+00" };
+    // negativo entre paréntesis (contabilidad)
+    m = /^\((\$?)\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?\)$/.exec(s);
+    if (m) return { crudo: "-" + m[2].replace(/,/g, "") + (m[3] ? "." + m[3] : ""), formato: m[1] ? (m[3] ? "$#,##0.00_);($#,##0.00)" : "$#,##0_);($#,##0)") : null };
+    // fecha con guiones (día-mes-año) → como la escribe NOM (día/mes/año)
+    m = /^(\d{1,2})-(\d{1,2})-(\d{4})$/.exec(s);
+    if (m && +m[2] >= 1 && +m[2] <= 12 && +m[1] >= 1 && +m[1] <= 31) return { crudo: `${m[1]}/${m[2]}/${m[3]}`, formato: null };
     return { crudo: t, formato: null };
   }
 
