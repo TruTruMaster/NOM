@@ -413,7 +413,7 @@
     const TAM0 = (pagDoc.tam === "otro" && +pagDoc.w > 100 && +pagDoc.h > 100 ? [+pagDoc.w, +pagDoc.h] : null) || { carta: [816, 1056], a4: [794, 1123], oficio: [816, 1344], a5: [559, 794], media: [529, 816] }[pagDoc.tam] || [816, 1056];
     const mg0 = pagDoc.margen || {}, v0 = (v) => (typeof v === "number" ? v : 96);
     const anchoTexto = Math.round(((pagDoc.orient === "h" ? TAM0[1] : TAM0[0]) - v0(mg0.iz) - v0(mg0.d)) * TWIP);
-    const CMT = 567;   // twips por centímetro
+    const CMT = 1440 / 2.54;   // twips por centímetro
     const rPr = (a) => {
       // en el orden que pide el esquema de Word
       let r = "";
@@ -1769,7 +1769,9 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     // El estilo Normal del archivo es el "formato base" del documento: lo que no trae formato propio
     // se ve con esa fuente, ese tamaño y ese interlineado.
     const rN = letraDe(idNormal), pN = parDe(idNormal);
-    const cmDe = (tw) => Math.round((tw / 567) * 100) / 100;
+    // (centímetros con 4 decimales y el factor exacto: con 2 decimales una sangría se movía hasta 0.14 pt y un renglón
+    // de Word que cabía justo dejaba de caber, o al revés)
+    const cmDe = (tw) => Math.round((tw / (1440 / 2.54)) * 10000) / 10000;
     // (con 4 decimales: el 1.1583 de Office 2024 —line="278"— no es el 1.15 de antes; en 40 renglones son 5 pt)
     const liDe = (c) => (c.linea && (!c.regla || c.regla === "auto") ? Math.round((c.linea / 240) * 10000) / 10000 : null);
     const liDeWord = (v) => Math.abs(v - 1.15) <= 0.04 || Math.abs(v - 1.08) <= 0.03;   // lo que aquí ya es el interlineado normal
@@ -2417,6 +2419,9 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         if (e) { pa.estilo = e; break; }
       }
       if (c.sinGuiones) pa.sinGuiones = true;
+      // la marca de párrafo (¶) con su propia letra y tamaño: de ella sale el alto del renglón donde está
+      const mr = hijo(ppr, "rPr");
+      if (mr) { const am = attrsRun(mr, {}); if (+am.tam) pa.tm = +am.tam; if (am.fuente) pa.fm = am.fuente; }
       if (c.num && c.num.id != null && c.num.id !== "0") {
         const lvl = +(c.num.lvl || 0), f = (formatoNum[c.num.id] || {})[lvl] || "bullet";
         // (un nivel con formato «none» no lleva marca: Word solo le da la sangría)

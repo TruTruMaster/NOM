@@ -118,6 +118,8 @@
     "sx",
     // entre páginas, como Word: salto de página antes, con el siguiente (1/0), líneas juntas y control de viudas (0 = sin)
     "saltoAntes", "conSig", "juntas", "viudas",
+    // de Word: «no dividir con guiones» y la letra y el tamaño de la marca de párrafo (¶)
+    "sinGuiones", "tm", "fm",
     // letra capital de Word: "drop|3|4" (dentro del texto o "margin", renglones que abarca, distancia al texto en pt)
     "capital"];
   const VINETAS = ["•", "◦", "▪", "–", "➢", "✓", "★", "♦"];
@@ -324,7 +326,7 @@
         if (n.nodeType !== 1) continue;
         const tag = n.tagName;
         if (n.hasAttribute("data-obj")) { out.push({ c: OBJ, id: n.getAttribute("data-id"), a }); enParrafo++; continue; }
-        if (n.classList && n.classList.contains("wd-guion")) continue;   // (guion de pantalla: no es del documento)
+        if (n.classList && (n.classList.contains("wd-guion") || n.classList.contains("wd-pintado"))) continue;   // (de pantalla: no es del documento)
         if (OMITIR.has(tag) || n.hidden || (n.style && n.style.display === "none")) continue;
         if (tag === "BR") { out.push({ c: SALTO, a, br: true }); enParrafo++; continue; }
         if (tag === "IMG") {
@@ -496,6 +498,21 @@
     if (pa.lista && pa.numfmts) at += ` data-numfmts="${esc(pa.numfmts)}"`;
     if (pa.lista && pa.numid) at += ` data-numid="${esc(pa.numid)}"`;
     if (pa.interlineado) { at += ` data-li="${+pa.interlineado}"`; st += `--li:${+pa.interlineado};`; }
+    // Alto de los renglones como Word: cada renglón mide lo que su letra más grande (la marca ¶ cuenta solo en el
+    // último). En el navegador todo renglón mide al menos lo que la letra del párrafo: si todo el texto lleva su propia
+    // letra y tamaño (y la marca también), el párrafo toma los de la marca, que en Word son casi siempre los del texto.
+    if (+pa.tm || pa.fm) {
+      let tamTodos = true, fuenteTodos = true;
+      for (let i = p.ini; i < p.fin && (tamTodos || fuenteTodos); i++) {
+        const x = vis[i];
+        if (!x || x.e || x.c === "\n") continue;
+        const a = S().attrs(x);
+        if (!+a.tam) tamTodos = false;
+        if (!a.fuente) fuenteTodos = false;
+      }
+      if (+pa.tm && tamTodos) st += `font-size:${+pa.tm}pt;`;
+      if (pa.fm && fuenteTodos) st += `font-family:${cssFuente(pa.fm)};--af:${altoFuente(pa.fm)};`;
+    }
     if (pa.antes != null) { at += ` data-antes="${+pa.antes}"`; st += `--antes:${+pa.antes}pt;`; }
     if (pa.despues != null) { at += ` data-desp="${+pa.despues}"`; st += `--desp:${+pa.despues}pt;`; }
     if (pa.ox != null && pa.ox !== "") at += ` data-ox="${esc(pa.ox)}"`;
@@ -712,6 +729,7 @@
         }
         // (ya en la página, donde se pueden medir: el avance de la escala de caracteres y la zona de división de Word)
         for (const el of medir) { ajustarEscalas(el); ajustarGuiones(el); }
+        acomodarComoWord(medir);
         while (cuerpo.children.length > ps.length) cuerpo.lastElementChild.remove();
         for (const k of [...elems.keys()]) if (!vivos.has(k)) { elems.delete(k); cache.delete(k); }
         ajustarEspacios();
@@ -812,6 +830,244 @@
           }
           if (!cambio) break;
         }
+      }
+      /**
+       * Renglones cortados donde los corta Word. Medido contra Word 2024 real (pruebas/office/windows/hacer_renglones.py
+       * y analisis/acomodo_word.py: 920 cortes de 144 párrafos en 8 fuentes, 3 tamaños y 3 anchos):
+       *  - A la izquierda (y centrado o a la derecha) Word mete en el renglón todo lo que cabe con los anchos EXACTOS de
+       *    la fuente, sin tolerancia (una palabra que se pasa 0.012 pt baja). El navegador mide el texto hasta un 0.1 %
+       *    más angosto (redondea el tamaño de la letra a 1/64 de píxel) y metía palabras que Word baja.
+       *  - Justificado (Word 2013 y después): Word mete la palabra que no cabe encogiendo los espacios solo si se pasa
+       *    del margen a lo más la MITAD del hueco que quedaría sin ella y cada espacio se encoge a lo más un 25 %
+       *    (0 errores en 559 decisiones). En modo de compatibilidad (Word 2010 y antes) no encoge.
+       *  - Word también corta después de un guion o una raya pegados a la palabra siguiente («A-|12», «—|guion—»).
+       * Aquí se calcula cada corte con los anchos de la fuente (lienzo a 1000 px) y se fuerza con un <br> que es solo de
+       * pantalla (.wd-pintado: el lector del DOM lo ignora). En justificado, los espacios van encogidos un 26 % de base
+       * y el navegador estira cada renglón hasta el margen (text-align-last); el último renglón lleva un relleno de
+       * pantalla del ancho que le sobra, para que no se estire. Se mide todo primero y se escribe después (sin volver a
+       * acomodar la página por cada párrafo).
+       */
+      const avancesW = new Map();   // «fuente|letra» o «fuente|k|palabra» → ancho a 1000 px
+      const cargandoW = new Set();  // fuentes que se están cargando para medir
+      let lienzoW = null;
+      const ESP_W = /[ 　]/;
+      function anchoW(fuente, kern, txt) {
+        if (!lienzoW) lienzoW = document.createElement("canvas").getContext("2d");
+        const c = lienzoW;
+        if (kern) {
+          const k = fuente + "|k|" + txt;
+          let w = avancesW.get(k);
+          if (w == null) { c.font = fuente; c.fontKerning = "normal"; w = c.measureText(txt).width; avancesW.set(k, w); }
+          return w;
+        }
+        let t = 0;
+        for (const ch of txt) {
+          const k = fuente + "|" + ch;
+          let w = avancesW.get(k);
+          if (w == null) { c.font = fuente; c.fontKerning = "none"; w = c.measureText(ch).width; avancesW.set(k, w); }
+          t += w;
+        }
+        return t;
+      }
+      /** Quita lo de pantalla de un acomodo anterior (cortes y relleno) y junta el texto que se partió. */
+      function quitarAcomodo(el) {
+        const pint = el.querySelectorAll(".wd-rompe, .wd-relleno");
+        if (!pint.length && !el.classList.contains("wd-acomodo")) return;
+        pint.forEach((x) => x.remove());
+        el.classList.remove("wd-acomodo");
+        el.style.wordSpacing = "";
+        delete el.dataset.acw;
+        el.normalize();
+      }
+      /** Lo que hay que leer de un párrafo para acomodarlo (todo lectura: no cambia nada). null si no se acomoda. */
+      function leerAcomodo(el, compat15) {
+        if (el.tagName !== "P" || el.dataset.capital != null || el.dir === "rtl") return null;
+        if (el.querySelector("br:not(.wd-pintado), .wd-guion, .wd-escala, .wd-tab, img, table")) return null;
+        // (el texto que se aparta de un objeto que flota cambia de ancho renglón por renglón: ese lo acomoda el navegador)
+        if (el.querySelector(":scope > .wd-excl")) return null;
+        const alin = el.dataset.alin || "izq";
+        if (!["izq", "just", "centro", "der"].includes(alin)) return null;
+        const er = el.getBoundingClientRect(), z = er.width / (el.offsetWidth || 1) || 1;
+        if (!er.width) return null;
+        const cs = getComputedStyle(el);
+        const izq = er.left + (parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth)) * z;
+        const der = er.right - (parseFloat(cs.paddingRight) + parseFloat(cs.borderRightWidth)) * z;
+        const fichas = [];   // { t, w (px css), esp, rompe (se puede cortar después), nodo, fin (posición después de la ficha) }
+        const estilos = new Map();
+        let primero = null, mal = false;
+        let espera = false;
+        const fuenteDe = (p) => {
+          let f = estilos.get(p);
+          if (f) return f;
+          const s = getComputedStyle(p);
+          if (s.fontVariantCaps !== "normal" || (s.textTransform !== "none" && s.textTransform !== "uppercase") || s.display === "none") { mal = true; return null; }
+          // (con la fuente todavía sin cargar, el lienzo mediría con la de reemplazo: se espera a que llegue)
+          const css16 = `${s.fontStyle} ${s.fontWeight} 16px ${s.fontFamily}`;
+          if (document.fonts && !document.fonts.check(css16)) {
+            espera = mal = true;
+            if (!cargandoW.has(css16)) { cargandoW.add(css16); document.fonts.load(css16).then(() => { cargandoW.delete(css16); programarPaginar(); }, () => cargandoW.delete(css16)); }
+            return null;
+          }
+          const tam = parseFloat(s.fontSize) || 16;
+          f = { css: `${s.fontStyle} ${s.fontWeight} 1000px ${s.fontFamily}`, k: tam / 1000, kern: s.fontKerning === "normal", ls: parseFloat(s.letterSpacing) || 0, may: s.textTransform === "uppercase" };
+          estilos.set(p, f);
+          return f;
+        };
+        (function rec(n) {
+          for (let c = n.firstChild; c && !mal; c = c.nextSibling) {
+            if (c.nodeType === 3) {
+              if (!c.nodeValue.length) continue;
+              const f = fuenteDe(c.parentElement);
+              if (!f) return;
+              if (/\t/.test(c.nodeValue)) { mal = true; return; }
+              if (!primero) primero = { nodo: c };
+              // fichas: espacios, y lo demás partido después de cada guion o raya que va pegado a algo
+              const v = c.nodeValue, RAYA = /[-\u2010\u2013\u2014]/;
+              for (let i = 0; i < v.length;) {
+                let j = i;
+                const esp = ESP_W.test(v[i]);
+                if (esp) while (j < v.length && ESP_W.test(v[j])) j++;
+                else while (j < v.length && !ESP_W.test(v[j])) { const ch = v[j++]; if (RAYA.test(ch) && j < v.length && !ESP_W.test(v[j]) && !RAYA.test(v[j])) break; }
+                const t = v.slice(i, j), txt = f.may ? t.toUpperCase() : t;
+                const w = anchoW(f.css, f.kern && !esp, txt) * f.k + f.ls * [...t].length;
+                fichas.push({ t, w, esp, rompe: !esp && RAYA.test(t[t.length - 1]) && j < v.length && !ESP_W.test(v[j]), nodo: c, fin: j });
+                i = j;
+              }
+              continue;
+            }
+            if (c.nodeType !== 1) continue;
+            if (c.classList.contains("wd-pintado")) continue;
+            if (c.classList.contains("wd-oculto") || c.style.display === "none") continue;
+            if (c.hasAttribute("data-obj")) {
+              const r = c.getBoundingClientRect();
+              if (!primero) primero = { obj: c };
+              fichas.push({ t: "", w: r.width / z, esp: false, rompe: false, obj: c });
+              continue;
+            }
+            rec(c);
+          }
+        })(el);
+        if (espera) return { espera: true };
+        if (mal || fichas.length < 2) return null;
+        // dónde empieza el primer renglón (sangría de primera línea, número de lista)
+        let x0 = izq;
+        if (primero.nodo) { const rg = document.createRange(); rg.setStart(primero.nodo, 0); rg.setEnd(primero.nodo, Math.min(1, primero.nodo.nodeValue.length)); const q = rg.getClientRects()[0]; if (q) x0 = q.left; }
+        else if (primero.obj) x0 = primero.obj.getBoundingClientRect().left;
+        return { el, alin, fichas, A1: (der - x0) / z, A: (der - izq) / z, ancho: (der - izq) / z, encoge: compat15 && alin === "just" };
+      }
+      /** Dónde corta Word: índices de las fichas después de las cuales termina cada renglón (menos el último). */
+      function cortesWord(L) {
+        const F = L.fichas, n = F.length, cortes = [];
+        let ini = 0, renglon = 0;
+        while (ini < n) {
+          while (ini < n && F[ini].esp) ini++;   // (los espacios de después de un corte se quedan en el renglón de arriba)
+          if (ini >= n) break;
+          const A = (renglon === 0 ? L.A1 : L.A) + 1e-6;
+          // w: lo escrito sin los espacios del final; ult: el último lugar donde se puede cortar con lo de antes dentro
+          let w = 0, pend = 0, ult = -1, wUlt = 0, pasa = false;
+          for (let j = ini; j < n; j++) {
+            const t = F[j];
+            if (t.esp) {
+              if (!pend) { if (w <= A) { ult = j; wUlt = w; } else { pasa = true; break; } }
+              pend += t.w;
+              continue;
+            }
+            w += pend + t.w; pend = 0;
+            if (t.rompe) { if (w <= A) { ult = j; wUlt = w; } else { pasa = true; break; } }
+          }
+          if (!pasa && w <= A) break;   // lo que queda cabe: es el último renglón
+          if (ult < 0) return null;     // una palabra más ancha que el renglón: que la parta el navegador
+          let corte = ult;
+          if (L.encoge) {
+            // ¿Word mete la palabra siguiente encogiendo los espacios? (si se pasa a lo más la mitad del hueco y cada
+            // espacio se encoge a lo más un 25 %)
+            let k = ult + 1;
+            while (k < n && F[k].esp) k++;
+            while (k < n && !F[k].esp && !F[k].rompe) k++;
+            const finC = k < n && F[k].rompe ? k : k - 1;
+            let wc = 0, ec = 0, pc = 0;
+            for (let q = ini; q <= finC; q++) { if (F[q].esp) { pc += F[q].w; continue; } wc += pc + F[q].w; ec += pc; pc = 0; }
+            const sobra = wc - A, hueco = A - wUlt;
+            if (sobra <= hueco / 2 && sobra <= 0.25 * ec) {
+              if (finC >= n - 1 || k >= n) break;   // con ella se acaba el párrafo: era el último renglón
+              corte = k;
+            }
+          }
+          cortes.push(corte);
+          ini = corte + 1;
+          renglon++;
+        }
+        return cortes;
+      }
+      /** Escribe los cortes de Word en el párrafo (de atrás hacia adelante: las posiciones de antes no se mueven). */
+      function escribirAcomodo(L, cortes) {
+        const el = L.el, F = L.fichas;
+        for (let i = cortes.length - 1; i >= 0; i--) {
+          // después de la ficha del corte (si es un espacio, después de todos los espacios seguidos)
+          let c = cortes[i];
+          while (c + 1 < F.length && F[c + 1].esp) c++;
+          const f = F[c];
+          const br = document.createElement("br");
+          br.className = "wd-rompe wd-pintado";
+          if (f.obj) { f.obj.after(br); continue; }
+          const nodo = f.nodo;
+          if (f.fin >= nodo.nodeValue.length) nodo.after(br);
+          else { const resto = nodo.splitText(f.fin); resto.before(br); }
+        }
+        el.classList.add("wd-acomodo");
+        el.dataset.acw = L.ancho.toFixed(2);
+        if (L.alin === "just") {
+          // los espacios, encogidos más de lo que Word encoge (25 %) en todas las fuentes del párrafo: así cada renglón
+          // cabe hasta su corte y el navegador lo estira hasta el margen
+          let mx = 0;
+          for (const f of F) if (f.esp) mx = Math.max(mx, f.w / [...f.t].length);
+          el.style.wordSpacing = (-0.3 * mx).toFixed(3) + "px";
+          // el último renglón no se estira: un relleno de pantalla del ancho que le sobra (con sus espacios naturales)
+          const u = cortes.length ? cortes[cortes.length - 1] + 1 : 0;
+          let w = 0, fin = F.length;
+          while (fin > u && F[fin - 1].esp) fin--;
+          for (let q = u; q < fin; q++) w += F[q].w;
+          const A = cortes.length ? L.A : L.A1;
+          const r = document.createElement("span");
+          r.className = "wd-relleno wd-pintado";
+          r.contentEditable = "false";
+          r.style.width = Math.max(0, A - w - 1).toFixed(2) + "px";
+          el.append(r);
+        }
+      }
+      /** Acomoda como Word los párrafos que se acaban de pintar (solo en la vista de páginas). */
+      function acomodarComoWord(els) {
+        if (vista !== "paginas" || window.__sinAcomodo) { els.forEach(quitarAcomodo); return; }
+        const compat15 = cuerpo.classList.contains("encoge");
+        els.forEach(quitarAcomodo);
+        const leidos = els.map((el) => { try { return leerAcomodo(el, compat15); } catch (e) { return null; } });
+        els.forEach((el, i) => { if (leidos[i] && leidos[i].espera) delete el.dataset.acv; else el.dataset.acv = anchoContenido(el).toFixed(2); });
+        for (const L of leidos) {
+          if (!L || L.espera) continue;
+          const cortes = cortesWord(L);
+          if (!cortes || (!cortes.length && L.alin !== "just")) continue;
+          escribirAcomodo(L, cortes);
+        }
+      }
+      const anchoContenido = (el) => { const cs = getComputedStyle(el); return el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight); };
+      /**
+       * Después de paginar: los párrafos que cambiaron de ancho (columnas, otra sección, otros márgenes) o que no se han
+       * revisado (se cambió a la vista de páginas) se acomodan otra vez; fuera de la vista de páginas se quita el acomodo.
+       * Devuelve si cambió algo (hay que paginar otra vez).
+       */
+      function revisarAcomodos() {
+        const quitar = vista !== "paginas" || window.__sinAcomodo;
+        const cambiaron = [];
+        let otro = false;
+        for (const el of cuerpo.children) {
+          if (quitar) { if (el.dataset.acw) otro = true; if (el.dataset.acw || el.dataset.acv) { quitarAcomodo(el); delete el.dataset.acv; } continue; }
+          // (al paginar, un objeto que flota aparta el texto de este párrafo: el acomodo ya no sirve)
+          if (el.dataset.acw && el.querySelector(":scope > .wd-excl")) { quitarAcomodo(el); otro = true; continue; }
+          if (el.dataset.acv == null || Math.abs(anchoContenido(el) - +el.dataset.acv) > 0.5) cambiaron.push(el);
+        }
+        const antes = cambiaron.map((el) => !!el.dataset.acw);
+        if (cambiaron.length) acomodarComoWord(cambiaron);
+        return otro || cambiaron.some((el, i) => antes[i] || !!el.dataset.acw);
       }
       /** Escala de caracteres de Word: la palabra estirada ocupa en el renglón lo que mide estirada (margen a la derecha). */
       function ajustarEscalas(raizEl) {
@@ -1115,7 +1371,7 @@
           for (let c = n.firstChild; c; c = c.nextSibling) {
             if (c.nodeType === 3) r.push(c);
             else if (c.nodeType === 1) {
-              if (c.classList.contains("wd-guion")) continue;   // (guion de pantalla: no cuenta)
+              if (c.classList.contains("wd-guion") || c.classList.contains("wd-pintado")) continue;   // (de pantalla: no cuenta)
               if (c.hasAttribute("data-obj") || c.tagName === "BR" || c.tagName === "IMG") r.push(c);
               else rec(c);
             }
@@ -2639,12 +2895,40 @@
       let pegadoManejado = false;
       // Lo último que se copió o cortó aquí. "Pegar" de la ruedita lo usa cuando el navegador no deja
       // leer el portapapeles (en http de la red del salón no existe navigator.clipboard).
-      const guardarCopia = () => {
+      /** El texto de un pedazo copiado, con un salto entre párrafos (como lo copia el navegador). */
+      function textoPlano(raiz) {
+        let out = "";
+        (function rec(n) {
+          for (let c = n.firstChild; c; c = c.nextSibling) {
+            if (c.nodeType === 3) { out += c.nodeValue; continue; }
+            if (c.nodeType !== 1) continue;
+            if (c.tagName === "BR") { out += "\n"; continue; }
+            const bloque = /^(P|H[1-6]|LI|DIV|TR|BLOCKQUOTE|PRE)$/.test(c.tagName);
+            if (bloque && out && !out.endsWith("\n")) out += "\n";
+            rec(c);
+            if (bloque && out && !out.endsWith("\n")) out += "\n";
+          }
+        })(raiz);
+        return out.replace(/\n+$/, "");
+      }
+      const guardarCopia = (e) => {
         const sl = getSelection();
         if (!sl.rangeCount || sl.isCollapsed) return;
         const d = document.createElement("div");
         d.append(sl.getRangeAt(0).cloneContents());
-        NOM._portaTexto = { html: d.innerHTML, texto: sl.toString() };
+        // lo que es solo de pantalla (los cortes de renglón de Word, los guiones automáticos, el relleno) no se copia:
+        // si lo había, lo que va al portapapeles se arma aquí (si no, lo copia el navegador como siempre)
+        const pint = d.querySelectorAll(".wd-pintado, .wd-guion");
+        if (!pint.length) { NOM._portaTexto = { html: d.innerHTML, texto: sl.toString() }; return; }
+        pint.forEach((x) => x.remove());
+        const texto = textoPlano(d);
+        NOM._portaTexto = { html: d.innerHTML, texto };
+        if (e && e.clipboardData) {
+          e.preventDefault();
+          e.clipboardData.setData("text/plain", texto);
+          e.clipboardData.setData("text/html", d.innerHTML);
+          if (e.type === "cut" && !ed.soloLectura) document.execCommand("delete");
+        }
       };
       cuerpo.addEventListener("copy", guardarCopia);
       cuerpo.addEventListener("cut", guardarCopia);
@@ -3249,7 +3533,12 @@
         hoja.style.setProperty("--miz", pg.m.iz + "px");
         hoja.style.setProperty("--md", pg.m.d + "px");
       }
+      /** Pagina; si con la paginación algún párrafo cambió de ancho, se vuelve a acomodar y se pagina otra vez (una vez). */
       function paginar() {
+        paginarBase();
+        if (revisarAcomodos()) paginarBase();
+      }
+      function paginarBase() {
         clearTimeout(tPag); tPag = null;
         const t0 = performance.now();
         quitarPaginacion();

@@ -10,7 +10,7 @@ def _libre(p=None):
         s_.bind(("127.0.0.1", 0)); return s_.getsockname()[1]
 P = _libre(); B = f"http://localhost:{P}"
 D = tempfile.mkdtemp(prefix="nom-limites-")
-srv = subprocess.Popen([os.environ.get("JAVA") or shutil.which("java") or "java", "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P), NOM_DATOS=D, NOM_DESCUBRIMIENTO="false"), stdout=open(os.path.join(D, "log"), "w"), stderr=subprocess.STDOUT)
+srv = subprocess.Popen([os.environ.get("JAVA") or shutil.which("java") or "java", "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P), NOM_DATOS=D, NOM_DESCUBRIMIENTO="false"), stdout=open(D + ".log", "w"), stderr=subprocess.STDOUT)
 def r(m, u, b=None, t=None):
     h = {"Content-Type": "application/json"}
     if t: h["Authorization"] = "Bearer " + t
@@ -37,7 +37,7 @@ try:
     else:
         pass
     if srv.poll() is not None:
-        print("El servidor de la prueba no arrancó:\n" + open(os.path.join(D, "log"), encoding="utf-8", errors="replace").read()[-3000:]); sys.exit(1)
+        print("El servidor de la prueba no arrancó:\n" + open(D + ".log", encoding="utf-8", errors="replace").read()[-3000:]); sys.exit(1)
     CL = "Clave-Segura-123"
     reg = lambda n, c=CL: r("POST", "/api/cuentas/registro", {"nombre": n, "contrasena": c, "acepto": "2026-11-13"})
     caso("VL-01", "Nombre de 2 caracteres (ab)", 400, reg("ab"))

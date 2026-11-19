@@ -1249,6 +1249,12 @@
 /* Justificado como Word 2013 y después: los espacios pueden encogerse hasta un 20 % de su ancho para que quepa
    una palabra más; luego el justificado reparte lo que sobra. --ae es el ancho del espacio de la fuente (em). */
 .wd-cuerpo.encoge { --encoger: 0.2; }
+/* Renglones cortados donde Word (modo-texto.js, acomodarComoWord): el corte es un <br> de pantalla. En justificado los
+   espacios van encogidos un 26 % y cada renglón se estira hasta el margen; el último lleva un relleno (.wd-relleno). */
+.wd-cuerpo > .wd-acomodo[data-alin="just"] { text-align-last: justify; }
+.wd-cuerpo > .wd-acomodo[data-alin="just"] span { word-spacing: inherit !important; }
+.wd-cuerpo > .wd-acomodo:not([data-alin]), .wd-cuerpo > .wd-acomodo[data-alin="izq"] { margin-right: -1px; }
+.wd-relleno { display: inline-block; height: 0; user-select: none; pointer-events: none; }
 .wd-cuerpo.encoge > [data-alin="just"], .wd-cuerpo.encoge > [data-alin="just"] span[style*="--ae"] { word-spacing: calc(var(--ae, 0.25) * var(--encoger) * -1em); }
 
 /* ---- Hoja en modo Excel (libro importado de Excel): se ve como en Excel ----------------------------

@@ -81,8 +81,20 @@ archivo de Office se muestra (y se conserva al descargar), pero no se crea ni se
 | Controles de contenido y formularios | Casilla, lista, fecha, texto | Se conservan y su texto se edita; como formulario: no |
 | VBA, modo seguro, automatización | | No |
 
-Medido contra Word 2024 real (renglones idénticos): w01 85.4 %, w02 84.9 %, w03 96.6 %, w04 86.5 %, w05 85.7 %,
-w06 84.5 %, w07 91.2 %, w08 94.3 %, w09 77.3 %, w10 34.0 %, w11 100 %, w12 77.8 %.
+Medido contra Word 2024 real (renglones idénticos, 18-nov, con los renglones cortados como Word): w01 94.9 %,
+w02 94.1 %, w03 96.6 %, w04 93.4 %, w05 85.7 %, w06 83.8 %, w07 96.5 %, w08 100 %, w09 93.3 %, w10 27.7 %, w11 100 %,
+w12 82.9 %, w13 57.1 %, t01 89.6 % (antes: w01 86.1, w02 84.9, w04 86.5, w07 93.0, w08 94.3, w09 78.5, w12 77.8,
+t01 83.8). Y w14-renglones (144 párrafos hechos en Word para esto: 8 fuentes, 3 tamaños, izquierda y justificado,
+3 anchos): **99.6 %** (antes 85.2 %) y las mismas 23 páginas que Word (antes 26).
+
+**Cómo corta Word un renglón** (medido con w14: `windows/hacer_renglones.py`, `analisis/acomodo_word.py`): a la
+izquierda, todo lo que cabe con los anchos EXACTOS de la fuente, sin tolerancia; justificado (Word 2013 y después),
+mete la palabra que no cabe encogiendo los espacios solo si se pasa del margen a lo más la mitad del hueco que
+quedaría sin ella y cada espacio se encoge a lo más un 25 % (0 errores en 559 decisiones); corta también después de un
+guion o una raya pegados a lo que sigue. NOM lo calcula con los anchos de sus fuentes (las mismas medidas que las de
+Office) y lo fuerza con cortes de pantalla (`acomodarComoWord` en `modo-texto.js`; el navegador solo no puede: mide el
+texto hasta un 0.1 % más angosto). Falta: párrafos con tabuladores, guiones automáticos, escala de caracteres, letra
+capital o junto a un objeto que flota (esos los sigue acomodando el navegador), y el texto dentro de tablas y cuadros.
 
 ## 4. Excel
 

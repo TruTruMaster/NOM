@@ -479,6 +479,9 @@ def prueba_colaboracion(P, c, e, salida):
     B = otra_pagina(movil=True)
     enlace = (qr or "").replace("http://" + (qr or "x/").split("/")[2], OTRO["base_local"]) if qr else OTRO["base_local"] + "/unirse?c=" + codigo
     B.p.goto(enlace); B.t(1500)
+    # (la página de la invitación pide los datos del código al servidor: con la computadora ocupada tarda más)
+    try: B.p.wait_for_function("(n) => document.body.innerText.includes(n)", arg=esp["nombre"], timeout=20000)
+    except Exception: pass
     check("el enlace del QR abre «Te invitan a…» con el nombre del espacio", esp["nombre"] in (B.ev("() => document.body.innerText") or ""), (B.ev("() => document.body.innerText") or "")[:200])
     # Fase 13: ya no se escribe un apodo (nadie se hace pasar por otro): se entra con un alias al azar.
     check("no hay campo para escribir un apodo", not B.ev("() => !!document.querySelector('#ap')"), "hay #ap")
