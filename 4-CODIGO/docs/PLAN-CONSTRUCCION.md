@@ -738,6 +738,9 @@ sesión anterior: `./desplegar.sh roles` para las columnas nuevas de usuarios.
 
 ## Orden recomendado para la siguiente sesión
 
+**Desde el 19 de noviembre de 2026:** empezar por `docs/RELEVO-19NOV.md` (todo `PARIDAD-OFFICE.md` en «Sí» contra
+Office real: lo hecho, cómo seguir y la lista real de lo que falta).
+
 **Desde el 18 de noviembre de 2026 (tarde):** leer primero `docs/RELEVO-18NOV-TARDE.md` (0.17.0: almacén de binarios,
 EMF/WMF, campos de Word, notas al final; pruebas contra Office real y regresión en la PC de Windows).
 

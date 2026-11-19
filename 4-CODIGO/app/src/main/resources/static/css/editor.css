@@ -420,7 +420,7 @@
 
 /* párrafos: estilo Normal de Word (Calibri 11, interlineado 1.15, 8 pt después) */
 /* (--mprev: el espacio de después del párrafo de arriba; entre los dos queda el mayor, como Word) */
-.wd-cuerpo > * { margin: max(0px, calc(var(--antes, 0px) - var(--mprev, 0px))) var(--sr, 0px) var(--desp, 8pt) var(--sx, 0px); line-height: calc(var(--li, 1.15) * var(--af)); padding-left: calc(var(--sang, 0) * 36pt); min-height: calc(var(--li, 1.15) * var(--af) * 1em); position: relative; font-size: inherit; font-weight: inherit; }
+.wd-cuerpo > * { margin: max(0px, calc(var(--antes, 0px) - var(--mprev, 0px))) calc(var(--sr, 0px) + min(0cm, var(--sangder, 0cm) * var(--ks, 1)) - var(--hol, 0px)) var(--desp, 8pt) calc(var(--sx, 0px) + min(0cm, (var(--sangiz, 0cm) + var(--francesa, 0cm)) * var(--ks, 1))); line-height: calc(var(--li, 1.15) * var(--af)); padding-left: calc(var(--sang, 0) * 36pt); min-height: calc(var(--li, 1.15) * var(--af) * 1em); position: relative; font-size: inherit; font-weight: inherit; }
 .wd-cuerpo > [data-alin="centro"] { text-align: center; }
 .wd-cuerpo > [data-alin="der"] { text-align: right; }
 .wd-cuerpo > [data-alin="just"] { text-align: justify; }
@@ -429,10 +429,17 @@
 .wd-cuerpo > h3 { --af: 1.2205; font: 12pt/1.15 "NOM CL", "Calibri Light", Carlito, Calibri, "Segoe UI", sans-serif; color: #1F3763; margin-top: max(0px, calc(var(--antes, 2pt) - var(--mprev, 0px))); margin-bottom: var(--desp, 0); }
 .wd-cuerpo > [data-estilo="titulo"] { font: 28pt/1.05 "Calibri Light", Carlito, Calibri, sans-serif; letter-spacing: -.5pt; margin-bottom: var(--desp, 4pt); }
 .wd-cuerpo > [data-estilo="subtitulo"] { color: #5A5A5A; letter-spacing: .75pt; }
-.wd-cuerpo > [data-estilo="cita"] { font-style: italic; color: #404040; text-align: center; margin: max(0px, calc(var(--antes, 10pt) - var(--mprev, 0px))) calc(43pt + var(--sr, 0px)) var(--desp, 8pt) calc(43pt + var(--sx, 0px)); }
+.wd-cuerpo > [data-estilo="cita"] { font-style: italic; color: #404040; text-align: center; margin: max(0px, calc(var(--antes, 10pt) - var(--mprev, 0px))) calc(43pt + var(--sr, 0px) - var(--hol, 0px)) var(--desp, 8pt) calc(43pt + var(--sx, 0px)); }
+/* Un párrafo de Word con el estilo «Cita» lleva las sangrías y la alineación de SU estilo (vienen en el párrafo): la cita
+   de NOM (43 pt a cada lado, centrada) no se le suma. */
+.wd-cuerpo.de-word > [data-estilo="cita"] { margin-left: var(--sx, 0px); margin-right: calc(var(--sr, 0px) - var(--hol, 0px)); }
+.wd-cuerpo.de-word > [data-estilo="cita"]:not([data-alin]) { text-align: start; }
 .wd-cuerpo > [data-estilo="codigo"] { font-family: "Courier New", "Liberation Mono", Cousine, monospace; font-size: 10pt; background: #F3F3F3; padding: 2pt 6pt; margin-bottom: var(--desp, 0); }
 .wd-cuerpo a { color: #0563C1; text-decoration: underline; cursor: text; }
 .wd-cuerpo sub, .wd-cuerpo sup { font-size: .7em; line-height: 0; }
+/* En un documento de Word, el tamaño que les da Word: el de la fuente (OS/2) redondeado a medio punto (--supk: modo-texto.js) */
+.wd-cuerpo.de-word sub, .wd-cuerpo.de-word sup { font-size: round(nearest, calc(1em * var(--supk, 0.6499)), 0.5pt); }
+.wd-cuerpo :is(sub, sup) [data-ts] { font-size: calc(var(--ts) * .7); font-size: round(nearest, calc(var(--ts) * var(--supk, 0.6499)), 0.5pt); }
 
 /* listas: viñetas, numeración y tareas, con niveles */
 .wd-cuerpo > [data-lista] { --n: 0; padding-left: calc(18pt + var(--n) * 18pt + var(--sang, 0) * 36pt); margin-bottom: var(--desp, 2pt); }
@@ -911,7 +918,8 @@
 
 /* ---------------------------------------------------------------- 8.2 texto: sangrías en cm, primera línea y francesa */
 /* --ks: cuánto se achican las sangrías en centímetros (1 = tal cual; en un celular sin páginas, menos) */
-.wd-cuerpo > * { padding-left: calc(var(--sang, 0) * 36pt + (var(--sangiz, 0cm) + var(--francesa, 0cm)) * var(--ks, 1)); padding-right: calc(var(--sangder, 0cm) * var(--ks, 1)); text-indent: calc((var(--primera, var(--wd-primera, 0cm)) - var(--francesa, 0cm)) * var(--ks, 1)); }
+/* (una sangría negativa —Word deja que el texto salga al margen— va en el margen: el relleno no puede ser negativo) */
+.wd-cuerpo > * { padding-left: calc(var(--sang, 0) * 36pt + max(0cm, (var(--sangiz, 0cm) + var(--francesa, 0cm)) * var(--ks, 1))); padding-right: max(0cm, var(--sangder, 0cm) * var(--ks, 1)); text-indent: calc((var(--primera, var(--wd-primera, 0cm)) - var(--francesa, 0cm)) * var(--ks, 1)); }
 .wd-cuerpo > :is(h1, h2, h3, [data-estilo], [data-obj-bloque]) { text-indent: calc((var(--primera, 0cm) - var(--francesa, 0cm)) * var(--ks, 1)); }
 .wd-cuerpo > [data-lista] { text-indent: 0; padding-left: calc(18pt + var(--n) * 18pt + var(--sang, 0) * 36pt + var(--sangiz, 0cm) * var(--ks, 1)); }
 .wd-cuerpo > [data-lista="vinetas"][data-vineta]::before { content: attr(data-vineta); }
@@ -1219,8 +1227,9 @@
 
 /* ---------------------------------------------------------------- lo que viene de Word
    Borde y fondo de párrafo: el recuadro va en las sangrías (como en Word), no de lado a lado, y el
-   texto se queda donde estaba (--bext: lo que el recuadro sale hacia afuera; --bpad: su relleno). */
-.wd-cuerpo > :is([data-borde], [data-sombra]):not([data-lista]) { margin-left: calc(var(--sx, 0px) + var(--sang, 0) * 36pt + (var(--sangiz, 0cm) + var(--francesa, 0cm)) * var(--ks, 1) - var(--bext, 0pt)); margin-right: calc(var(--sr, 0px) + var(--sangder, 0cm) * var(--ks, 1) - var(--bext, 0pt)); padding-left: var(--bpad, 0pt); padding-right: var(--bpad, 0pt); }
+   texto se queda donde estaba (--bexti/--bextd: lo que el recuadro sale hacia afuera a la izquierda y a la derecha;
+   --bpadi/--bpadd: su relleno; solo del lado que tiene borde: un borde a la izquierda no mueve el margen derecho). */
+.wd-cuerpo > :is([data-borde], [data-sombra]):not([data-lista]) { margin-left: calc(var(--sx, 0px) + var(--sang, 0) * 36pt + (var(--sangiz, 0cm) + var(--francesa, 0cm)) * var(--ks, 1) - var(--bexti, 0pt)); margin-right: calc(var(--sr, 0px) + var(--sangder, 0cm) * var(--ks, 1) - var(--bextd, 0pt) - var(--hol, 0px)); padding-left: var(--bpadi, 0pt); padding-right: var(--bpadd, 0pt); }
 .wd-cuerpo > [data-borde] { padding-top: 1pt; padding-bottom: 1pt; }
 /* Texto de derecha a izquierda */
 .wd-cuerpo > [dir="rtl"] { text-align: right; }
@@ -1253,7 +1262,9 @@
    espacios van encogidos un 26 % y cada renglón se estira hasta el margen; el último lleva un relleno (.wd-relleno). */
 .wd-cuerpo > .wd-acomodo[data-alin="just"] { text-align-last: justify; }
 .wd-cuerpo > .wd-acomodo[data-alin="just"] span { word-spacing: inherit !important; }
-.wd-cuerpo > .wd-acomodo:not([data-alin]), .wd-cuerpo > .wd-acomodo[data-alin="izq"] { margin-right: -1px; }
+/* (1 px de holgura a la derecha para que el navegador no corte antes que el corte de Word; en una variable que restan
+   todas las reglas del margen derecho: columnas, recuadros y citas conservan el suyo) */
+.wd-cuerpo > .wd-acomodo:not([data-alin]), .wd-cuerpo > .wd-acomodo[data-alin="izq"] { --hol: 1px; }
 .wd-relleno { display: inline-block; height: 0; user-select: none; pointer-events: none; }
 /* Tabulaciones de Word (acomodarComoWord): la tabulación no mide nada y un espacio de pantalla lleva su ancho y su relleno
    (puntos, guiones o raya) alineado a la parada. */

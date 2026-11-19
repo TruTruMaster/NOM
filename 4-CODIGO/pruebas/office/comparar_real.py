@@ -85,13 +85,16 @@ JS_RENGLONES = r"""
     }
   }
   letras.sort((a, b) => a.p - b.p);
-  // renglones: una letra empieza renglón si queda más abajo que la anterior (más de media altura) o a la izquierda en otra fila
+  // renglones: una letra empieza renglón si queda toda debajo de lo que lleva el renglón, o si baja (más de media altura)
+  // y regresa a la izquierda (un subíndice después de un superíndice baja, pero sigue hacia la derecha: mismo renglón)
   const renglones = [];
   let cur = null;
   for (const L of letras) {
-    const nuevo = !cur || L.p !== cur.p || L.y > cur.y + Math.max(4, cur.h * 0.5) || L.y + L.h < cur.y;
-    if (nuevo) { cur = { texto: '', x: L.x, y: L.y, h: L.h, p: L.p, fin: L.x + L.w }; renglones.push(cur); }
+    const baja = cur && (L.y > cur.y + Math.max(4, cur.h * 0.5) || L.y + L.h < cur.y);
+    const nuevo = !cur || L.p !== cur.p || L.y >= cur.abajo - 1 || L.y + L.h <= cur.arriba + 1 || (baja && L.x < cur.ultX - 1);
+    if (nuevo) { cur = { texto: '', x: L.x, y: L.y, h: L.h, p: L.p, fin: L.x + L.w, arriba: L.y, abajo: L.y + L.h, ultX: L.x }; renglones.push(cur); }
     cur.texto += L.c; cur.fin = Math.max(cur.fin, L.x + L.w); cur.x = Math.min(cur.x, L.x);
+    cur.arriba = Math.min(cur.arriba, L.y); cur.abajo = Math.max(cur.abajo, L.y + L.h); cur.ultX = L.x;
   }
   const salida = pags.map((p, i) => ({ n: i + 1, ancho: p.width * PT, alto: p.height * PT, renglones: [], enc: '', pie: '' }));
   const fuera = [];

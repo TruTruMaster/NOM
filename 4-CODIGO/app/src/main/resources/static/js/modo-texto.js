@@ -78,7 +78,11 @@
     "NOM FG": 0.25, "NOM GA": 0.25, "NOM GE": 0.2412, "NOM GS": 0.278, "NOM IM": 0.1763, "NOM LC": 0.6025, "NOM PL": 0.25, "NOM SP": 0.4, "NOM SS": 0.4,
     "NOM SU": 0.2739, "NOM TA": 0.3125, "NOM TI": 0.25, "NOM TR": 0.3013, "NOM VE": 0.3516, Carlito: 0.2261, "Liberation Sans": 0.2778, "Liberation Serif": 0.25, "Liberation Mono": 0.6001,
   };
+  // Tamaño de los superíndices y subíndices de cada fuente (OS/2 ySuperscriptYSize): Word los pone a este tanto del tamaño,
+  // redondeado a medio punto (medido en Word 2024: Calibri 11 → 7, 12 → 8; Aptos 11 → 6.5, 12 → 7). Las demás, 0.65.
+  const SUP = { "NOM A": 0.6001, "NOM AD": 0.6001, "NOM AN": 0.6001, "NOM PL": 0.6006, "NOM IM": 0.5278, "NOM BH": 0.5996 };
   const primeraDe = (f) => { const m = /^'([^']+)'/.exec(cssFuente(f || "Calibri")); return m ? m[1] : ""; };
+  function supFuente(f) { return SUP[primeraDe(f)] || 0.6499; }
   /** Alto natural del renglón de una fuente de Office (para el interlineado de Word); 1.2 si no se conoce. */
   function altoFuente(f) { return ALTO[primeraDe(f)] || 1.2; }
   /** Ancho del espacio de una fuente (en em). */
@@ -226,6 +230,7 @@
         if (f && !/^(serif|sans-serif|monospace|cursive|system-ui|inherit|-apple-system)$/i.test(f)) pon("fuente", f);
       }
       if (st.fontSize) pon("tam", aPt(st.fontSize));
+      if (n.dataset && n.dataset.ts && !isNaN(+n.dataset.ts)) pon("tam", +n.dataset.ts);
       if (st.fontVariantCaps === "small-caps" || /small-caps/.test(st.fontVariant || "")) pon("vers", true);
       if (st.textTransform === "uppercase") pon("mayus", true);
       if (st.letterSpacing && st.letterSpacing !== "normal") { const e = /^(-?[\d.]+)(pt|px)$/.exec(st.letterSpacing); pon("esp", e ? Math.round((e[2] === "px" ? +e[1] * 0.75 : +e[1]) * 100) / 100 || null : null); }
@@ -424,8 +429,10 @@
     let st = "";
     if (a.color) st += `color:${a.color};`;
     if (a.fondo) st += `background-color:${a.fondo};`;
-    if (a.fuente) st += `font-family:${cssFuente(a.fuente)};--af:${altoFuente(a.fuente)};--ae:${espacioFuente(a.fuente)};`;
-    if (a.tam) st += `font-size:${+a.tam}pt;`;
+    if (a.fuente) st += `font-family:${cssFuente(a.fuente)};--af:${altoFuente(a.fuente)};--ae:${espacioFuente(a.fuente)};--supk:${supFuente(a.fuente)};`;
+    // (en un superíndice o subíndice el tamaño va en una variable: el <sup> lo reduce como Word, editor.css)
+    const enSup = a.va === "sup" || a.va === "sub";
+    if (a.tam) st += enSup ? `--ts:${+a.tam}pt;` : `font-size:${+a.tam}pt;`;
     if (a.vers) st += "font-variant-caps:small-caps;";
     if (a.mayus) st += "text-transform:uppercase;";
     if (+a.esp) st += `letter-spacing:${+a.esp}pt;`;
@@ -437,7 +444,7 @@
       const k = Math.max(0.01, +a.esc / 100);
       h = h.split(/(?<= )/).map((pz) => `<span class="wd-escala" data-k="${k}" style="display:inline-block;white-space:pre;transform:scaleX(${k});transform-origin:0 0">${pz}</span>`).join("");
     }
-    if (st) h = `<span style="${esc(st)}">${h}</span>`;
+    if (st) h = `<span${enSup && a.tam ? ` data-ts="${+a.tam}"` : ""} style="${esc(st)}">${h}</span>`;
     // texto oculto de Word (w:vanish): no se ve ni se imprime, como en Word; se conserva al descargar
     if (a.oc) h = `<span class="wd-oculto" style="display:none">${h}</span>`;
     if (a.va === "sub") h = `<sub>${h}</sub>`; else if (a.va === "sup") h = `<sup>${h}</sup>`;
@@ -524,7 +531,8 @@
     if (pa.ox != null && pa.ox !== "") at += ` data-ox="${esc(pa.ox)}"`;
     if (+pa.lineaPt) { at += ` data-lipt="${+pa.lineaPt}"`; st += `--lipt:${+pa.lineaPt}pt;`; }
     const bm = RE_BORDE.exec(pa.borde || "");
-    if (bm) { at += ` data-borde="${esc(pa.borde)}"`; st += cssBorde(pa.borde) + (/[zd]/.test(bm[4]) ? `;--bext:${(+bm[1] + 4).toFixed(2)}pt;--bpad:4pt;` : ";"); }
+    // (el recuadro sale hacia el margen solo del lado que tiene borde: grueso + 4 pt de separación, como Word)
+    if (bm) { const ext = (+bm[1] + 4).toFixed(2); at += ` data-borde="${esc(pa.borde)}"`; st += cssBorde(pa.borde) + ";" + (bm[4].includes("z") ? `--bexti:${ext}pt;--bpadi:4pt;` : "") + (bm[4].includes("d") ? `--bextd:${ext}pt;--bpadd:4pt;` : ""); }
     if (/^#[0-9a-fA-F]{6}$/.test(pa.sombra || "")) { at += ` data-sombra="${pa.sombra}"`; st += `background-color:${pa.sombra};`; }
     if (pa.dir === "rtl") at += ` dir="rtl" data-dir="rtl"`;
     if (pa.sec != null && pa.sec !== "") { const t = String(pa.sec).slice(2); at += ` data-sec="${esc(pa.sec)}"${t ? ` data-sec-t="${esc("Sección: " + t)}"` : ""}`; }
@@ -795,7 +803,7 @@
         if (!g0) return;
         const conf = guionesDocActual();
         const zonaPt = conf && conf.zona != null ? +conf.zona : 18;
-        const cs = getComputedStyle(el), caja = el.getBoundingClientRect(), k = caja.width / (el.offsetWidth || 1) || 1;
+        const cs = getComputedStyle(el), caja = el.getBoundingClientRect(), k = escalaDe(caja, el);
         // (medido contra Word en w13-guiones: con la zona completa Word parte palabras que aquí no se partirían; con la mitad
         // o menos coincide: 46.4 → 57.1 % de renglones idénticos)
         const derecha = caja.right - (parseFloat(cs.paddingRight) || 0) * k, zona = zonaPt * (96 / 72) * k * (window.__zonaFactor != null ? window.__zonaFactor : 0.5);
@@ -888,16 +896,20 @@
       }
       /** Lo que hay que leer de un párrafo para acomodarlo (todo lectura: no cambia nada). null si no se acomoda. */
       function leerAcomodo(el, compat15) {
-        if (el.tagName !== "P" || el.dataset.capital != null || el.dir === "rtl") return null;
-        if (el.querySelector(".wd-guion, .wd-escala, .wd-tab, img, table")) return null;
+        // (para medir: con window.__razAcomodo = new Map() se anota por qué un párrafo no se acomoda)
+        const no = (r) => { if (window.__razAcomodo) window.__razAcomodo.set(el, r); return null; };
+        if (el.tagName !== "P") return no("no es párrafo");
+        if (el.dataset.capital != null) return no("letra capital");
+        if (el.dir === "rtl") return no("derecha a izquierda");
+        { const q = el.querySelector(".wd-guion, .wd-tab, img, table"); if (q) return no("contiene " + (q.className || q.tagName)); }
         // (un salto de renglón manual sí cuenta; el <br> del final, que solo le da alto al párrafo, no)
-        if ([...el.querySelectorAll("br:not(.wd-pintado)")].some((b) => b !== el.lastChild)) return null;
+        if ([...el.querySelectorAll("br:not(.wd-pintado)")].some((b) => b !== el.lastChild)) return no("salto de renglón");
         // (el texto que se aparta de un objeto que flota cambia de ancho renglón por renglón: ese lo acomoda el navegador)
-        if (el.querySelector(":scope > .wd-excl")) return null;
+        if (el.querySelector(":scope > .wd-excl")) return no("junto a lo que flota");
         const alin = el.dataset.alin || "izq";
-        if (!["izq", "just", "centro", "der"].includes(alin)) return null;
-        const er = el.getBoundingClientRect(), z = er.width / (el.offsetWidth || 1) || 1;
-        if (!er.width) return null;
+        if (!["izq", "just", "centro", "der"].includes(alin)) return no("alineación " + alin);
+        const er = el.getBoundingClientRect(), z = escalaDe(er, el);
+        if (!er.width) return no("sin ancho");
         const cs = getComputedStyle(el);
         const izq = er.left + (parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth)) * z;
         const der = er.right - (parseFloat(cs.paddingRight) + parseFloat(cs.borderRightWidth)) * z;
@@ -909,7 +921,7 @@
           let f = estilos.get(p);
           if (f) return f;
           const s = getComputedStyle(p);
-          if (s.fontVariantCaps !== "normal" || (s.textTransform !== "none" && s.textTransform !== "uppercase") || s.display === "none") { mal = true; return null; }
+          if ((s.fontVariantCaps !== "normal" && s.fontVariantCaps !== "small-caps") || (s.textTransform !== "none" && s.textTransform !== "uppercase") || s.display === "none") { mal = s.fontVariantCaps !== "normal" ? "versalitas " + s.fontVariantCaps : s.display === "none" ? "oculto" : "transformación " + s.textTransform; return null; }
           // (con la fuente todavía sin cargar, el lienzo mediría con la de reemplazo: se espera a que llegue)
           // (solo la primera familia: con toda la lista, check() da falso si una de reemplazo que no hace falta no cargó)
           const fam0 = (s.fontFamily.split(",")[0] || "").replace(/["']/g, "").trim();
@@ -921,13 +933,21 @@
             if (!cargandoW.has(css16)) { cargandoW.add(css16); document.fonts.load(css16).then(() => { cargandoW.delete(css16); if (!document.fonts.check(css16)) sinCargaW.add(css16); programarPaginar(); }, () => { cargandoW.delete(css16); sinCargaW.add(css16); }); }
             return null;
           }
-          if (sinCargaW.has(css16)) { mal = true; return null; }
+          if (sinCargaW.has(css16)) { mal = "fuente sin cargar " + fam0; return null; }
           const tam = parseFloat(s.fontSize) || 16;
           f = { css: `${s.fontStyle} ${s.fontWeight} 1000px ${s.fontFamily}`, k: tam / 1000, kern: s.fontKerning === "normal", ls: parseFloat(s.letterSpacing) || 0, may: s.textTransform === "uppercase" };
+          // Versalitas de Word (medido en Word 2024, analisis/letras_word.py): la minúscula se dibuja como mayúscula al 80 % del
+          // tamaño redondeado a medio punto (11 pt → 9, 12 → 9.5); lo demás, a su tamaño
+          if (s.fontVariantCaps === "small-caps" && !f.may) f.ksc = (Math.round(tam * 0.75 * 1.6) / 2) / 0.75 / 1000;
           estilos.set(p, f);
           return f;
         };
-        (function rec(n) {
+        // ancho de un texto con su formato (versalitas como Word; la escala de caracteres multiplica todo)
+        const anchoF = (f, kern, t, esc) => {
+          if (f.ksc) { let w = 0; for (const ch of t) { const M = ch.toUpperCase(); w += M !== ch ? anchoW(f.css, false, M) * f.ksc : anchoW(f.css, false, ch) * f.k; } return w * esc; }
+          return anchoW(f.css, kern, f.may ? t.toUpperCase() : t) * f.k * esc;
+        };
+        (function rec(n, esc, caja) {
           for (let c = n.firstChild; c && !mal; c = c.nextSibling) {
             if (c.nodeType === 3) {
               if (!c.nodeValue.length) continue;
@@ -939,6 +959,7 @@
               for (let i = 0; i < v.length;) {
                 let j = i;
                 if (v[i] === "\t") {
+                  if (caja) { mal = "tabulación con escala"; return; }
                   fichas.push({ t: "\t", w: 0, esp: false, rompe: false, tab: true, nodo: c, fin: i + 1, punto: anchoW(f.css, false, ".") * f.k });
                   i++;
                   continue;
@@ -946,9 +967,10 @@
                 const esp = ESP_W.test(v[i]);
                 if (esp) while (j < v.length && ESP_W.test(v[j])) j++;
                 else while (j < v.length && !ESP_W.test(v[j]) && v[j] !== "\t") { const ch = v[j++]; if (RAYA.test(ch) && j < v.length && !ESP_W.test(v[j]) && !RAYA.test(v[j])) break; }
-                const t = v.slice(i, j), txt = f.may ? t.toUpperCase() : t;
-                const w = anchoW(f.css, f.kern && !esp, txt) * f.k + f.ls * [...t].length;
-                fichas.push({ t, w, esp, rompe: !esp && RAYA.test(t[t.length - 1]) && j < v.length && !ESP_W.test(v[j]), nodo: c, fin: j });
+                const t = v.slice(i, j);
+                const w = anchoF(f, f.kern && !esp, t, esc) + f.ls * [...t].length;
+                // (en la escala de caracteres cada palabra con su espacio es una caja: solo se corta después de ella)
+                fichas.push({ t, w, esp, rompe: !caja && !esp && RAYA.test(t[t.length - 1]) && j < v.length && !ESP_W.test(v[j]), nodo: c, fin: j, caja });
                 i = j;
               }
               continue;
@@ -956,20 +978,22 @@
             if (c.nodeType !== 1) continue;
             if (c.classList.contains("wd-pintado")) continue;
             if (c.classList.contains("wd-oculto") || c.style.display === "none") continue;
+            if (c.classList.contains("wd-escala")) { if (caja) { mal = "escala dentro de escala"; return; } rec(c, esc * (+c.dataset.k || 1), c); continue; }
             if (c.hasAttribute("data-obj")) {
               const r = c.getBoundingClientRect();
               if (!primero) primero = { obj: c };
               fichas.push({ t: "", w: r.width / z, esp: false, rompe: false, obj: c });
               continue;
             }
-            rec(c);
+            rec(c, esc, caja);
           }
-        })(el);
+        })(el, 1, null);
         if (espera) return { espera: true };
-        if (mal || fichas.length < 2) return null;
+        if (mal) return no(mal === true ? "fuente" : mal);
+        if (fichas.length < 2) return no("una sola ficha");
         const hayTab = fichas.some((f) => f.tab);
         // (con tabulaciones solo a la izquierda: en justificado Word estira solo lo de después de la última)
-        if (hayTab && alin !== "izq") return null;
+        if (hayTab && alin !== "izq") return no("tabulación con " + alin);
         // dónde empieza el primer renglón (sangría de primera línea, número de lista)
         let x0 = izq;
         if (primero.nodo) { const rg = document.createRange(); rg.setStart(primero.nodo, 0); rg.setEnd(primero.nodo, Math.min(1, primero.nodo.nodeValue.length)); const q = rg.getClientRects()[0]; if (q) x0 = q.left; }
@@ -1010,7 +1034,8 @@
           const x0 = L.tabs ? (renglon === 0 ? L.tabs.x0 : L.tabs.izq) : 0;
           for (let j = ini; j < n; j++) {
             const t = F[j];
-            if (t.tab) { t.w = anchoTab(L.tabs, x0 + w + pend, t, x0 + (renglon === 0 ? L.A1 : L.A)); w += pend + t.w; pend = 0; continue; }
+            // (Word también corta después de una tabulación: lo que sigue y no cabe baja al renglón de abajo)
+            if (t.tab) { t.w = anchoTab(L.tabs, x0 + w + pend, t, x0 + (renglon === 0 ? L.A1 : L.A)); w += pend + t.w; pend = 0; if (w <= A) { ult = j; wUlt = w; } else { pasa = true; break; } continue; }
             if (t.esp) {
               if (!pend) { if (w <= A) { ult = j; wUlt = w; } else { pasa = true; break; } }
               pend += t.w;
@@ -1020,7 +1045,7 @@
             if (t.rompe) { if (w <= A) { ult = j; wUlt = w; } else { pasa = true; break; } }
           }
           if (!pasa && w <= A) break;   // lo que queda cabe: es el último renglón
-          if (ult < 0) return null;     // una palabra más ancha que el renglón: que la parta el navegador
+          if (ult < 0) { if (window.__razAcomodo) window.__razAcomodo.set(L.el, "palabra más ancha que el renglón"); return null; }     // una palabra más ancha que el renglón: que la parta el navegador
           let corte = ult;
           if (L.encoge) {
             // ¿Word mete la palabra siguiente encogiendo los espacios? (si se pasa a lo más la mitad del hueco y cada
@@ -1073,7 +1098,8 @@
         // los cortes de renglón y el espacio de cada tabulación (la tabulación misma no mide nada: tab-size 0)
         const puntos = cortes.map((c) => { while (c + 1 < F.length && F[c + 1].esp) c++; return [c, "br"]; });
         F.forEach((f, q) => { if (f.tab) puntos.push([q, "tab"]); });
-        puntos.sort((a, b) => b[0] - a[0]);
+        // (en el mismo lugar, el corte primero: así el espacio de la tabulación queda antes del corte)
+        puntos.sort((a, b) => b[0] - a[0] || (a[1] === "br" ? -1 : 1));
         for (const [q, tipo] of puntos) {
           const f = F[q];
           let nuevo;
@@ -1090,6 +1116,7 @@
             }
           }
           if (f.obj) { f.obj.after(nuevo); continue; }
+          if (f.caja && tipo === "br") { f.caja.after(nuevo); continue; }   // (después de la palabra con escala, no dentro)
           if (f.fin >= f.nodo.nodeValue.length) f.nodo.after(nuevo);
           else f.nodo.splitText(f.fin).before(nuevo);
         }
@@ -1122,7 +1149,7 @@
         const compat15 = cuerpo.classList.contains("encoge");
         els.forEach(quitarAcomodo);
         const leidos = els.map((el) => { try { return leerAcomodo(el, compat15); } catch (e) { return null; } });
-        els.forEach((el, i) => { if (leidos[i] && leidos[i].espera) delete el.dataset.acv; else el.dataset.acv = anchoContenido(el).toFixed(2); });
+        els.forEach((el, i) => { if (leidos[i] && leidos[i].espera) delete el.dataset.acv; else el.dataset.acv = anchoContenido(el).toFixed(3); });
         for (const L of leidos) {
           if (!L || L.espera) continue;
           const cortes = cortesWord(L);
@@ -1130,7 +1157,13 @@
           escribirAcomodo(L, cortes);
         }
       }
-      const anchoContenido = (el) => { const cs = getComputedStyle(el); return el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight); };
+      /**
+       * Escala de la pantalla de un elemento (el zoom de la hoja). El cociente con offsetWidth (entero) se equivoca hasta
+       * 0.07 % con anchos fraccionarios (699.59 / 700): suficiente para cambiar un corte de Word; si se parece al zoom, es él.
+       */
+      function escalaDe(r, el) { const q = r.width / (el.offsetWidth || 1) || 1, zq = zoom || 1; return Math.abs(q - zq) < 0.01 ? zq : q; }
+      /** Ancho del contenido de un párrafo, con fracciones de píxel (clientWidth es entero). */
+      const anchoContenido = (el) => { const cs = getComputedStyle(el), r = el.getBoundingClientRect(); return r.width / escalaDe(r, el) - parseFloat(cs.borderLeftWidth) - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight); };
       /**
        * Después de paginar: los párrafos que cambiaron de ancho (columnas, otra sección, otros márgenes) o que no se han
        * revisado (se cambió a la vista de páginas) se acomodan otra vez; fuera de la vista de páginas se quita el acomodo.
@@ -1143,8 +1176,11 @@
         for (const el of cuerpo.children) {
           if (quitar) { if (el.dataset.acw) otro = true; if (el.dataset.acw || el.dataset.acv) { quitarAcomodo(el); delete el.dataset.acv; } continue; }
           // (al paginar, un objeto que flota aparta el texto de este párrafo: el acomodo ya no sirve)
-          if (el.dataset.acw && el.querySelector(":scope > .wd-excl")) { quitarAcomodo(el); otro = true; continue; }
-          if (el.dataset.acv == null || Math.abs(anchoContenido(el) - +el.dataset.acv) > 0.5) cambiaron.push(el);
+          if (el.dataset.acw && el.querySelector(":scope > .wd-excl")) { quitarAcomodo(el); otro = true; if (window.__razAcomodo) window.__razAcomodo.set(el, "junto a lo que flota"); continue; }
+          // (acomodado a la izquierda lleva 1 px de holgura a la derecha: --hol en editor.css)
+          const hol = el.classList.contains("wd-acomodo") && (!el.dataset.alin || el.dataset.alin === "izq") ? 1 : 0;
+          // (con cualquier cambio: un renglón de Word se decide por centésimas de punto —w02: 524.98 pt en 524.70—)
+          if (el.dataset.acv == null || Math.abs(anchoContenido(el) - hol - +el.dataset.acv) > 0.02) cambiaron.push(el);
         }
         const antes = cambiaron.map((el) => !!el.dataset.acw);
         if (cambiaron.length) acomodarComoWord(cambiaron);
@@ -3104,6 +3140,7 @@
         cuerpo.style.fontFamily = fb.fuente ? cssFuente(fb.fuente) : "";
         cuerpo.style.setProperty("--af", altoFuente(fb.fuente || "Calibri"));
         cuerpo.style.setProperty("--ae", espacioFuente(fb.fuente || "Calibri"));
+        cuerpo.style.setProperty("--supk", supFuente(fb.fuente || "Calibri"));
         // Word 2013 y después encoge los espacios de los renglones justificados (modo de compatibilidad 15);
         // un documento de Word 2010 o anterior, no.
         cuerpo.classList.toggle("encoge", !(+fb.compat && +fb.compat < 15));
@@ -3114,6 +3151,8 @@
         if (fb.interlineado) cuerpo.style.setProperty("--wd-li", +fb.interlineado); else cuerpo.style.removeProperty("--wd-li");
         if (+fb.primera) cuerpo.style.setProperty("--wd-primera", +fb.primera + "cm"); else cuerpo.style.removeProperty("--wd-primera");
         cuerpo.classList.toggle("con-fuente", !!fb.fuente);
+        // (un documento que vino de Word: sus párrafos llevan el formato de sus propios estilos)
+        cuerpo.classList.toggle("de-word", !!fb.word);
       }
       function aplicarPagina() {
         aplicarFormato();
@@ -3331,6 +3370,9 @@
         const colocarCopia = (c, p, col, y) => {
           c.style.position = "absolute"; c.style.left = xDe(p, col) + "px"; c.style.top = y + "px"; c.style.width = col.w + "px"; c.style.margin = "0";
           if (!c.isConnected) capa.append(c);
+          // (lo que sigue en una columna de otro ancho se vuelve a cortar con ese ancho, como Word: los cortes copiados
+          // eran los de la columna de antes)
+          if (c.dataset.acw != null && c.dataset.acv != null && Math.abs(anchoContenido(c) - (c.classList.contains("wd-acomodo") && (!c.dataset.alin || c.dataset.alin === "izq") ? 1 : 0) - +c.dataset.acv) > 0.02) acomodarComoWord([c]);
         };
         /**
          * Acomoda los párrafos [i, hasta) de una sección en las columnas `cols` de la hoja p, desde `arriba` hasta
@@ -3630,10 +3672,15 @@
         hoja.style.setProperty("--miz", pg.m.iz + "px");
         hoja.style.setProperty("--md", pg.m.d + "px");
       }
-      /** Pagina; si con la paginación algún párrafo cambió de ancho, se vuelve a acomodar y se pagina otra vez (una vez). */
+      /**
+       * Pagina; si con la paginación algún párrafo cambió de ancho, se vuelve a acomodar y se pagina otra vez, hasta que
+       * ninguno cambie (con columnas de distinto ancho, un párrafo acomodado para una columna puede caer en otra: w04 de
+       * Word real tenía 17 renglones cortados con el ancho de la columna de al lado). Con tope, por si un párrafo brinca
+       * entre dos columnas.
+       */
       function paginar() {
         paginarBase();
-        if (revisarAcomodos()) paginarBase();
+        for (let k = 0; k < 4 && revisarAcomodos(); k++) paginarBase();
       }
       function paginarBase() {
         clearTimeout(tPag); tPag = null;

@@ -1801,7 +1801,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     // (con 4 decimales: el 1.1583 de Office 2024 —line="278"— no es el 1.15 de antes; en 40 renglones son 5 pt)
     const liDe = (c) => (c.linea && (!c.regla || c.regla === "auto") ? Math.round((c.linea / 240) * 10000) / 10000 : null);
     const liDeWord = (v) => Math.abs(v - 1.15) <= 0.04 || Math.abs(v - 1.08) <= 0.03;   // lo que aquí ya es el interlineado normal
-    const formato = {};
+    const formato = { word: 1 };   // (vino de Word: sus párrafos llevan el formato de sus estilos, no el de los de NOM)
     if (rN.fuente) formato.fuente = rN.fuente;
     if (rN.tam) formato.tam = rN.tam; else if (stTxt) formato.tam = 10;   // sin tamaño escrito, Word usa 10 pt
     // (un archivo con estilos que no dice el interlineado va a renglón sencillo: es lo que hace Word)
@@ -2472,9 +2472,10 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       if (v) pa.alin = v;
       if (!pa.lista) {
         const izq = c.izq || 0, der = c.der || 0, pri = c.pri || 0, fr = c.fr || 0, priBase = pa.estilo ? 0 : Math.max(0, pN.pri || 0);
-        if (fr > 0) { pa.francesa = cmDe(fr); if (izq - fr > 20) pa.sangiz = cmDe(izq - fr); if (priBase) pa.primera = 0; }
-        else { if (izq > 20) pa.sangiz = cmDe(izq); if (pri !== priBase && pri >= 0) pa.primera = cmDe(pri); }
-        if (der > 20) pa.sangder = cmDe(der);
+        // (también negativas: en Word el texto sale al margen)
+        if (fr > 0) { pa.francesa = cmDe(fr); if (Math.abs(izq - fr) > 20) pa.sangiz = cmDe(izq - fr); if (priBase) pa.primera = 0; }
+        else { if (Math.abs(izq) > 20) pa.sangiz = cmDe(izq); if (pri !== priBase && pri >= 0) pa.primera = cmDe(pri); }
+        if (Math.abs(der) > 20) pa.sangder = cmDe(der);
       }
       const li = liDeO(c);
       if (li != null) { if (Math.abs(li - liBase) > 0.0005 && !(formato.interlineado == null && liDeWord(li))) pa.interlineado = li; }
