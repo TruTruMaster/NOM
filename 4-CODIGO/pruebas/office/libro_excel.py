@@ -49,6 +49,18 @@ CASOS = {
           return { mal: n >= 3 ? [] : ["flechas de C1 en dos niveles: " + n], datos }; }""",
         "revisar": lambda x, r: revisar_auditoria(x, r),
     },
+    # Evaluar fórmula: cada paso (la fórmula con lo ya calculado escrito como valor) lo calcula Excel y tiene que dar lo
+    # mismo que la celda
+    "evaluar": {
+        "celdas": {"A1": "2", "A2": "3", "B1": "=A1*2", "C1": "=SUMA(A1:A2)+B1*2", "C2": "=SI(A1>2;\"sí\";\"no\")&\" x\"", "C3": "=(A1+A2)*(B1-1)",
+                   "C4": "=PROMEDIO(A1:A2;B1)/FILAS(A1:A2)", "C5": "=-A1^2+B1%", "C6": "=Y(A1<A2;B1=4)", "C7": "=INDICE(A1:B2;2;1)*10"},
+        "js": """async (H, hoja) => { const F = NOM.formulas, t = H.tabla(), ev = H.evaluar(), datos = {}, expr = [];
+          for (const r of ["C1", "C2", "C3", "C4", "C5", "C6", "C7"]) { const p = F.parseRef(r); const pasos = F.pasosEvaluar(t["c:" + r], ev, p.c, p.f);
+            datos[r] = pasos.map((x) => x.texto); pasos.slice(0, -1).forEach((x) => expr.push([r, NOM.ooxml.formulaExcel(x.texto, 9)])); }
+          return { mal: [], datos, expr: expr.map((x) => x[1].replace(/^=/, "")), donde: expr.map((x) => x[0]) }; }""",
+        "expr": True,
+        "revisar": lambda x, r: revisar_evaluar(x, r),
+    },
     # Mostrar fórmulas (Ctrl+`): la hoja muestra la fórmula escrita y sale con showFormulas="1"
     "mostrar-formulas": {
         "celdas": {"A1": "2", "A2": "=A1*3", "A3": "=SUMA(A1:A2)"},
@@ -126,6 +138,16 @@ def celdas_de(addr):
     return sorted(out)
 
 
+def revisar_evaluar(x, r):
+    mal, cel, res = [], x["hojas"][0]["celdas"], r["res"]
+    ev = x.get("evaluados") or []
+    if len(ev) != len(res["expr"]): return [f"Excel calculó {len(ev)} de {len(res['expr'])} pasos"]
+    for e, donde, v in zip(res["expr"], res["donde"], ev):
+        final = cel.get(donde, {}).get("v")
+        if not igual(v, final): mal.append(f"{donde}: el paso «{e}» da {v!r} en Excel (la celda da {final!r})")
+    return mal
+
+
 def revisar_auditoria(x, r):
     mal = []
     cel = x["hojas"][0]["celdas"]
@@ -172,7 +194,11 @@ def main():
                     if str(v["formulas"].get(ref)).replace(" ", "") != fx.replace(" ", ""): fallas.append(f"vuelta: {ref} {v['formulas'].get(ref)!r} (era {fx!r})")
             # Excel
             remoto.subir([arch], "nomoffice/entrada")
-            rr = remoto.correr_office("libro-" + nombre, "libro_ver.py", f"entrada\\{arch.name}", f"libro-{nombre}.json", timeout=600)
+            extra = []
+            if c.get("expr"):
+                ej = SALE / f"{nombre}.expr.json"; ej.write_text(json.dumps(r["res"]["expr"], ensure_ascii=False), encoding="utf-8")
+                remoto.subir([ej], "nomoffice/entrada"); extra = [f"entrada\\{ej.name}"]
+            rr = remoto.correr_office("libro-" + nombre, "libro_ver.py", f"entrada\\{arch.name}", f"libro-{nombre}.json", *extra, timeout=600)
             sal = SALE / f"{nombre}.excel.json"
             if not remoto.bajar(f"nomoffice/libro-{nombre}.json", sal): fallas.append("Excel no dejó resultado: " + rr.stdout[-300:])
             else:

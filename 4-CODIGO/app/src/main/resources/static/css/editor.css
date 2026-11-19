@@ -1305,6 +1305,9 @@
 .rejilla-hoja th.esq-2 { --esq: 2; } .rejilla-hoja th.esq-3 { --esq: 3; } .rejilla-hoja th.esq-4 { --esq: 4; }
 .esq-btn { position: absolute; left: 2px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; padding: 0; border: 1px solid var(--borde-fuerte, #8a8a96); border-radius: 2px; background: var(--sup, #fff); color: var(--tinta, #222); font: 700 12px/12px system-ui, sans-serif; cursor: pointer; z-index: 2; }
 .rejilla-hoja th[data-col] .esq-btn { left: 50%; top: 1px; transform: translateX(-50%); }
+/* Evaluar fórmula: la fórmula con la parte siguiente subrayada y el resultado más reciente en cursiva */
+.evaluar-formula { font: 14px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace; white-space: pre-wrap; word-break: break-all; padding: 10px; border: 1px solid var(--borde); border-radius: 6px; background: var(--sup); min-height: 3.2em; }
+.evaluar-formula u { text-decoration-thickness: 2px; text-underline-offset: 3px; }
 /* Flechas de auditoría (rastrear precedentes y dependientes), encima de la tabla */
 .rejilla-hoja > svg.flechas-aud { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 3; overflow: visible; }
 .hoja-esquema { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 2px 8px; }

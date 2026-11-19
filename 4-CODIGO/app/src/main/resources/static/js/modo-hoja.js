@@ -1529,6 +1529,39 @@
         }
         return { aqui, otras };
       }
+      /** Evaluar fórmula, como Excel: la fórmula de la celda elegida, paso a paso, con la parte siguiente subrayada. */
+      function dialogoEvaluar() {
+        if (!t) return;
+        const c = sel.c, f = sel.f, cr = String(crudo(c, f));
+        if (!cr.startsWith("=")) return aviso("La celda elegida no tiene una fórmula", { tipo: "aviso" });
+        const pasos = F().pasosEvaluar(cr, evaluarVivo(), c, f);
+        let k = 0;
+        const cuerpo = html(`<div class="col"><p class="suave chico" style="font-weight:400">Referencia: ${esc(F().prefijoHoja(nombreHoja()) + "$" + F().colLetra(c) + "$" + (f + 1))}</p>
+          <div class="evaluar-formula" data-texto aria-live="polite"></div>
+          <p class="suave chico" style="font-weight:400">Para ver cómo se calcula la parte subrayada, pulsa Evaluar. El resultado más reciente aparece en cursiva.</p></div>`);
+        const pie = html(`<div style="display:contents"><button class="btn" data-reiniciar>Reiniciar</button><span class="crece"></span><button class="btn" data-cerrar>Cerrar</button><button class="btn primario" data-evaluar>Evaluar</button></div>`);
+        const h = NOM.hoja({ titulo: "Evaluar fórmula", icono: "square-function", cuerpo, pie });
+        let ultimo = null;   // [desde, hasta] del valor recién calculado (va en cursiva, como en Excel)
+        const pintar = () => {
+          const p = pasos[k], tx = p.texto;
+          let h2 = "";
+          if (p.marca) h2 = esc(tx.slice(0, p.marca[0])) + `<u>${esc(tx.slice(p.marca[0], p.marca[1]))}</u>` + esc(tx.slice(p.marca[1]));
+          else h2 = `<i>${esc(tx)}</i>`;
+          if (p.marca && ultimo && ultimo[1] <= p.marca[0]) h2 = esc(tx.slice(0, ultimo[0])) + `<i>${esc(tx.slice(ultimo[0], ultimo[1]))}</i>` + esc(tx.slice(ultimo[1], p.marca[0])) + `<u>${esc(tx.slice(p.marca[0], p.marca[1]))}</u>` + esc(tx.slice(p.marca[1]));
+          $("[data-texto]", cuerpo).innerHTML = h2;
+          $("[data-evaluar]", pie).textContent = p.marca ? "Evaluar" : "Reiniciar";
+        };
+        pintar();
+        $("[data-evaluar]", pie).onclick = () => {
+          if (!pasos[k].marca) { k = 0; ultimo = null; pintar(); return; }
+          // dónde quedó el valor nuevo en el paso siguiente: donde estaba la parte subrayada
+          const a = pasos[k], b = pasos[k + 1];
+          ultimo = b && b.marca !== undefined ? [a.marca[0], a.marca[0] + (b.texto.length - (a.texto.length - (a.marca[1] - a.marca[0])))] : null;
+          k++; pintar();
+        };
+        $("[data-reiniciar]", pie).onclick = () => { k = 0; ultimo = null; pintar(); };
+        $("[data-cerrar]", pie).onclick = () => h.cerrar();
+      }
       let flechas = [];   // { de: { c1, f1, c2, f2 } | { hoja }, a: { c, f } | { hoja } , tipo: "p" | "d" }
       const trazadas = { p: new Set(), d: new Set() };
       /** Rastrear precedentes (tipo «p») o dependientes («d») de la celda elegida: cada vez, un nivel más (como Excel). */
@@ -2958,7 +2991,8 @@
               { texto: "Auditoría", icono: "arrow-down-right", sub: [
                 { texto: "Rastrear precedentes", corto: "Precedentes", icono: "arrow-down-right", fn: () => rastrear("p") },
                 { texto: "Rastrear dependientes", corto: "Dependientes", icono: "arrow-up-right", fn: () => rastrear("d") },
-                { texto: "Quitar flechas", corto: "Quitar", icono: "x", fn: () => quitarFlechas() }] },
+                { texto: "Quitar flechas", corto: "Quitar", icono: "x", fn: () => quitarFlechas() },
+                { texto: "Evaluar fórmula", corto: "Evaluar", icono: "square-function", fn: dialogoEvaluar }] },
               { texto: "Esquema", icono: "list-tree", off: lect, sub: [
                 { texto: "Agrupar filas", corto: "+ Filas", icono: "list-tree", fn: () => agrupar("f", 1) }, { texto: "Agrupar columnas", corto: "+ Col.", icono: "list-tree", fn: () => agrupar("c", 1) },
                 { texto: "Desagrupar filas", corto: "− Filas", icono: "list-x", fn: () => agrupar("f", -1) }, { texto: "Desagrupar columnas", corto: "− Col.", icono: "list-x", fn: () => agrupar("c", -1) },
@@ -3092,6 +3126,7 @@
           { texto: "Rastrear precedentes", icono: "arrow-down-right", fn: () => { const a = NOM.editorActual.modoApi.api.auditoria; if (a) a.rastrear("p"); }, claves: "auditoria flechas precedentes de donde sale" },
         { texto: "Rastrear dependientes", icono: "arrow-up-right", fn: () => { const a = NOM.editorActual.modoApi.api.auditoria; if (a) a.rastrear("d"); }, claves: "auditoria flechas dependientes quien usa" },
         { texto: "Quitar flechas", icono: "x", fn: () => { const a = NOM.editorActual.modoApi.api.auditoria; if (a) a.quitar(); }, claves: "auditoria quitar flechas" },
+        { texto: "Evaluar fórmula", icono: "square-function", fn: () => { const a = NOM.editorActual.modoApi.api.auditoria; if (a) a.evaluar(); }, claves: "auditoria evaluar formula paso a paso depurar" },
         { texto: "Mostrar fórmulas (Ctrl+`)", icono: "square-function", fn: () => { const a = NOM.editorActual.modoApi.api.formulasVisibles; if (a) a(); }, claves: "ver formulas mostrar formulas auditoria" },
         { texto: "Borrar esquema", icono: "eraser", fn: borrarEsquema },
           { titulo: "Fórmulas" },
@@ -3104,6 +3139,7 @@
           { texto: "Rastrear precedentes", icono: "arrow-down-right", fn: () => rastrear("p") },
           { texto: "Rastrear dependientes", icono: "arrow-up-right", fn: () => rastrear("d") },
           { texto: "Quitar flechas", icono: "x", fn: () => quitarFlechas() },
+          { texto: "Evaluar fórmula…", icono: "square-function", fn: dialogoEvaluar },
           { texto: "Definir nombre…", icono: "tag", fn: () => dialogoNombre(null, render) },
           { texto: "Administrador de nombres…", icono: "tags", fn: () => administradorNombres() },
           { titulo: "Hoja" },
@@ -3189,7 +3225,7 @@
         calculo: { modo: modoCalculo, fijar: fijarModoCalculo, ahora: calcularAhora },
         esquema: { agrupar, alternar: alternarGrupo, nivel: mostrarNivel, detalle, borrar: borrarEsquema },
         formulasVisibles: alternarFormulas,
-        auditoria: { precedentes: precedentesDe, dependientes: dependientesDe, rastrear, quitar: quitarFlechas, flechas: () => flechas.slice() },
+        auditoria: { precedentes: precedentesDe, dependientes: dependientesDe, rastrear, quitar: quitarFlechas, flechas: () => flechas.slice(), evaluar: dialogoEvaluar },
         nombres: { guardar: guardarNombre, lista: nombresLibro, invalido: nombreInvalido } };
       void self;
 

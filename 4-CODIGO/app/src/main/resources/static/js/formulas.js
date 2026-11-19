@@ -2603,7 +2603,8 @@
       }
       function pot() {
         let a = unario();
-        while (es("^")) { toma(); const b = unario(); a = porElemento([a, b], (p, q) => Math.pow(num(p), num(q))); }
+        // (base negativa con exponente fraccionario, 0 a la negativa…: #¡NUM! en Excel, no NaN)
+        while (es("^")) { toma(); const b = unario(); a = porElemento([a, b], (p, q) => { const r = Math.pow(num(p), num(q)); if (Number.isNaN(r)) throw E("#NUM!"); if (!isFinite(r)) throw E(num(p) === 0 ? "#DIV/0!" : "#NUM!"); return r; }); }
         return a;
       }
       function unario() {
@@ -2886,6 +2887,8 @@
       limpiar: () => { actual.cache.clear(); actual.derrames.clear(); actual.meta.clear(); actual.duenos.clear(); actual.cand = null; otras.clear(); },
       // una fórmula que no está en ninguna celda, como si estuviera en (c, f): la de una regla de formato condicional
       calcular: (crudo, c, f) => { try { const v = calcular(crudo, actual, { c, f }); return Array.isArray(v) ? v[0] : v; } catch (e) { return e instanceof ErrorF ? e : E("#VALOR!"); } },
+      // lo mismo, pero una matriz entera (Evaluar fórmula)
+      calcularTodo: (crudo, c, f) => { try { return calcular(crudo, actual, { c, f }); } catch (e) { return e instanceof ErrorF ? e : E("#VALOR!"); } },
       /** Si la fórmula de (c, f) da una matriz: { filas, cols, bloqueado } (lo que derrama, o no cabe). */
       derrame: (c, f) => { const d = abierta(c, f); return d ? { filas: d.filas, cols: d.cols, bloqueado: d.bloqueado } : null; },
       /** ¿La fórmula de (c, f) es de matrices? (dio una matriz o calculó con ellas: Excel la guarda como fórmula de matriz) */
@@ -3542,6 +3545,100 @@
     };
   };
   /** Evaluador de una tabla que entiende las referencias a las demás hojas del documento. */
+  /**
+   * Evaluar fórmula, como Excel (Fórmulas → Evaluar fórmula): los pasos con que se calcula la fórmula de (c, f). Primero
+   * cada referencia (de izquierda a derecha), luego cada operación o función en cuanto tiene sus datos, como en el cuadro
+   * de Excel. Devuelve [{ texto, marca: [desde, hasta] (la parte que se calcula al pulsar Evaluar) }], y el último lleva el
+   * resultado (sin marca). Con LET o LAMBDA, un solo paso.
+   */
+  const REF_ARGS = new Set(["DESREF", "OFFSET", "FILA", "ROW", "COLUMNA", "COLUMN", "FILAS", "ROWS", "COLUMNAS", "COLUMNS", "CELDA", "CELL", "AREAS",
+    "INDIRECTO", "INDIRECT", "ESREF", "ISREF", "SUMAR.SI", "SUMIF", "CONTAR.SI", "COUNTIF", "PROMEDIO.SI", "AVERAGEIF", "SUMAR.SI.CONJUNTO", "SUMIFS",
+    "CONTAR.SI.CONJUNTO", "COUNTIFS", "PROMEDIO.SI.CONJUNTO", "AVERAGEIFS", "MAX.SI.CONJUNTO", "MAXIFS", "MIN.SI.CONJUNTO", "MINIFS", "SUBTOTALES", "SUBTOTAL", "AGREGAR", "AGGREGATE", "CONTAR.BLANCO", "COUNTBLANK"]);
+  function literalDe(v) {
+    if (v instanceof ErrorF) return v.codigo;
+    if (v instanceof FechaF) return String(v.serie);
+    if (Array.isArray(v)) {
+      const cols = v.cols || v.length || 1, filas = Math.ceil(v.length / cols), r = [];
+      for (let f = 0; f < filas; f++) r.push(v.slice(f * cols, f * cols + cols).map((x) => (x === "" || x == null ? "0" : literalDe(x))).join(","));
+      return "{" + r.join(";") + "}";
+    }
+    if (typeof v === "boolean") return v ? "VERDADERO" : "FALSO";
+    if (typeof v === "number") return String(v);
+    if (v && typeof v === "object" && typeof v.valueOf() === "number") return String(v.valueOf());
+    return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+  }
+  function pasosEvaluar(formula, ev, c, f) {
+    const s = String(formula || "").replace(/^=/, "");
+    const final = (v) => ({ texto: literalDe(v) });
+    if (/\b(LET|LAMBDA)\s*\(/i.test(s)) return [{ texto: "=" + s, marca: [1, s.length + 1] }, final(ev.calcularTodo("=" + s, c, f))];
+    const tk = tokens(s);
+    let i = 0;
+    const esOp = (v) => tk[i] && tk[i].k === "op" && tk[i].v === v;
+    const falla = () => { throw new Error("no se pudo leer"); };
+    function prim() {
+      const x = tk[i];
+      if (!x) falla();
+      if (x.k === "num") { i++; return { t: "lit", txt: String(x.v) }; }
+      if (x.k === "str") { i++; return { t: "lit", txt: '"' + String(x.v).replace(/"/g, '""') + '"' }; }
+      if (x.k === "err") { i++; return { t: "lit", txt: x.v }; }
+      if (x.k === "ref") { i++; return { t: "ref", txt: textoRef(x.v) + (x.derrame ? "#" : "") }; }
+      if (x.k === "id") {
+        i++;
+        if (esOp("(")) {
+          i++;
+          const args = [];
+          if (!esOp(")")) for (;;) { args.push(esOp(";") || esOp(")") ? { t: "lit", txt: "" } : expr()); if (esOp(";")) { i++; continue; } break; }
+          if (!esOp(")")) falla();
+          i++;
+          return { t: "fn", nombre: x.v, args };
+        }
+        if (/^(VERDADERO|FALSO|TRUE|FALSE)$/i.test(x.v)) return { t: "lit", txt: /^(VERDADERO|TRUE)$/i.test(x.v) ? "VERDADERO" : "FALSO" };
+        return { t: "ref", txt: x.v };   // (un nombre definido)
+      }
+      if (x.k === "op" && x.v === "(") { i++; const e = expr(); if (!esOp(")")) falla(); i++; return { t: "par", x: e }; }
+      if (x.k === "op" && x.v === "{") {
+        let prof = 0, txt = "";
+        do { const y = tk[i]; if (!y) falla(); txt += y.k === "str" ? '"' + String(y.v).replace(/"/g, '""') + '"' : String(y.v); if (y.k === "op" && y.v === "{") prof++; if (y.k === "op" && y.v === "}") prof--; i++; } while (prof > 0);
+        return { t: "lit", txt };
+      }
+      return falla();
+    }
+    function unario() { if (esOp("-") || esOp("+")) { const op = tk[i++].v; return { t: "un", op, x: unario() }; } return prim(); }
+    function pct() { let e = unario(); while (esOp("%")) { i++; e = { t: "pct", x: e }; } return e; }
+    function pot() { let e = pct(); while (esOp("^")) { i++; e = { t: "bin", op: "^", a: e, b: pct() }; } return e; }
+    function mul() { let e = pot(); while (esOp("*") || esOp("/")) { const op = tk[i++].v; e = { t: "bin", op, a: e, b: pot() }; } return e; }
+    function sum() { let e = mul(); while (esOp("+") || esOp("-")) { const op = tk[i++].v; e = { t: "bin", op, a: e, b: mul() }; } return e; }
+    function cat() { let e = sum(); while (esOp("&")) { i++; e = { t: "bin", op: "&", a: e, b: sum() }; } return e; }
+    function expr() { let e = cat(); while (["=", "<>", "<", ">", "<=", ">="].some(esOp)) { const op = tk[i++].v; e = { t: "bin", op, a: e, b: cat() }; } return e; }
+    let raiz;
+    try { raiz = expr(); if (i < tk.length) falla(); } catch (e) { return [{ texto: "=" + s, marca: [1, s.length + 1] }, final(ev.calcularTodo("=" + s, c, f))]; }
+    const txt = (n) => (n.t === "lit" || n.t === "ref" ? n.txt : n.t === "fn" ? n.nombre + "(" + n.args.map(txt).join(";") + ")" : n.t === "par" ? "(" + txt(n.x) + ")"
+      : n.t === "un" ? n.op + txt(n.x) : n.t === "pct" ? txt(n.x) + "%" : txt(n.a) + n.op + txt(n.b));
+    // el orden de Excel: cada nodo después de sus datos (las referencias que una función necesita como referencia se quedan)
+    const orden = [];
+    (function rec(n, enRef) {
+      if (n.t === "lit") return;
+      if (n.t === "ref") { if (!enRef) orden.push(n); return; }
+      if (n.t === "fn") { const r = REF_ARGS.has(String(n.nombre).toUpperCase()); n.args.forEach((a) => rec(a, r && a.t === "ref")); }
+      else if (n.t === "bin") { rec(n.a, false); rec(n.b, false); }
+      else rec(n.x, false);
+      orden.push(n);
+    })(raiz, false);
+    const pasos = [];
+    for (const n of orden) {
+      const guardado = { ...n };
+      const v = ev.calcularTodo("=" + txt(guardado), c, f);
+      // (una celda vacía se queda como referencia: su valor depende de dónde se use —0 en una suma, "" al juntar textos—)
+      if (guardado.t === "ref" && (v === "" || v == null)) continue;
+      Object.keys(n).forEach((k) => delete n[k]);
+      Object.assign(n, { t: "lit", txt: "\u0001" + txt(guardado) + "\u0002" });
+      const conMarca = "=" + txt(raiz), ini = conMarca.indexOf("\u0001"), fin = conMarca.indexOf("\u0002") - 1;
+      pasos.push({ texto: conMarca.replace(/[\u0001\u0002]/g, ""), marca: [ini, fin] });
+      n.txt = literalDe(v);
+    }
+    pasos.push(final(ev.calcularTodo("=" + s, c, f)));
+    return pasos;
+  }
   /** Los nombres definidos del libro (en «_doc», nombres: { minúsculas: { n, d } }): nombre → su definición. */
   function nombresDe(doc) {
     const m = doc && typeof doc.valor === "function" ? doc.valor("_doc", "nombres") : null;
@@ -3561,7 +3658,7 @@
   }
 
   NOM.formulas = {
-    hojasDe, nombreDeHoja, evaluadorDeTabla, nombresDe,
+    hojasDe, nombreDeHoja, evaluadorDeTabla, nombresDe, pasosEvaluar, literalDe,
     evaluador, formatear, aplicarFormato, formatoXL, ErrorF, FechaF, esNum, colLetra, colNum, ref, parseRef, NOMBRES, FIRMAS, ALIAS, INGLES,
     leerFecha, criterio, desplazar, ajustarEstructura, renombrarHoja, refsDe, textoRef, leerRef, transformarRefs, FORMATOS, esFormatoFecha,
     cambiarDecimales, leerEntrada, serie, calcularLiteral, prefijoHoja, textoFecha, aEspanol, formulasDe, conInterseccion,

@@ -49,6 +49,21 @@ try:
         except Exception: vf = None
         hojas.append({"nombre": h.Name, "celdas": celdas, "filas": filas, "columnas": cols, "formulas_visibles": vf})
     res["hojas"] = hojas
+    # (opcional) fórmulas sueltas que Excel calcula en la primera hoja: para comparar los pasos de Evaluar fórmula
+    if len(sys.argv) > 3:
+        ruta = sys.argv[3] if os.path.isabs(sys.argv[3]) else os.path.join(BASE, sys.argv[3])
+        exprs = json.load(open(ruta, encoding="utf-8"))
+        h1 = wb.Worksheets(1)
+        ERR = {-2146826288: "#NULL!", -2146826281: "#DIV/0!", -2146826273: "#VALUE!", -2146826265: "#REF!", -2146826259: "#NAME?", -2146826252: "#NUM!", -2146826246: "#N/A"}
+        ev = []
+        for e in exprs:
+            try:
+                v = h1.Evaluate(e)
+                if isinstance(v, int) and v in ERR: v = ERR[v]
+                if isinstance(v, tuple): v = [list(x) if isinstance(x, tuple) else x for x in v]
+            except Exception as ex: v = "ERROR " + str(ex)[:80]
+            ev.append(v)
+        res["evaluados"] = ev
     wb.Close(False)
 except Exception as e:
     res["error"] = str(getattr(e, "excepinfo", None) or e)[:400]
