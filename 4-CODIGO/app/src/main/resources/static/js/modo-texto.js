@@ -1079,8 +1079,8 @@
             if (f.lider) {
               const ch = { dot: ".", hyphen: "-", middleDot: "·" }[f.lider];
               nuevo.dataset.lider = f.lider;
-              // (de punta a punta, como Word: lo que sobra del primero queda cortado a la izquierda)
-              if (ch) nuevo.textContent = ch.repeat(Math.max(0, Math.ceil(f.w / Math.max(1, f.punto || 4))));
+              // (los que caben, pegados a la parada; lo que sobra, menos de un punto, queda a la izquierda)
+              if (ch) nuevo.textContent = ch.repeat(Math.max(0, Math.floor(f.w / Math.max(1, f.punto || 4) - 0.02)));
             }
           }
           if (f.obj) { f.obj.after(nuevo); continue; }

@@ -1258,7 +1258,9 @@
 /* Tabulaciones de Word (acomodarComoWord): la tabulación no mide nada y un espacio de pantalla lleva su ancho y su relleno
    (puntos, guiones o raya) alineado a la parada. */
 .wd-cuerpo > .wd-acomodo.con-tab { tab-size: 0; }
-.wd-tabw { display: inline-block; overflow: hidden; white-space: nowrap; text-align: right; vertical-align: baseline; text-indent: 0; user-select: none; pointer-events: none; text-decoration: none; }
+/* (sin overflow: con overflow oculto la línea base de un inline-block baja a su borde de abajo: los puntos subían y el
+   renglón crecía) */
+.wd-tabw { display: inline-block; white-space: nowrap; text-align: right; vertical-align: baseline; text-indent: 0; user-select: none; pointer-events: none; text-decoration: none; }
 .wd-tabw:empty::before { content: "\200b"; }
 .wd-tabw[data-lider="underscore"] { border-bottom: 0.75pt solid currentColor; }
 .wd-tabw[data-lider="heavy"] { border-bottom: 1.5pt solid currentColor; }
