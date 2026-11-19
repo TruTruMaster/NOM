@@ -30,6 +30,9 @@ version: 0.17.0
   justificado, en ocho fuentes): ahora un documento de Word se ve con las mismas palabras en cada renglón y en cada
   página (en las pruebas, de 85 % a más de 99 % de renglones idénticos). El alto de cada renglón también sale como
   en Word cuando el texto lleva otra letra que la del estilo.
+- **Tabulaciones de Word:** las tablas de contenido y los índices importados se ven con sus puntos y el número de
+  página alineado a la derecha, como en Word (también las tabulaciones de centro y decimales). Las columnas de una
+  sección continua (por ejemplo, un índice a dos columnas) se reparten parejas, como en Word.
 - **Guiones automáticos:** si el Word los tiene activados («Disposición → Guiones»), las palabras se parten al final
   del renglón con las reglas del español o del inglés; se activan y desactivan en **Más → Guiones automáticos**.
 - **Notas al final** (las de Word, numeradas aparte: i, ii, iii) y la **escala de caracteres** (texto estirado o

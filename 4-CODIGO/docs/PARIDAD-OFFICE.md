@@ -59,7 +59,7 @@ archivo de Office se muestra (y se conserva al descargar), pero no se crea ni se
 |---|---|---|
 | Inicio · Portapapeles | Cortar, copiar, pegar, pegado especial, copiar formato | Sí, salvo **pegar con formato** (a medias: negritas, listas y vínculos; faltan estilos, tablas, imágenes y colores desde Word o Google Docs) |
 | Inicio · Fuente | Fuente, tamaño, negrita, cursiva, subrayado, tachado, sub/superíndice, color, resaltado, mayúsculas, borrar formato | Sí. Versalitas, espaciado entre letras, elevado/bajado y texto oculto: se leen y se conservan de Word, sin botón propio. **Escala de caracteres (`w:w`): no** |
-| Inicio · Párrafo | Alineación, sangrías, interlineado, espacio, viñetas, numeración multinivel, ordenar, marcas ¶, bordes y sombreado | Sí lo principal (también numeración como la escribe Word); bordes y sombreado se ven; **ordenar y mostrar marcas ¶: no** |
+| Inicio · Párrafo | Alineación, sangrías, interlineado, espacio, viñetas, numeración multinivel, ordenar, marcas ¶, bordes y sombreado | Sí lo principal (también numeración como la escribe Word); bordes y sombreado se ven; **ordenar y mostrar marcas ¶: no**. **Tabulaciones del archivo: sí** (18-nov: izquierda, derecha, centro y decimal con relleno de puntos, guiones o raya, las del estilo y las propias, «quitar» y la distancia de siempre; medido en w07 y w09: índices y tablas de contenido con sus puntos y el número en la parada; w09 98.2 % de renglones idénticos); ponerlas desde NOM (regla): no |
 | Inicio · Estilos | Galería de estilos, crear y modificar | A medias: Normal, Título 1-3 y los del archivo se ven; crear o cambiar estilos: no |
 | Inicio · Edición | Buscar, reemplazar, seleccionar | Sí |
 | Insertar · Páginas | Portada, página en blanco, salto | Salto sí; portada de la galería no («Armar reporte» hace la suya) |
@@ -71,7 +71,7 @@ archivo de Office se muestra (y se conserva al descargar), pero no se crea ni se
 | Insertar · Símbolos | Ecuación, símbolo | Sí (ecuaciones con notación tipo LaTeX, a OMML de Word) |
 | Dibujar | Pluma, entintado | No en el texto (la pluma existe al presentar) |
 | Diseño | Temas, conjuntos de estilos, colores, fuentes, marca de agua, color y bordes de página | Marca de agua sí; color y bordes de página se ven; temas, conjuntos de estilos, colores y fuentes del documento: no |
-| Disposición | Márgenes, orientación, tamaño, columnas, saltos, números de línea, guiones, sangría, espacio, organizar | Márgenes, orientación, tamaño, saltos de página, sangría y espacio: sí. Columnas: las del archivo se ven como Word; en NOM, «dos lado a lado» como bloque. Saltos de sección: se ven. **División automática de palabras: sí** (18-nov: «Guiones automáticos» del archivo —zona, mayúsculas, «No dividir con guiones» por párrafo— se respeta, se activa y desactiva en Más y se guarda al descargar; patrones de TeX en inglés y español. Medido contra Word en w13-guiones: 57.1 % de renglones idénticos, 19.6 % sin dividir. Lo que falta: Word usa su propio diccionario y parte algunas palabras en otro lugar —«extra-ordinariamente», «con-exión» en inglés—; ver RELEVO-18NOV-TARDE). **Números de línea: no** |
+| Disposición | Márgenes, orientación, tamaño, columnas, saltos, números de línea, guiones, sangría, espacio, organizar | Márgenes, orientación, tamaño, saltos de página, sangría y espacio: sí. Columnas: las del archivo se ven como Word (18-nov: las de una sección continua se equilibran como Word; el índice a dos columnas de w07 ya no se encima); en NOM, «dos lado a lado» como bloque. Saltos de sección: se ven. **División automática de palabras: sí** (18-nov: «Guiones automáticos» del archivo —zona, mayúsculas, «No dividir con guiones» por párrafo— se respeta, se activa y desactiva en Más y se guarda al descargar; patrones de TeX en inglés y español. Medido contra Word en w13-guiones: 57.1 % de renglones idénticos, 19.6 % sin dividir. Lo que falta: Word usa su propio diccionario y parte algunas palabras en otro lugar —«extra-ordinariamente», «con-exión» en inglés—; ver RELEVO-18NOV-TARDE). **Números de línea: no** |
 | Referencias | Tabla de contenido, notas al pie y al final, citas y bibliografía, títulos, tabla de ilustraciones, índice, tabla de autoridades | Tabla de contenido y notas al pie: sí. Notas al final: no. Citas y bibliografía: **las de NOM** (APA, fuentes por DOI, ISBN o dirección); las de Word (`CITATION`, `Sources.xml`): no. Títulos «Figura 1.»: sí. Tabla de ilustraciones, índice (`XE`) y tabla de autoridades: no. Investigar (Wikipedia, libros, artículos): sí, extra |
 | Correspondencia | Combinar correspondencia, sobres, etiquetas, reglas | **La de NOM** (texto con `{{campos}}` + una hoja = un documento por fila); la de Word (`MERGEFIELD`, origen de datos), sobres y etiquetas: no |
 | Revisar | Ortografía, Editor, contar palabras, accesibilidad, traducir, idioma, comentarios, control de cambios, comparar, proteger | Contar palabras, comentarios y proteger: sí. **Control de cambios: a medias** (NOM tiene su modo sugerencia con aceptar y rechazar; los cambios marcados de un Word se muestran ya aplicados, sin sus marcas). Comparar, traducir, idioma y Editor: no |
@@ -81,10 +81,10 @@ archivo de Office se muestra (y se conserva al descargar), pero no se crea ni se
 | Controles de contenido y formularios | Casilla, lista, fecha, texto | Se conservan y su texto se edita; como formulario: no |
 | VBA, modo seguro, automatización | | No |
 
-Medido contra Word 2024 real (renglones idénticos, 18-nov, con los renglones cortados como Word): w01 94.9 %,
-w02 94.1 %, w03 96.6 %, w04 93.4 %, w05 85.7 %, w06 83.8 %, w07 96.5 %, w08 100 %, w09 93.3 %, w10 27.7 %, w11 100 %,
-w12 82.9 %, w13 57.1 %, t01 89.6 % (antes: w01 86.1, w02 84.9, w04 86.5, w07 93.0, w08 94.3, w09 78.5, w12 77.8,
-t01 83.8). Y w14-renglones (144 párrafos hechos en Word para esto: 8 fuentes, 3 tamaños, izquierda y justificado,
+Medido contra Word 2024 real (renglones idénticos, 18-nov, con los renglones cortados como Word, tabulaciones y
+columnas equilibradas): w01 94.9 %, w02 96.2 %, w03 96.6 %, w04 94.3 %, w05 85.7 %, w06 83.8 %, w07 96.5 %, w08 100 %,
+w09 98.2 %, w10 28.7 %, w11 100 %, w12 82.9 %, w13 57.1 %, t01 90.8 % (al empezar el 18-nov: w01 86.1, w02 84.9,
+w04 86.5, w07 93.0, w08 94.3, w09 78.5, w12 77.8, t01 83.8). Y w14-renglones (144 párrafos hechos en Word para esto: 8 fuentes, 3 tamaños, izquierda y justificado,
 3 anchos): **99.6 %** (antes 85.2 %) y las mismas 23 páginas que Word (antes 26).
 
 **Cómo corta Word un renglón** (medido con w14: `windows/hacer_renglones.py`, `analisis/acomodo_word.py`): a la
@@ -93,7 +93,7 @@ mete la palabra que no cabe encogiendo los espacios solo si se pasa del margen a
 quedaría sin ella y cada espacio se encoge a lo más un 25 % (0 errores en 559 decisiones); corta también después de un
 guion o una raya pegados a lo que sigue. NOM lo calcula con los anchos de sus fuentes (las mismas medidas que las de
 Office) y lo fuerza con cortes de pantalla (`acomodarComoWord` en `modo-texto.js`; el navegador solo no puede: mide el
-texto hasta un 0.1 % más angosto). Falta: párrafos con tabuladores, guiones automáticos, escala de caracteres, letra
+texto hasta un 0.1 % más angosto). Falta: párrafos justificados o centrados con tabuladores, guiones automáticos, escala de caracteres, letra
 capital o junto a un objeto que flota (esos los sigue acomodando el navegador), y el texto dentro de tablas y cuadros.
 
 ## 4. Excel
