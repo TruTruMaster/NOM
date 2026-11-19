@@ -1266,6 +1266,17 @@
    todas las reglas del margen derecho: columnas, recuadros y citas conservan el suyo) */
 .wd-cuerpo > .wd-acomodo:not([data-alin]), .wd-cuerpo > .wd-acomodo[data-alin="izq"] { --hol: 1px; }
 .wd-relleno { display: inline-block; height: 0; user-select: none; pointer-events: none; }
+/* El texto de un documento corta sus renglones como Word: sin el «balance» de los títulos ni el «pretty» de los párrafos que
+   usa la interfaz (nom.css). Con «balance», un título de dos renglones se partía a la mitad (w05). Solo el estilo: el modo
+   (nowrap de lo que no se parte) se queda. */
+.wd-hoja :is(h1, h2, h3, h4, h5, h6, p, div, li, td, th, span) { text-wrap-style: auto; }
+/* Lo mismo en los párrafos de las celdas de tabla (acomodados como Word: su alineación va en data-alin) */
+.wd-tab .wd-acomodo[data-alin="just"] { text-align-last: justify; }
+.wd-tab .wd-acomodo[data-alin="just"] span { word-spacing: inherit !important; }
+/* (1 px de holgura en todo párrafo de celda: con anchos redondeados, una palabra que en Word cabe por 0.02 pt —w05:
+   «PROGRAMACIÓN», 93.73 en 93.75— el navegador la partía; el acomodo resta esta holgura al medir) */
+.wd-tab .wd-cel-p, .wd-tab .wd-celda:not(.rica) { margin-right: -1px; }
+.wd-tab .wd-acomodo.con-tab { tab-size: 0; }
 /* Tabulaciones de Word (acomodarComoWord): la tabulación no mide nada y un espacio de pantalla lleva su ancho y su relleno
    (puntos, guiones o raya) alineado a la parada. */
 .wd-cuerpo > .wd-acomodo.con-tab { tab-size: 0; }

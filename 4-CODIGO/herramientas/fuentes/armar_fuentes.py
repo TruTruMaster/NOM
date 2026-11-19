@@ -80,6 +80,11 @@ FAMILIAS = [
     ("Segoe Print", "NOM SP", {"Regular": "windows/segoepr.ttf", "Bold": "windows/segoeprb.ttf"}, COMIC),
     ("Segoe Script", "NOM SS", {"Regular": "windows/segoesc.ttf", "Bold": "windows/segoescb.ttf"}, COMIC),
     ("Bahnschrift", "NOM BH", {"Regular": "windows/bahnschrift.ttf"}, {"Regular": os_(400, 87)}),
+    # (19-nov) las de w01 que faltaban: Sitka Text es la instancia «Text» de la fuente variable (opsz 11)
+    ("Sitka Text", "NOM SKT", {"Regular": "windows/SitkaVF.ttf|opsz=11,wght=400", "Bold": "windows/SitkaVF.ttf|opsz=11,wght=700",
+                              "Italic": "windows/SitkaVF-Italic.ttf|opsz=11,wght=400", "Bold Italic": "windows/SitkaVF-Italic.ttf|opsz=11,wght=700"}, GELASIO),
+    ("Lucida Sans Unicode", "NOM LSU", {"Regular": "windows/l_10646.ttf"}, OPEN_SANS),
+    ("Ink Free", "NOM IF", {"Regular": "windows/Inkfree.ttf"}, COMIC),
 ]
 ARCHIVO_ESTILO = {"Regular": "regular", "Bold": "negrita", "Italic": "cursiva", "Bold Italic": "negrita-cursiva"}
 CSS_ESTILO = {"Regular": ("normal", 400), "Bold": ("normal", 700), "Italic": ("italic", 400), "Bold Italic": ("italic", 700)}
@@ -106,6 +111,8 @@ def main():
         if solo and oficina.lower() not in solo: continue
         slug = nueva.lower().replace(" ", "-")
         for estilo, rel in archivos.items():
+            # («archivo|eje=valor,…»: una instancia de una fuente variable de Office, como la usa Office)
+            rel, _, ejes_obj = rel.partition("|")
             obj = Path(a.office) / rel
             base, ejes = dibujo.get(estilo) or dibujo["Regular"]
             rb = base if base.startswith("/") else str(Path(a.libres) / base)
@@ -113,11 +120,21 @@ def main():
                 print("  falta", obj if not obj.exists() else rb); continue
             destino = sale / f"{slug}-{ARCHIVO_ESTILO[estilo]}.woff2"
             cr = next((v for k, v in COPY.items() if k.lower() in rb.lower()), "")
-            n, faltan = M.clonar(TTFont(str(obj), fontNumber=0), M.cargar_base(rb, ejes), nueva, estilo, cr, str(destino))
+            objetivo = TTFont(str(obj), fontNumber=0)
+            if ejes_obj:
+                from fontTools.varLib import instancer
+                objetivo = instancer.instantiateVariableFont(objetivo, {k: float(v) for k, v in (e.split("=") for e in ejes_obj.split(","))}, updateFontNames=False)
+            n, faltan = M.clonar(objetivo, M.cargar_base(rb, ejes), nueva, estilo, cr, str(destino))
             st, peso = CSS_ESTILO[estilo]
             css.append(f'@font-face {{ font-family: "{nueva}"; font-style: {st}; font-weight: {peso}; font-display: swap; src: url("../fonts/office/{destino.name}") format("woff2"); }}')
             print(f"{oficina:24s} {estilo:12s} -> {destino.name:34s} {n:4d} letras, {destino.stat().st_size // 1024} KB")
         tabla[oficina.lower()] = nueva
+    if solo:
+        # (con --solo se conservan las demás familias del CSS y de la tabla: solo se cambian las que se armaron)
+        hechas = {nueva for oficina, nueva, _, _ in FAMILIAS if oficina.lower() in solo}
+        viejo = (STATIC / "css/fuentes-office.css").read_text().splitlines()
+        css = [l for l in viejo if not any(f'font-family: "{h}";' in l for h in hechas)] + [l for l in css[5:]]
+        tabla = dict(json.loads((sale / "tabla.json").read_text()), **tabla)
     (STATIC / "css/fuentes-office.css").write_text("\n".join(css) + "\n")
     (sale / "tabla.json").write_text(json.dumps(tabla, ensure_ascii=False, indent=1))
 

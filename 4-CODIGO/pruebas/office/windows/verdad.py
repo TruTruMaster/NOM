@@ -48,6 +48,31 @@ HISTORIAS = {1: "cuerpo", 2: "notas", 3: "notasfinales", 4: "comentarios", 5: "c
              8: "pie-par", 9: "pie", 10: "enc-primera", 11: "pie-primera"}
 
 
+def lineas_de(rc, prof=0):
+    """Los renglones de una zona de la página. Una fila de tabla (LineType 1) trae sus celdas, cada una con sus
+    renglones (y las tablas de adentro, hasta 3 niveles): así se comparan también los renglones dentro de las celdas."""
+    out = []
+    ls = rc.Lines
+    for k in range(1, ls.Count + 1):
+        ln = ls(k)
+        li = {"t": ln.LineType, "x": ln.Left, "y": ln.Top, "w": ln.Width, "h": ln.Height}
+        try: li["texto"] = ln.Range.Text
+        except Exception: li["texto"] = None
+        if li["t"] == 1 and prof < 3:
+            try:
+                cs = ln.Rectangles
+                li["celdas"] = []
+                for c in range(1, cs.Count + 1):
+                    rcel = cs(c)
+                    cel = {"x": rcel.Left, "y": rcel.Top, "w": rcel.Width, "h": rcel.Height}
+                    try: cel["lineas"] = lineas_de(rcel, prof + 1)
+                    except Exception as e: cel["error"] = str(e)[:120]
+                    li["celdas"].append(cel)
+            except Exception as e: li["error_celdas"] = str(e)[:120]
+        out.append(li)
+    return out
+
+
 def verdad_word(ruta, nombre):
     antes = pids("WINWORD.EXE")
     w = word()
@@ -97,14 +122,7 @@ def verdad_word(ruta, nombre):
                     except Exception: z[k2] = None
                 try: z["historia"] = HISTORIAS.get(rc.Range.StoryType, rc.Range.StoryType)
                 except Exception: z["historia"] = None
-                try:
-                    ls = rc.Lines
-                    for k in range(1, ls.Count + 1):
-                        ln = ls(k)
-                        li = {"t": ln.LineType, "x": ln.Left, "y": ln.Top, "w": ln.Width, "h": ln.Height}
-                        try: li["texto"] = ln.Range.Text
-                        except Exception: li["texto"] = None
-                        z["lineas"].append(li)
+                try: z["lineas"] = lineas_de(rc)
                 except Exception as e: z["error"] = str(e)[:120]
                 pag["zonas"].append(z)
             paginas.append(pag)

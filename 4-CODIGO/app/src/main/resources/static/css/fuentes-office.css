@@ -108,3 +108,9 @@
 @font-face { font-family: "NOM SS"; font-style: normal; font-weight: 400; font-display: swap; src: url("../fonts/office/nom-ss-regular.woff2") format("woff2"); }
 @font-face { font-family: "NOM SS"; font-style: normal; font-weight: 700; font-display: swap; src: url("../fonts/office/nom-ss-negrita.woff2") format("woff2"); }
 @font-face { font-family: "NOM BH"; font-style: normal; font-weight: 400; font-display: swap; src: url("../fonts/office/nom-bh-regular.woff2") format("woff2"); }
+@font-face { font-family: "NOM SKT"; font-style: normal; font-weight: 400; font-display: swap; src: url("../fonts/office/nom-skt-regular.woff2") format("woff2"); }
+@font-face { font-family: "NOM SKT"; font-style: normal; font-weight: 700; font-display: swap; src: url("../fonts/office/nom-skt-negrita.woff2") format("woff2"); }
+@font-face { font-family: "NOM SKT"; font-style: italic; font-weight: 400; font-display: swap; src: url("../fonts/office/nom-skt-cursiva.woff2") format("woff2"); }
+@font-face { font-family: "NOM SKT"; font-style: italic; font-weight: 700; font-display: swap; src: url("../fonts/office/nom-skt-negrita-cursiva.woff2") format("woff2"); }
+@font-face { font-family: "NOM LSU"; font-style: normal; font-weight: 400; font-display: swap; src: url("../fonts/office/nom-lsu-regular.woff2") format("woff2"); }
+@font-face { font-family: "NOM IF"; font-style: normal; font-weight: 400; font-display: swap; src: url("../fonts/office/nom-if-regular.woff2") format("woff2"); }

@@ -63,5 +63,8 @@ los nombres reservados de sus bases.
   NOM SP     Segoe Print                Comic Neue
   NOM SS     Segoe Script               Comic Neue
   NOM BH     Bahnschrift                Open Sans (ancho 87)
+  NOM SKT    Sitka Text                 Gelasio (Copyright 2022 The Gelasio Project Authors)
+  NOM LSU    Lucida Sans Unicode        Open Sans
+  NOM IF     Ink Free                   Comic Neue
 
 Llevan latín (con todos los acentos de Europa), griego, cirílico, puntuación, monedas y signos comunes.

@@ -58,6 +58,7 @@
     consolas: "NOM CO", "lucida console": "NOM LC", "century gothic": "NOM CG", garamond: "NOM GA", "book antiqua": "NOM BA",
     "palatino linotype": "NOM PL", "comic sans ms": "NOM CS", impact: "NOM IM", "franklin gothic medium": "NOM FG", "gill sans mt": "NOM GS",
     candara: "NOM CN", corbel: "NOM CB", constantia: "NOM CT", "segoe print": "NOM SP", "segoe script": "NOM SS", bahnschrift: "NOM BH",
+    "sitka text": "NOM SKT", "lucida sans unicode": "NOM LSU", "ink free": "NOM IF",
     // variantes que Office 2024 resuelve con la misma familia
     "aptos light": "NOM A", "aptos semibold": "NOM A", "aptos extrabold": "NOM A", "aptos black": "NOM A", "segoe ui light": "NOM SU", "segoe ui semibold": "NOM SU",
   };
@@ -68,7 +69,7 @@
     "NOM CB": 1.2075, "NOM CG": 1.2261, "NOM CL": 1.2205, "NOM CN": 1.2205, "NOM CO": 1.1709, "NOM CS": 1.394, "NOM CT": 1.221, "NOM FG": 1.1338,
     "NOM GA": 1.125, "NOM GE": 1.1362, "NOM GS": 1.1595, "NOM IM": 1.2197, "NOM LC": 1.0, "NOM PL": 1.3491, "NOM SP": 1.765, "NOM SS": 1.584,
     "NOM SU": 1.3301, "NOM TA": 1.207, "NOM TR": 1.1611, "NOM VE": 1.2153, "NOM CAL": 1.2207, "NOM AR": 1.1499, "NOM TI": 1.1499, "NOM CU": 1.1328, Carlito: 1.2207, Caladea: 1.15, "Liberation Sans": 1.1499,
-    "Liberation Serif": 1.1499, "Liberation Mono": 1.1328, "Comic Neue": 1.15,
+    "Liberation Serif": 1.1499, "Liberation Mono": 1.1328, "Comic Neue": 1.15, "NOM SKT": 1.2502, "NOM LSU": 1.5366, "NOM IF": 1.238,
   };
   // Ancho del espacio de cada fuente (entre unidades por em): Word 2013 y después, en un párrafo justificado,
   // encoge los espacios (hasta un 20 % de este ancho) para que quepa una palabra más en el renglón.
@@ -76,11 +77,11 @@
     "NOM A": 0.2031, "NOM AD": 0.1929, "NOM AN": 0.187, "NOM AR": 0.2778, "NOM ARB": 0.3335, "NOM ARN": 0.228, "NOM BA": 0.25, "NOM BH": 0.2686, "NOM CA": 0.22,
     "NOM CAL": 0.2261, "NOM CB": 0.2002, "NOM CG": 0.2769, "NOM CL": 0.226, "NOM CN": 0.217, "NOM CO": 0.5498, "NOM CS": 0.299, "NOM CT": 0.251, "NOM CU": 0.6001,
     "NOM FG": 0.25, "NOM GA": 0.25, "NOM GE": 0.2412, "NOM GS": 0.278, "NOM IM": 0.1763, "NOM LC": 0.6025, "NOM PL": 0.25, "NOM SP": 0.4, "NOM SS": 0.4,
-    "NOM SU": 0.2739, "NOM TA": 0.3125, "NOM TI": 0.25, "NOM TR": 0.3013, "NOM VE": 0.3516, Carlito: 0.2261, "Liberation Sans": 0.2778, "Liberation Serif": 0.25, "Liberation Mono": 0.6001,
+    "NOM SU": 0.2739, "NOM TA": 0.3125, "NOM TI": 0.25, "NOM TR": 0.3013, "NOM VE": 0.3516, "NOM SKT": 0.2849, "NOM LSU": 0.3164, "NOM IF": 0.287, Carlito: 0.2261, "Liberation Sans": 0.2778, "Liberation Serif": 0.25, "Liberation Mono": 0.6001,
   };
   // Tamaño de los superíndices y subíndices de cada fuente (OS/2 ySuperscriptYSize): Word los pone a este tanto del tamaño,
   // redondeado a medio punto (medido en Word 2024: Calibri 11 → 7, 12 → 8; Aptos 11 → 6.5, 12 → 7). Las demás, 0.65.
-  const SUP = { "NOM A": 0.6001, "NOM AD": 0.6001, "NOM AN": 0.6001, "NOM PL": 0.6006, "NOM IM": 0.5278, "NOM BH": 0.5996 };
+  const SUP = { "NOM A": 0.6001, "NOM AD": 0.6001, "NOM AN": 0.6001, "NOM PL": 0.6006, "NOM IM": 0.5278, "NOM BH": 0.5996, "NOM IF": 0.6 };
   const primeraDe = (f) => { const m = /^'([^']+)'/.exec(cssFuente(f || "Calibri")); return m ? m[1] : ""; };
   function supFuente(f) { return SUP[primeraDe(f)] || 0.6499; }
   /** Alto natural del renglón de una fuente de Office (para el interlineado de Word); 1.2 si no se conoce. */
@@ -743,7 +744,7 @@
         }
         // (ya en la página, donde se pueden medir: el avance de la escala de caracteres y la zona de división de Word)
         for (const el of medir) { ajustarEscalas(el); ajustarGuiones(el); }
-        acomodarComoWord(medir);
+        acomodarComoWord(medir.concat(celdasDe(medir)));
         while (cuerpo.children.length > ps.length) cuerpo.lastElementChild.remove();
         for (const k of [...elems.keys()]) if (!vivos.has(k)) { elems.delete(k); cache.delete(k); }
         ajustarEspacios();
@@ -898,7 +899,11 @@
       function leerAcomodo(el, compat15) {
         // (para medir: con window.__razAcomodo = new Map() se anota por qué un párrafo no se acomoda)
         const no = (r) => { if (window.__razAcomodo) window.__razAcomodo.set(el, r); return null; };
-        if (el.tagName !== "P") return no("no es párrafo");
+        // (un párrafo de una celda de tabla: los de una celda con formato, o una celda de texto simple sin el cursor —su
+        // texto se lee con innerText y un corte de pantalla sería un salto de renglón—)
+        const esCelda = el.classList.contains("wd-cel-p") || (el.classList.contains("wd-celda") && !el.classList.contains("rica"));
+        if (!/^(P|H[1-6])$/.test(el.tagName) && !esCelda) return no("no es párrafo");   // (los títulos también son párrafos de Word)
+        if (esCelda && el.isContentEditable && el.contains(document.activeElement)) return no("celda con el cursor");
         if (el.dataset.capital != null) return no("letra capital");
         if (el.dir === "rtl") return no("derecha a izquierda");
         { const q = el.querySelector(".wd-guion, .wd-tab, img, table"); if (q) return no("contiene " + (q.className || q.tagName)); }
@@ -906,13 +911,14 @@
         if ([...el.querySelectorAll("br:not(.wd-pintado)")].some((b) => b !== el.lastChild)) return no("salto de renglón");
         // (el texto que se aparta de un objeto que flota cambia de ancho renglón por renglón: ese lo acomoda el navegador)
         if (el.querySelector(":scope > .wd-excl")) return no("junto a lo que flota");
-        const alin = el.dataset.alin || "izq";
+        const alin = esCelda ? ({ center: "centro", right: "der", end: "der", justify: "just" }[getComputedStyle(el).textAlign] || "izq") : el.dataset.alin || "izq";
         if (!["izq", "just", "centro", "der"].includes(alin)) return no("alineación " + alin);
         const er = el.getBoundingClientRect(), z = escalaDe(er, el);
         if (!er.width) return no("sin ancho");
         const cs = getComputedStyle(el);
         const izq = er.left + (parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth)) * z;
-        const der = er.right - (parseFloat(cs.paddingRight) + parseFloat(cs.borderRightWidth)) * z;
+        // (una celda lleva 1 px de holgura a la derecha —margen negativo—: el ancho de Word es sin ella)
+        const der = er.right - (parseFloat(cs.paddingRight) + parseFloat(cs.borderRightWidth) - (esCelda ? Math.min(0, parseFloat(cs.marginRight) || 0) : 0)) * z;
         const fichas = [];   // { t, w (px css), esp, rompe (se puede cortar después), nodo, fin (posición después de la ficha) }
         const estilos = new Map();
         let primero = null, mal = false;
@@ -976,7 +982,7 @@
               continue;
             }
             if (c.nodeType !== 1) continue;
-            if (c.classList.contains("wd-pintado")) continue;
+            if (c.classList.contains("wd-pintado") || c.classList.contains("wd-cel-marca")) continue;   // (la viñeta de una celda: el primer renglón empieza después de ella)
             if (c.classList.contains("wd-oculto") || c.style.display === "none") continue;
             if (c.classList.contains("wd-escala")) { if (caja) { mal = "escala dentro de escala"; return; } rec(c, esc * (+c.dataset.k || 1), c); continue; }
             if (c.hasAttribute("data-obj")) {
@@ -1019,7 +1025,23 @@
             void q2;
           }
         }
-        return { el, alin, fichas, A1: (der - x0) / z, A: (der - izq) / z, ancho: (der - izq) / z, encoge: compat15 && alin === "just", tabs, hayTab };
+        // En una celda, el ancho de Word: columna (su % de la tabla) menos los márgenes de celda. El navegador redondea los
+        // bordes a 1 px y la celda queda hasta 0.7 px más angosta (w05: «anidada 2.1» se partía).
+        let ajuste = 0;
+        if (esCelda) {
+          const td = el.closest("td, th"), tb = td && td.closest("table"), aw = td ? parseFloat(td.dataset.aw) : NaN;
+          if (tb && aw > 0) {
+            const tcs = getComputedStyle(tb), cpl = parseFloat(tcs.getPropertyValue("--cpl")), cpr = parseFloat(tcs.getPropertyValue("--cpr"));
+            const celda = el.classList.contains("wd-celda") ? el : el.closest(".wd-celda");
+            if (celda && !isNaN(cpl) && !isNaN(cpr)) {
+              const cc = getComputedStyle(celda), cr = celda.getBoundingClientRect();
+              const contenido = cr.width / z - parseFloat(cc.paddingLeft) - parseFloat(cc.paddingRight) + Math.min(0, parseFloat(cc.marginRight) || 0);
+              ajuste = (aw / 100) * (tb.getBoundingClientRect().width / z) - cpl - cpr - contenido;
+              if (Math.abs(ajuste) > 3) ajuste = 0;   // (algo no cuadra: mejor lo que se ve)
+            }
+          }
+        }
+        return { el, alin, fichas, A1: (der - x0) / z + ajuste, A: (der - izq) / z + ajuste, A1v: (der - x0) / z, Av: (der - izq) / z, ancho: (der - izq) / z, encoge: compat15 && alin === "just", tabs, hayTab, esCelda };
       }
       /** Dónde corta Word: índices de las fichas después de las cuales termina cada renglón (menos el último). */
       function cortesWord(L) {
@@ -1121,6 +1143,7 @@
           else f.nodo.splitText(f.fin).before(nuevo);
         }
         if (L.hayTab) el.classList.add("con-tab");
+        if (L.esCelda) el.dataset.alin = L.alin;   // (para el CSS del justificado y la holgura; una celda no se lee del DOM con esto)
         el.classList.add("wd-acomodo");
         el.dataset.acw = L.ancho.toFixed(2);
         if (L.alin === "just") {
@@ -1134,7 +1157,7 @@
           let w = 0, fin = F.length;
           while (fin > u && F[fin - 1].esp) fin--;
           for (let q = u; q < fin; q++) w += F[q].w;
-          const A = cortes.length ? L.A : L.A1;
+          const A = cortes.length ? L.Av : L.A1v;   // (lo que se ve: el relleno no puede pasarse de la caja)
           const r = document.createElement("span");
           r.className = "wd-relleno wd-pintado";
           r.contentEditable = "false";
@@ -1142,6 +1165,12 @@
           const u2 = el.lastChild;
           if (u2 && u2.nodeName === "BR" && !u2.classList.contains("wd-pintado")) el.insertBefore(r, u2); else el.append(r);
         }
+      }
+      /** Los párrafos de las celdas de tabla que hay dentro de estos elementos (para acomodarlos como Word). */
+      function celdasDe(els) {
+        const out = [];
+        for (const el of els) if (el.querySelector && el.querySelector("table")) out.push(...el.querySelectorAll(".wd-cel-p, .wd-celda:not(.rica)"));
+        return out;
       }
       /** Acomoda como Word los párrafos que se acaban de pintar (solo en la vista de páginas). */
       function acomodarComoWord(els) {
@@ -1173,12 +1202,12 @@
         const quitar = vista !== "paginas" || window.__sinAcomodo;
         const cambiaron = [];
         let otro = false;
-        for (const el of cuerpo.children) {
+        for (const el of [...cuerpo.children, ...celdasDe(cuerpo.children)]) {
           if (quitar) { if (el.dataset.acw) otro = true; if (el.dataset.acw || el.dataset.acv) { quitarAcomodo(el); delete el.dataset.acv; } continue; }
           // (al paginar, un objeto que flota aparta el texto de este párrafo: el acomodo ya no sirve)
           if (el.dataset.acw && el.querySelector(":scope > .wd-excl")) { quitarAcomodo(el); otro = true; if (window.__razAcomodo) window.__razAcomodo.set(el, "junto a lo que flota"); continue; }
           // (acomodado a la izquierda lleva 1 px de holgura a la derecha: --hol en editor.css)
-          const hol = el.classList.contains("wd-acomodo") && (!el.dataset.alin || el.dataset.alin === "izq") ? 1 : 0;
+          const hol = el.classList.contains("wd-acomodo") && !el.closest(".wd-tab") && (!el.dataset.alin || el.dataset.alin === "izq") ? 1 : 0;
           // (con cualquier cambio: un renglón de Word se decide por centésimas de punto —w02: 524.98 pt en 524.70—)
           if (el.dataset.acv == null || Math.abs(anchoContenido(el) - hol - +el.dataset.acv) > 0.02) cambiaron.push(el);
         }
@@ -2461,11 +2490,14 @@
             if (b["n:" + r]) ce.push("font-weight:bold");
             if (b["i:" + r]) ce.push("font-style:italic");
             if (b["k:" + r]) ce.push("color:" + b["k:" + r]);
+            if (b["my:" + r]) ce.push("text-transform:uppercase");
             if (b["al:" + r]) ce.push("text-align:" + ({ izq: "left", centro: "center", der: "right" }[b["al:" + r]] || "left"));
             if (+b["z:" + r] > 0 && +b["z:" + r] < 200) ce.push(`font-size:${+b["z:" + r]}pt`);
             // texto girado (Word: hacia arriba o hacia abajo)
             if (b["td:" + r] === "abajo") ce.push("writing-mode:vertical-rl;white-space:pre-wrap"); else if (b["td:" + r] === "arriba") ce.push("writing-mode:vertical-rl;transform:rotate(180deg);white-space:pre-wrap");
-            h += `<td${sp ? ` colspan="${sp[0]}" rowspan="${sp[1]}"` : ""}${st.length ? ` style="${esc(st.join(";"))}"` : ""}><div class="wd-celda${rico ? " rica" : ""}"${prof ? "" : ` data-celda="${r}"`} ${editable && !rico ? 'contenteditable="true"' : ""} spellcheck="true"${ce.length ? ` style="${esc(ce.join(";"))}"` : ""}${rico && editable ? ' title="Doble clic para escribir en ella como texto"' : ""}>${rico ? htmlRico(rico, prof) : esc(b["c:" + r] || "")}</div></td>`;
+            // (el ancho de Word de la celda, en % de la tabla: para cortar sus renglones como Word aunque el navegador redondee los bordes)
+            const aw = anchos.slice(c, c + (sp ? sp[0] : 1)).reduce((a2, b2) => a2 + b2, 0);
+            h += `<td data-aw="${aw.toFixed(4)}"${sp ? ` colspan="${sp[0]}" rowspan="${sp[1]}"` : ""}${st.length ? ` style="${esc(st.join(";"))}"` : ""}><div class="wd-celda${rico ? " rica" : ""}"${prof ? "" : ` data-celda="${r}"`} ${editable && !rico ? 'contenteditable="true"' : ""} spellcheck="true"${ce.length ? ` style="${esc(ce.join(";"))}"` : ""}${rico && editable ? ' title="Doble clic para escribir en ella como texto"' : ""}>${rico ? htmlRico(rico, prof) : esc(b["c:" + r] || "")}</div></td>`;
           }
           h += "</tr>";
         }
@@ -2529,8 +2561,15 @@
         const cel = e.target.closest && e.target.closest("[data-celda]");
         if (!cel) return;
         celdaActiva = { ref: cel.closest("[data-ref]").dataset.ref, celda: cel.dataset.celda };
+        if (cel.classList.contains("wd-acomodo")) { quitarAcomodo(cel); tomarRegistros(); }
         $$(".wd-tabla.activa", cuerpo).forEach((x) => x.classList.remove("activa"));
         const o = cel.closest("[data-obj]"); if (o) o.classList.add("activa");
+      });
+      // (al salir de una celda de texto simple se vuelve a acomodar como Word, cuando ya se guardó lo escrito)
+      cuerpo.addEventListener("focusout", (e) => {
+        const cel = e.target.closest && e.target.closest(".wd-celda:not(.rica)[data-celda]");
+        if (!cel) return;
+        setTimeout(() => { if (!cel.isConnected || cel.contains(document.activeElement)) return; acomodarComoWord([cel]); tomarRegistros(); }, 260);
       });
       cuerpo.addEventListener("keydown", (e) => {
         const cel = e.target.closest && e.target.closest("[data-celda]");
@@ -4696,11 +4735,12 @@
               const enEsta = act && o.contains(act) ? act.dataset.celda : null;
               pintarTabla(o, doc().bloque(c.bloque), c.bloque);
               if (enEsta) { const el = $(`[data-celda="${enEsta}"]`, o); if (el) el.focus({ preventScroll: true }); }
+              acomodarComoWord(celdasDe([o])); tomarRegistros();
               return;
             }
             Object.keys(c.campos).filter((k) => k.startsWith("c:")).forEach((k) => {
               const el = $(`[data-celda="${k.slice(2)}"]`, o);
-              if (el && document.activeElement !== el) el.textContent = c.campos[k] || "";
+              if (el && document.activeElement !== el) { el.textContent = c.campos[k] || ""; acomodarComoWord([el]); tomarRegistros(); }
             });
           });
           $$(".wd-imagen[data-obj]", cuerpo).forEach((o) => { const it = sec().item(o.dataset.id); if (it && it.e && it.e.ref === c.bloque) llenarObjetos(o.parentNode); });

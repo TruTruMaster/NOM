@@ -50,12 +50,36 @@ JS_RENGLONES = r"""
   // el texto del cuerpo y, con secciones en columnas, lo que sigue de un párrafo partido (otra capa: va justo
   // después de su párrafo); lo recortado de un párrafo partido no se ve y no cuenta
   const kidsC = [...cuerpo.children];
+  // (la celda de una tabla en la que está cada letra: cada celda tiene sus propios renglones; en una celda con texto
+  // vertical los renglones van de lado)
+  const celdas = new Map();
+  const celdaDe = (t) => { const c = t && (t.nodeType === 1 ? t : t.parentElement); const td = c && c.closest('td, th'); if (!td) return 0; if (!celdas.has(td)) celdas.set(td, celdas.size + 1); return celdas.get(td); };
+  // (la fila y la orilla izquierda de la celda: en la hoja, las celdas van en orden de lectura por fila y por columna)
+  const filaDe = (t) => { const c = t && (t.nodeType === 1 ? t : t.parentElement); const td = c && c.closest('td, th'); if (!td) return null; const a = td.parentElement.getBoundingClientRect(), b = td.getBoundingClientRect(); return [a.top, b.left]; };
+  const vertical = (t) => { const c = t.parentElement && t.parentElement.closest('.wd-celda'); return !!c && /^vertical/.test(getComputedStyle(c).writingMode); };
   for (const raiz of [cuerpo, ...document.querySelectorAll('.wd-continuaciones')]) {
-    const tw = document.createTreeWalker(raiz, NodeFilter.SHOW_TEXT, { acceptNode: (n) => {
+    // Los objetos que van en el renglón (imagen, forma, gráfico, objeto incrustado) son en Word un solo carácter que la
+    // verdad lee como «/»; una ecuación, «[ec]» (Word la escribe en texto lineal con letras matemáticas: ver
+    // renglones_word). Lo de adentro (las letras de un gráfico o de una forma) no es texto del renglón.
+    const NO_TEXTO = '.wd-corte, .wd-ctl, .wd-tab-ctl, .wd-salto, .wd-saltocol, .wd-guion, .wd-pintado, .wd-cel-marca, script, style';
+    const tw = document.createTreeWalker(raiz, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, { acceptNode: (n) => {
+      if (n.nodeType === 1) {
+        // (las marcas del editor de un salto de página o de columna no son texto del documento)
+        // (el guion de pantalla de la división automática: en la verdad de Word no es una letra del renglón)
+        if (n.matches(NO_TEXTO)) return NodeFilter.FILTER_REJECT;
+        if (n.matches('.wd-obj.wd-objeto, .wd-obj.wd-imagen, .wd-obj.wd-ecuacion, img.wd-cel-img')) {
+          const cs = getComputedStyle(n), b = n.getBoundingClientRect();
+          const enLinea = !n.matches('.libre, .flota-w') && cs.position !== 'absolute' && cs.display !== 'none' && b.width > 0;
+          const p = raiz === cuerpo ? n.closest('.wd-cuerpo > *') : n.closest('.wd-continuaciones > *');
+          // (va sobre la línea base: su parte de abajo es la que comparte el renglón con las letras)
+          const hh = Math.min(b.height, 12);
+          if (enLinea && p) letras.push({ c: n.matches('.wd-ecuacion') ? '[ec]' : '/', x: b.left, y: b.bottom - hh, h: hh, w: b.width, p: raiz === cuerpo ? kidsC.indexOf(p) : +(p.dataset.par) + 0.5, cel: celdaDe(n.firstChild || n), fila: filaDe(n) });
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_SKIP;
+      }
       const e = n.parentElement;
-      // (las marcas del editor de un salto de página o de columna no son texto del documento)
-      // (el guion de pantalla de la división automática: en la verdad de Word no es una letra del renglón)
-      if (!e || e.closest('.wd-corte, [data-obj] .wd-ctl, .wd-salto, .wd-saltocol, .wd-guion, .wd-pintado, script, style')) return NodeFilter.FILTER_REJECT;
+      if (!e) return NodeFilter.FILTER_REJECT;
       const cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden') return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT; } });
     let n, parrafo = null, numPar = -1, corte = null, pr = null, zz = 1;
@@ -71,6 +95,7 @@ JS_RENGLONES = r"""
       const s = nota ? (n === (nota.__primerTexto = nota.__primerTexto || n) ? '\x02' + ''.padEnd(n.data.length - 1, '\x01') : ''.padEnd(n.data.length, '\x01')) : n.data;
       // lo que se VE: «Mayúsculas» de Word es text-transform (el texto del documento no cambia), como lo lee Word
       const tt = getComputedStyle(n.parentElement).textTransform;
+      const esVert = vertical(n);
       const ver = (c) => (tt === 'uppercase' ? c.toUpperCase() : tt === 'lowercase' ? c.toLowerCase() : c);
       for (let i = 0; i < s.length; i++) {
         let j = i + 1; const c0 = s.charCodeAt(i); if (c0 >= 0xD800 && c0 < 0xDC00 && j < s.length) j++;
@@ -79,7 +104,7 @@ JS_RENGLONES = r"""
         const b = q[q.length - 1];
         if (corte != null && pr && (b.top + b.bottom) / 2 - pr.top > corte * zz) { i = j - 1; continue; }
         if (s[i] === '\x01') { i = j - 1; continue; }   // (el resto del número de una nota: no cuenta)
-        letras.push({ c: ver(s.slice(i, j)), x: b.left, y: b.top, h: b.height, w: b.width, p: numPar });
+        letras.push({ c: ver(s.slice(i, j)), x: b.left, y: b.top, h: b.height, w: b.width, p: numPar, cel: celdaDe(n), vert: esVert, fila: filaDe(n) });
         i = j - 1;
       }
     }
@@ -91,8 +116,10 @@ JS_RENGLONES = r"""
   let cur = null;
   for (const L of letras) {
     const baja = cur && (L.y > cur.y + Math.max(4, cur.h * 0.5) || L.y + L.h < cur.y);
-    const nuevo = !cur || L.p !== cur.p || L.y >= cur.abajo - 1 || L.y + L.h <= cur.arriba + 1 || (baja && L.x < cur.ultX - 1);
-    if (nuevo) { cur = { texto: '', x: L.x, y: L.y, h: L.h, p: L.p, fin: L.x + L.w, arriba: L.y, abajo: L.y + L.h, ultX: L.x }; renglones.push(cur); }
+    const nuevo = !cur || L.p !== cur.p || L.cel !== cur.cel || !!L.vert !== !!cur.vert
+      || (L.vert ? Math.abs(L.x - cur.ultX) > Math.max(3, Math.min(L.w, L.h) * 0.6)
+                 : L.y >= cur.abajo - 1 || L.y + L.h <= cur.arriba + 1 || (baja && L.x < cur.ultX - 1));
+    if (nuevo) { cur = { texto: '', x: L.x, y: L.y, h: L.h, p: L.p, cel: L.cel, vert: L.vert, fila: L.fila, fin: L.x + L.w, arriba: L.y, abajo: L.y + L.h, ultX: L.x }; renglones.push(cur); }
     cur.texto += L.c; cur.fin = Math.max(cur.fin, L.x + L.w); cur.x = Math.min(cur.x, L.x);
     cur.arriba = Math.min(cur.arriba, L.y); cur.abajo = Math.max(cur.abajo, L.y + L.h); cur.ultX = L.x;
   }
@@ -100,7 +127,8 @@ JS_RENGLONES = r"""
   const fuera = [];
   for (const R of renglones) {
     const i = pagDe(R.y + R.h / 2);
-    const o = { texto: R.texto, x: (R.x - (i >= 0 ? pags[i].left : 0)) * PT, y: (R.y - (i >= 0 ? pags[i].top : 0)) * PT, w: (R.fin - R.x) * PT, h: R.h * PT, p: R.p };
+    const o = { texto: R.texto, x: (R.x - (i >= 0 ? pags[i].left : 0)) * PT, y: (R.y - (i >= 0 ? pags[i].top : 0)) * PT, w: (R.fin - R.x) * PT, h: R.h * PT, p: R.p, celda: R.cel > 0,
+      fila: R.fila ? [(R.fila[0] - (i >= 0 ? pags[i].top : 0)) * PT, (R.fila[1] - (i >= 0 ? pags[i].left : 0)) * PT] : null };
     if (i >= 0) salida[i].renglones.push(o); else fuera.push(o);
   }
   document.querySelectorAll('.wd-pagina').forEach((p, i) => {
@@ -121,18 +149,42 @@ def limpio(t):
     return re.sub(r"\s+", " ", t).strip()
 
 
+MATE = re.compile("[\U0001D400-\U0001D7FF]")   # (las letras matemáticas: solo las usa una ecuación; ∑ o ≤ sueltos son texto)
+TROZO_MATE = re.compile("[\U0001D400-\U0001D7FF\u2200-\u22FF\u0391-\u03C9\u2061-\u2064\u2032-\u2034\u00B1\u00D7\u00F7\u2212\u221E0-9=+()\\[\\]{}|/^_.,' \u00A0\u2009\u200A-]+")
+
+
+def con_ecuaciones(t):
+    """Una ecuación en un renglón de Word viene en texto lineal con letras matemáticas («𝜎= 1 𝑁 𝑖=1 𝑁 𝑥 𝑖 −𝜇 2»): en NOM
+    se ve dibujada. Para comparar, cada tramo matemático que lleve una letra matemática cuenta como «[ec]»."""
+    if not t or not MATE.search(t): return t
+    t = TROZO_MATE.sub(lambda m: (" [ec] " if MATE.search(m.group(0)) else m.group(0)), t)
+    # (lo que queda entre dos tramos —el ▒ de una suma, números sueltos— es de la misma ecuación)
+    t = re.sub(r"\[ec\](?:[^\w\[]|\d)*(?=\[ec\])", "", t)
+    return re.sub(r"\[ec\][\s\d\W]*$", "[ec]", t)
+
+
 def renglones_word(verdad):
-    """Renglones del cuerpo de Word por página (sin encabezado, pie ni notas)."""
+    """Renglones del cuerpo de Word por página (sin encabezado, pie ni notas). Las filas de tabla traen los renglones de
+    cada celda (verdad.py desde el 19-nov): van en orden de lectura (celda por celda), justo donde va la fila."""
+    def de_celdas(li):
+        rs = []
+        for c in li.get("celdas") or []:
+            for l2 in c.get("lineas") or []:
+                if l2.get("t") == 0 and l2.get("texto") is not None: rs.append({"texto": con_ecuaciones(l2["texto"]), "x": l2["x"], "y": l2["y"], "h": l2["h"], "celda": True, "fila": [li["y"], c.get("x", l2["x"])]})
+                elif l2.get("t") == 1: rs.extend(de_celdas(l2))
+        return rs
     out = []
     for pg in verdad.get("paginas", []):
-        rs = []
+        grupos = []
         for z in pg["zonas"]:
             if z.get("historia") not in ("cuerpo", None) or z.get("tipo") not in (0, None): continue
             for li in z["lineas"]:
                 if li.get("t") == 0 and li.get("texto") is not None:
-                    rs.append({"texto": li["texto"], "x": li["x"], "y": li["y"], "h": li["h"]})
-        rs.sort(key=lambda r: (round(r["y"]), r["x"]))
-        out.append(rs)
+                    grupos.append(((round(li["y"]), li["x"]), [{"texto": con_ecuaciones(li["texto"]), "x": li["x"], "y": li["y"], "h": li["h"]}]))
+                elif li.get("t") == 1 and li.get("celdas"):
+                    grupos.append(((round(li["y"]), li["x"]), de_celdas(li)))
+        grupos.sort(key=lambda g: g[0])
+        out.append([r for _, g in grupos for r in g])
     return out
 
 
@@ -158,6 +210,8 @@ def ordenar_columnas(word, nom):
     """En las páginas en columnas, los renglones de los dos en orden de lectura (columna por columna, cada una de arriba
     a abajo): Word los da de arriba a abajo mezclando las columnas."""
     for k, rs in enumerate(word):
+        # (una hoja con tablas no se reordena: las celdas de una fila parecen columnas y ya vienen en orden de lectura)
+        if any(r.get("celda") for r in rs) or (k < len(nom) and any(r.get("celda") for r in nom[k])): continue
         inicios = columnas_de(rs)
         if not inicios: continue
         col = lambda r: max([j for j, x0 in enumerate(inicios) if r["x"] >= x0 - 8] or [0])
@@ -165,10 +219,26 @@ def ordenar_columnas(word, nom):
         if k < len(nom): nom[k].sort(key=lambda r: (col(r), round(r["y"]), r["x"]))
 
 
+def ordenar_celdas(paginas):
+    """En cada hoja, los renglones seguidos que son de celdas van por fila (de arriba abajo) y en cada fila por celda (de
+    izquierda a derecha), cada celda con sus renglones en orden: así una fila de encabezado que se repite queda arriba."""
+    for rs in paginas:
+        i = 0
+        while i < len(rs):
+            if not (rs[i].get("celda") and rs[i].get("fila")): i += 1; continue
+            j = i
+            while j < len(rs) and rs[j].get("celda") and rs[j].get("fila"): j += 1
+            tramo = rs[i:j]
+            orden = sorted(range(len(tramo)), key=lambda k: (round(tramo[k]["fila"][0] / 3), round(tramo[k]["fila"][1] / 3), k))
+            rs[i:j] = [tramo[k] for k in orden]
+            i = j
+
+
 def comparar_renglones(word, nom):
-    """Alinea los renglones de los dos (en orden) y cuenta cuántos quedaron idénticos y en su página."""
-    W = [(p, limpio(r["texto"]), r) for p, rs in enumerate(word) for r in rs if limpio(r["texto"])]
-    Nn = [(p, limpio(r["texto"]), r) for p, rs in enumerate(nom) for r in rs if limpio(r["texto"])]
+    """Alinea los renglones de los dos (en orden) y cuenta cuántos quedaron idénticos y en su página. Los renglones con una
+    ecuación no cuentan: Word los da en texto lineal (una ecuación de varios pisos son varios renglones) y NOM la dibuja."""
+    W = [(p, limpio(r["texto"]), r) for p, rs in enumerate(word) for r in rs if limpio(r["texto"]) and "[ec]" not in r["texto"]]
+    Nn = [(p, limpio(r["texto"]), r) for p, rs in enumerate(nom) for r in rs if limpio(r["texto"]) and "[ec]" not in r["texto"]]
     sm = difflib.SequenceMatcher(None, [t for _, t, _ in W], [t for _, t, _ in Nn], autojunk=False)
     iguales = misma_pag = 0; dy = []
     diferencias = []
@@ -461,6 +531,7 @@ def comparar(archivo, movil, salida, nav, esp):
         word = renglones_word(verdad)
         nom = [pg["renglones"] for pg in m["paginas"]]
         ordenar_columnas(word, nom)
+        ordenar_celdas(word); ordenar_celdas(nom)
         rep.update(paginas_word=len(word), paginas_nom=len(nom), aviso=m.get("aviso"), paginacion=m.get("paginacion"),
                    fuera_de_pagina=len(m["fuera"]), **comparar_renglones(word, nom))
         pdf = REAL / "verdad" / (nombre + ".pdf")

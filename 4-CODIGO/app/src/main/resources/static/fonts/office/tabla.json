@@ -30,5 +30,8 @@
  "constantia": "NOM CT",
  "segoe print": "NOM SP",
  "segoe script": "NOM SS",
- "bahnschrift": "NOM BH"
+ "bahnschrift": "NOM BH",
+ "sitka text": "NOM SKT",
+ "lucida sans unicode": "NOM LSU",
+ "ink free": "NOM IF"
 }

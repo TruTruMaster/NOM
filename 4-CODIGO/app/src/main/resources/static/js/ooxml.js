@@ -2281,11 +2281,13 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         if (fl.fr && fl.lc && f === 0 && c === nC - 1) pon("neCell");
         if (fl.lr && fl.fc && f === nF - 1 && c === 0) pon("swCell");
         if (fl.lr && fl.lc && f === nF - 1 && c === nC - 1) pon("seCell");
-        let fondo = null, negrita = null, cursiva = null, color = null;
+        let fondo = null, negrita = null, cursiva = null, color = null, mayus = null;
         const bd = {};
         for (const [t, x] of capas) {
           const shd = x.tcpr && hijo(x.tcpr, "shd"), fill = shd && (shd.getAttributeNS(W, "fill") || shd.getAttribute("w:fill"));
           if (fill && /^[0-9a-f]{6}$/i.test(fill)) fondo = "#" + fill.toUpperCase();
+          // (mayúsculas del estilo: «Plain Table 3» pone en mayúsculas la primera fila y la primera columna)
+          if (x.rpr) { const cp = hijo(x.rpr, "caps"); if (cp) mayus = val(cp) !== "0" && val(cp) !== "false"; }
           if (x.rpr) { const b = hijo(x.rpr, "b"); if (b) negrita = val(b) !== "0" && val(b) !== "false"; const i = hijo(x.rpr, "i"); if (i) cursiva = val(i) !== "0" && val(i) !== "false"; const k = val(hijo(x.rpr, "color")); if (k && /^[0-9a-f]{6}$/i.test(k)) color = "#" + k.toUpperCase(); }
           // bordes: los de la tabla (tblBorders: afuera y adentro) y los de la celda en esa región (tcBorders)
           const tb2 = t === "wholeTable" && x.tblpr ? hijo(x.tblpr, "tblBorders") : null;
@@ -2305,6 +2307,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         if (negrita && celdas["n:" + R] == null && celdas["c:" + R]) celdas["n:" + R] = true;
         if (cursiva && celdas["i:" + R] == null && celdas["c:" + R]) celdas["i:" + R] = true;
         if (color && !celdas["k:" + R] && color !== "#000000") celdas["k:" + R] = color;
+        if (mayus && celdas["my:" + R] == null) celdas["my:" + R] = true;
         const txt = Object.entries(bd).filter(([, v]) => v).map(([l, v]) => (v === "no" ? `${l}:no` : `${l}:${v[0]}:${v[1]}:${v[2]}`)).join(";");
         if (txt) celdas["bxw:" + R] = txt;
       }
