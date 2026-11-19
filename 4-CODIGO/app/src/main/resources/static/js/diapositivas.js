@@ -436,14 +436,16 @@
       p.prepend(m);
       return m;
     });
-    let espera = false;
+    const faltan = new Set();
     const mov = pars.map((p, i) => {
       const cs = getComputedStyle(p), r = p.getBoundingClientRect(), z = r.height / (p.offsetHeight || 1) || 1;
       const fam = (cs.fontFamily.split(",")[0] || "").replace(/["']/g, "").trim();
       const k = PP_BASE[fam];
       if (!k) return null;
       // (con la letra todavía sin cargar se mediría la de reemplazo: se vuelve a acomodar cuando llegue)
-      if (document.fonts && !document.fonts.check(`${cs.fontStyle} ${cs.fontWeight} 16px ${cs.fontFamily}`)) { espera = true; return null; }
+      // (solo la primera familia: con toda la lista, check() da falso si una de reemplazo que no hace falta no cargó)
+      const css = `${cs.fontStyle} ${cs.fontWeight} 16px "${fam}"`;
+      if (document.fonts && !SIN_CARGA.has(css) && !document.fonts.check(css)) { faltan.add(css); return null; }
       const tam = parseFloat(cs.fontSize) || 0, L = parseFloat(cs.lineHeight) || tam * 1.2;
       const bNav = (marcas[i].getBoundingClientRect().top - r.top) / z;
       const bPP = Math.max(1.2 * tam * k + Math.min(0, L - 1.2 * tam), 0.75 * L);
@@ -451,7 +453,17 @@
     });
     marcas.forEach((m) => m.remove());
     pars.forEach((p, i) => { if (mov[i] != null) { p.style.position = "relative"; p.style.top = mov[i].toFixed(2) + "px"; } });
-    if (espera && document.fonts) document.fonts.ready.then(() => { if (raiz.isConnected !== false) ajustarRenglones(raiz); });
+    // (se cargan las que faltan y se vuelve a acomodar UNA vez; la que no carga se da por perdida —con document.fonts.ready
+    // ya resuelto, reintentar sin tope trababa la página—)
+    if (faltan.size && document.fonts && !raiz.__esperaFuentes) {
+      raiz.__esperaFuentes = true;
+      Promise.all([...faltan].map((f) => document.fonts.load(f).catch(() => null))).then(() => {
+        raiz.__esperaFuentes = false;
+        for (const f of faltan) if (!document.fonts.check(f)) SIN_CARGA.add(f);
+        if (raiz.isConnected !== false) ajustarRenglones(raiz);
+      });
+    }
   }
+  const SIN_CARGA = new Set();   // letras que no cargan (se miden con la de reemplazo, sin esperar más)
   NOM.diapo = { aplicar, iconoPng, TAMANOS, tam, TEMAS, tema, cssFondo, fondoDe, estiloDiapo, htmlRico, textoPlano, parrafos, DISENOS, editarDatos, graficaHtml, tablaHtml, rangoUsado, diapoPng, ajustarRenglones };
 })();

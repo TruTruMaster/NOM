@@ -855,6 +855,7 @@
        */
       const avancesW = new Map();   // «fuente|letra» o «fuente|k|palabra» → ancho a 1000 px
       const cargandoW = new Set();  // fuentes que se están cargando para medir
+      const sinCargaW = new Set();  // fuentes que no cargaron (sus párrafos los acomoda el navegador)
       let lienzoW = null;
       const ESP_W = /[ 　]/;
       function anchoW(fuente, kern, txt) {
@@ -910,12 +911,17 @@
           const s = getComputedStyle(p);
           if (s.fontVariantCaps !== "normal" || (s.textTransform !== "none" && s.textTransform !== "uppercase") || s.display === "none") { mal = true; return null; }
           // (con la fuente todavía sin cargar, el lienzo mediría con la de reemplazo: se espera a que llegue)
-          const css16 = `${s.fontStyle} ${s.fontWeight} 16px ${s.fontFamily}`;
-          if (document.fonts && !document.fonts.check(css16)) {
+          // (solo la primera familia: con toda la lista, check() da falso si una de reemplazo que no hace falta no cargó)
+          const fam0 = (s.fontFamily.split(",")[0] || "").replace(/["']/g, "").trim();
+          const css16 = `${s.fontStyle} ${s.fontWeight} 16px "${fam0}"`;
+          if (document.fonts && !sinCargaW.has(css16) && !document.fonts.check(css16)) {
             espera = mal = true;
-            if (!cargandoW.has(css16)) { cargandoW.add(css16); document.fonts.load(css16).then(() => { cargandoW.delete(css16); programarPaginar(); }, () => cargandoW.delete(css16)); }
+            // (se carga una vez; si aun así no está, se da por perdida y el párrafo lo acomoda el navegador: sin esto se
+            // volvía a paginar sin fin)
+            if (!cargandoW.has(css16)) { cargandoW.add(css16); document.fonts.load(css16).then(() => { cargandoW.delete(css16); if (!document.fonts.check(css16)) sinCargaW.add(css16); programarPaginar(); }, () => { cargandoW.delete(css16); sinCargaW.add(css16); }); }
             return null;
           }
+          if (sinCargaW.has(css16)) { mal = true; return null; }
           const tam = parseFloat(s.fontSize) || 16;
           f = { css: `${s.fontStyle} ${s.fontWeight} 1000px ${s.fontFamily}`, k: tam / 1000, kern: s.fontKerning === "normal", ls: parseFloat(s.letterSpacing) || 0, may: s.textTransform === "uppercase" };
           estilos.set(p, f);
