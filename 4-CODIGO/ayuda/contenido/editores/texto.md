@@ -24,6 +24,10 @@ Varias personas escriben a la vez, **hasta en la misma palabra**, y todos ven lo
   **Insertar**, en la ruedita → **Más** o en la paleta) los calcula otra vez para todos los del documento; **Alt+F9**
   muestra sus códigos; **Insertar → Campo (como en Word)** pone uno nuevo con su código.
 - **Imágenes EMF y WMF** y las ecuaciones viejas de Word (Editor de ecuaciones, MathType) se ven como en Word.
+- **Guiones automáticos** (en la ruedita → **Más** o en la paleta): las palabras se parten al final del renglón,
+  como «Disposición → Guiones» de Word; se guardan al descargar. Un Word que los trae activados se ve partido igual.
+- En la vista de **páginas**, los renglones de un Word se cortan donde los corta Word (también en justificado, que
+  encoge un poco los espacios cuando así cabe una palabra más, como hace Word).
 - **Buscar y reemplazar** (Ctrl+F).
 - Pegar un enlace sobre texto seleccionado lo convierte en vínculo.
 

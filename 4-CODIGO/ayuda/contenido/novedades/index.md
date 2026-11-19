@@ -26,6 +26,16 @@ version: 0.17.0
 - **Imágenes EMF y WMF** (los dibujos de Windows) se ven, también las **ecuaciones viejas** de Word (Editor de
   ecuaciones 3.0 y MathType) y los **objetos incrustados** con su vista previa, como en Word. Al descargar sale el
   archivo original, idéntico.
+- **Los renglones de un Word se cortan donde los corta Word.** Se midió en Word 2024 cómo decide (a la izquierda y
+  justificado, en ocho fuentes): ahora un documento de Word se ve con las mismas palabras en cada renglón y en cada
+  página (en las pruebas, de 85 % a más de 99 % de renglones idénticos). El alto de cada renglón también sale como
+  en Word cuando el texto lleva otra letra que la del estilo.
+- **Guiones automáticos:** si el Word los tiene activados («Disposición → Guiones»), las palabras se parten al final
+  del renglón con las reglas del español o del inglés; se activan y desactivan en **Más → Guiones automáticos**.
+- **Notas al final** (las de Word, numeradas aparte: i, ii, iii) y la **escala de caracteres** (texto estirado o
+  angosto) se ven como en Word.
+- **Hoja:** 224 funciones más de Excel (454 en total): estadística, ingeniería, finanzas, fechas, números complejos y
+  bases de datos. Comprobadas contra Excel 2024: 499 de 500 fórmulas dan lo mismo.
 - **Arreglos:** el enlace para ver de un texto o una hoja muestra sus imágenes; un Word guardado como .nom y vuelto
   a abrir ya no reescribe al descargar los párrafos con ecuaciones (salen idénticos al original).
 

@@ -118,8 +118,8 @@
     "sx",
     // entre páginas, como Word: salto de página antes, con el siguiente (1/0), líneas juntas y control de viudas (0 = sin)
     "saltoAntes", "conSig", "juntas", "viudas",
-    // de Word: «no dividir con guiones» y la letra y el tamaño de la marca de párrafo (¶)
-    "sinGuiones", "tm", "fm",
+    // (sinGuiones, tm y fm —«no dividir con guiones» y la letra de la marca ¶ de Word— NO van aquí: no se escriben en la
+    // pantalla, y lo que está en esta lista y no en la pantalla, el lector lo daba por borrado con cada tecla)
     // letra capital de Word: "drop|3|4" (dentro del texto o "margin", renglones que abarca, distancia al texto en pt)
     "capital"];
   const VINETAS = ["•", "◦", "▪", "–", "➢", "✓", "★", "♦"];
@@ -502,14 +502,18 @@
     // último). En el navegador todo renglón mide al menos lo que la letra del párrafo: si todo el texto lleva su propia
     // letra y tamaño (y la marca también), el párrafo toma los de la marca, que en Word son casi siempre los del texto.
     if (+pa.tm || pa.fm) {
-      let tamTodos = true, fuenteTodos = true;
+      // (solo con texto: en un párrafo vacío lo que se escribe tomaría la letra de la marca y el lector la confundía
+      // con un cambio de formato)
+      let tamTodos = true, fuenteTodos = true, hay = false;
       for (let i = p.ini; i < p.fin && (tamTodos || fuenteTodos); i++) {
         const x = vis[i];
         if (!x || x.e || x.c === "\n") continue;
+        hay = true;
         const a = S().attrs(x);
         if (!+a.tam) tamTodos = false;
         if (!a.fuente) fuenteTodos = false;
       }
+      if (!hay) tamTodos = fuenteTodos = false;
       if (+pa.tm && tamTodos) st += `font-size:${+pa.tm}pt;`;
       if (pa.fm && fuenteTodos) st += `font-family:${cssFuente(pa.fm)};--af:${altoFuente(pa.fm)};`;
     }
@@ -3204,10 +3208,13 @@
         const fondoHoja = (p) => p.top + p.g.h - p.g.m[1] - reservado(p);
         const xDe = (p, c) => p.x0 + p.g.m[2] + c.x;
         const ponerX = (el, p, c) => { const x = xDe(p, c); el.style.setProperty("--sx", x + "px"); el.style.setProperty("--sr", Math.max(0, Wmax - x - c.w) + "px"); };
-        const mt = (el) => parseFloat(getComputedStyle(el).marginTop) || 0, mb = (el) => parseFloat(getComputedStyle(el).marginBottom) || 0;
+        // mt: el espacio de antes del párrafo SIN lo que ya se le empujó al paginar (al equilibrar columnas se prueba
+        // varias veces: con el margen ya empujado, la prueba siguiente lo tomaba como espacio y encimaba los párrafos)
+        const mtActual = (el) => parseFloat(getComputedStyle(el).marginTop) || 0;
+        const mt = (el) => mtActual(el) - (+(el.dataset.empuje || 0)), mb = (el) => parseFloat(getComputedStyle(el).marginBottom) || 0;
         const empujar = (el, d) => {
           if (Math.abs(d) < 0.25) return;
-          el.style.marginTop = mt(el) + d + "px";
+          el.style.marginTop = mtActual(el) + d + "px";
           el.dataset.empuje = (+(el.dataset.empuje || 0) + d).toFixed(2);
         };
         // alineación vertical: lo de la hoja que se cierra baja (centrada) o se pega abajo
@@ -3251,7 +3258,9 @@
          * `abajo` (o el fondo de la hoja). `sigue`: lo que quedó de un párrafo partido, que va primero. Devuelve
          * { i, sigue, bajo, lleno, hechos: [elementos, copias] }.
          */
+        let sigContinuaRegion = false;   // (la sección que se acomoda termina en un salto continuo)
         function colocarRegion(p, cols, arriba, abajo, i, hasta, sigue, conEspacio, estricto) {
+          const desdeRegion = i;
           let ci = 0, y = arriba, bajo = arriba, primero = true;
           const hechos = [], copias = [], saltos = [];
           const lim = () => Math.min(abajo == null ? Infinity : abajo, fondoHoja(p));
@@ -3267,6 +3276,12 @@
               if (!sigCol()) { return { i, sigue: null, bajo, lleno: true, hechos, copias, saltos }; }
             }
             const col = cols[ci];
+            // el párrafo vacío que solo lleva el salto de sección continuo, al final de la sección: Word no le da renglón
+            // al equilibrar las columnas (con 4 entradas deja 2 y 2)
+            if (!esCopia && i === hasta - 1 && i > desdeRegion && !el.textContent.trim() && !el.querySelector("[data-obj], img") && sigContinuaRegion) {
+              ponerX(el, p, col); empujar(el, y - el.offsetTop); hechos.push(el); i++;
+              continue;
+            }
             // en su columna, debajo de lo anterior (arriba de la columna: sin su espacio de antes, como Word)
             const antes = esCopia ? 0 : !primero ? mt(el) : conEspacio && ci === 0 && y === arriba ? mt(el) : 0;
             if (esCopia) colocarCopia(el, p, col, y);
@@ -3321,6 +3336,7 @@
         for (let s = 0; s < secs.length; s++) {
           const g = secs[s].g, desde = secs[s].i, hasta = s + 1 < secs.length ? secs[s + 1].i : n, cols = columnasDe(g);
           const sigContinua = s + 1 < secs.length && secs[s + 1].g.t === "c" && Math.abs(secs[s + 1].g.w - g.w) < 1 && Math.abs(secs[s + 1].g.h - g.h) < 1;
+          sigContinuaRegion = sigContinua;
           let arriba, conEspacio = false;
           if (p && g.t === "c" && Math.abs(p.g.w - g.w) < 1 && Math.abs(p.g.h - g.h) < 1) {
             arriba = p.finSeccion != null ? p.finSeccion : p.bajo != null ? p.bajo : p.top + p.g.m[0];
@@ -3403,7 +3419,9 @@
                   deshacer(t);
                   if (!t.lleno && !t.sigue && t.i >= hasta) { hi = m; mejor = m; } else lo = m;
                 }
-                r = colocarRegion(p, cols, arriba, mejor != null ? hi : null, i, hasta, sigue, false);
+                // (2 px de holgura: la búsqueda llega justo al borde y las posiciones se redondean a píxel entero, así que
+                // al colocar de verdad lo que en la prueba cabía podía quedar 1 px fuera)
+                r = colocarRegion(p, cols, arriba, mejor != null ? hi + 2 : null, i, hasta, sigue, false);
               }
               if (g.l) p.regiones.push({ top: arriba, bajo: Math.max(arriba, Math.min(r.bajo, fondoHoja(p))), cols });
               i = r.i; sigue = r.sigue;

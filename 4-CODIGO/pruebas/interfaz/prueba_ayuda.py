@@ -110,8 +110,11 @@ def main():
         pie = p2.evaluate("() => [...document.querySelectorAll('footer.pie-legal a')].map(a => [a.textContent, a.getAttribute('href')])")
         check("entrar y crear cuenta tienen un pie con Ayuda, Preguntas frecuentes, Privacidad, Términos y lo legal",
               [x[1] for x in pie] == ["/ayuda", "/ayuda/preguntas-frecuentes", "/legal/privacidad", "/legal/terminos", "/legal"], pie)
-        p2.fill("#ru", "sinacepto" + str(os.getpid() % 10000)); p2.fill("#rc", N.CL); p2.click("button[type=submit]"); p2.wait_for_timeout(600)
-        check("sin marcar la casilla no se crea la cuenta", "acepta" in p2.evaluate("() => document.body.innerText").lower(), "")
+        p2.fill("#ru", "sinacepto" + str(os.getpid() % 10000)); p2.fill("#rc", N.CL); p2.click("button[type=submit]")
+        # (el aviso tarda más con varias pruebas a la vez: se espera a que aparezca, hasta 10 s)
+        try: p2.wait_for_function("() => document.body.innerText.toLowerCase().includes('acepta')", timeout=10000)
+        except Exception: pass
+        check("sin marcar la casilla no se crea la cuenta", "acepta" in p2.evaluate("() => document.body.innerText").lower(), p2.evaluate("() => document.body.innerText")[:150])
         # Sin Internet, con el service worker (localhost cuenta como seguro)
         p3 = ctx.new_page()
         p3.goto(N.B + "/ayuda"); p3.wait_for_timeout(500)
