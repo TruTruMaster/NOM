@@ -2535,6 +2535,21 @@
       return out;
     }
 
+    /**
+     * Un nombre definido del libro: su definición («=Datos!$A$2:$A$9», «=0,16», «=LAMBDA(x; x*2)») calculada en la hoja
+     * de la fórmula que lo usa, como Excel. undefined si no existe ese nombre.
+     */
+    const nombresEnCurso = new Set();
+    function valorNombre(n, h, donde) {
+      const d = opc.nombres ? opc.nombres(n) : null;
+      if (d == null || d === "") return undefined;
+      const k = String(n).toLowerCase();
+      if (nombresEnCurso.has(k)) return E("#CICLO!");
+      nombresEnCurso.add(k);
+      try { const v = calcular(String(d)[0] === "=" ? String(d) : "=" + d, h, Object.assign({}, donde || {}, { lambda: true })); return v === "" ? 0 : v; }
+      catch (e) { return e instanceof ErrorF ? e : E("#VALOR!"); }
+      finally { nombresEnCurso.delete(k); }
+    }
     function calcular(crudo, h, donde) {
       if (crudo == null || crudo === "") return "";
       const s = String(crudo);
@@ -2631,6 +2646,8 @@
           if (es("(")) {
             // una función guardada con LET o un parámetro: =LET(f; LAMBDA(x; x*2); f(5))
             if (propio instanceof LambdaF) return llamadas(propio);
+            // un nombre definido del libro que es una función (MiFuncion = LAMBDA(x; x*2)): MiFuncion(5)
+            if (propio === undefined && !FUNCS[ALIAS[x.v] || x.v] && !/^(LET|LAMBDA|ISOMITTED)$/.test(ALIAS[x.v] || x.v)) { const nv = valorNombre(x.v, h, donde); if (nv instanceof LambdaF) return llamadas(nv); }
             toma("(");
             const nombre = ALIAS[x.v] || x.v;
             if (nombre === "LET") return llamadas(conNombres());
@@ -2653,6 +2670,9 @@
             if (propio instanceof ErrorF) throw propio;
             return propio === OMITIDO ? "" : propio;
           }
+          // un nombre definido del libro (Fórmulas → Administrador de nombres): IVA, Ventas…
+          const nv = valorNombre(x.v, h, donde);
+          if (nv !== undefined) { if (nv instanceof ErrorF) throw nv; return nv; }
           throw E("#NOMBRE?");
         }
         throw E("#VALOR!");
@@ -2854,7 +2874,7 @@
       }
       const v = expr();
       if (i < tk.length) throw E("#VALOR!");
-      if (v instanceof LambdaF) throw E("#CALC!");
+      if (v instanceof LambdaF) { if (donde && donde.lambda) return v; throw E("#CALC!"); }   // (un nombre definido que es una función: se devuelve tal cual)
       if (v === OMITIDO) return "";
       if (Array.isArray(v)) { if (v.length === 1) return v[0] instanceof LambdaF ? E("#CALC!") : v[0]; if (!v.length) throw E("#CALC!"); return v; }
       return v;
@@ -3522,9 +3542,15 @@
     };
   };
   /** Evaluador de una tabla que entiende las referencias a las demás hojas del documento. */
+  /** Los nombres definidos del libro (en «_doc», nombres: { minúsculas: { n, d } }): nombre → su definición. */
+  function nombresDe(doc) {
+    const m = doc && typeof doc.valor === "function" ? doc.valor("_doc", "nombres") : null;
+    if (!m || typeof m !== "object" || !Object.keys(m).length) return null;
+    return (n) => { const x = m[String(n).toLowerCase()]; return x && x.d != null ? x.d : null; };
+  }
   function evaluadorDeTabla(doc, b) {
     const todas = doc ? hojasDe(doc) : [];
-    return evaluador(lectorDe(b), {
+    return evaluador(lectorDe(b), { nombres: nombresDe(doc),
       nombre: doc ? nombreDeHoja(doc, b) : "", filas: b.filas || b.filasTexto || 30, cols: b.cols || b.colsTexto || 10,
       formulas: formulasDe(b), sinDerrame: sinDerrameDe(b), combinada: combinadaDe(b),
       hojas: (n) => {
@@ -3535,7 +3561,7 @@
   }
 
   NOM.formulas = {
-    hojasDe, nombreDeHoja, evaluadorDeTabla,
+    hojasDe, nombreDeHoja, evaluadorDeTabla, nombresDe,
     evaluador, formatear, aplicarFormato, formatoXL, ErrorF, FechaF, esNum, colLetra, colNum, ref, parseRef, NOMBRES, FIRMAS, ALIAS, INGLES,
     leerFecha, criterio, desplazar, ajustarEstructura, renombrarHoja, refsDe, textoRef, leerRef, transformarRefs, FORMATOS, esFormatoFecha,
     cambiarDecimales, leerEntrada, serie, calcularLiteral, prefijoHoja, textoFecha, aEspanol, formulasDe, conInterseccion,

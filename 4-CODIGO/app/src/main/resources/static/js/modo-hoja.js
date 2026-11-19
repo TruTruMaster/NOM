@@ -95,6 +95,7 @@
         <div class="barra-formula">
           <span class="celda-ref" data-ref>A1</span><span class="fx">fx</span>
           <input data-fx aria-label="Contenido de la celda" spellcheck="false" autocomplete="off" ${ed.soloLectura ? "readonly" : ""}>
+          <button type="button" class="btn chico calcular-pend" data-calcular hidden data-micro="Calcular|El cálculo es manual y hay cambios sin calcular: F9 calcula todo el libro, Mayús+F9 esta hoja.|F9">Calcular</button>
         </div>
         <div class="hoja-filtro" data-filtro hidden></div>
         <div class="rejilla-hoja" data-rejilla tabindex="0" aria-label="Hoja de cálculo"></div>
@@ -104,6 +105,7 @@
       ed.lienzo.append(raiz);
       ed.lienzo.style.overflow = "hidden";
       const rej = $("[data-rejilla]", raiz), fx = $("[data-fx]", raiz), refEl = $("[data-ref]", raiz), bandaFiltro = $("[data-filtro]", raiz), zonaGraficas = $("[data-graficas]", raiz);
+      { const bc = $("[data-calcular]", raiz); if (bc) bc.onclick = () => calcularAhora(false); }
       let sel = { c: 0, f: 0 }, ancla = null, editor = null, arrastrando = false;
       let visibles = [];          // filas reales en el orden en que se ven
       let resaltadas = new Set(), comentadas = new Map(), halladas = new Set();
@@ -228,7 +230,47 @@
         aviso(que === "u" ? (quitar ? "Celdas bloqueadas" : "Celdas desbloqueadas: se podrán cambiar con la hoja protegida") : quitar ? "Fórmulas visibles" : "Fórmulas ocultas al proteger la hoja", { tipo: "ok" });
       }
       const nombreHoja = () => (t ? F().nombreDeHoja(doc(), t) : "Hoja1");
-      const evaluar = () => F().evaluadorDeTabla(doc(), t || { filas: 30, cols: 10 });
+      /**
+       * Cálculo manual de Excel (Fórmulas → Opciones de cálculo, «calcPr» del libro): las fórmulas se quedan con el valor de
+       * la última vez que se calculó hasta F9 (todo el libro) o Mayús+F9 (esta hoja); una fórmula que se escribe o cambia se
+       * calcula al escribirla, como en Excel. Los valores que se ven se guardan aquí (en este equipo: el modo es del libro).
+       */
+      const modoCalculo = () => doc().valor("_doc", "calculo") || "auto";
+      const congelados = new Map();   // id de la hoja → Map(ref → { crudo, v })
+      let calcPendiente = false;
+      const evaluarVivo = () => F().evaluadorDeTabla(doc(), t || { filas: 30, cols: 10 });
+      function evaluar() {
+        const ev = evaluarVivo();
+        if (modoCalculo() !== "manual" || !t) return ev;
+        let m = congelados.get(t.id);
+        if (!m) { m = new Map(); congelados.set(t.id, m); }
+        const tb = t;
+        return Object.assign({}, ev, {
+          valor: (c, f) => {
+            const ref = F().ref(c, f), crudo = tb["c:" + ref];
+            if (crudo == null || String(crudo)[0] !== "=") return ev.valor(c, f);
+            const x = m.get(ref);
+            if (x && x.crudo === crudo) return x.v;
+            const v = ev.valor(c, f);   // (fórmula nueva o cambiada: se calcula al escribirla)
+            m.set(ref, { crudo, v });
+            return v;
+          },
+        });
+      }
+      /** F9: calcula todo el libro; Mayús+F9 (soloHoja): esta hoja. */
+      function calcularAhora(soloHoja) {
+        if (soloHoja && t) congelados.delete(t.id); else congelados.clear();
+        calcPendiente = false;
+        const b = $("[data-calcular]", raiz); if (b) b.hidden = true;
+        render();
+      }
+      function fijarModoCalculo(modo) {
+        if (ed.soloLectura) return;
+        doc().cambiar("_doc", { calculo: modo });   // (también «auto»: así al descargar se sabe que se eligió, aunque el archivo dijera manual)
+        if (modo !== "manual") { congelados.clear(); calcPendiente = false; }
+        render();
+        aviso(modo === "manual" ? "Cálculo manual: F9 calcula todo el libro y Mayús+F9 esta hoja" : modo === "sinTablas" ? "Cálculo automático excepto tablas de datos" : "Cálculo automático", { tipo: "ok" });
+      }
       const rango = () => {
         if (!ancla) return { c1: sel.c, c2: sel.c, f1: sel.f, f2: sel.f };
         return { c1: Math.min(ancla.c, sel.c), c2: Math.max(ancla.c, sel.c), f1: Math.min(ancla.f, sel.f), f2: Math.max(ancla.f, sel.f) };
@@ -597,6 +639,80 @@
           // (Cancelar: la celda que cambió vuelve a su valor de antes, como en Excel)
           $("[data-no]", p2).onclick = () => { cambiarT({ ["c:" + res.cambiando]: res.antes }); h2.cerrar(); };
         };
+      }
+      // ------------------------------------------------------------ nombres definidos (Fórmulas → Administrador de nombres)
+      /** Los nombres del libro: { minúsculas: { n, d } } (d: la definición en NOM, «=Hoja1!$A$1:$A$9»). */
+      const nombresLibro = () => Object.assign({}, doc().valor("_doc", "nombres") || {});
+      /**
+       * ¿Sirve como nombre de Excel? Empieza con letra, _ o \; letras, números, _ y punto; sin espacios; no parece una celda
+       * (A1, XFD1048576, R1C1) ni es VERDADERO/FALSO; hasta 255 letras. Devuelve el motivo si no sirve.
+       */
+      function nombreInvalido(n) {
+        if (!n) return "Escribe un nombre";
+        if (n.length > 255) return "El nombre es demasiado largo (255 letras como máximo)";
+        if (!/^[\p{L}_\\][\p{L}\p{N}_.\\]*$/u.test(n)) return "El nombre empieza con una letra o «_» y no lleva espacios ni signos";
+        if (/^[A-Za-z]{1,3}\d+$/.test(n) || /^[Rr]\d*[Cc]\d*$/.test(n) || /^[RrCc]$/.test(n)) return "El nombre no puede parecer una celda (como A1 o R1C1)";
+        if (/^(VERDADERO|FALSO|TRUE|FALSE)$/i.test(n)) return "Ese nombre está reservado";
+        return null;
+      }
+      /** Agrega, cambia (antes: el nombre de antes) o quita (d null) un nombre del libro. Devuelve el motivo si no se pudo. */
+      function guardarNombre(n, d, antes) {
+        if (ed.soloLectura) return "Solo puedes ver esta hoja";
+        const m = nombresLibro();
+        if (antes) delete m[String(antes).toLowerCase()];
+        if (d == null) { doc().cambiar("_doc", { nombres: m }); return null; }
+        const malo = nombreInvalido(n);
+        if (malo) return malo;
+        if (m[n.toLowerCase()]) return "Ya hay un nombre así en el libro";
+        let def = String(d).trim();
+        if (!def) return "Escribe a qué se refiere";
+        if (!def.startsWith("=")) def = "=" + def;
+        m[n.toLowerCase()] = { n, d: def };
+        doc().cambiar("_doc", { nombres: m });
+        return null;
+      }
+      /** El rango elegido escrito como lo pone Excel en «Se refiere a»: =Hoja1!$A$1:$B$5. */
+      function refDeSeleccion() {
+        const r = rango(), hoja = F().nombreDeHoja(doc(), t), pre = F().prefijoHoja ? F().prefijoHoja(hoja) : (/^[\p{L}_][\p{L}\p{N}_.]*$/u.test(hoja) ? hoja : `'${hoja.replace(/'/g, "''")}'`) + "!";
+        const abs = (c, f) => "$" + F().colLetra(c) + "$" + (f + 1);
+        return "=" + pre + (r.c1 === r.c2 && r.f1 === r.f2 ? abs(r.c1, r.f1) : abs(r.c1, r.f1) + ":" + abs(r.c2, r.f2));
+      }
+      function dialogoNombre(previo, alGuardar) {
+        const cuerpo = html(`<div class="col">
+          <label>Nombre <input data-n value="${esc(previo ? previo.n : "")}" autocomplete="off" spellcheck="false"></label>
+          <label>Se refiere a <input data-d value="${esc(previo ? previo.d : refDeSeleccion())}" autocomplete="off" spellcheck="false"></label>
+          <p class="suave chico" style="font-weight:400">Un rango (=Hoja1!$A$2:$A$20), un número (=0,16) o una fórmula. Se usa en cualquier fórmula del libro escribiendo su nombre.</p></div>`);
+        const pie = html(`<div style="display:contents"><span class="crece"></span><button class="btn primario" data-si>Aceptar</button></div>`);
+        const h = NOM.hoja({ titulo: previo ? "Editar nombre" : "Nombre nuevo", icono: "tag", cuerpo, pie });
+        setTimeout(() => $("[data-n]", cuerpo).focus(), 30);
+        $("[data-si]", pie).onclick = () => {
+          const malo = guardarNombre($("[data-n]", cuerpo).value.trim(), $("[data-d]", cuerpo).value.trim(), previo && previo.n);
+          if (malo) return aviso(malo, { tipo: "aviso", ms: 5000 });
+          h.cerrar();
+          if (alGuardar) alGuardar();
+        };
+      }
+      function administradorNombres() {
+        const cuerpo = html(`<div class="col"><div class="lista" data-lista></div>
+          <p class="suave chico" style="font-weight:400" data-vacio hidden>Este libro todavía no tiene nombres. Un nombre (IVA, Ventas…) hace las fórmulas más fáciles de leer: =B2*IVA.</p></div>`);
+        const pie = html(`<div style="display:contents">${ed.soloLectura ? "" : `<button class="btn" data-nuevo>${ico("plus")} Nuevo…</button>`}<span class="crece"></span><button class="btn primario" data-ok>Cerrar</button></div>`);
+        const h = NOM.hoja({ titulo: "Administrador de nombres", icono: "tag", cuerpo, pie });
+        const pintar = () => {
+          const m = nombresLibro(), l = Object.values(m).sort((a, b) => a.n.toLowerCase().localeCompare(b.n.toLowerCase()));
+          const ev = evaluar();
+          $("[data-vacio]", cuerpo).hidden = !!l.length;
+          $("[data-lista]", cuerpo).innerHTML = l.map((o) => {
+            let v = "";
+            try { v = ev.calcular ? F().formatear(ev.calcular(o.d)) : ""; } catch (e) { v = ""; }
+            return `<div class="lista-item"><span class="crece"><b>${esc(o.n)}</b><br><span class="suave chico" style="font-weight:400">${esc(o.d)}${v !== "" ? " · " + esc(String(v).slice(0, 40)) : ""}</span></span>${ed.soloLectura ? "" : `<button class="icono-btn chico" data-editar="${esc(o.n)}" aria-label="Editar ${esc(o.n)}">${ico("pencil", "ico-s")}</button><button class="icono-btn chico" data-quitar="${esc(o.n)}" aria-label="Eliminar ${esc(o.n)}">${ico("trash-2", "ico-s")}</button>`}</div>`;
+          }).join("");
+          $$("[data-editar]", cuerpo).forEach((b) => (b.onclick = () => dialogoNombre(nombresLibro()[b.dataset.editar.toLowerCase()], pintar)));
+          $$("[data-quitar]", cuerpo).forEach((b) => (b.onclick = () => { guardarNombre(b.dataset.quitar, null, b.dataset.quitar); render(); pintar(); }));
+        };
+        pintar();
+        const nuevo = $("[data-nuevo]", pie);
+        if (nuevo) nuevo.onclick = () => dialogoNombre(null, () => { render(); pintar(); });
+        $("[data-ok]", pie).onclick = () => h.cerrar();
       }
       function ordenarDeVerdad(c, asc) {
         if (ed.soloLectura || !t) return;
@@ -1745,6 +1861,8 @@
         if (e.key === "Enter") { e.preventDefault(); e.shiftKey ? mover(0, -1) : abrirEditor(null, true); return; }
         if (e.key === "Tab") { e.preventDefault(); conTab(e.shiftKey); return; }
         if (e.key === "F2") { e.preventDefault(); abrirEditor(null, true); return; }
+        // F9 calcula todo el libro y Mayús+F9 la hoja (en cálculo manual; en automático no hace falta, como en Excel)
+        if (e.key === "F9") { e.preventDefault(); calcularAhora(e.shiftKey); return; }
         if (e.key === "Escape") { if (portapapeles) { portapapeles = null; marcarCopiado(); } return; }
         if ((e.key === "Delete" || e.key === "Backspace") && !ed.soloLectura) { e.preventDefault(); vaciarRango(); return; }
         const k = e.key.toLowerCase();
@@ -2618,6 +2736,9 @@
             { texto: "Otras", icono: "more-vertical", sub: [
               { texto: "Buscar", icono: "search", fn: () => buscar(false) },
               { texto: "Buscar objetivo", corto: "Objetivo", icono: "target", off: lect, fn: () => dialogoObjetivo() },
+              { texto: "Nombres", icono: "tags", fn: () => administradorNombres() },
+              { texto: "Calcular ahora", corto: "Calcular", icono: "calculator", fn: () => calcularAhora(false) },
+              { texto: modoCalculo() === "manual" ? "Cálculo automático" : "Cálculo manual", corto: modoCalculo() === "manual" ? "Automático" : "Manual", icono: "zap", off: lect, fn: () => fijarModoCalculo(modoCalculo() === "manual" ? "auto" : "manual") },
               { texto: "Comentar", icono: "message-square", off: !NOM.comentarios || ed.local, fn: () => NOM.comentarios.nuevo(ed) },
               { texto: "Fijar", icono: "snowflake", off: lect, sub: menuFijar(null).filter((x) => x && x.texto).map((x) => Object.assign({}, x, { corto: x.texto.replace(/^Hasta la /, "Hasta ").slice(0, 14) })) },
               { texto: "Lista desplegable…", corto: "Lista…", icono: "list-checks", off: lect, fn: dialogoValidacion },
@@ -2735,6 +2856,14 @@
           { texto: "Quitar duplicados…", icono: "copy-x", fn: () => dialogoDuplicados() },
           { texto: "Texto en columnas…", icono: "columns-3", fn: () => dialogoTextoColumnas() },
           { texto: "Buscar objetivo…", icono: "target", fn: () => dialogoObjetivo() },
+          { titulo: "Fórmulas" },
+          { texto: "Cálculo automático", icono: "zap", marcado: modoCalculo() === "auto", fn: () => fijarModoCalculo("auto") },
+          { texto: "Automático excepto tablas de datos", icono: "zap", marcado: modoCalculo() === "sinTablas", fn: () => fijarModoCalculo("sinTablas") },
+          { texto: "Cálculo manual", icono: "hand", marcado: modoCalculo() === "manual", fn: () => fijarModoCalculo("manual") },
+          { texto: "Calcular ahora", icono: "calculator", atajo: "F9", fn: () => calcularAhora(false) },
+          { texto: "Calcular esta hoja", icono: "calculator", atajo: "Mayús+F9", fn: () => calcularAhora(true) },
+          { texto: "Definir nombre…", icono: "tag", fn: () => dialogoNombre(null, render) },
+          { texto: "Administrador de nombres…", icono: "tags", fn: () => administradorNombres() },
           { titulo: "Hoja" },
           { texto: "Ancho de columna…", icono: "move-horizontal", fn: anchoColumnas },
           { texto: "Alto de fila…", icono: "move-vertical", fn: altoFilas },
@@ -2769,6 +2898,10 @@
 
       this.cambios = (lista) => {
         const tId = t && t.id;
+        // (cálculo manual: cambió algo de una hoja y las fórmulas no se recalculan hasta F9 —«Calcular», como Excel—)
+        if (modoCalculo() === "manual" && lista.some((c) => doc().valor(c.bloque, "tipo") === "tabla" && Object.keys(c.campos).some((k) => k.startsWith("c:")))) calcPendiente = true;
+        const bCalc = $("[data-calcular]", raiz);
+        if (bCalc) bCalc.hidden = !(modoCalculo() === "manual" && calcPendiente);
         const deGraficas = lista.some((c) => doc().valor(c.bloque, "tipo") === "grafica");
         const deTablas = lista.some((c) => c.bloque !== tId && doc().valor(c.bloque, "tipo") === "tabla");
         if (lista.some((c) => c.bloque === tId || c.bloque === "_doc" || c.campos.tipo === "tabla")) {
@@ -2809,7 +2942,9 @@
       this.api = { rango, tabla: () => t, evaluar, seleccion: () => ({ ...sel }),
         // herramientas de datos como las de Excel (también para las pruebas contra Excel real)
         herramientas: { quitarDuplicados, regionActual, textoEnColumnas, partirTexto, buscarObjetivo },
-        dialogos: { duplicados: dialogoDuplicados, textoColumnas: dialogoTextoColumnas, objetivo: dialogoObjetivo } };
+        dialogos: { duplicados: dialogoDuplicados, textoColumnas: dialogoTextoColumnas, objetivo: dialogoObjetivo, nombres: administradorNombres },
+        calculo: { modo: modoCalculo, fijar: fijarModoCalculo, ahora: calcularAhora },
+        nombres: { guardar: guardarNombre, lista: nombresLibro, invalido: nombreInvalido } };
       void self;
 
       render();
@@ -2820,6 +2955,9 @@
       const dlg = (k) => () => { const d = NOM.editorActual && NOM.editorActual.modoApi && NOM.editorActual.modoApi.api && NOM.editorActual.modoApi.api.dialogos; if (d && d[k]) d[k](); };
       return [
         { texto: "Buscar objetivo", icono: "target", fn: dlg("objetivo"), claves: "hipotesis analisis meta valor buscar objetivo goal seek" },
+        { texto: "Administrador de nombres", icono: "tags", fn: dlg("nombres"), claves: "nombres definidos rango nombrado definir nombre" },
+        { texto: "Calcular ahora (F9)", icono: "calculator", fn: () => { const a = NOM.editorActual.modoApi.api.calculo; if (a) a.ahora(false); }, claves: "recalcular f9 calculo manual" },
+        { texto: "Opciones de cálculo: manual o automático", icono: "zap", fn: () => { const a = NOM.editorActual.modoApi.api.calculo; if (a) a.fijar(a.modo() === "manual" ? "auto" : "manual"); }, claves: "calculo manual automatico opciones f9" },
         { texto: "Quitar duplicados", icono: "copy-x", fn: dlg("duplicados"), claves: "repetidos duplicados unicos" },
         { texto: "Texto en columnas", icono: "columns-3", fn: dlg("textoColumnas"), claves: "separar partir dividir columnas coma" },
         ...(NOM.datos ? [{ texto: "Hacer un reporte con estos datos", icono: "bar-chart", fn: () => NOM.datos.reporteDeDatos(NOM.editorActual), claves: "encuesta google forms resumen graficas frecuencias estadistica" }] : []),

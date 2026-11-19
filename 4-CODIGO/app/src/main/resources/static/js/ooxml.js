@@ -211,7 +211,8 @@
       }
       const m = /^[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*(?=\s*\()/.exec(s.slice(i));
       if (m && params && params.has(m[0].toUpperCase()) && !/[A-Za-z0-9_.$]/.test(s[i - 1] || "")) { r += "_xlpm." + m[0]; i += m[0].length - 1; continue; }
-      if (m) { const n = m[0].toUpperCase(), es = (F().ALIAS || {})[n] || n; r += (F().INGLES || {})[es] || EN[n] || n; i += m[0].length - 1; continue; }
+      // (lo que no es una función —un nombre definido que es una función propia: Doble(5)— se queda como se escribió)
+      if (m) { const n = m[0].toUpperCase(), es = (F().ALIAS || {})[n] || n; r += (F().INGLES || {})[es] || EN[n] || (/^_xl/i.test(m[0]) ? n : m[0]); i += m[0].length - 1; continue; }
       if (params) {
         const q = /^[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*/.exec(s.slice(i));
         if (q && params.has(q[0].toUpperCase()) && !/[A-Za-z0-9_.$!:'\]]/.test(s[i - 1] || "") && s[i + q[0].length] !== "!") { r += "_xlpm." + q[0]; i += q[0].length - 1; continue; }
@@ -3202,6 +3203,23 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
   }
 
   /** Hoja de cálculo → .xlsx. Si el documento vino de un Excel, se parte de ese archivo (xlsxConOrigen). */
+  /** El modo de cálculo del libro como lo escribe Excel en calcPr (« calcMode="manual"»), o "" si es automático. */
+  function calcModeDe(doc) {
+    const m = doc && typeof doc.valor === "function" ? doc.valor("_doc", "calculo") : null;
+    return m === "manual" ? ' calcMode="manual"' : m === "sinTablas" ? ' calcMode="autoNoTable"' : "";
+  }
+  /** Los nombres definidos de NOM como los escribe Excel en workbook.xml (<definedNames>…), o "" si no hay. */
+  function definedNameXml(o, pref) {
+    const d = formulaExcel(String(o.d || "").startsWith("=") ? o.d : "=" + (o.d || ""), 7).replace(/^=/, "");
+    return `<${pref || ""}definedName name="${x(o.n)}">${x(d)}</${pref || ""}definedName>`;
+  }
+  function definedNamesDe(doc, pref) {
+    const m = doc && typeof doc.valor === "function" ? doc.valor("_doc", "nombres") : null;
+    const l = m && typeof m === "object" ? Object.values(m).filter((o) => o && o.n && o.d != null) : [];
+    if (!l.length) return "";
+    l.sort((a, b) => a.n.toLowerCase().localeCompare(b.n.toLowerCase()));
+    return `<${pref || ""}definedNames>${l.map((o) => definedNameXml(o, pref)).join("")}</${pref || ""}definedNames>`;
+  }
   function xlsx(doc) {
     const og = NOM.ooxml.usarOrigen !== false && NOM.origen ? NOM.origen.leer(doc) : null;
     if (og && og.fmt === "xlsx") {
@@ -3248,7 +3266,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       return hojaDesdeCero(t, ev, fab, (ref, esFecha) => fab.estilo(t, ref, esFecha), i === 0, dibujo);
     });
     const { fuentes, rellenos, bordes, xfs, numFmts, dxfs } = fab;
-    const libro = XML + `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${nombres.map((n, i) => `<sheet name="${x(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`;
+    const libro = XML + `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${nombres.map((n, i) => `<sheet name="${x(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets>${definedNamesDe(doc)}<calcPr calcId="191029"${calcModeDe(doc)} fullCalcOnLoad="1"/></workbook>`;
     const estilos = XML + `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${numFmts.length ? `<numFmts count="${numFmts.length}">${numFmts.join("")}</numFmts>` : ""}<fonts count="${fuentes.length}">${fuentes.join("")}</fonts>
 <fills count="${rellenos.length}">${rellenos.join("")}</fills><borders count="${bordes.length}">${bordes.join("")}</borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfs.length}">${xfs.join("")}</cellXfs>
@@ -3793,26 +3811,71 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       });
       info.filter((s) => !(s.ruta && hojasBase[s.ruta])).forEach((s) => lista.push(s.txt));   // hojas de gráfico y otras que no se importan
       importadas.filter((s) => !usados.has(s.ruta)).forEach((s) => { pq.quita(s.ruta); pq.quita(pq.relsDe(s.ruta)); pq.quitaTipo(s.ruta); pq.quitaRel(LIBRO, s.rid); });
-      // Los nombres definidos "de una hoja" y la pestaña activa van por posición: ya no corresponden.
-      const dn = hsL.find((h) => O.local(h.n) === "definedNames");
-      if (dn) {
-        const quedan = O.hijosXml(libroTxt, dn.ci, dn.cf).filter((h) => O.attr(libroTxt, h, "localSheetId") == null).map((h) => libroTxt.slice(h.i, h.f)).join("");
-        piezasL.push([dn.i, dn.f, quedan ? `<${dn.n}>${quedan}</${dn.n}>` : ""]);
-      }
+      // Los nombres definidos "de una hoja" y la pestaña activa van por posición: ya no corresponden (ver abajo).
       const bv = hsL.find((h) => O.local(h.n) === "bookViews");
       if (bv) piezasL.push([bv.i, bv.f, libroTxt.slice(bv.i, bv.f).replace(/\s(activeTab|firstSheet)\s*=\s*"[^"]*"/g, "")]);
     }
     piezasL.push([secHojas.ci, secHojas.cf, lista.join("")]);
+    // Nombres definidos: si los de NOM (Administrador de nombres) ya no son los del original, se escriben los de NOM; los de
+    // una hoja (si las hojas siguen en su lugar) y los de Excel (_xlnm: área de impresión, filtros…) se quedan tal cual.
+    {
+      const dn = hsL.find((h) => O.local(h.n) === "definedNames");
+      const hijosDn = dn ? O.hijosXml(libroTxt, dn.ci, dn.cf) : [];
+      const norm = (t) => String(t || "").replace(/^=/, "").replace(/_xlfn\.|_xlpm\.|_xlws\./g, "").replace(/\s+/g, "");
+      const orig = {};
+      hijosDn.forEach((h) => {
+        const nm = O.attr(libroTxt, h, "name") || "", txt = libroTxt.slice(h.i, h.f);
+        if (/^_xlnm\./i.test(nm) || O.attr(libroTxt, h, "localSheetId") != null || /\shidden\s*=\s*"(1|true)"/.test(txt.slice(0, txt.indexOf(">")))) return;
+        orig[nm.toLowerCase()] = norm(txt.replace(/^<[^>]*>|<\/[^>]*>$/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&amp;/g, "&"));
+      });
+      const mNom = doc.valor("_doc", "nombres");
+      const nom = mNom && typeof mNom === "object" ? mNom : null;
+      // (un libro importado antes de los nombres —versión 7— no los tiene en «_doc»: los del original se quedan)
+      let cambianNombres = false;
+      if (nom) {
+        const ks = Object.keys(nom), ko = Object.keys(orig);
+        cambianNombres = ks.length !== ko.length || ks.some((k) => orig[k] == null || norm(formulaExcel(String(nom[k].d || "").startsWith("=") ? nom[k].d : "=" + nom[k].d, 7)) !== orig[k]);
+      }
+      if (cambianNombres || (!mismaLista && hijosDn.some((h) => O.attr(libroTxt, h, "localSheetId") != null))) {
+        const pref = dn ? (dn.n.includes(":") ? dn.n.split(":")[0] + ":" : "") : prefL;
+        const quedan = hijosDn.filter((h) => {
+          const nm = O.attr(libroTxt, h, "name") || "", local = O.attr(libroTxt, h, "localSheetId") != null, txt = libroTxt.slice(h.i, h.f);
+          if (local) return mismaLista;
+          if (/^_xlnm\./i.test(nm) || /\shidden\s*=\s*"(1|true)"/.test(txt.slice(0, txt.indexOf(">")))) return true;
+          return !cambianNombres;   // (los del libro: si cambiaron, se escriben los de NOM)
+        }).map((h) => libroTxt.slice(h.i, h.f)).join("");
+        const nuevos = cambianNombres ? Object.values(nom).filter((o) => o && o.n && o.d != null).map((o) => definedNameXml(o, pref)).join("") : "";
+        const todo = quedan + nuevos;
+        if (dn) piezasL.push([dn.i, dn.f, todo ? `<${dn.n}>${todo}</${dn.n}>` : ""]);
+        else if (todo) {
+          // (va después de «sheets» y antes de calcPr, en el orden del esquema)
+          const ORDN = ["fileVersion", "fileSharing", "workbookPr", "workbookProtection", "bookViews", "sheets", "functionGroups", "externalReferences"];
+          const sig = hsL.find((h) => ORDN.indexOf(O.local(h.n)) < 0), pos = sig ? sig.i : raizL.cf;
+          piezasL.push([pos, pos, `<${pref}definedNames>${todo}</${pref}definedNames>`]);
+        }
+        cambio = true;
+      }
+    }
+    // modo de cálculo: si en NOM se eligió otro que el del archivo, calcPr lleva el nuevo
+    const modoNom = doc.valor("_doc", "calculo");
+    let nuevoModo = null;
+    {
+      const cp0 = hsL.find((h) => O.local(h.n) === "calcPr");
+      const orig = cp0 ? (O.attr(libroTxt, cp0, "calcMode") || "auto") : "auto";
+      const quiere = modoNom === "manual" ? "manual" : modoNom === "sinTablas" ? "autoNoTable" : modoNom === "auto" ? "auto" : null;
+      if (quiere && quiere !== orig) { nuevoModo = quiere; cambio = true; }
+    }
     if (cambio) {
       // Los valores guardados de las fórmulas pueden ya no servir: Excel recalcula al abrir.
       const cc = relsL.find((r) => /\/calcChain$/.test(r.tipo || ""));
       if (cc) { const ruta = pq.resolver(LIBRO, cc.destino); pq.quita(ruta); pq.quitaTipo(ruta); pq.quitaRel(LIBRO, cc.id); }
       const cp = hsL.find((h) => O.local(h.n) === "calcPr");
-      if (cp) piezasL.push([cp.i, cp.f, `<${cp.n}${quitaAttr(libroTxt.slice(cp.a, cp.af), "fullCalcOnLoad")} fullCalcOnLoad="1"/>`]);
+      const modoAttr = (a) => (nuevoModo ? quitaAttr(a, "calcMode") + (nuevoModo !== "auto" ? ` calcMode="${nuevoModo}"` : "") : a);
+      if (cp) piezasL.push([cp.i, cp.f, `<${cp.n}${modoAttr(quitaAttr(libroTxt.slice(cp.a, cp.af), "fullCalcOnLoad"))} fullCalcOnLoad="1"/>`]);
       else {
         const ORD = ["fileVersion", "fileSharing", "workbookPr", "workbookProtection", "bookViews", "sheets", "functionGroups", "externalReferences", "definedNames", "calcPr"];
         const sig = hsL.find((h) => ORD.indexOf(O.local(h.n)) < 0 || ORD.indexOf(O.local(h.n)) > 9), pos = sig ? sig.i : raizL.cf;
-        piezasL.push([pos, pos, `<${prefL}calcPr fullCalcOnLoad="1"/>`]);
+        piezasL.push([pos, pos, `<${prefL}calcPr${modoAttr("")} fullCalcOnLoad="1"/>`]);
       }
     }
     pq.pon(LIBRO, aplicarPiezas(libroTxt, piezasL));
@@ -3834,6 +3897,21 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
   const FMT_EXCEL_V2 = Object.assign({}, FMT_EXCEL, { 11: "0.00E+00", 12: "# ?/?", 13: "# ??/??", 20: "h:mm", 21: "h:mm:ss", 37: "#,##0 ;(#,##0)", 38: "#,##0 ;[Red](#,##0)",
     39: "#,##0.00;(#,##0.00)", 40: "#,##0.00;[Red](#,##0.00)", 45: "mm:ss", 46: "[h]:mm:ss", 47: "mm:ss.0", 48: "##0.0E+0" });
   /** .xlsx → { hojas: [{ nombre, campos }], aviso }: cada hoja con sus celdas, formato, combinadas, anchos y filas fijas. */
+  /** Los nombres definidos de todo el libro en workbook.xml: { minúsculas: { n: nombre, d: definición en NOM («=…») } }. */
+  function nombresDelLibro(wb) {
+    const out = {};
+    const re = /<(?:\w+:)?definedName\b([^>]*)>([\s\S]*?)<\/(?:\w+:)?definedName>/g;
+    let m;
+    while ((m = re.exec(wb))) {
+      const nm = (/\sname\s*=\s*"([^"]*)"/.exec(m[1]) || [])[1];
+      if (!nm || /^_xlnm\./i.test(nm) || /\slocalSheetId\s*=/.test(m[1]) || /\shidden\s*=\s*"(1|true)"/.test(m[1])) continue;
+      const t = m[2].replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&").trim();
+      let d;
+      try { d = F().aEspanol("=" + t.replace(/_xlfn\.|_xlpm\.|_xlws\./g, "")); } catch (e) { d = "=" + t; }
+      out[nm.toLowerCase()] = { n: nm, d };
+    }
+    return out;
+  }
   async function leerXlsx(archivo) {
     if (archivo.size > 30 * 1024 * 1024) throw new Error("El archivo pesa más de 30 MB");
     const u8 = new Uint8Array(await archivo.arrayBuffer());
@@ -3851,6 +3929,16 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         if (!p.hash && fs.getAttribute("reservationPassword")) p.viejo = fs.getAttribute("reservationPassword");
         doc.modificar = { recomendada: si(fs, "readOnlyRecommended") || undefined, p };
       }
+    }
+    // modo de cálculo del libro (calcPr): manual o automático excepto tablas de datos
+    if (wb) {
+      const cp = /<(?:\w+:)?calcPr\b([^>]*)>/.exec(wb), cm = cp ? (/\scalcMode\s*=\s*"([^"]*)"/.exec(cp[1]) || [])[1] : null;
+      if (cm === "manual") doc.calculo = "manual"; else if (cm === "autoNoTable") doc.calculo = "sinTablas";
+    }
+    // nombres definidos del libro (los de todo el libro; los de una hoja y los de Excel —_xlnm— se conservan en el original)
+    if (wb) {
+      const nombres = nombresDelLibro(wb);
+      if (Object.keys(nombres).length) doc.nombres = nombres;
     }
     const c = z.texto("docProps/custom.xml");
     if (c && /name="_MarkAsFinal"[^>]*>\s*<vt:bool>\s*(true|1)\s*<\/vt:bool>/i.test(c)) doc.final = true;
@@ -3870,8 +3958,10 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
   // con su estilo y color, y los estilos de tabla (los que Excel trae de fábrica y los del libro) · 4 alineación
   // completa, tramas, degradados y diagonales · 5 matrices dinámicas: lo derramado no se guarda como valores
   // sueltos (fa: guarda el lugar que derramaba), {1,2;3,4} con sus separadores, A1#, «@» y LAMBDA sin «_xlpm.» ·
-  // 6 protección: la de cada hoja (prot), la de cada celda (pr: «u» sin bloquear, «h» fórmula oculta) y la del libro.
-  const VERSION_XL = 6;
+  // 6 protección: la de cada hoja (prot), la de cada celda (pr: «u» sin bloquear, «h» fórmula oculta) y la del libro ·
+  // 7 nombres definidos: las fórmulas los conservan (=B2*IVA, como Excel; antes se sustituían por su definición) y el
+  // libro los guarda en «_doc» (nombres), para el Administrador de nombres.
+  const VERSION_XL = 7;
   function modeloXlsx(z, version) {
     const V = version || VERSION_XL;
     const P = (t) => new DOMParser().parseFromString(t, "application/xml");
@@ -4441,7 +4531,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       // de hoja no puede llevar «:», así que dentro de las comillas los dos puntos siempre separan la primera de la última)
       let r = fx.replace(/'((?:[^':]|'')+):((?:[^':]|'')+)'!(\$?[A-Z]{1,3}\$?\d+(?::\$?[A-Z]{1,3}\$?\d+)?)/g, tresD);
       r = r.replace(/('[^']+'|[A-Za-z_][\w.]*):('[^']+'|[A-Za-z_][\w.]*)!(\$?[A-Z]{1,3}\$?\d+(?::\$?[A-Z]{1,3}\$?\d+)?)/g, tresD);
-      if (Object.keys(nombresXl).length) {
+      if (Object.keys(nombresXl).length && V < 7) {
         // fuera de los textos entre comillas: un identificador que es un nombre definido (y no una función)
         r = r.split(/("(?:[^"]|"")*")/).map((parte, i) => (i % 2 ? parte : parte.replace(/(^|[^\w.!'$\]])([A-Za-z_\\][\w.]*)(?![\w.(!\[])/g, (todo, antes, n) => {
           const d = nombresXl[n.toLowerCase()];
