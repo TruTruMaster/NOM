@@ -25,6 +25,14 @@ Orden: (0) auditar PARIDAD; (1) lo que queda de cómo se VE un archivo; (2) herr
 | **Medir mejor**: `verdad.py` saca los renglones de cada celda (Word los daba por fila); `comparar_real.py` los compara en orden de lectura, un objeto en el renglón es «/» (como lo lee Word), los renglones con ecuación no cuentan, la viñeta de una celda no es texto, el texto vertical se agrupa por columnas, un subíndice después de un superíndice no es renglón nuevo. Herramientas nuevas: `analisis/razones_acomodo.py` (por qué un párrafo no se acomoda), `analisis/inspeccionar.py` (abrir un archivo y correr JS) | — |
 | **PowerPoint**: renglones donde los pone PowerPoint también en las miniaturas, al terminar de escribir en un cuadro y en el PNG de la diapositiva (que ahora lleva adentro las fuentes de la página; antes salía con las del equipo) | `analisis/png_diapositivas.py`: PNG de NOM contra PowerPoint p01 98.4 %, p07 98.9 %; prueba_pptx y pres1 sin errores |
 | **Excel: Buscar objetivo** (Más → Datos, ruedita, paleta; diálogo y estado como Excel; Cancelar regresa el valor) | `datos_excel.py` 14/14 (los 4 de Buscar objetivo, también el sin solución) |
+| **Excel: nombres definidos** (motor, importador v7 —ya no los sustituye: la barra muestra `=B2*IVA`—, `definedNames` al descargar, Administrador de nombres) | `libro_excel.py` (nuevo): Excel 2024 abre lo que descarga NOM con los 4 nombres y 6/6 celdas iguales; la vuelta los conserva |
+| **Excel: cálculo manual, F9 y Mayús+F9** (`calcPr calcMode`; botón «Calcular») | `libro_excel.py`: NOM no recalcula sin F9; Excel abre en manual |
+| **Excel: esquema** (agrupar/desagrupar filas y columnas, +/−, niveles, ocultar/mostrar detalle, borrar; importador v8) | `libro_excel.py`: mismos niveles y lo mismo contraído en Excel; validador de Microsoft 3/3; ediciones xlsx 30/30 |
+| **Excel: mostrar fórmulas** (Ctrl+`; importador v9, `showFormulas`) | `libro_excel.py`: Excel abre con las fórmulas a la vista |
+| **Excel: rastrear precedentes y dependientes** (flechas por niveles, Quitar flechas) | `libro_excel.py`: 7 celdas iguales a DirectPrecedents/DirectDependents |
+| **Excel: evaluar fórmula** (paso a paso, en el orden del cuadro de Excel); potencias imposibles dan #¡NUM!/#¡DIV/0! (antes NaN) | `libro_excel.py`: 37 pasos de 7 fórmulas, calculados por Excel, dan lo mismo que la celda |
+| **Excel: consolidar** (11 funciones; rótulos o posición; el orden de rótulos sale de medir Excel) | `datos_excel.py` 24/24 (10 de consolidar) |
+| **Excel: tablas de datos** (`=TABLA(fila;columna)`: calcular, abrir —importador v10— y guardar como Excel); números en notación científica (Excel los escribe así; NOM los tomaba como texto) | x10-tablas-datos.xlsx (hecho en Excel): los 51 valores iguales; x01-x09 y t02 siguen en 100 % |
 
 ### 1a. Buscar objetivo: lo que no se pudo igualar
 
@@ -58,11 +66,17 @@ misma tolerancia; los dos quedan a menos de 0.001 del valor pedido y coinciden e
   las páginas de t01 (126 en Word, 121 en NOM) y w06 (18/17).
 - PowerPoint: SmartArt contra el video (p06, p11 89.5 %), transiciones y Transformar (Morph) contra el video.
 
-**Excel (punto 2)**: definir nombres y administrador de nombres (exportar `definedNames`), cálculo manual y F9/Mayús+F9
-(`calcPr`), agrupar filas/columnas (esquema, `outlineLevel`), rastrear precedentes/dependientes, evaluar fórmula, mostrar
-fórmulas, relleno rápido, consolidar, escenarios, tablas de datos, hoja de previsión, `FORECAST.ETS*`, `ODDF*/ODDL*`,
-`IMAGE`; disposición de página e impresión (márgenes, orientación, tamaño, área de impresión, títulos, encabezado y pie,
-saltos, ajustar a N páginas, vistas de saltos y de diseño; PDF de NOM contra el de Excel).
+**Excel (punto 2)**, lo que sigue: tablas de datos — falta el cuadro para crearlas desde NOM (el cálculo, abrir y guardar
+ya están) y probar en Excel una creada en NOM —; relleno rápido (Ctrl+E: `Range.FlashFill` da la verdad), escenarios
+(`Scenarios.Add`/`Show`/resumen), hoja de previsión y `FORECAST.ETS*` (el método de Excel no es público: medir como se
+hizo con Buscar objetivo), `ODDFPRICE/ODDFYIELD/ODDLPRICE/ODDLYIELD`, `IMAGE`; disposición de página e impresión
+(márgenes, orientación, tamaño, área de impresión, títulos, encabezado y pie, saltos, ajustar a N páginas, vistas de
+saltos y de diseño; PDF de NOM contra el de Excel).
+- **«####» con el hueco «_)»** (x10: 3 celdas): el formato de moneda de Excel deja al final un hueco del ancho de «)» y
+  con él «$1,887.12» ya no cabe en 64 px. Se probó dibujar el hueco invisible del ancho exacto (`.xl-hueco::before`) y
+  x10 subió a 98.2 %, pero x01 bajó a 97.7 % y t02 a 99.9 %: se quitó. Medido en Excel (`windows/medir_gatos.py`): el
+  número cabe si a la columna le sobran más de ~3 px (entre 2.04 y 3.40). Falta ver qué celdas de x01 cambiaron con el
+  hueco (probablemente se muestran «####» de más) antes de volver a ponerlo.
 
 **Crear lo que hoy solo se ve (punto 3)** y **lo demás (punto 4)**: ver las filas «No» y «A medias» de
 `PARIDAD-OFFICE.md` (§2-§5): tablas dinámicas, dar formato como tabla, estilos de celda, minigráficos, segmentaciones,
@@ -73,4 +87,16 @@ Excel incrustado; en PowerPoint ocultar diapositivas, presentaciones personaliza
 3D y estilos de forma, insertar video y audio, crear SmartArt; vistas de Word, ordenar párrafos, marcas ¶, estilos de
 imagen; VBA, Power Query, Power Pivot y Python (como mínimo: que se conserven al descargar, con plan).
 
-**Publicar**: nada de lo de este relevo está publicado; la 0.18.0 sale cuando la regresión completa de Windows pase.
+**Publicar**: nada de lo de este relevo está publicado (los commits están en `main` y en GitHub; no en la Pi ni en el
+APK). La 0.18.0 sale cuando la regresión completa de Windows pase (`python3 pruebas/regresion_windows.py --carriles 10`).
+Antes: correr `pruebas/office/libro_excel.py` y `datos_excel.py --solo-nom` (las dos nuevas de esta sesión).
+
+## 4. Cuánto falta (al cerrar el 19-nov)
+
+De `PARIDAD-OFFICE.md` quedan en «No» o «A medias» unas 60 filas o partes de fila: Word ~25 (estilos, temas, formas y
+SmartArt en el texto, marcadores, índices, citas y correspondencia de Word, comparar, control de cambios completo,
+pegar con formato, formularios, vistas, guiones con el diccionario de Word…), Excel ~15 (relleno rápido, escenarios,
+previsión, disposición de página e impresión, tablas dinámicas y formato como tabla desde NOM, minigráficos,
+segmentaciones, comentarios con hilo, VBA/Power Query/Python a conservar) y PowerPoint ~15 (secciones, ocultar
+diapositivas, presentaciones personalizadas, ensayar y grabar, patrón, 3D, video y audio, crear SmartArt, Morph contra
+el video). A este ritmo (unas 10-12 funciones medidas contra Office por sesión larga) son varias sesiones más.
