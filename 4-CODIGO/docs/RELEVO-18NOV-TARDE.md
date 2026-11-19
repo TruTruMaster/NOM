@@ -35,8 +35,11 @@ solo se ve; (5) lo demás.
   32 bien y 2 fallas (prueba_pptx y prueba_pptx2: el editor no abría porque la espera de fuentes de las diapositivas
   se reintentaba sin fin —arreglado—) y la 9.ª, dirigida a lo que cambió después (pptx, pptx2, pres1, diag1,
   documento_grande, editar_real, funciones, funciones_firefox, prueba_acomodo, ayuda), 10 de 10.
-- **Publicada como 0.17.0** desde esta rama: unida a `main` y subida a GitHub, jar en la Pi (`humo.py`), APK con
-  `assembleRelease` + `publicar-apk.sh`, `avisar.py` (ver la sección 4 de abajo para lo que quedó pendiente de eso).
+- **Publicada como 0.17.0 el 18-nov (22:20)**: `main` = `c07b028` en GitHub (la rama `almacen-binarios` también
+  está subida; el trabajo de Azure terminó bien, la aplicación de Azure sigue apagada a propósito); jar en la Pi
+  (`https://www.nom.qd.je/api/red/info` da 0.17.0, interfaz 22; `humo.py` 34 de 34); APK 0.17.0 (código 32, firmado
+  con la llave de siempre, certificado `2ef146f6…`) como release «latest» `v0.17.0`: la descarga fija responde; IndexNow
+  76 direcciones. **Falta solo el A55** (ver 3.1). Se sigue trabajando en `main`.
 - Lo que entró después del relevo de la tarde: renglones de Word con la regla medida (w09 98.2 %, w02 96.2 %,
   w14 99.6 %), tabulaciones con puntos, columnas equilibradas, símbolos de la fuente Symbol, renglones de PowerPoint
   (p01 2 → 1 px, p07 4 → 1.5 px), quitar duplicados y texto en columnas (10 de 10 contra Excel).
