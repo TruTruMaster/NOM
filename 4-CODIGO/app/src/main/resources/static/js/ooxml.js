@@ -3203,6 +3203,22 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
   }
 
   /** Hoja de cálculo → .xlsx. Si el documento vino de un Excel, se parte de ese archivo (xlsxConOrigen). */
+  /** Esquema de Excel (Datos → Agrupar): atributos de la fila n (1, 2…) —oculta, nivel y, en la de resumen de abajo, si
+      el grupo de arriba está contraído— y de la columna (su letra). */
+  function esqFila(t, n) {
+    const nv = +t["ol:" + n] || 0, ant = +t["ol:" + (n - 1)] || 0;
+    return (t["oh:" + n] ? ' hidden="1"' : "") + (nv ? ` outlineLevel="${nv}"` : "") + (ant > nv && t["oh:" + (n - 1)] ? ' collapsed="1"' : "");
+  }
+  function esqCol(t, letra) {
+    const p = F().parseRef(letra + "1"), ant = p && p.c > 0 ? F().colLetra(p.c - 1) : null;
+    const nv = +t["olc:" + letra] || 0, na = ant ? +t["olc:" + ant] || 0 : 0;
+    return (t["ow:" + letra] ? ' hidden="1"' : "") + (nv ? ` outlineLevel="${nv}"` : "") + (ant && na > nv && t["ow:" + ant] ? ' collapsed="1"' : "");
+  }
+  function nivelesEsq(t) {
+    let f = 0, c = 0;
+    for (const k in t) { if (k.startsWith("ol:")) f = Math.max(f, +t[k] || 0); else if (k.startsWith("olc:")) c = Math.max(c, +t[k] || 0); }
+    return { f, c };
+  }
   /** El modo de cálculo del libro como lo escribe Excel en calcPr (« calcMode="manual"»), o "" si es automático. */
   function calcModeDe(doc) {
     const m = doc && typeof doc.valor === "function" ? doc.valor("_doc", "calculo") : null;
@@ -3487,7 +3503,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
    */
   function parcharHoja(xml, base, t, fab, ev) {
     const O = NOM.origen;
-    const celdas = new Map(), filasAlto = new Set(), colsCamb = new Set();
+    const celdas = new Map(), filasAlto = new Set(), colsCamb = new Set(), filasEsq = new Set(), colsAncho = new Set();
     let cM = false, cPane = false, cCf = false, cDv = false, cProt = false;
     const llaves = new Set(Object.keys(base));
     Object.keys(t).forEach((k) => llaves.add(k));
@@ -3499,13 +3515,15 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         if ((p === "c" || CELDA_FMT.includes(p)) && /^[A-Z]{1,3}\d+$/.test(r)) { (celdas.get(r) || celdas.set(r, new Set()).get(r)).add(p); }
         else if (p === "m") cM = true;
         else if (p === "ah") filasAlto.add(+r);
-        else if (p === "aw") colsCamb.add(r);
+        else if (p === "oh" || p === "ol") { filasEsq.add(+r); filasEsq.add(+r + 1); }   // (y la de resumen de abajo: su «collapsed»)
+        else if (p === "aw") { colsCamb.add(r); colsAncho.add(r); }
+        else if (p === "ow" || p === "olc") { colsCamb.add(r); const q = F().parseRef(r + "1"); if (q) colsCamb.add(F().colLetra(q.c + 1)); }
         else if (p === "cf") cCf = true;
         else if (p === "dv") cDv = true;
       } else if (k === "fijasF" || k === "fijasC") cPane = true;
       else if (k === "prot") cProt = true;
     });
-    if (!celdas.size && !filasAlto.size && !colsCamb.size && !cM && !cPane && !cCf && !cDv && !cProt) return null;
+    if (!celdas.size && !filasAlto.size && !filasEsq.size && !colsCamb.size && !cM && !cPane && !cCf && !cDv && !cProt) return null;
     // Matrices dinámicas: si la hoja cambió, lo que derrama cada fórmula se vuelve a escribir con sus valores de hoy
     // (y se borra lo que ya no alcanza); la fórmula, si cambió el tamaño de lo que derrama (su «ref»).
     if (celdas.size && ev.derrame) {
@@ -3527,7 +3545,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     const S = seccionesHoja(xml), pf = S.pf;
     const tiene = (v) => v != null && v !== "" && v !== false;
 
-    if (celdas.size || filasAlto.size) {
+    if (celdas.size || filasAlto.size || filasEsq.size) {
       const sd = S.una("sheetData");
       const rows = sd ? O.hijosXml(xml, sd.ci, sd.cf).filter((h) => O.local(h.n) === "row") : [];
       // Fórmulas compartidas: si cambia la celda "maestra", las que dependen de ella se escriben completas.
@@ -3546,6 +3564,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       const porFila = new Map();
       celdas.forEach((ks, ref) => { const p = F().parseRef(ref); if (!p) return; (porFila.get(p.f + 1) || porFila.set(p.f + 1, new Map()).get(p.f + 1)).set(p.c, { ref, ks }); });
       filasAlto.forEach((n) => { if (n > 0 && !porFila.has(n)) porFila.set(n, new Map()); });
+      filasEsq.forEach((n) => { if (n > 0 && !porFila.has(n)) porFila.set(n, new Map()); });
       const altoAttr = (n) => { const h = +t["ah:" + n] || 0; return h ? ` ht="${Math.round(h * 0.75 * 100) / 100}" customHeight="1"` : ""; };
       const celdaParchada = (ref, c, f, ks, oc) => {
         const sOrig = oc ? +(O.attr(xml, oc, "s") || 0) : 0;
@@ -3566,7 +3585,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       };
       const filaNueva = (n) => {
         const cs = [...porFila.get(n).entries()].sort((a, b) => a[0] - b[0]).map(([c, v]) => celdaParchada(v.ref, c, n - 1, v.ks, null)).join("");
-        const alto = altoAttr(n);
+        const alto = altoAttr(n) + (filasEsq.has(n) ? esqFila(t, n) : "");
         return cs || alto ? pf(`<row r="${n}"${alto}>`) + cs + pf("</row>") : "";
       };
       const filaParchada = (row, n, cambios) => {
@@ -3582,6 +3601,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         columnas.forEach((c) => { const cb = cambios.get(c), oc = orig.get(c); dentro += cb ? celdaParchada(cb.ref, c, n - 1, cb.ks, oc || null) : xml.slice(oc.i, oc.f); });
         let attrs = quitaAttr(xml.slice(row.a, row.af), "spans");
         if (filasAlto.has(n)) attrs = quitaAttr(quitaAttr(attrs, "ht"), "customHeight") + altoAttr(n);
+        if (filasEsq.has(n)) attrs = quitaAttr(quitaAttr(quitaAttr(attrs, "hidden"), "outlineLevel"), "collapsed") + esqFila(t, n);
         if (!/\sr\s*=/.test(attrs)) attrs = ` r="${n}"` + attrs;
         return `<${row.n}${attrs}>${dentro}${otros.join("")}</${row.n}>`;
       };
@@ -3599,24 +3619,33 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       else S.pon("sheetData", pf("<sheetData>") + sale + pf("</sheetData>"));
       if (celdas.size) S.pon("dimension", "");
     }
+    // (con el esquema cambiado, sheetFormatPr dice hasta qué nivel llega: Excel dibuja así sus botones)
+    if (filasEsq.size || [...colsCamb].some((l) => !colsAncho.has(l))) {
+      const fp = S.una("sheetFormatPr"), nv = nivelesEsq(t);
+      const esqA = (nv.f ? ` outlineLevelRow="${nv.f}"` : "") + (nv.c ? ` outlineLevelCol="${nv.c}"` : "");
+      if (fp) S.piezas.push([fp.i, fp.f, `<${fp.n}${quitaAttr(quitaAttr(xml.slice(fp.a, fp.af), "outlineLevelRow"), "outlineLevelCol").replace(/\/$/, "")}${esqA}/>`]);
+      else if (esqA) S.pon("sheetFormatPr", pf(`<sheetFormatPr defaultRowHeight="15"${esqA}/>`));
+    }
     if (colsCamb.size) {
       const sec = S.una("cols");
       let rangos = (sec ? O.hijosXml(xml, sec.ci, sec.cf) : []).map((h) => ({ min: +O.attr(xml, h, "min"), max: +O.attr(xml, h, "max"), attrs: quitaAttr(quitaAttr(xml.slice(h.a, h.af), "min"), "max") }));
       colsCamb.forEach((letra) => {
         const p = F().parseRef(letra + "1");
         if (!p) return;
-        const n = p.c + 1, w = +t["aw:" + letra] || 0, nuevos = [];
+        const n = p.c + 1, w = +t["aw:" + letra] || 0, nuevos = [], ancho = colsAncho.has(letra), esq = esqCol(t, letra);
         let puesto = false;
         rangos.forEach((r) => {
           if (n < r.min || n > r.max) { nuevos.push(r); return; }
           if (r.min < n) nuevos.push({ min: r.min, max: n - 1, attrs: r.attrs });
-          let a = quitaAttr(quitaAttr(r.attrs, "width"), "customWidth");
-          if (w) a += ` width="${px2ancho(w)}" customWidth="1"`;
-          if (a.trim()) nuevos.push({ min: n, max: n, attrs: w ? a : a + ' width="9.14"' });
+          // (el ancho, solo si cambió; el esquema —oculta, nivel, contraída—, siempre el de NOM)
+          let a = quitaAttr(quitaAttr(quitaAttr(r.attrs, "hidden"), "outlineLevel"), "collapsed");
+          if (ancho) { a = quitaAttr(quitaAttr(a, "width"), "customWidth"); if (w) a += ` width="${px2ancho(w)}" customWidth="1"`; }
+          a += esq;
+          if (a.trim()) nuevos.push({ min: n, max: n, attrs: /\swidth\s*=/.test(a) ? a : a + ' width="9.14"' });
           if (r.max > n) nuevos.push({ min: n + 1, max: r.max, attrs: r.attrs });
           puesto = true;
         });
-        if (!puesto && w) nuevos.push({ min: n, max: n, attrs: ` width="${px2ancho(w)}" customWidth="1"` });
+        if (!puesto && (w || esq)) nuevos.push({ min: n, max: n, attrs: ` width="${w ? px2ancho(w) : "9.14"}"${w ? ' customWidth="1"' : ""}${esq}` });
         rangos = nuevos.sort((a, b) => a.min - b.min);
       });
       S.pon("cols", rangos.length ? pf(`<cols>${rangos.map((r) => `<col min="${r.min}" max="${r.max}"${r.attrs}/>`).join("")}</cols>`) : "");
@@ -3674,25 +3703,32 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     });
     celdasCon.forEach((ref) => { const r = F().parseRef(ref); (porFila[r.f] = porFila[r.f] || []).push({ c: r.c, ref }); });
     Object.keys(t).forEach((k) => { if (k.startsWith("ah:") && t[k]) { const f = +k.slice(3) - 1; porFila[f] = porFila[f] || []; } });
+    // (las filas agrupadas u ocultas, y la de resumen de abajo de cada grupo, van aunque no tengan celdas)
+    Object.keys(t).forEach((k) => { if ((k.startsWith("ol:") || k.startsWith("oh:")) && t[k]) { const f = +k.slice(3) - 1; porFila[f] = porFila[f] || []; porFila[f + 1] = porFila[f + 1] || []; } });
     const filas = Object.keys(porFila).map(Number).sort((a, b) => a - b).map((f) => {
       const celdas = porFila[f].sort((a, b) => a.c - b.c).map((c) => {
         const crudo = t["c:" + c.ref] == null ? "" : String(t["c:" + c.ref]);
         const esFecha = crudo.startsWith("=") ? ev.valor(c.c, f) instanceof F().FechaF : fab.esFechaLit(crudo);
         return fab.celda(t, ev, c.ref, c.c, f, estiloDe(c.ref, esFecha));
       }).join("");
-      const h = +t["ah:" + (f + 1)] || 0;
-      return `<row r="${f + 1}"${h ? ` ht="${Math.round(h * 0.75 * 100) / 100}" customHeight="1"` : ""}>${celdas}</row>`;
+      const h = +t["ah:" + (f + 1)] || 0, esq = esqFila(t, f + 1);
+      if (!celdas && !h && !esq) return "";
+      return `<row r="${f + 1}"${h ? ` ht="${Math.round(h * 0.75 * 100) / 100}" customHeight="1"` : ""}${esq}>${celdas}</row>`;
     }).join("");
     const ncols = Math.max(t.cols || 10, 1);
     // Solo las columnas con ancho propio (las demás usan el ancho por omisión): archivo más chico.
     let cols = "";
-    for (let c = 0; c < ncols; c++) { const w = +t["aw:" + F().colLetra(c)] || 0; if (w) cols += `<col min="${c + 1}" max="${c + 1}" width="${px2ancho(w)}" customWidth="1"/>`; }
+    for (let c = 0; c < ncols + 1; c++) {
+      const L = F().colLetra(c), w = +t["aw:" + L] || 0, esq = esqCol(t, L);
+      if (w || esq) cols += `<col min="${c + 1}" max="${c + 1}" width="${w ? px2ancho(w) : "9.14"}"${w ? ' customWidth="1"' : ""}${esq}/>`;
+    }
+    const nvE = nivelesEsq(t), esqFmt = (nvE.f ? ` outlineLevelRow="${nvE.f}"` : "") + (nvE.c ? ` outlineLevelCol="${nvE.c}"` : "");
     const pane = fab.panel(t);
     const vista = pane ? `<sheetView workbookViewId="0"${primera ? ' tabSelected="1"' : ""}>${pane}</sheetView>` : `<sheetView workbookViewId="0"${primera ? ' tabSelected="1"' : ""}/>`;
     const combinadas = fab.combinadas(t);
     const reglas = Object.keys(t).filter((k) => k.startsWith("cf:")).map((k) => fab.regla(t[k])).join("");
     const validaciones = Object.keys(t).filter((k) => k.startsWith("dv:")).map((k) => fab.validacion(t[k])).filter(Boolean);
-    return XML + `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetViews>${vista}</sheetViews><sheetFormatPr defaultColWidth="16.43" defaultRowHeight="15"/>${cols ? `<cols>${cols}</cols>` : ""}<sheetData>${filas}</sheetData>${t.prot && typeof t.prot === "object" ? xmlProtHoja(t.prot) : ""}${combinadas.length ? `<mergeCells count="${combinadas.length}">${combinadas.join("")}</mergeCells>` : ""}${reglas}${validaciones.length ? `<dataValidations count="${validaciones.length}">${validaciones.join("")}</dataValidations>` : ""}<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>${dibujo || ""}</worksheet>`;
+    return XML + `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetViews>${vista}</sheetViews><sheetFormatPr defaultColWidth="16.43" defaultRowHeight="15"${esqFmt}/>${cols ? `<cols>${cols}</cols>` : ""}<sheetData>${filas}</sheetData>${t.prot && typeof t.prot === "object" ? xmlProtHoja(t.prot) : ""}${combinadas.length ? `<mergeCells count="${combinadas.length}">${combinadas.join("")}</mergeCells>` : ""}${reglas}${validaciones.length ? `<dataValidations count="${validaciones.length}">${validaciones.join("")}</dataValidations>` : ""}<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>${dibujo || ""}</worksheet>`;
   }
   const CT_HOJA = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
   const CT_DIBUJO = "application/vnd.openxmlformats-officedocument.drawing+xml", CT_GRAFICA = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
@@ -3960,8 +3996,9 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
   // sueltos (fa: guarda el lugar que derramaba), {1,2;3,4} con sus separadores, A1#, «@» y LAMBDA sin «_xlpm.» ·
   // 6 protección: la de cada hoja (prot), la de cada celda (pr: «u» sin bloquear, «h» fórmula oculta) y la del libro ·
   // 7 nombres definidos: las fórmulas los conservan (=B2*IVA, como Excel; antes se sustituían por su definición) y el
-  // libro los guarda en «_doc» (nombres), para el Administrador de nombres.
-  const VERSION_XL = 7;
+  // libro los guarda en «_doc» (nombres), para el Administrador de nombres · 8 esquema: el nivel de cada fila (ol:) y de
+  // cada columna (olc:) agrupada.
+  const VERSION_XL = 8;
   function modeloXlsx(z, version) {
     const V = version || VERSION_XL;
     const P = (t) => new DOMParser().parseFromString(t, "application/xml");
@@ -4624,6 +4661,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         if (at(row, "customHeight") === "1" && ht && rnum && rnum <= MAX_F) campos["ah:" + rnum] = pxFila(ht);
         else if (ht && rnum && rnum <= MAX_F) campos["ahx:" + rnum] = pxFila(ht);   // alto que Excel calculó (letra grande, texto ajustado)
         if (at(row, "hidden") === "1" && rnum && rnum <= MAX_F) campos["oh:" + rnum] = true;
+        if (V >= 8 && +at(row, "outlineLevel") > 0 && rnum && rnum <= MAX_F) campos["ol:" + rnum] = Math.min(7, +at(row, "outlineLevel"));
         hijos(row, "c").forEach((c) => {
           const ref = at(c, "r"), p = F().parseRef(ref || "");
           if (!p) return;
@@ -4697,9 +4735,9 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         for (let k = min; k <= max && k - min < MAX_C; k++) { campos["aw:" + F().colLetra(k - 1)] = Math.round(w * 7 + 5); campos["ap:" + F().colLetra(k - 1)] = pxCol(w); }
       });
       todos(doc, "col").forEach((c) => {
-        if (at(c, "hidden") !== "1") return;
-        const min = +at(c, "min"), max = Math.min(+at(c, "max"), MAX_C);
-        for (let k = min; k <= max && k - min < MAX_C; k++) campos["ow:" + F().colLetra(k - 1)] = true;
+        const min = +at(c, "min"), max = Math.min(+at(c, "max"), MAX_C), nv = V >= 8 ? Math.min(7, +at(c, "outlineLevel") || 0) : 0;
+        if (at(c, "hidden") === "1") for (let k = min; k <= max && k - min < MAX_C; k++) campos["ow:" + F().colLetra(k - 1)] = true;
+        if (nv > 0) for (let k = min; k <= max && k - min < MAX_C; k++) campos["olc:" + F().colLetra(k - 1)] = nv;
       });
       // (versión 6) la protección de la hoja: el hash de su contraseña y lo que deja hacer
       if (V >= 6) { const sp = todos(doc, "sheetProtection")[0]; if (sp && /^(1|true)$/.test(at(sp, "sheet") || "")) campos.prot = protHojaDe(sp); }

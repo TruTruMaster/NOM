@@ -38,6 +38,26 @@ CASOS = {
           return mal; }""",
         "revisar": lambda x, r: [] if x.get("calculo") == "manual" else [f"Excel abrió en cálculo {x.get('calculo')}"],
     },
+    # Esquema: filas 2-6 en un grupo y 3-4 adentro (nivel 2), contraído; columnas B-C agrupadas y contraídas
+    "esquema": {
+        "celdas": {"A1": "Mes", "A2": "1", "A3": "2", "A4": "3", "A5": "4", "A6": "5", "A7": "=SUMA(A2:A6)", "B1": "x", "C1": "y", "D1": "=B1&C1"},
+        "js": """async (H, hoja) => { const E = H.esquema, mal = [];
+          E.agrupar("f", 1, { c1: 0, c2: 0, f1: 1, f2: 5 }); E.agrupar("f", 1, { c1: 0, c2: 0, f1: 2, f2: 3 });
+          E.agrupar("c", 1, { c1: 1, c2: 2, f1: 0, f2: 0 });
+          E.alternar("f", 6); E.alternar("c", 3);
+          await new Promise((r) => setTimeout(r, 400));
+          const t = H.tabla();
+          if (!t["oh:2"] || !t["oh:6"] || t["oh:7"]) mal.push("NOM no contrajo las filas");
+          if (!t["ow:B"] || !t["ow:C"] || t["ow:D"]) mal.push("NOM no contrajo las columnas");
+          if (document.querySelector('[data-filah="1"]')) mal.push("NOM sigue mostrando la fila 2");
+          if (!document.querySelector('[data-esq-f="6"]')) mal.push("no está el botón + de la fila 7");
+          return mal; }""",
+        "esquema": {"ol:2": 1, "ol:3": 2, "ol:4": 2, "ol:5": 1, "ol:6": 1, "olc:B": 1, "olc:C": 1, "oh:2": True, "oh:6": True, "ow:B": True, "ow:C": True},
+        "revisar": lambda x, r: (
+            ([] if x["hojas"][0]["filas"] == {"2": {"nivel": 2, "oculta": True}, "3": {"nivel": 3, "oculta": True}, "4": {"nivel": 3, "oculta": True},
+                                               "5": {"nivel": 2, "oculta": True}, "6": {"nivel": 2, "oculta": True}} else [f"filas en Excel {x['hojas'][0]['filas']}"])
+            + ([] if x["hojas"][0]["columnas"] == {"2": {"nivel": 2, "oculta": True}, "3": {"nivel": 2, "oculta": True}} else [f"columnas en Excel {x['hojas'][0]['columnas']}"])),
+    },
 }
 
 JS_CASO = r"""
@@ -47,7 +67,7 @@ async ([c, js]) => {
   for (const [r, v] of Object.entries(c.celdas)) campos["c:" + r] = v;
   d.cambiar(t.id, campos);
   const hoja = F.prefijoHoja(F.nombreDeHoja(d, t)).replace(/!$/, "");
-  const res = (0, eval)(js)(H, hoja);
+  const res = await (0, eval)(js)(H, hoja);
   await new Promise((r) => setTimeout(r, 200));
   const ev = H.evaluar(), vals = {};
   for (const r of Object.keys(c.celdas)) { const p = F.parseRef(r); const v = ev.valor(p.c, p.f); vals[r] = v && v.codigo ? v.codigo : typeof v === "object" && v !== null && v.valueOf ? v.valueOf() : v; }
@@ -65,7 +85,9 @@ async ([b64, nombre, espacio]) => {
   const doc = r.ops.find((o) => o.bloque === "_doc" && o.campos && o.campos.nombres);
   const t = r.ops.filter((o) => o.campos && Object.keys(o.campos).some((k) => k.startsWith("c:")));
   const formulas = {}; t.forEach((o) => Object.entries(o.campos).forEach(([k, v]) => { if (k.startsWith("c:")) formulas[k.slice(2)] = v; }));
-  return { nombres: doc ? Object.values(doc.campos.nombres).map((o) => o.n).sort() : [], formulas };
+  const esquema = {}; t.forEach((o) => Object.entries(o.campos).forEach(([k, v]) => { if (/^(ol|olc|oh|ow):/.test(k)) esquema[k] = v; }));
+  r.ops.forEach((o) => o.campos && Object.entries(o.campos).forEach(([k, v]) => { if (/^(ol|olc|oh|ow):/.test(k)) esquema[k] = v; }));
+  return { nombres: doc ? Object.values(doc.campos.nombres).map((o) => o.n).sort() : [], formulas, esquema };
 }
 """
 
@@ -98,6 +120,7 @@ def main():
             # la vuelta: NOM abre lo que exportó
             v = nav.p.evaluate(JS_VUELTA, [r["xlsx"], arch.name, esp])
             if c.get("nombres") and v["nombres"] != c["nombres"]: fallas.append(f"vuelta: nombres {v['nombres']}")
+            if c.get("esquema") and {k: v["esquema"].get(k) for k in c["esquema"]} != c["esquema"]: fallas.append(f"vuelta: esquema {v['esquema']}")
             for ref, fx in c["celdas"].items():
                 if str(fx).startswith("=") and v["formulas"].get(ref) != fx.replace(";", ";"):
                     if str(v["formulas"].get(ref)).replace(" ", "") != fx.replace(" ", ""): fallas.append(f"vuelta: {ref} {v['formulas'].get(ref)!r} (era {fx!r})")

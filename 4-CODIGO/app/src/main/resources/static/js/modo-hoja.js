@@ -98,6 +98,7 @@
           <button type="button" class="btn chico calcular-pend" data-calcular hidden data-micro="Calcular|El cálculo es manual y hay cambios sin calcular: F9 calcula todo el libro, Mayús+F9 esta hoja.|F9">Calcular</button>
         </div>
         <div class="hoja-filtro" data-filtro hidden></div>
+        <div class="hoja-esquema" data-esquema hidden></div>
         <div class="rejilla-hoja" data-rejilla tabindex="0" aria-label="Hoja de cálculo"></div>
         <div class="hoja-graficas" data-graficas hidden></div>
         <div class="bandeja-libres" data-bandeja></div>
@@ -282,8 +283,8 @@
       const ancho = (c) => {
         const L = F().colLetra(c), aw = +(t && t["aw:" + L]);
         const X = xl();
+        if (t && t["ow:" + L]) return 0;   // (oculta: a mano o por un grupo contraído)
         if (!X) return aw || ANCHO;
-        if (t["ow:" + L] && !aw) return 0;
         const ap = +t["ap:" + L];
         if (ap && aw && Math.abs(aw - (ap + 5)) <= 2) return ap;   // el de Excel (nadie lo cambió aquí)
         return aw || X.w0 || 64;
@@ -329,7 +330,7 @@
       function calcularVisibles(ev, minFilas) {
         const n = t ? Math.max(t.filas || 30, minFilas || 0) : 0;
         let todas = Array.from({ length: n }, (_, i) => i);
-        if (xl()) todas = todas.filter((i) => !t["oh:" + (i + 1)]);   // filas ocultas en Excel
+        todas = todas.filter((i) => !t["oh:" + (i + 1)]);   // filas ocultas (de Excel, o de un grupo contraído)
         const v = vistaActual();
         if (!v) return todas;
         const enc = v.encabezado ? 1 : 0;
@@ -1296,6 +1297,83 @@
         fx.placeholder = fantasma;
         return v;
       }
+      // ------------------------------------------------------------ esquema (Datos → Agrupar), como Excel
+      // Cada fila (ol:n) y columna (olc:LETRA) agrupada lleva su nivel (1 a 7); la de resumen va abajo o a la derecha del
+      // grupo y lleva el botón para contraerlo (+/−); contraer oculta las filas (oh:) o columnas (ow:) del grupo.
+      const nivelF = (f) => +(t && t["ol:" + (f + 1)]) || 0;
+      const nivelC = (c) => +(t && t["olc:" + F().colLetra(c)]) || 0;
+      const ocultaF = (f) => !!(t && t["oh:" + (f + 1)]);
+      const ocultaC = (c) => !!(t && t["ow:" + F().colLetra(c)]);
+      const resumenF = (f) => { const a = f > 0 ? nivelF(f - 1) : 0; return a > nivelF(f) ? a : 0; };
+      const resumenC = (c) => { const a = c > 0 ? nivelC(c - 1) : 0; return a > nivelC(c) ? a : 0; };
+      const esqClaseF = (f) => (nivelF(f) ? ` esq-n esq-${nivelF(f)}` : "");
+      const esqClaseC = (c) => (ocultaC(c) ? " col-oculta" : "") + (nivelC(c) ? ` esq-n esq-${nivelC(c)}` : "");
+      const esqBotonF = (f) => { const n = resumenF(f); if (!n) return ""; const cerrado = ocultaF(f - 1); return `<button type="button" class="esq-btn" data-esq-f="${f}" aria-label="${cerrado ? "Mostrar" : "Ocultar"} el detalle (las filas de arriba)">${cerrado ? "+" : "−"}</button>`; };
+      const esqBotonC = (c) => { const n = resumenC(c); if (!n) return ""; const cerrado = ocultaC(c - 1); return `<button type="button" class="esq-btn" data-esq-c="${c}" aria-label="${cerrado ? "Mostrar" : "Ocultar"} el detalle (las columnas de la izquierda)">${cerrado ? "+" : "−"}</button>`; };
+      /** El grupo que termina antes de la fila (o columna) de resumen i, con su nivel n: [desde, hasta]. */
+      const grupoAntes = (nivel, i, n) => { let a = i - 1; while (a - 1 >= 0 && nivel(a - 1) >= n) a--; return [a, i - 1]; };
+      /** Contrae o expande el grupo de arriba de la fila de resumen f (eje «f») o de la izquierda de la columna c («c»). */
+      function alternarGrupo(eje, i) {
+        if (!t) return;
+        const n = eje === "f" ? resumenF(i) : resumenC(i);
+        if (!n) return;
+        const [a, b] = grupoAntes(eje === "f" ? nivelF : nivelC, i, n), cerrar = !(eje === "f" ? ocultaF(b) : ocultaC(b)), campos = {};
+        for (let k = a; k <= b; k++) campos[eje === "f" ? "oh:" + (k + 1) : "ow:" + F().colLetra(k)] = cerrar ? true : null;
+        cambiarT(campos, { origen: "esquema" });
+      }
+      /** Agrupar (mas = 1) o desagrupar (mas = −1) las filas o las columnas elegidas, como Excel. */
+      function agrupar(eje, mas, rr) {
+        if (ed.soloLectura || !t) return;
+        const r = rr || rango(), campos = {};
+        if (eje === "f") for (let f = r.f1; f <= r.f2; f++) { const n = Math.max(0, Math.min(7, nivelF(f) + mas)); campos["ol:" + (f + 1)] = n || null; if (!n && ocultaF(f)) campos["oh:" + (f + 1)] = null; }
+        else for (let c = r.c1; c <= r.c2; c++) { const L = F().colLetra(c), n = Math.max(0, Math.min(7, nivelC(c) + mas)); campos["olc:" + L] = n || null; if (!n && ocultaC(c)) campos["ow:" + L] = null; }
+        cambiarT(campos);
+      }
+      /** Filas o columnas, según lo elegido: columnas si se eligieron columnas enteras (como Excel). */
+      const ejeElegido = () => { const r = rango(); return r.f1 === 0 && r.f2 >= (t.filas || 30) - 1 && !(r.c1 === 0 && r.c2 >= (t.cols || 10) - 1) ? "c" : "f"; };
+      /** Ver hasta el nivel k (los botones 1, 2, 3…): se ven las filas o columnas de nivel menor que k. */
+      function mostrarNivel(eje, k) {
+        if (!t) return;
+        const campos = {};
+        if (eje === "f") for (let f = 0; f < (t.filas || 30); f++) { const n = nivelF(f); if (n) campos["oh:" + (f + 1)] = n >= k ? true : null; }
+        else for (let c = 0; c < (t.cols || 10); c++) { const n = nivelC(c); if (n) campos["ow:" + F().colLetra(c)] = n >= k ? true : null; }
+        cambiarT(campos, { origen: "esquema" });
+      }
+      /** Ocultar o mostrar el detalle del grupo donde está la celda elegida (Datos → Ocultar detalle). */
+      function detalle(mostrar) {
+        if (!t) return;
+        const eje = nivelF(sel.f) ? "f" : nivelC(sel.c) ? "c" : null;
+        if (!eje) return aviso("La celda no está dentro de un grupo", { tipo: "aviso" });
+        const nivel = eje === "f" ? nivelF : nivelC, i = eje === "f" ? sel.f : sel.c, n = nivel(i), lim = eje === "f" ? t.filas || 30 : t.cols || 10;
+        let a = i, b = i;
+        while (a > 0 && nivel(a - 1) >= n) a--;
+        while (b + 1 < lim && nivel(b + 1) >= n) b++;
+        const campos = {};
+        for (let k = a; k <= b; k++) campos[eje === "f" ? "oh:" + (k + 1) : "ow:" + F().colLetra(k)] = mostrar ? null : true;
+        if (!mostrar) { if (eje === "f") sel = { c: sel.c, f: Math.min(lim - 1, b + 1) }; else sel = { c: Math.min(lim - 1, b + 1), f: sel.f }; ancla = null; }
+        cambiarT(campos, { origen: "esquema" });
+      }
+      /** Borrar el esquema: sin grupos y con todo a la vista (lo que estaba contraído vuelve a verse). */
+      function borrarEsquema() {
+        if (ed.soloLectura || !t) return;
+        const campos = {};
+        for (const k of Object.keys(t)) {
+          if (k.startsWith("ol:") && t[k]) { campos[k] = null; if (t["oh:" + k.slice(3)]) campos["oh:" + k.slice(3)] = null; }
+          else if (k.startsWith("olc:") && t[k]) { campos[k] = null; if (t["ow:" + k.slice(4)]) campos["ow:" + k.slice(4)] = null; }
+        }
+        if (Object.keys(campos).length) cambiarT(campos);
+      }
+      /** La barra con los botones de nivel (1, 2, 3…) de filas y de columnas, si hay grupos. */
+      function pintarEsquema() {
+        const b = $("[data-esquema]", raiz);
+        if (!b || !t) return;
+        let mf = 0, mc = 0;
+        for (const k of Object.keys(t)) { if (k.startsWith("ol:")) mf = Math.max(mf, +t[k] || 0); else if (k.startsWith("olc:")) mc = Math.max(mc, +t[k] || 0); }
+        b.hidden = !mf && !mc;
+        if (b.hidden) { b.innerHTML = ""; return; }
+        const botones = (eje, m) => Array.from({ length: m + 1 }, (_, i) => `<button type="button" class="btn chico" data-nivel-${eje}="${i + 1}" aria-label="Ver hasta el nivel ${i + 1}">${i + 1}</button>`).join("");
+        b.innerHTML = `<span class="suave chico">Esquema</span>${mf ? `<span class="chico">Filas</span>${botones("f", mf)}` : ""}${mc ? `<span class="chico">Columnas</span>${botones("c", mc)}` : ""}`;
+      }
       function render() {
         t = tabla();
         if (!t) {
@@ -1305,6 +1383,7 @@
         }
         const ev = evaluar();
         ultimoEv = ev;
+        pintarEsquema();
         // lo que derraman las fórmulas de matrices también se ve aunque pase del tamaño de la hoja
         const ext = extensionDerrames(ev);
         const cols = Math.max(t.cols || 10, ext.cols);
@@ -1320,13 +1399,13 @@
         const anchoTotal = X ? 46 + Array.from({ length: cols }, (_, c) => ancho(c)).reduce((a, b) => a + b, 0) : 0;
         const estXl = X ? ` class="xl${X.rejilla ? "" : " sin-rejilla"}" style="width:${anchoTotal}px;--xl-fuente:${esc(NOM.textoRico ? NOM.textoRico.cssFuente(X.fuente) : X.fuente)};--xl-tam:${+X.tam || 11}pt"${X.rtl ? ' dir="rtl"' : ""}` : "";
         let h = `<table${estXl}><colgroup><col style="width:46px">${Array.from({ length: cols }, (_, c) => `<col style="width:${ancho(c)}px">`).join("")}</colgroup>
-          <thead><tr><th data-todo title="Elegir todo"></th>${Array.from({ length: cols }, (_, c) => `<th data-col="${c}" class="${c >= r.c1 && c <= r.c2 ? "activa" : ""}${v.orden && v.orden.c === c ? " ordenada" : ""}${(v.filtros || {})[c] ? " filtrada" : ""}">${F().colLetra(c)}${ed.soloLectura ? "" : `<span class="redim-c" data-redim-c="${c}" aria-hidden="true"></span>`}</th>`).join("")}</tr></thead><tbody>`;
+          <thead><tr><th data-todo title="Elegir todo"></th>${Array.from({ length: cols }, (_, c) => `<th data-col="${c}" class="${c >= r.c1 && c <= r.c2 ? "activa" : ""}${v.orden && v.orden.c === c ? " ordenada" : ""}${(v.filtros || {})[c] ? " filtrada" : ""}${esqClaseC(c)}">${F().colLetra(c)}${esqBotonC(c)}${ed.soloLectura ? "" : `<span class="redim-c" data-redim-c="${c}" aria-hidden="true"></span>`}</th>`).join("")}</tr></thead><tbody>`;
         const x0s = []; { let x = 0; for (let c = 0; c < cols; c++) { x0s.push(x); x += ancho(c); } }
         let yAcum = 0;
         for (const f of visibles) {
           const hf = alto(f), fija = !!(X && hf && +t["ah:" + (f + 1)]);   // modo Excel: alto fijo (lo que no cabe se corta)
           const numFila = fija && hf < 20 ? `<div class="xl-fija-n" style="height:${Math.max(0, hf - 1)}px">${f + 1}</div>` : f + 1;
-          h += `<tr data-fila="${f}"${hf ? ` style="height:${hf}px"` : ""}><th data-filah="${f}" class="${f >= r.f1 && f <= r.f2 ? "activa" : ""}">${numFila}${ed.soloLectura ? "" : `<span class="redim-f" data-redim-f="${f}" aria-hidden="true"></span>`}</th>`;
+          h += `<tr data-fila="${f}"${hf ? ` style="height:${hf}px"` : ""}><th data-filah="${f}" class="${f >= r.f1 && f <= r.f2 ? "activa" : ""}${esqClaseF(f)}">${numFila}${esqBotonF(f)}${ed.soloLectura ? "" : `<span class="redim-f" data-redim-f="${f}" aria-hidden="true"></span>`}</th>`;
           for (let c = 0; c < cols; c++) {
             const ref = F().ref(c, f);
             if (cubiertas.has(ref)) continue;
@@ -1337,10 +1416,11 @@
               resaltadas.has(ref) ? "cambiada" : "", comentadas.has(ref) ? "con-comentario" : "", halladas.has(ref) ? "hallada" : "",
               listas.some((x) => dentro(x.r, c, f)) ? "con-lista" : "", sp ? "combinada" : ""].join(" ");
             let contenido = esc(a.txt), extra = "";
+            if (t["ow:" + F().colLetra(c)]) extra += " col-oculta";
             if (X) {
               // relleno «*» (contabilidad): lo de la izquierda pegado a la izquierda y el número a la derecha
               if (a.relleno != null && a.txt.includes("\u0000")) { const [iz, de] = a.txt.split("\u0000"); contenido = `<span class="xl-rell"><span>${esc(iz)}</span><span>${esc(de)}</span></span>`; }
-              if (t["ow:" + F().colLetra(c)]) extra += " col-oculta";
+
               const ax = a.ax, hx = ax && ax.h;
               if (ax && ax.r && a.txt && !a.gato) {
                 // texto girado (de 1 a 90: hacia arriba; de 91 a 180: hacia abajo) o apilado (255), como Excel;
@@ -1857,10 +1937,11 @@
         if (editor || !t) return;
         const mod = e.ctrlKey || e.metaKey;
         const flechas = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
-        if (flechas[e.key]) { e.preventDefault(); colTab = null; mover(...flechas[e.key], e.shiftKey); return; }
+        if (flechas[e.key] && !(e.shiftKey && e.altKey && (e.key === "ArrowRight" || e.key === "ArrowLeft"))) { e.preventDefault(); colTab = null; mover(...flechas[e.key], e.shiftKey); return; }
         if (e.key === "Enter") { e.preventDefault(); e.shiftKey ? mover(0, -1) : abrirEditor(null, true); return; }
         if (e.key === "Tab") { e.preventDefault(); conTab(e.shiftKey); return; }
         if (e.key === "F2") { e.preventDefault(); abrirEditor(null, true); return; }
+        if (e.shiftKey && e.altKey && (e.key === "ArrowRight" || e.key === "ArrowLeft") && !ed.soloLectura) { e.preventDefault(); agrupar(ejeElegido(), e.key === "ArrowRight" ? 1 : -1); return; }
         // F9 calcula todo el libro y Mayús+F9 la hoja (en cálculo manual; en automático no hace falta, como en Excel)
         if (e.key === "F9") { e.preventDefault(); calcularAhora(e.shiftKey); return; }
         if (e.key === "Escape") { if (portapapeles) { portapapeles = null; marcarCopiado(); } return; }
@@ -2251,6 +2332,18 @@
         cambiarT(campos);
       }
       rej.addEventListener("pointerdown", () => { colTab = null; }, true);
+      // (los botones +/− del esquema van dentro del número de fila o la letra de columna: que no la elijan)
+      rej.addEventListener("pointerdown", (e) => { if (e.target.closest && e.target.closest(".esq-btn")) e.stopImmediatePropagation(); }, true);
+      rej.addEventListener("click", (e) => {
+        const b = e.target.closest && e.target.closest(".esq-btn");
+        if (!b) return;
+        e.stopImmediatePropagation(); e.preventDefault();
+        if (b.dataset.esqF != null) alternarGrupo("f", +b.dataset.esqF); else alternarGrupo("c", +b.dataset.esqC);
+      }, true);
+      $("[data-esquema]", raiz).addEventListener("click", (e) => {
+        const b = e.target.closest && e.target.closest("[data-nivel-f], [data-nivel-c]");
+        if (b) mostrarNivel(b.dataset.nivelF != null ? "f" : "c", +(b.dataset.nivelF || b.dataset.nivelC));
+      });
       rej.addEventListener("pointerdown", (e) => {
         const rc = e.target.closest && e.target.closest("[data-redim-c]"), rf = e.target.closest && e.target.closest("[data-redim-f]");
         if ((!rc && !rf) || ed.soloLectura) return;
@@ -2737,6 +2830,11 @@
               { texto: "Buscar", icono: "search", fn: () => buscar(false) },
               { texto: "Buscar objetivo", corto: "Objetivo", icono: "target", off: lect, fn: () => dialogoObjetivo() },
               { texto: "Nombres", icono: "tags", fn: () => administradorNombres() },
+              { texto: "Esquema", icono: "list-tree", off: lect, sub: [
+                { texto: "Agrupar filas", corto: "+ Filas", icono: "list-tree", fn: () => agrupar("f", 1) }, { texto: "Agrupar columnas", corto: "+ Col.", icono: "list-tree", fn: () => agrupar("c", 1) },
+                { texto: "Desagrupar filas", corto: "− Filas", icono: "list-x", fn: () => agrupar("f", -1) }, { texto: "Desagrupar columnas", corto: "− Col.", icono: "list-x", fn: () => agrupar("c", -1) },
+                { texto: "Ocultar detalle", corto: "Ocultar", icono: "minus-square", fn: () => detalle(false) }, { texto: "Mostrar detalle", corto: "Mostrar", icono: "plus-square", fn: () => detalle(true) },
+                { texto: "Borrar esquema", corto: "Borrar", icono: "eraser", fn: borrarEsquema }] },
               { texto: "Calcular ahora", corto: "Calcular", icono: "calculator", fn: () => calcularAhora(false) },
               { texto: modoCalculo() === "manual" ? "Cálculo automático" : "Cálculo manual", corto: modoCalculo() === "manual" ? "Automático" : "Manual", icono: "zap", off: lect, fn: () => fijarModoCalculo(modoCalculo() === "manual" ? "auto" : "manual") },
               { texto: "Comentar", icono: "message-square", off: !NOM.comentarios || ed.local, fn: () => NOM.comentarios.nuevo(ed) },
@@ -2856,6 +2954,13 @@
           { texto: "Quitar duplicados…", icono: "copy-x", fn: () => dialogoDuplicados() },
           { texto: "Texto en columnas…", icono: "columns-3", fn: () => dialogoTextoColumnas() },
           { texto: "Buscar objetivo…", icono: "target", fn: () => dialogoObjetivo() },
+          { texto: "Agrupar filas", icono: "list-tree", atajo: "Mayús+Alt+→", fn: () => agrupar("f", 1) },
+          { texto: "Agrupar columnas", icono: "list-tree", fn: () => agrupar("c", 1) },
+          { texto: "Desagrupar filas", icono: "list-x", atajo: "Mayús+Alt+←", fn: () => agrupar("f", -1) },
+          { texto: "Desagrupar columnas", icono: "list-x", fn: () => agrupar("c", -1) },
+          { texto: "Ocultar detalle", icono: "minus-square", fn: () => detalle(false) },
+          { texto: "Mostrar detalle", icono: "plus-square", fn: () => detalle(true) },
+          { texto: "Borrar esquema", icono: "eraser", fn: borrarEsquema },
           { titulo: "Fórmulas" },
           { texto: "Cálculo automático", icono: "zap", marcado: modoCalculo() === "auto", fn: () => fijarModoCalculo("auto") },
           { texto: "Automático excepto tablas de datos", icono: "zap", marcado: modoCalculo() === "sinTablas", fn: () => fijarModoCalculo("sinTablas") },
@@ -2894,7 +2999,8 @@
         if (document.activeElement !== fx && !editor) fx.value = textoBarra(sel.c, sel.f);
       }
       /** ¿El cambio altera la forma de la tabla (columnas, filas, combinadas, anchos…)? Entonces se repinta todo. */
-      const deForma = (k) => /^(filas|cols|fijasF|fijasC|vistaComun|nombre|tipo|eliminado)$/.test(k) || /^(m|aw|ah|dv):/.test(k);
+      // (el esquema —niveles y filas o columnas ocultas— cambia qué filas y columnas se dibujan)
+      const deForma = (k) => /^(filas|cols|fijasF|fijasC|vistaComun|nombre|tipo|eliminado)$/.test(k) || /^(m|aw|ah|dv|oh|ow|ol|olc):/.test(k);
 
       this.cambios = (lista) => {
         const tId = t && t.id;
@@ -2944,6 +3050,7 @@
         herramientas: { quitarDuplicados, regionActual, textoEnColumnas, partirTexto, buscarObjetivo },
         dialogos: { duplicados: dialogoDuplicados, textoColumnas: dialogoTextoColumnas, objetivo: dialogoObjetivo, nombres: administradorNombres },
         calculo: { modo: modoCalculo, fijar: fijarModoCalculo, ahora: calcularAhora },
+        esquema: { agrupar, alternar: alternarGrupo, nivel: mostrarNivel, detalle, borrar: borrarEsquema },
         nombres: { guardar: guardarNombre, lista: nombresLibro, invalido: nombreInvalido } };
       void self;
 
@@ -2956,6 +3063,8 @@
       return [
         { texto: "Buscar objetivo", icono: "target", fn: dlg("objetivo"), claves: "hipotesis analisis meta valor buscar objetivo goal seek" },
         { texto: "Administrador de nombres", icono: "tags", fn: dlg("nombres"), claves: "nombres definidos rango nombrado definir nombre" },
+        { texto: "Agrupar filas o columnas (esquema)", icono: "list-tree", fn: () => { const a = NOM.editorActual.modoApi.api.esquema; if (a) a.agrupar("f", 1); }, claves: "agrupar esquema contraer expandir subtotal grupo" },
+        { texto: "Borrar esquema", icono: "eraser", fn: () => { const a = NOM.editorActual.modoApi.api.esquema; if (a) a.borrar(); }, claves: "desagrupar esquema quitar grupos" },
         { texto: "Calcular ahora (F9)", icono: "calculator", fn: () => { const a = NOM.editorActual.modoApi.api.calculo; if (a) a.ahora(false); }, claves: "recalcular f9 calculo manual" },
         { texto: "Opciones de cálculo: manual o automático", icono: "zap", fn: () => { const a = NOM.editorActual.modoApi.api.calculo; if (a) a.fijar(a.modo() === "manual" ? "auto" : "manual"); }, claves: "calculo manual automatico opciones f9" },
         { texto: "Quitar duplicados", icono: "copy-x", fn: dlg("duplicados"), claves: "repetidos duplicados unicos" },

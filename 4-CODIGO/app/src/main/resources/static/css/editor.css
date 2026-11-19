@@ -1297,7 +1297,16 @@
 .rejilla-hoja table.xl.sin-rejilla td { border-right-color: transparent; border-bottom-color: transparent; }
 .rejilla-hoja table.xl td.desborda { overflow: visible; position: relative; z-index: 1; }
 .rejilla-hoja table.xl td.ajusta { white-space: normal; overflow-wrap: anywhere; vertical-align: bottom; }
-.rejilla-hoja table.xl td.col-oculta, .rejilla-hoja table.xl th.col-oculta { padding: 0; border: 0; font-size: 0; }
+.rejilla-hoja td.col-oculta, .rejilla-hoja th.col-oculta { padding: 0; border: 0; font-size: 0; overflow: hidden; }
+/* Esquema (agrupar filas y columnas, como Excel): una raya del nivel junto al número o la letra, y el botón +/− en la fila o
+   columna de resumen (abajo o a la derecha del grupo); arriba, los botones de nivel. */
+.rejilla-hoja th.esq-n[data-filah] { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--m-hoja, #1D6F42) calc(30% + var(--esq, 0) * 10%), transparent); }
+.rejilla-hoja th.esq-n[data-col] { box-shadow: inset 0 3px 0 color-mix(in srgb, var(--m-hoja, #1D6F42) 45%, transparent); }
+.rejilla-hoja th.esq-2 { --esq: 2; } .rejilla-hoja th.esq-3 { --esq: 3; } .rejilla-hoja th.esq-4 { --esq: 4; }
+.esq-btn { position: absolute; left: 2px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; padding: 0; border: 1px solid var(--borde-fuerte, #8a8a96); border-radius: 2px; background: var(--sup, #fff); color: var(--tinta, #222); font: 700 12px/12px system-ui, sans-serif; cursor: pointer; z-index: 2; }
+.rejilla-hoja th[data-col] .esq-btn { left: 50%; top: 1px; transform: translateX(-50%); }
+.hoja-esquema { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 2px 8px; }
+.hoja-esquema .btn.chico { min-width: 26px; padding: 0 6px; }
 .rejilla-hoja table.xl .xl-rell { display: flex; justify-content: space-between; white-space: pre; width: 100%; }
 /* Texto desbordado (a la derecha, a la izquierda o a los dos lados): una ventana sobre las celdas vacías de al lado,
    que lo corta en la primera celda con algo; los toques pasan a las celdas de abajo */
