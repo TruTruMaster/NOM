@@ -3145,6 +3145,18 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     /** XML de una celda con el valor del modelo y el estilo `sx` (ya calculado). */
     function celda(t, ev, ref, c, f, sx) {
       const crudo = t["c:" + ref] == null ? "" : String(t["c:" + ref]), s = sx ? ` s="${sx}"` : "";
+      const td = /^=\s*(?:TABLA|TABLE)\s*\(\s*(\$?[A-Z]{1,3}\$?\d+)?\s*[;,]\s*(\$?[A-Z]{1,3}\$?\d+)?\s*\)\s*$/i.exec(crudo);
+      if (td) {
+        // tabla de datos, como la guarda Excel: la fórmula en la primera celda de su lugar, con el lugar y las entradas
+        const v = ev.valor(c, f), { tipo, val } = valorXml(v), esT = (cc, ff) => /^=\s*(TABLA|TABLE)\s*\(/i.test(String(t["c:" + F().ref(cc, ff)] || ""));
+        if ((c > 0 && esT(c - 1, f)) || (f > 0 && esT(c, f - 1))) return `<c r="${ref}"${s}${tipo}>${val}</c>`;
+        let c2 = c, f2 = f;
+        while (esT(c2 + 1, f)) c2++;
+        while (esT(c, f2 + 1)) f2++;
+        const fi = td[1] ? td[1].replace(/\$/g, "").toUpperCase() : null, ci = td[2] ? td[2].replace(/\$/g, "").toUpperCase() : null;
+        const at2 = fi && ci ? ` dt2D="1" dtr="1" r1="${fi}" r2="${ci}"` : fi ? ` dt2D="0" dtr="1" r1="${fi}"` : ` dt2D="0" dtr="0" r1="${ci}"`;
+        return `<c r="${ref}"${s}${tipo}><f t="dataTable" ref="${ref}:${F().ref(c2, f2)}"${at2}/>${val}</c>`;
+      }
       if (crudo.startsWith("=")) {
         const v = ev.valor(c, f), { tipo, val } = valorXml(v), matrizD = !!(ev.esMatriz && ev.esMatriz(c, f));
         const fx = x(formulaExcel(crudo, t.xlv, !matrizD));
@@ -4008,8 +4020,9 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
   // 6 protección: la de cada hoja (prot), la de cada celda (pr: «u» sin bloquear, «h» fórmula oculta) y la del libro ·
   // 7 nombres definidos: las fórmulas los conservan (=B2*IVA, como Excel; antes se sustituían por su definición) y el
   // libro los guarda en «_doc» (nombres), para el Administrador de nombres · 8 esquema: el nivel de cada fila (ol:) y de
-  // cada columna (olc:) agrupada · 9 «mostrar fórmulas» de la hoja (vf).
-  const VERSION_XL = 9;
+  // cada columna (olc:) agrupada · 9 «mostrar fórmulas» de la hoja (vf) · 10 tablas de datos (t="dataTable": cada celda
+  // de su lugar lleva =TABLA(fila;columna), como la muestra Excel).
+  const VERSION_XL = 10;
   function modeloXlsx(z, version) {
     const V = version || VERSION_XL;
     const P = (t) => new DOMParser().parseFromString(t, "application/xml");
@@ -4663,7 +4676,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         if (V >= 9 && sv && /^(1|true)$/.test(at(sv, "showFormulas") || "")) campos.vf = true;
       }
       let maxF = 0, maxC = 0;
-      const compartidas = {};
+      const compartidas = {}, tablasDatos = [];
       const derramadas = new Set();   // (versión 5) celdas a las que llega lo que derrama una fórmula de matriz
       todos(doc, "row").forEach((row) => {
         const ht = +at(row, "ht");
@@ -4680,6 +4693,13 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
           if (p.f >= MAX_F || p.c >= MAX_C) { aviso = `Solo se importaron las primeras ${MAX_F} filas y ${MAX_C} columnas`; return; }
           const tipo = at(c, "t"), v = hijo(c, "v"), f = hijo(c, "f"), s = xfs[+at(c, "s") || 0];
           let crudo = "";
+          // (versión 10) tabla de datos: todo su lugar lleva la fórmula TABLA (las demás celdas solo traen su valor)
+          if (V >= 10 && f && at(f, "t") === "dataTable") {
+            const [a1, b1] = String(at(f, "ref") || "").split(":").map((q) => F().parseRef(q));
+            const r1 = at(f, "r1") || "", r2 = at(f, "r2") || "", dos = at(f, "dt2D") === "1", fila = at(f, "dtr") === "1";
+            const fx = dos ? `=TABLA(${r1};${r2})` : fila ? `=TABLA(${r1};)` : `=TABLA(;${r1})`;
+            if (a1) tablasDatos.push({ a: a1, b: b1 || a1, fx });
+          }
           if (f && (f.textContent || at(f, "t") === "shared")) {
             let fx = f.textContent;
             if (at(f, "t") === "shared") {
@@ -4751,6 +4771,8 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         if (at(c, "hidden") === "1") for (let k = min; k <= max && k - min < MAX_C; k++) campos["ow:" + F().colLetra(k - 1)] = true;
         if (nv > 0) for (let k = min; k <= max && k - min < MAX_C; k++) campos["olc:" + F().colLetra(k - 1)] = nv;
       });
+      // (versión 10) las celdas de cada tabla de datos: su fórmula TABLA (Excel solo guarda la primera)
+      tablasDatos.forEach((td) => { for (let f2 = td.a.f; f2 <= td.b.f; f2++) for (let c2 = td.a.c; c2 <= td.b.c; c2++) campos["c:" + F().ref(c2, f2)] = td.fx; });
       // (versión 6) la protección de la hoja: el hash de su contraseña y lo que deja hacer
       if (V >= 6) { const sp = todos(doc, "sheetProtection")[0]; if (sp && /^(1|true)$/.test(at(sp, "sheet") || "")) campos.prot = protHojaDe(sp); }
       const pane = todos(doc, "pane")[0];

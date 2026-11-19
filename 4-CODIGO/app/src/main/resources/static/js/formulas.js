@@ -2406,6 +2406,8 @@
 
   /** Lo que se escribió en una celda (sin =): número, porcentaje, moneda, fecha o texto. */
   function calcularLiteral(t) {
+    // notación científica (1e3, 7.0000000000000007E-2: así escribe Excel algunos números en el archivo): un número, como en Excel
+    if (/^-?(\d+\.?\d*|\.\d+)[eE][+-]?\d+$/.test(t)) { const n = parseFloat(t); if (isFinite(n)) return n; }
     if (/^-?\d+([.,]\d+)?%?$/.test(t) && !/^-?\d{1,3},\d{3}$/.test(t)) { const n = parseFloat(t.replace(",", ".")); return t.endsWith("%") ? n / 100 : n; }
     let m = /^(-?)\$?\s?(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?$/.exec(t);
     if (m && (t.includes("$") || t.includes(","))) return parseFloat(m[1] + m[2].replace(/,/g, "") + (m[3] || ""));
@@ -2536,6 +2538,33 @@
     }
 
     /**
+     * Una celda de una tabla de datos de Excel (Análisis de hipótesis → Tabla de datos): la fórmula de la tabla —arriba de la
+     * columna (entrada de columna), a la izquierda de la fila (entrada de fila) o en la esquina (las dos)— calculada con el
+     * valor de su fila y de su columna puestos en las celdas de entrada, como Excel. El bloque son las celdas seguidas con
+     * TABLA; los valores de entrada, la fila de arriba y la columna de la izquierda del bloque.
+     */
+    function tablaDatos(h, donde, fi, ci) {
+      if (!donde) throw E("#VALOR!");
+      const esT = (c, f) => /^=\s*(TABLA|TABLE)\s*\(/i.test(String(h.obtener(c, f) || ""));
+      let c0 = donde.c, f0 = donde.f;
+      while (c0 > 0 && esT(c0 - 1, donde.f)) c0--;
+      while (f0 > 0 && esT(donde.c, f0 - 1)) f0--;
+      let fc, ff;
+      const subs = [];
+      if (fi && ci) { fc = c0 - 1; ff = f0 - 1; subs.push([fi, valorEn(h, donde.c, f0 - 1)], [ci, valorEn(h, c0 - 1, donde.f)]); }
+      else if (ci) { fc = donde.c; ff = f0 - 1; subs.push([ci, valorEn(h, c0 - 1, donde.f)]); }
+      else if (fi) { fc = c0 - 1; ff = donde.f; subs.push([fi, valorEn(h, donde.c, f0 - 1)]); }
+      else throw E("#VALOR!");
+      if (fc < 0 || ff < 0) throw E("#REF!");
+      const lit = (v) => (v instanceof ErrorF ? v.codigo : v === true ? "VERDADERO" : v === false ? "FALSO" : v instanceof FechaF ? String(v.serie) : v == null ? "" : String(v));
+      // la hoja con las celdas de entrada cambiadas (las demás hojas, igual)
+      const sub = evaluador((cc, fx) => { for (const [r, v] of subs) if (r.c === cc && r.f === fx) return lit(v); return h.obtener(cc, fx); },
+        Object.assign({}, opc, { nombre: h.nombre, filas: h.filas, cols: h.cols, formulas: h.formulas, sinDerrame: h.sinDerrame, combinada: h.combinada }));
+      const v = sub.valor(fc, ff);
+      if (v instanceof ErrorF) throw v;
+      return v;
+    }
+    /**
      * Un nombre definido del libro: su definición («=Datos!$A$2:$A$9», «=0,16», «=LAMBDA(x; x*2)») calculada en la hoja
      * de la fórmula que lo usa, como Excel. undefined si no existe ese nombre.
      */
@@ -2653,6 +2682,20 @@
             const nombre = ALIAS[x.v] || x.v;
             if (nombre === "LET") return llamadas(conNombres());
             if (nombre === "LAMBDA") return llamadas(lambda());
+            // tabla de datos de Excel ({=TABLA(entrada de fila; entrada de columna)}): sus argumentos son celdas, no valores
+            if (nombre === "TABLA" || nombre === "TABLE") {
+              const ent = [null, null];
+              let k = 0;
+              while (!es(")")) {
+                const y = tk[i];
+                if (!y) throw E("#VALOR!");
+                if (y.k === "op" && (y.v === ";" || y.v === ",")) { k++; i++; continue; }
+                if (y.k === "ref" && y.v.tipo === "celda" && k < 2) { ent[k] = y.v.a; i++; continue; }
+                throw E("#VALOR!");
+              }
+              toma(")");
+              return tablaDatos(h, donde, ent[0], ent[1]);
+            }
             if (nombre === "ISOMITTED") {
               const t = ver(), sig = tk[i + 1];
               if (t && t.k === "id" && sig && sig.k === "op" && sig.v === ")") { i += 2; return buscar(t.v) === OMITIDO; }
