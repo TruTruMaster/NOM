@@ -31,6 +31,8 @@ Lo que cambió en cada versión, en corto (es la página «Novedades» de la ayu
   sección continua (por ejemplo, un índice a dos columnas) se reparten parejas, como en Word.
 - **Guiones automáticos:** si el Word los tiene activados («Disposición → Guiones»), las palabras se parten al final
   del renglón con las reglas del español o del inglés; se activan y desactivan en **Más → Guiones automáticos**.
+- **PowerPoint:** el texto de cada cuadro queda a la misma altura que en PowerPoint (se midió dónde pone cada renglón en
+  12 fuentes y 8 interlineados), también al presentar y en el proyector.
 - **Notas al final** (las de Word, numeradas aparte: i, ii, iii) y la **escala de caracteres** (texto estirado o
   angosto) se ven como en Word.
 - **Hoja:** 224 funciones más de Excel (454 en total): estadística, ingeniería, finanzas, fechas, números complejos y

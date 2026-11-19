@@ -150,6 +150,16 @@ x01 (99.4 %); cada gráfica 92-98 % de parecido.
 Medido contra PowerPoint 2024 real (parecido de imagen): p01 97.6 %, p02 99.0 %, p03 95.2 %, p04 98.0 %, p05 97.9 %,
 p06 96.3 %, p07 98.8 %, p08 99.5 %, p09 98.7 %, p10 98.6 %, p11 89.5 %.
 
+**Dónde pone PowerPoint cada renglón** (18-nov, `windows/hacer_interlineado.py` y `analisis/interlineado_ppt.py`: 12
+fuentes, 5 tamaños, interlineado 80, 90, 100, 110, 120, 150, 200 % y exacto, midiendo la tinta de la línea base en
+la imagen de PowerPoint): cada renglón baja exactamente el interlineado (1.2 × tamaño × %, o los puntos exactos
+redondeados a punto entero) en todas las fuentes, y la primera línea base queda en
+`max(1.2·tamaño·r + min(0, L − 1.2·tamaño), 0.75·L)` con r = (ascendente + espacio)/(ascendente + descendente +
+espacio) de la tabla hhea. NOM mide dónde puso el navegador la línea base y mueve cada párrafo lo que falta
+(`ajustarRenglones` en `diapositivas.js`: editor, presentar, proyector, enlace para ver). En p12: de hasta 10 pt de
+diferencia a ±0.5 pt (un píxel de la medida); en p01 la diferencia mediana de los renglones baja de 2 a 1 px (37 de 55
+exactos, antes 22) y en p07 de 4 a 1.5 px. Falta: las miniaturas y la imagen PNG de una diapositiva (no se acomodan).
+
 ## 6. Lo que NOM tiene y Office no
 
 Edición entre varios **sin Internet** (una computadora o un teléfono comparte, también por su punto de acceso);
