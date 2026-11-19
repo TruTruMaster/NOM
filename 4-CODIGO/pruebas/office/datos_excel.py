@@ -35,6 +35,28 @@ CASOS = [
      "datos": [["2026-11-18|2026-01-05|1e-2"], ["a|b"], ["|vacío|"]]},
     {"id": "txt-anchos", "op": "texto_columnas", "rango": "A1:A3", "anchos": [0, 4, 9],
      "datos": [["ABCD12345resto"], ["XY  9    final"], ["corto"]]},
+    # Consolidar: dos tablas con rótulos (filas y columnas en otro orden, una con algo que la otra no tiene) y por posición
+    {"id": "cons-rotulos", "op": "consolidar", "destino": "I1", "fuentes": ["A1:C4", "E1:G5"], "funcion": "suma", "fila": True, "columna": True,
+     "datos": [["", "Ene", "Feb", None, "", "Feb", "Mar"], ["Ana", 1, 2, None, "Luis", 5, 6], ["Luis", 3, 4, None, "ana", 7, 8], ["Eva", 9, "x", None, "Juan", 1, 1], [None, None, None, None, "Ana", 2, 2]]},
+    {"id": "cons-posicion", "op": "consolidar", "destino": "A8", "fuentes": ["A1:B3", "D1:F2"], "funcion": "promedio",
+     "datos": [[1, 2, None, 10, 20, 30], [3, 4, None, 40, 50, 60], [5, "t", None, None, None, None]]},
+    {"id": "cons-contar", "op": "consolidar", "destino": "H1", "fuentes": ["A1:B4", "D1:E3"], "funcion": "contar", "columna": True,
+     "datos": [["a", 1, None, "b", 2], ["b", "x", None, "a", None], ["a", 3, None, "c", 4], ["c", None, None, None, None]]},
+    {"id": "cons-max", "op": "consolidar", "destino": "A6", "fuentes": ["A1:C3", "E1:G3"], "funcion": "max", "fila": True,
+     "datos": [["x", "y", "z", None, "z", "x", "w"], [1, 5, 2, None, 9, 0, 4], [7, -1, 3, None, -2, 8, 6]]},
+    # (el orden de los rótulos: casos para sacar la regla de Excel)
+    {"id": "cons-orden-1", "op": "consolidar", "destino": "A6", "fuentes": ["A1:B3", "D1:E3"], "funcion": "suma", "fila": True, "columna": True,
+     "datos": [["", "x", None, "", "x"], ["a", 1, None, "c", 1], ["b", 1, None, "d", 1]]},
+    {"id": "cons-orden-2", "op": "consolidar", "destino": "A6", "fuentes": ["A1:B3", "D1:E3"], "funcion": "suma", "fila": True, "columna": True,
+     "datos": [["", "x", None, "", "x"], ["a", 1, None, "b", 1], ["b", 1, None, "c", 1]]},
+    {"id": "cons-orden-3", "op": "consolidar", "destino": "A6", "fuentes": ["A1:B3", "D1:E3"], "funcion": "suma", "fila": True, "columna": True,
+     "datos": [["", "x", None, "", "x"], ["a", 1, None, "c", 1], ["b", 1, None, "a", 1]]},
+    {"id": "cons-orden-4", "op": "consolidar", "destino": "A6", "fuentes": ["A1:B3", "D1:E3"], "funcion": "suma", "columna": True,
+     "datos": [["a", 1, None, "c", 1], ["b", 1, None, "a", 1], [None, None, None, None, None]]},
+    {"id": "cons-orden-5", "op": "consolidar", "destino": "A6", "fuentes": ["A1:C2", "E1:G2"], "funcion": "suma", "fila": True, "columna": True,
+     "datos": [["", "x", "y", None, "", "z", "x"], ["a", 1, 1, None, "a", 1, 1]]},
+    {"id": "cons-orden-6", "op": "consolidar", "destino": "A8", "fuentes": ["A1:B4", "D1:E4"], "funcion": "suma", "fila": True, "columna": True,
+     "datos": [["", "x", None, "", "x"], ["a", 1, None, "d", 1], ["b", 1, None, "a", 1], ["c", 1, None, "e", 1]]},
     {"id": "obj-lineal", "op": "buscar_objetivo", "celda": "B2", "valor": 100, "cambiando": "B1", "datos": [["x", 1], ["2x+3", "=B1*2+3"]]},
     {"id": "obj-raiz", "op": "buscar_objetivo", "celda": "B2", "valor": 2, "cambiando": "B1", "datos": [["x", 1], ["x^2", "=B1^2"]]},
     {"id": "obj-pago", "op": "buscar_objetivo", "celda": "B2", "valor": 2000, "cambiando": "B1", "datos": [["tasa", 0.05], ["pago", "=PMT(B1/12,60,-100000)"]]},
@@ -67,6 +89,7 @@ async (c) => {
   let res = null;
   if (c.op === "quitar_duplicados") res = H.herramientas.quitarDuplicados(r, c.columnas.map((k) => r.c1 + k - 1), !!c.encabezado);
   else if (c.op === "texto_columnas") res = H.herramientas.textoEnColumnas(r, c.anchos ? { anchos: c.anchos } : { sep: c.sep, seguidos: !!c.seguidos, calificador: c.calificador == null ? '"' : c.calificador });
+  else if (c.op === "consolidar") res = H.herramientas.consolidar(c.destino, c.fuentes, c.funcion, !!c.fila, !!c.columna);
   else if (c.op === "buscar_objetivo") {
     const o = H.herramientas.buscarObjetivo(c.celda, c.valor, c.cambiando);
     await new Promise((r) => setTimeout(r, 150));

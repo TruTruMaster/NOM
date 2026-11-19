@@ -616,6 +616,130 @@
         const v = F().evaluadorDeTabla(doc(), t).valor(a.c, a.f);
         return { logrado, x, valor: typeof v === "number" ? v : +v, antes, celda: F().ref(a.c, a.f), cambiando: F().ref(b.c, b.f), meta: g };
       }
+      /**
+       * Consolidar, como Excel (Datos → Consolidar; comparado con Excel 2024 en pruebas/office/datos_excel.py): junta varios
+       * rangos (de esta hoja o de otras) con una función. Con rótulos (fila superior, columna izquierda o las dos) junta
+       * por nombre, sin distinguir mayúsculas; sin rótulos, por posición. El orden de los rótulos es el de Excel: los de la
+       * primera fuente y cada rótulo nuevo de otra justo antes del siguiente de esa fuente que ya estaba (si no hay, al
+       * final). Donde no hay ningún dato queda vacío; el texto no cuenta (salvo en Contar, que es como CONTARA).
+       * Devuelve { filas, cols } o un texto con el motivo.
+       */
+      const FUNC_CONS = {
+        suma: (l) => l.reduce((a, b) => a + b, 0),
+        promedio: (l) => l.reduce((a, b) => a + b, 0) / l.length,
+        max: (l) => Math.max(...l), min: (l) => Math.min(...l),
+        producto: (l) => l.reduce((a, b) => a * b, 1),
+        contar_num: (l) => l.length,
+        desvest: (l) => (l.length < 2 ? null : Math.sqrt(FUNC_CONS.var(l))), desvestp: (l) => Math.sqrt(FUNC_CONS.varp(l)),
+        var: (l) => { if (l.length < 2) return null; const m = l.reduce((a, b) => a + b, 0) / l.length; return l.reduce((a, b) => a + (b - m) * (b - m), 0) / (l.length - 1); },
+        varp: (l) => { const m = l.reduce((a, b) => a + b, 0) / l.length; return l.reduce((a, b) => a + (b - m) * (b - m), 0) / l.length; },
+      };
+      function consolidar(destino, fuentes, funcion, conFila, conCol) {
+        if (ed.soloLectura || !t) return "Solo puedes ver esta hoja";
+        const dst = F().parseRef(String(destino || "").replace(/\$/g, "").toUpperCase());
+        if (!dst) return "Elige la celda donde empieza el resultado";
+        if (!fuentes || !fuentes.length) return "Agrega al menos un rango";
+        const fn = funcion === "contar" ? null : FUNC_CONS[funcion];
+        if (funcion !== "contar" && !fn) return "Esa función no se puede usar para consolidar";
+        // cada fuente: su matriz de valores (de esta hoja o de otra)
+        const hojas = F().hojasDe(doc());
+        const datos = [];
+        for (const txt0 of fuentes) {
+          const m = /^(?:(.+)!)?\$?([A-Za-z]{1,3})\$?(\d+)(?::\$?([A-Za-z]{1,3})\$?(\d+))?$/.exec(String(txt0).trim());
+          if (!m) return `No entiendo el rango «${txt0}»`;
+          const nombreH = m[1] ? m[1].replace(/^'|'$/g, "").replace(/''/g, "'") : null;
+          const tb = nombreH ? hojas.find((h) => F().nombreDeHoja(doc(), h).toLowerCase() === nombreH.toLowerCase()) : t;
+          if (!tb) return `No hay una hoja «${nombreH}»`;
+          const a = F().parseRef(m[2].toUpperCase() + m[3]), b = m[4] ? F().parseRef(m[4].toUpperCase() + m[5]) : a;
+          const ev = tb === t ? evaluarVivo() : F().evaluadorDeTabla(doc(), tb);
+          const filas = [];
+          for (let f = Math.min(a.f, b.f); f <= Math.max(a.f, b.f); f++) { const fila = []; for (let c = Math.min(a.c, b.c); c <= Math.max(a.c, b.c); c++) fila.push(ev.valor(c, f)); filas.push(fila); }
+          datos.push(filas);
+        }
+        const texto = (v) => (v == null ? "" : typeof v === "object" && v.valueOf ? String(v.valueOf()) : String(v));
+        // los rótulos, en el orden de Excel
+        const fusionar = (lista, nuevos) => {
+          const pend = [];
+          for (const x of nuevos) {
+            const k = x.toLowerCase();
+            if (x === "") continue;
+            const i = lista.findIndex((y) => y.k === k);
+            if (i < 0) { if (!pend.some((y) => y.k === k)) pend.push({ k, t: x }); continue; }
+            if (pend.length) { lista.splice(i, 0, ...pend); pend.length = 0; }
+          }
+          lista.push(...pend);
+        };
+        const rotF = [], rotC = [];
+        let nF = 0, nC = 0;
+        for (const D of datos) {
+          const f0 = conFila ? 1 : 0, c0 = conCol ? 1 : 0;
+          if (conCol) fusionar(rotF, D.slice(f0).map((fila) => texto(fila[0]).trim())); else nF = Math.max(nF, D.length - f0);
+          if (conFila) fusionar(rotC, (D[0] || []).slice(c0).map((v) => texto(v).trim())); else nC = Math.max(nC, (D[0] || []).length - c0);
+        }
+        const filasR = conCol ? rotF.length : nF, colsR = conFila ? rotC.length : nC;
+        const celda = Array.from({ length: filasR }, () => Array.from({ length: colsR }, () => []));
+        for (const D of datos) {
+          const f0 = conFila ? 1 : 0, c0 = conCol ? 1 : 0;
+          for (let i = f0; i < D.length; i++) {
+            const fi = conCol ? rotF.findIndex((y) => y.k === texto(D[i][0]).trim().toLowerCase()) : i - f0;
+            if (fi < 0) continue;
+            for (let j = c0; j < D[i].length; j++) {
+              const cj = conFila ? rotC.findIndex((y) => y.k === texto(D[0][j]).trim().toLowerCase()) : j - c0;
+              if (cj < 0) continue;
+              const v = D[i][j];
+              if (funcion === "contar") { if (v !== "" && v != null) celda[fi][cj].push(1); continue; }
+              const n = typeof v === "number" ? v : v instanceof F().FechaF ? +v : null;
+              if (n != null && isFinite(n)) celda[fi][cj].push(n);
+            }
+          }
+        }
+        const campos = {}, f1 = dst.f + (conFila ? 1 : 0), c1 = dst.c + (conCol ? 1 : 0);
+        const pon = (c, f, v) => { campos["c:" + F().ref(c, f)] = v === "" || v == null ? null : String(v); };
+        if (conFila && conCol) pon(dst.c, dst.f, null);
+        if (conFila) rotC.forEach((x, j) => pon(c1 + j, dst.f, x.t));
+        if (conCol) rotF.forEach((x, i) => pon(dst.c, f1 + i, x.t));
+        for (let i = 0; i < filasR; i++) for (let j = 0; j < colsR; j++) {
+          const l = celda[i][j];
+          const v = !l.length ? null : funcion === "contar" ? l.length : fn(l);
+          pon(c1 + j, f1 + i, v == null || !isFinite(v) ? null : v);
+        }
+        const finF = f1 + filasR, finC = c1 + colsR;
+        if (finF > (t.filas || 30)) campos.filas = finF + 1;
+        if (finC > (t.cols || 10)) campos.cols = finC + 1;
+        cambiarT(campos, { meta: { o: "r" } });
+        return { filas: filasR + (conFila ? 1 : 0), cols: colsR + (conCol ? 1 : 0) };
+      }
+      function dialogoConsolidar() {
+        if (ed.soloLectura || !t) return;
+        const r = rango(), hoja = F().prefijoHoja(nombreHoja());
+        const abs = (c, f) => "$" + F().colLetra(c) + "$" + (f + 1);
+        const actual = hoja + (r.c1 === r.c2 && r.f1 === r.f2 ? abs(r.c1, r.f1) : abs(r.c1, r.f1) + ":" + abs(r.c2, r.f2));
+        const lista = [];
+        const cuerpo = html(`<div class="col">
+          <label>Función <select data-fun>${[["suma", "Suma"], ["contar", "Contar"], ["promedio", "Promedio"], ["max", "Máx"], ["min", "Mín"], ["producto", "Producto"], ["contar_num", "Contar números"], ["desvest", "Desvest"], ["desvestp", "Desvestp"], ["var", "Var"], ["varp", "Varp"]].map(([v, n]) => `<option value="${v}">${n}</option>`).join("")}</select></label>
+          <label>Referencia <span class="fila"><input data-ref value="${esc(actual)}" autocomplete="off" spellcheck="false" class="crece"><button class="btn chico" type="button" data-agregar>Agregar</button></span></label>
+          <div class="lista" data-lista></div>
+          <span class="chico">Usar rótulos en:</span>
+          <label><input type="checkbox" data-fila> Fila superior</label>
+          <label><input type="checkbox" data-col> Columna izquierda</label>
+          <p class="suave chico" style="font-weight:400">El resultado empieza en ${esc(F().ref(sel.c, sel.f))} (la celda elegida).</p></div>`);
+        const pie = html(`<div style="display:contents"><span class="crece"></span><button class="btn primario" data-si>Aceptar</button></div>`);
+        const h = NOM.hoja({ titulo: "Consolidar", icono: "layers", cuerpo, pie });
+        const destino = F().ref(sel.c, sel.f);
+        const pintar = () => {
+          $("[data-lista]", cuerpo).innerHTML = lista.map((x, i) => `<div class="lista-item"><span class="crece">${esc(x)}</span><button class="icono-btn chico" data-quitar="${i}" aria-label="Quitar">${ico("x", "ico-s")}</button></div>`).join("");
+          $$("[data-quitar]", cuerpo).forEach((b) => (b.onclick = () => { lista.splice(+b.dataset.quitar, 1); pintar(); }));
+        };
+        $("[data-agregar]", cuerpo).onclick = () => { const v = $("[data-ref]", cuerpo).value.trim(); if (v && !lista.includes(v)) { lista.push(v); pintar(); } };
+        $("[data-si]", pie).onclick = () => {
+          const v = $("[data-ref]", cuerpo).value.trim();
+          if (!lista.length && v) lista.push(v);
+          const res = consolidar(destino, lista.map((x) => x.replace(/^=/, "")), $("[data-fun]", cuerpo).value, $("[data-fila]", cuerpo).checked, $("[data-col]", cuerpo).checked);
+          if (typeof res === "string") return aviso(res, { tipo: "aviso", ms: 5000 });
+          h.cerrar();
+          aviso(`Consolidado en ${destino}: ${res.filas} × ${res.cols}. Ctrl+Z para deshacer`, { tipo: "ok" });
+        };
+      }
       function dialogoObjetivo() {
         if (ed.soloLectura || !t) return;
         const def = F().ref(sel.c, sel.f);
@@ -2986,6 +3110,7 @@
             { texto: "Otras", icono: "more-vertical", sub: [
               { texto: "Buscar", icono: "search", fn: () => buscar(false) },
               { texto: "Buscar objetivo", corto: "Objetivo", icono: "target", off: lect, fn: () => dialogoObjetivo() },
+              { texto: "Consolidar", icono: "layers", off: lect, fn: dialogoConsolidar },
               { texto: "Nombres", icono: "tags", fn: () => administradorNombres() },
               { texto: t && t.vf ? "Ver resultados" : "Mostrar fórmulas", corto: t && t.vf ? "Resultados" : "Fórmulas", icono: "square-function", off: lect, fn: alternarFormulas },
               { texto: "Auditoría", icono: "arrow-down-right", sub: [
@@ -3117,6 +3242,7 @@
           { texto: "Quitar duplicados…", icono: "copy-x", fn: () => dialogoDuplicados() },
           { texto: "Texto en columnas…", icono: "columns-3", fn: () => dialogoTextoColumnas() },
           { texto: "Buscar objetivo…", icono: "target", fn: () => dialogoObjetivo() },
+          { texto: "Consolidar…", icono: "layers", fn: dialogoConsolidar },
           { texto: "Agrupar filas", icono: "list-tree", atajo: "Mayús+Alt+→", fn: () => agrupar("f", 1) },
           { texto: "Agrupar columnas", icono: "list-tree", fn: () => agrupar("c", 1) },
           { texto: "Desagrupar filas", icono: "list-x", atajo: "Mayús+Alt+←", fn: () => agrupar("f", -1) },
@@ -3220,8 +3346,8 @@
       // Lo que usan otros módulos (datos → reporte, combinar correspondencia).
       this.api = { rango, tabla: () => t, evaluar, seleccion: () => ({ ...sel }),
         // herramientas de datos como las de Excel (también para las pruebas contra Excel real)
-        herramientas: { quitarDuplicados, regionActual, textoEnColumnas, partirTexto, buscarObjetivo },
-        dialogos: { duplicados: dialogoDuplicados, textoColumnas: dialogoTextoColumnas, objetivo: dialogoObjetivo, nombres: administradorNombres },
+        herramientas: { quitarDuplicados, regionActual, textoEnColumnas, partirTexto, buscarObjetivo, consolidar },
+        dialogos: { duplicados: dialogoDuplicados, textoColumnas: dialogoTextoColumnas, objetivo: dialogoObjetivo, nombres: administradorNombres, consolidar: dialogoConsolidar },
         calculo: { modo: modoCalculo, fijar: fijarModoCalculo, ahora: calcularAhora },
         esquema: { agrupar, alternar: alternarGrupo, nivel: mostrarNivel, detalle, borrar: borrarEsquema },
         formulasVisibles: alternarFormulas,
@@ -3243,6 +3369,7 @@
         { texto: "Calcular ahora (F9)", icono: "calculator", fn: () => { const a = NOM.editorActual.modoApi.api.calculo; if (a) a.ahora(false); }, claves: "recalcular f9 calculo manual" },
         { texto: "Opciones de cálculo: manual o automático", icono: "zap", fn: () => { const a = NOM.editorActual.modoApi.api.calculo; if (a) a.fijar(a.modo() === "manual" ? "auto" : "manual"); }, claves: "calculo manual automatico opciones f9" },
         { texto: "Quitar duplicados", icono: "copy-x", fn: dlg("duplicados"), claves: "repetidos duplicados unicos" },
+        { texto: "Consolidar", icono: "layers", fn: dlg("consolidar"), claves: "consolidar juntar sumar varias hojas rangos resumen" },
         { texto: "Texto en columnas", icono: "columns-3", fn: dlg("textoColumnas"), claves: "separar partir dividir columnas coma" },
         ...(NOM.datos ? [{ texto: "Hacer un reporte con estos datos", icono: "bar-chart", fn: () => NOM.datos.reporteDeDatos(NOM.editorActual), claves: "encuesta google forms resumen graficas frecuencias estadistica" }] : []),
         { texto: "Insertar fila o columna", icono: "between-horizontal-start", fn: () => { const b = document.querySelector('[data-micro^="Insertar o eliminar filas"]'); if (b) b.click(); }, claves: "fila columna insertar eliminar borrar" },

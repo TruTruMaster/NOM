@@ -45,6 +45,20 @@ try:
                     r.TextToColumns(Destination=r, DataType=1, TextQualifier={"\"": 1, "'": 2, "": -4142}.get(c.get("calificador", "\""), 1),
                                     ConsecutiveDelimiter=bool(c.get("seguidos")), Tab=bool(s.get("tab")), Semicolon=bool(s.get("punto_coma")),
                                     Comma=bool(s.get("coma")), Space=bool(s.get("espacio")), Other=bool(s.get("otro")), OtherChar=s.get("otro") or "")
+            elif op == "consolidar":
+                # fuentes «A1:C4» de esta hoja, en R1C1 como las pide Excel; función de consolidar de Excel
+                def r1c1(a1):
+                    import re
+                    def una(x):
+                        m = re.match(r"([A-Z]+)(\d+)", x); n = 0
+                        for ch in m.group(1): n = n * 26 + ord(ch) - 64
+                        return f"R{m.group(2)}C{n}"
+                    a, _, b = a1.partition(":")
+                    return una(a) + (":" + una(b) if b else "")
+                FUN = {"suma": -4157, "contar": -4112, "promedio": -4106, "max": -4136, "min": -4139, "producto": -4149, "contar_num": -4113,
+                       "desvest": -4155, "desvestp": -4156, "var": -4164, "varp": -4165}
+                fuentes = tuple(f"'{h.Name}'!{r1c1(f)}" for f in c["fuentes"])
+                h.Range(c["destino"]).Consolidate(Sources=fuentes, Function=FUN[c["funcion"]], TopRow=bool(c.get("fila")), LeftColumn=bool(c.get("columna")), CreateLinks=False)
             elif op == "buscar_objetivo":
                 ok = h.Range(c["celda"]).GoalSeek(Goal=c["valor"], ChangingCell=h.Range(c["cambiando"]))
                 res.setdefault(c["id"], {})["logrado"] = bool(ok)
