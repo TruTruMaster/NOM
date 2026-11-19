@@ -255,6 +255,8 @@ async ([i, k]) => {
   cont.style.width = T.w + 'px'; cont.style.height = T.h + 'px';
   cont.style.transformOrigin = '0 0'; cont.style.transform = k && k !== 1 ? `scale(${k})` : '';
   await document.fonts.ready; await new Promise((r) => setTimeout(r, 120));
+  // (como en el editor, al presentar y en el proyector: los renglones de PowerPoint en su altura)
+  if (NOM.diapo.ajustarRenglones) NOM.diapo.ajustarRenglones(cont);
   const imgs = [...cont.querySelectorAll('img')]; await Promise.all(imgs.map((im) => im.complete ? 0 : new Promise((r) => { im.onload = im.onerror = r; })));
   return { w: T.w, h: T.h, n: doc.paginas().length };
 }

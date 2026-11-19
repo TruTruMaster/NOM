@@ -698,6 +698,8 @@
       });
       pintarConectores(bs, mapa);
       pintarCajaGrupo();
+      // (los renglones de los cuadros de PowerPoint, a la altura donde los pone PowerPoint)
+      if (acotado && NOM.diapo && NOM.diapo.ajustarRenglones) NOM.diapo.ajustarRenglones(mundo);
       if (editando) {
         const el = mundo.querySelector(`[data-id="${editando}"] .txt, [data-id="${editando}"] .libre-texto`), be = doc().bloque(editando);
         if (el && be && be.tipo === "forma" && COMPARTIMENTOS.has(be.figura)) { el.textContent = be.texto || ""; el.classList.add("cm-editando"); }
@@ -2634,6 +2636,7 @@
       d.innerHTML = htmlDiapositiva(doc, p, null);
       borrarMarcas(false);
       escala();
+      if (NOM.diapo && NOM.diapo.ajustarRenglones) NOM.diapo.ajustarRenglones(d);
       if (motor) motor.detener();
       // videos y audios de PowerPoint (antes del motor: sus comandos de reproducir, pausa… llegan por alMedio)
       if (medios) medios.montar(d, p, i);
@@ -2652,6 +2655,7 @@
       if (presentador) {
         const n = pags()[i + 1];
         sig.innerHTML = n ? htmlDiapositiva(doc, n) : "";
+        if (NOM.diapo && NOM.diapo.ajustarRenglones) NOM.diapo.ajustarRenglones(sig);
         $(".pv-sig", rep).classList.toggle("fin", !n);
         const nota = doc.valor("_doc", "nota:" + p) || "";
         $("[data-notas]", rep).innerHTML = nota ? esc(nota).replace(/\n/g, "<br>") : `<span class="suave">Sin notas para esta diapositiva.</span>`;

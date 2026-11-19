@@ -75,6 +75,7 @@
       if (trActual) { trActual.saltar(); trActual = null; }
       d.innerHTML = V.htmlDiapositiva(doc, pagina, paso);
       escala();
+      if (NOM.diapo && NOM.diapo.ajustarRenglones) NOM.diapo.ajustarRenglones(d);
       pintarMarcas();
       if (viejo) {
         const T = V.tam ? V.tam(doc) : { w: V.ANCHO, h: V.ALTO };

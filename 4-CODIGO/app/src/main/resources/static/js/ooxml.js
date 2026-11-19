@@ -6014,9 +6014,12 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
         const r0 = (tramos.find((x) => !x.br) || {}).r || finR;
         const tam0 = (r0.sz || 18) * cuerpo.escala;
         const ls = o.lnSpc || { pct: 1 };
-        const lh = ls.pts ? `${px(ls.pts)}px` : String(Math.round(1.2 * Math.max(0.1, ls.pct - cuerpo.reduce) * 10000) / 10000);
+        // (el interlineado exacto PowerPoint lo dibuja redondeado a puntos enteros: 33.6 → 34, medido)
+        const lh = ls.pts ? `${px(Math.round(ls.pts))}px` : String(Math.round(1.2 * Math.max(0.1, ls.pct - cuerpo.reduce) * 10000) / 10000);
         const espacio = (e) => (!e ? 0 : e.pts ? px(e.pts) : px(e.pct * tam0 * 1.2));
-        const st = [`font-size:${px(tam0)}px`, `line-height:${lh}`];
+        // (con la letra de su primer texto: si el párrafo heredara otra, el navegador alinea las dos por la línea base y el
+        // renglón crece más que el interlineado —medido contra PowerPoint: hasta 3 pt por renglón en Segoe UI 44—)
+        const st = [`font-size:${px(tam0)}px`, `line-height:${lh}`, `font-family:${NOM.textoRico ? NOM.textoRico.cssFuente(resolverFuente(r0.fuente)) : resolverFuente(r0.fuente)}`];
         if (o.algn) st.push(`text-align:${{ ctr: "center", r: "right", just: "justify", dist: "justify", l: "left" }[o.algn] || "left"}`);
         const marL = o.marL != null ? emu(+o.marL) : 0, ind = o.indent != null ? emu(+o.indent) : 0;
         if (marL) st.push(`margin-left:${marL}px`);

@@ -7,10 +7,14 @@ la posición de cada renglón (BoundTop, BoundHeight) y analisis/interlineado_pp
 import json, os
 from comun import powerpoint, ARCHIVOS
 
+import sys
 FUENTES = ["Calibri", "Aptos", "Aptos Display", "Arial", "Times New Roman", "Segoe UI", "Georgia", "Verdana", "Cambria",
            "Calibri Light", "Century Gothic", "Tahoma"]
 TAMANOS = [12, 18, 24, 32, 44]
 ESPACIOS = [("sencillo", 1.0), ("uno y medio", 1.5), ("exacto", None)]
+if "--mas" in sys.argv:   # más interlineados (el 90 % es el de los títulos de los temas de Office)
+    FUENTES = ["Calibri", "Aptos", "Aptos Display", "Arial", "Times New Roman", "Segoe UI"]
+    ESPACIOS = [("80", 0.8), ("90", 0.9), ("sencillo", 1.0), ("110", 1.1), ("120", 1.2), ("uno y medio", 1.5), ("doble", 2.0), ("exacto", None)]
 
 pp = powerpoint()
 pres = pp.Presentations.Add(False)
@@ -43,9 +47,10 @@ try:
                 meta.append({"diapo": s.SlideIndex, "forma": caja.Name, "fuente": fuente, "tam": tam, "espacio": nombre_esp,
                              "mult": mult, "exacto": None if mult is not None else round(tam * 1.4, 1)})
                 x += 188
-    salida = os.path.join(ARCHIVOS, "p12-interlineado.pptx")
+    nombre = "p13-interlineado-mas" if "--mas" in sys.argv else "p12-interlineado"
+    salida = os.path.join(ARCHIVOS, nombre + ".pptx")
     pres.SaveAs(salida, 24)
-    json.dump(meta, open(os.path.join(ARCHIVOS, "p12-interlineado.json"), "w", encoding="utf-8"), ensure_ascii=False)
+    json.dump(meta, open(os.path.join(ARCHIVOS, nombre + ".json"), "w", encoding="utf-8"), ensure_ascii=False)
     print("hecho", pres.Slides.Count, "diapositivas,", len(meta), "cuadros", flush=True)
 finally:
     pres.Close()

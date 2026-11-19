@@ -103,8 +103,13 @@ def editar_diapo(p, texto, n):
         return nuevo_cuadro(p, texto, n)
     # Un doble clic, como lo hace una persona (antes: clic y doble clic casi seguidos, como un triple clic,
     # que en Firefox abre y vuelve a cerrar el texto).
-    p.mouse.dblclick(*c["xy"]); p.wait_for_timeout(600)
-    if not p.evaluate("() => !!document.querySelector('.bl [contenteditable=true], .bl.editando')"):
+    # (con muchas pruebas a la vez, Firefox tarda: se espera hasta 5 s y, si no abrió, otro doble clic)
+    abierto = "() => !!document.querySelector('.bl [contenteditable=true], .bl.editando')"
+    for _ in range(2):
+        p.mouse.dblclick(*c["xy"])
+        try: p.wait_for_function(abierto, timeout=5000); break
+        except Exception: p.wait_for_timeout(300)
+    if not p.evaluate(abierto):
         return "el doble clic no abrió el texto del cuadro"
     p.keyboard.press("Control+End"); p.keyboard.type(texto); p.wait_for_timeout(300)
     p.keyboard.press("Escape"); p.wait_for_timeout(300)

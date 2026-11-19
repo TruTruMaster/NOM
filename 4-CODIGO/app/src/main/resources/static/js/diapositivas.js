@@ -409,5 +409,49 @@
     }
     el.classList.toggle("con-franja", !!(te && te.franja));
   }
-  NOM.diapo = { aplicar, iconoPng, TAMANOS, tam, TEMAS, tema, cssFondo, fondoDe, estiloDiapo, htmlRico, textoPlano, parrafos, DISENOS, editarDatos, graficaHtml, tablaHtml, rangoUsado, diapoPng };
+  /**
+   * Renglones de PowerPoint en su lugar. Medido contra PowerPoint 2024 (pruebas/office/windows/hacer_interlineado.py,
+   * analisis/interlineado_ppt.py: 12 fuentes, 5 tamaños, sencillo, 1.5 y exacto): cada renglón baja exactamente lo que
+   * dice el interlineado (1.2 × tamaño × %, o los puntos exactos), y la línea base del primero queda en
+   *   max(1.2 × tamaño × r + min(0, interlineado − 1.2 × tamaño), 0.75 × interlineado)
+   * con r = (ascendente + espacio) / (ascendente + descendente + espacio) de las medidas «hhea» de la fuente: arriba
+   * del 100 % es 0.75 del interlineado en todas las fuentes; en 100 % y menos, la de la fuente, y lo que el renglón se
+   * encoge se quita de arriba (medido en 80, 90, 100, 110, 120, 150 y 200 % y exacto; p13-interlineado-mas). El navegador la pone en medio del renglón (y con otras medidas en Linux que en
+   * Windows): aquí se mide dónde la puso y cada párrafo se mueve lo que falta (sin cambiar su alto).
+   */
+  const PP_BASE = {"NOM A": 0.7692, "NOM AD": 0.7692, "NOM AN": 0.7692, "NOM AR": 0.8157, "NOM ARB": 0.7805, "NOM ARN": 0.8153, "NOM BA": 0.7659, "NOM BH": 0.8283, "NOM CA": 0.8106, "NOM CAL": 0.7952, "NOM CB": 0.7877, "NOM CG": 0.8204, "NOM CL": 0.7952, "NOM CN": 0.7743, "NOM CO": 0.7802, "NOM CS": 0.7905, "NOM CT": 0.7961, "NOM CU": 0.7349, "NOM FG": 0.8084, "NOM GA": 0.7662, "NOM GE": 0.807, "NOM GS": 0.8012, "NOM IM": 0.8271, "NOM LC": 0.7891, "NOM PL": 0.7894, "NOM SP": 0.7195, "NOM SS": 0.6875, "NOM SU": 0.8113, "NOM TA": 0.8289, "NOM TI": 0.8119, "NOM TR": 0.8087, "NOM VE": 0.8272};
+  function ajustarRenglones(raiz) {
+    if (!raiz) return;
+    const pars = [];
+    for (const caja of raiz.querySelectorAll(".libre-texto.ppt, .txt.ppt")) {
+      if (caja.isContentEditable) continue;   // (mientras se escribe en él, el cuadro se deja como está)
+      for (const p of caja.children) if (p.tagName === "DIV" && p.textContent.trim()) pars.push(p);
+    }
+    if (!pars.length) return;
+    // (todo junto: primero se quita lo de antes y se ponen las marcas, luego se mide, al final se mueve)
+    const marcas = pars.map((p) => {
+      p.style.position = ""; p.style.top = "";
+      const m = document.createElement("span");
+      m.style.cssText = "display:inline-block;width:0;height:0;vertical-align:baseline";
+      p.prepend(m);
+      return m;
+    });
+    let espera = false;
+    const mov = pars.map((p, i) => {
+      const cs = getComputedStyle(p), r = p.getBoundingClientRect(), z = r.height / (p.offsetHeight || 1) || 1;
+      const fam = (cs.fontFamily.split(",")[0] || "").replace(/["']/g, "").trim();
+      const k = PP_BASE[fam];
+      if (!k) return null;
+      // (con la letra todavía sin cargar se mediría la de reemplazo: se vuelve a acomodar cuando llegue)
+      if (document.fonts && !document.fonts.check(`${cs.fontStyle} ${cs.fontWeight} 16px ${cs.fontFamily}`)) { espera = true; return null; }
+      const tam = parseFloat(cs.fontSize) || 0, L = parseFloat(cs.lineHeight) || tam * 1.2;
+      const bNav = (marcas[i].getBoundingClientRect().top - r.top) / z;
+      const bPP = Math.max(1.2 * tam * k + Math.min(0, L - 1.2 * tam), 0.75 * L);
+      return Math.abs(bPP - bNav) > 0.05 && Math.abs(bPP - bNav) < tam ? bPP - bNav : null;
+    });
+    marcas.forEach((m) => m.remove());
+    pars.forEach((p, i) => { if (mov[i] != null) { p.style.position = "relative"; p.style.top = mov[i].toFixed(2) + "px"; } });
+    if (espera && document.fonts) document.fonts.ready.then(() => { if (raiz.isConnected !== false) ajustarRenglones(raiz); });
+  }
+  NOM.diapo = { aplicar, iconoPng, TAMANOS, tam, TEMAS, tema, cssFondo, fondoDe, estiloDiapo, htmlRico, textoPlano, parrafos, DISENOS, editarDatos, graficaHtml, tablaHtml, rangoUsado, diapoPng, ajustarRenglones };
 })();

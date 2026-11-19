@@ -64,6 +64,7 @@
         <figcaption>${i + 1} / ${doc.paginas().length}</figcaption></figure>`).join("")}</div>`;
       const escalar = () => $$(".ver-diapo-caja", cuerpo).forEach((c) => { c.firstElementChild.style.transform = `scale(${c.clientWidth / T.w})`; });
       escalar();
+      if (NOM.diapo && NOM.diapo.ajustarRenglones) NOM.diapo.ajustarRenglones(cuerpo);
       addEventListener("resize", escalar);
       limpiar.push(() => removeEventListener("resize", escalar));
       imprimir.hidden = false;
