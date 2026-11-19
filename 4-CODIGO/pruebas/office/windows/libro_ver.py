@@ -31,7 +31,12 @@ try:
             for j in range(u.Column, u.Column + u.Columns.Count):
                 c = h.Cells(i, j)
                 if c.Formula in (None, ""): continue
-                celdas[col(j) + str(i)] = {"f": c.Formula, "v": c.Value2, "t": c.Text}
+                d = {"f": c.Formula, "v": c.Value2, "t": c.Text}
+                # (auditoría: de qué celdas depende y cuáles dependen de ella, en esta hoja; Excel da error si no hay)
+                for k2, que in (("prec", "DirectPrecedents"), ("dep", "DirectDependents")):
+                    try: d[k2] = getattr(c, que).Address.replace("$", "")
+                    except Exception: d[k2] = ""
+                celdas[col(j) + str(i)] = d
         filas = {}
         for i in range(1, u.Row + u.Rows.Count + 1):
             r = h.Rows(i)

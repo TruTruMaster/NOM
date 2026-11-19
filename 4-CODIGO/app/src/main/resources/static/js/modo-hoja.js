@@ -1483,9 +1483,119 @@
         pintarGraficas();
         pintarBandeja();
         marcarCopiado();
+        pintarFlechas();
         ed.pintarPresencia();
       }
 
+      // ------------------------------------------------------------ auditoría (Fórmulas → Rastrear precedentes), como Excel
+      /**
+       * Los rangos de los que depende directamente la fórmula de (c, f): los de esta hoja ({ c1, f1, c2, f2 }) y los de otras
+       * (con su hoja). También los de un nombre definido que la fórmula usa (Excel los cuenta como precedentes).
+       */
+      const normalH = (n) => String(n || "").replace(/^'|'$/g, "").toLowerCase();
+      function precedentesDe(c, f, tb) {
+        tb = tb || t;
+        const cr = String((tb && tb["c:" + F().ref(c, f)]) || "");
+        const aqui = [], otras = [];
+        if (!cr.startsWith("=")) return { aqui, otras };
+        const filas = tb.filas || 30, cols = tb.cols || 10, propia = normalH(F().nombreDeHoja(doc(), tb));
+        const agregar = (r) => {
+          let c1, f1, c2, f2;
+          if (r.tipo === "col") { c1 = r.a.c; c2 = r.b.c; f1 = 0; f2 = filas - 1; }
+          else if (r.tipo === "fila") { f1 = r.a.f; f2 = r.b.f; c1 = 0; c2 = cols - 1; }
+          else if (r.a && r.b) { c1 = r.a.c; f1 = r.a.f; c2 = r.b.c; f2 = r.b.f; }
+          else return;
+          const x = { c1: Math.min(c1, c2), f1: Math.min(f1, f2), c2: Math.max(c1, c2), f2: Math.max(f1, f2) };
+          if (r.hoja && normalH(r.hoja) !== propia) otras.push(Object.assign({ hoja: r.hoja }, x)); else aqui.push(x);
+        };
+        F().refsDe(cr).forEach(agregar);
+        const nm = F().nombresDe(doc());
+        if (nm) for (const id of cr.replace(/"(?:[^"]|"")*"/g, "").match(/[\p{L}_\\][\p{L}\p{N}_.]*/gu) || []) { const d = nm(id); if (d) F().refsDe(d).forEach(agregar); }
+        return { aqui, otras };
+      }
+      /** Las celdas de esta hoja cuya fórmula usa directamente (c, f), y las de otras hojas (con su hoja). */
+      function dependientesDe(c, f) {
+        const aqui = [], otras = [], propia = normalH(nombreHoja());
+        const dentro = (x) => c >= x.c1 && c <= x.c2 && f >= x.f1 && f <= x.f2;
+        for (const tb of F().hojasDe(doc())) {
+          const esta = tb.id === t.id;
+          for (const k of Object.keys(tb)) {
+            if (!k.startsWith("c:") || String(tb[k])[0] !== "=") continue;
+            const p = F().parseRef(k.slice(2));
+            if (!p) continue;
+            const pr = precedentesDe(p.c, p.f, tb);
+            if (esta ? pr.aqui.some(dentro) : pr.otras.some((x) => normalH(x.hoja) === propia && dentro(x))) (esta ? aqui : otras).push(esta ? { c: p.c, f: p.f } : { hoja: F().nombreDeHoja(doc(), tb), c: p.c, f: p.f });
+          }
+        }
+        return { aqui, otras };
+      }
+      let flechas = [];   // { de: { c1, f1, c2, f2 } | { hoja }, a: { c, f } | { hoja } , tipo: "p" | "d" }
+      const trazadas = { p: new Set(), d: new Set() };
+      /** Rastrear precedentes (tipo «p») o dependientes («d») de la celda elegida: cada vez, un nivel más (como Excel). */
+      function rastrear(tipo, cc, ff) {
+        if (!t) return;
+        const ini = cc != null ? { c: cc, f: ff } : { c: sel.c, f: sel.f };
+        const clave = (c, f) => c + "," + f;
+        // el nivel siguiente: desde las celdas a donde ya llegaron las flechas de este tipo (o desde la elegida)
+        let frente = [ini];
+        if (trazadas[tipo].has(clave(ini.c, ini.f))) {
+          frente = [];
+          for (const x of flechas.filter((q) => q.tipo === tipo)) {
+            const lejos = tipo === "p" ? x.de : x.a;
+            if (lejos && lejos.c1 != null) { for (let f = lejos.f1; f <= lejos.f2; f++) for (let c = lejos.c1; c <= lejos.c2; c++) if (!trazadas[tipo].has(clave(c, f))) frente.push({ c, f }); }
+            else if (lejos && lejos.c != null && !lejos.hoja && !trazadas[tipo].has(clave(lejos.c, lejos.f))) frente.push(lejos);
+          }
+        }
+        let nuevas = 0;
+        for (const x of frente) {
+          trazadas[tipo].add(clave(x.c, x.f));
+          if (tipo === "p") {
+            const pr = precedentesDe(x.c, x.f);
+            pr.aqui.forEach((r) => { flechas.push({ tipo, de: r, a: x }); nuevas++; });
+            if (pr.otras.length) { flechas.push({ tipo, de: { hoja: pr.otras.map((o) => o.hoja).join(", ") }, a: x }); nuevas++; }
+          } else {
+            const de = dependientesDe(x.c, x.f);
+            de.aqui.forEach((d) => { flechas.push({ tipo, de: { c1: x.c, f1: x.f, c2: x.c, f2: x.f }, a: d }); nuevas++; });
+            if (de.otras.length) { flechas.push({ tipo, de: { c1: x.c, f1: x.f, c2: x.c, f2: x.f }, a: { hoja: de.otras.map((o) => o.hoja).join(", ") } }); nuevas++; }
+          }
+        }
+        if (!nuevas) aviso(tipo === "p" ? "Esta celda no usa otras celdas (o ya se rastrearon todas)" : "Ninguna fórmula usa esta celda (o ya se rastrearon todas)", { tipo: "info" });
+        pintarFlechas();
+      }
+      function quitarFlechas(tipo) {
+        flechas = tipo ? flechas.filter((x) => x.tipo !== tipo) : [];
+        if (!tipo || tipo === "p") trazadas.p.clear();
+        if (!tipo || tipo === "d") trazadas.d.clear();
+        pintarFlechas();
+      }
+      /** Las flechas azules de Excel: punto en la celda de origen, punta en la fórmula; un rango, con su recuadro; otra hoja, un ícono. */
+      function pintarFlechas() {
+        const viejo = rej.querySelector(":scope > svg.flechas-aud");
+        if (viejo) viejo.remove();
+        if (!flechas.length) return;
+        const tabla = rej.querySelector("table");
+        if (!tabla) return;
+        const tr = tabla.getBoundingClientRect();
+        const caja = (c, f) => { const td = tabla.querySelector(`td[data-c="${c}"][data-f="${f}"]`); if (!td) return null; const r = td.getBoundingClientRect(); return { x: r.left - tr.left, y: r.top - tr.top, w: r.width, h: r.height }; };
+        const centro = (b) => [b.x + b.w / 2, b.y + b.h / 2];
+        let svg = `<svg class="flechas-aud" width="${tr.width}" height="${tr.height}" aria-hidden="true"><defs><marker id="aud-punta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1F4FBF"/></marker></defs>`;
+        for (const x of flechas) {
+          const destino = x.a && x.a.c != null ? caja(x.a.c, x.a.f) : null;
+          let origen = null;
+          if (x.de && x.de.c1 != null) {
+            const b1 = caja(x.de.c1, x.de.f1), b2 = caja(x.de.c2, x.de.f2);
+            if (b1 && b2 && (x.de.c1 !== x.de.c2 || x.de.f1 !== x.de.f2)) svg += `<rect x="${b1.x + 1}" y="${b1.y + 1}" width="${b2.x + b2.w - b1.x - 2}" height="${b2.y + b2.h - b1.y - 2}" fill="none" stroke="#1F4FBF" stroke-width="2"/>`;
+            origen = b1;
+          }
+          const [x2, y2] = destino ? centro(destino) : origen ? [centro(origen)[0] + 60, centro(origen)[1] - 30] : [0, 0];
+          const [x1, y1] = origen ? centro(origen) : destino ? [x2 - 60, y2 - 30] : [0, 0];
+          if (!origen && !destino) continue;
+          const otra = (x.de && x.de.hoja) || (x.a && x.a.hoja);
+          svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#1F4FBF" stroke-width="1.5"${otra ? ' stroke-dasharray="4 3"' : ""} marker-end="url(#aud-punta)"/><circle cx="${x1}" cy="${y1}" r="3" fill="#1F4FBF"/>`;
+          if (otra) { const [ix, iy] = x.de && x.de.hoja ? [x1, y1] : [x2, y2]; svg += `<g transform="translate(${ix - 9},${iy - 8})"><rect width="18" height="14" rx="2" fill="#fff" stroke="#1F4FBF"/><path d="M3 4h12M3 7h12M3 10h12" stroke="#1F4FBF"/><title>${esc(otra)}</title></g>`; }
+        }
+        rej.insertAdjacentHTML("beforeend", svg + "</svg>");
+      }
       /**
        * Modo Excel, después de pintar: un número o una fecha que no cabe en su columna se ve como «####»;
        * uno en formato General primero pierde decimales (o pasa a notación científica), como en Excel.
@@ -2845,6 +2955,10 @@
               { texto: "Buscar objetivo", corto: "Objetivo", icono: "target", off: lect, fn: () => dialogoObjetivo() },
               { texto: "Nombres", icono: "tags", fn: () => administradorNombres() },
               { texto: t && t.vf ? "Ver resultados" : "Mostrar fórmulas", corto: t && t.vf ? "Resultados" : "Fórmulas", icono: "square-function", off: lect, fn: alternarFormulas },
+              { texto: "Auditoría", icono: "arrow-down-right", sub: [
+                { texto: "Rastrear precedentes", corto: "Precedentes", icono: "arrow-down-right", fn: () => rastrear("p") },
+                { texto: "Rastrear dependientes", corto: "Dependientes", icono: "arrow-up-right", fn: () => rastrear("d") },
+                { texto: "Quitar flechas", corto: "Quitar", icono: "x", fn: () => quitarFlechas() }] },
               { texto: "Esquema", icono: "list-tree", off: lect, sub: [
                 { texto: "Agrupar filas", corto: "+ Filas", icono: "list-tree", fn: () => agrupar("f", 1) }, { texto: "Agrupar columnas", corto: "+ Col.", icono: "list-tree", fn: () => agrupar("c", 1) },
                 { texto: "Desagrupar filas", corto: "− Filas", icono: "list-x", fn: () => agrupar("f", -1) }, { texto: "Desagrupar columnas", corto: "− Col.", icono: "list-x", fn: () => agrupar("c", -1) },
@@ -2975,7 +3089,10 @@
           { texto: "Desagrupar columnas", icono: "list-x", fn: () => agrupar("c", -1) },
           { texto: "Ocultar detalle", icono: "minus-square", fn: () => detalle(false) },
           { texto: "Mostrar detalle", icono: "plus-square", fn: () => detalle(true) },
-          { texto: "Mostrar fórmulas (Ctrl+`)", icono: "square-function", fn: () => { const a = NOM.editorActual.modoApi.api.formulasVisibles; if (a) a(); }, claves: "ver formulas mostrar formulas auditoria" },
+          { texto: "Rastrear precedentes", icono: "arrow-down-right", fn: () => { const a = NOM.editorActual.modoApi.api.auditoria; if (a) a.rastrear("p"); }, claves: "auditoria flechas precedentes de donde sale" },
+        { texto: "Rastrear dependientes", icono: "arrow-up-right", fn: () => { const a = NOM.editorActual.modoApi.api.auditoria; if (a) a.rastrear("d"); }, claves: "auditoria flechas dependientes quien usa" },
+        { texto: "Quitar flechas", icono: "x", fn: () => { const a = NOM.editorActual.modoApi.api.auditoria; if (a) a.quitar(); }, claves: "auditoria quitar flechas" },
+        { texto: "Mostrar fórmulas (Ctrl+`)", icono: "square-function", fn: () => { const a = NOM.editorActual.modoApi.api.formulasVisibles; if (a) a(); }, claves: "ver formulas mostrar formulas auditoria" },
         { texto: "Borrar esquema", icono: "eraser", fn: borrarEsquema },
           { titulo: "Fórmulas" },
           { texto: "Cálculo automático", icono: "zap", marcado: modoCalculo() === "auto", fn: () => fijarModoCalculo("auto") },
@@ -2984,6 +3101,9 @@
           { texto: "Calcular ahora", icono: "calculator", atajo: "F9", fn: () => calcularAhora(false) },
           { texto: "Calcular esta hoja", icono: "calculator", atajo: "Mayús+F9", fn: () => calcularAhora(true) },
           { texto: "Mostrar fórmulas", icono: "square-function", atajo: "Ctrl+`", marcado: !!(t && t.vf), fn: alternarFormulas },
+          { texto: "Rastrear precedentes", icono: "arrow-down-right", fn: () => rastrear("p") },
+          { texto: "Rastrear dependientes", icono: "arrow-up-right", fn: () => rastrear("d") },
+          { texto: "Quitar flechas", icono: "x", fn: () => quitarFlechas() },
           { texto: "Definir nombre…", icono: "tag", fn: () => dialogoNombre(null, render) },
           { texto: "Administrador de nombres…", icono: "tags", fn: () => administradorNombres() },
           { titulo: "Hoja" },
@@ -3069,6 +3189,7 @@
         calculo: { modo: modoCalculo, fijar: fijarModoCalculo, ahora: calcularAhora },
         esquema: { agrupar, alternar: alternarGrupo, nivel: mostrarNivel, detalle, borrar: borrarEsquema },
         formulasVisibles: alternarFormulas,
+        auditoria: { precedentes: precedentesDe, dependientes: dependientesDe, rastrear, quitar: quitarFlechas, flechas: () => flechas.slice() },
         nombres: { guardar: guardarNombre, lista: nombresLibro, invalido: nombreInvalido } };
       void self;
 

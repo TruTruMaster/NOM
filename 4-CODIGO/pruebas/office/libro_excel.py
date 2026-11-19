@@ -38,6 +38,17 @@ CASOS = {
           return mal; }""",
         "revisar": lambda x, r: [] if x.get("calculo") == "manual" else [f"Excel abrió en cálculo {x.get('calculo')}"],
     },
+    # Auditoría: los precedentes y dependientes directos de cada celda, como DirectPrecedents/DirectDependents de Excel
+    "auditoria": {
+        "celdas": {"A1": "2", "A2": "3", "D1": "0.1", "B1": "=A1*2", "B2": "=SUMA(A1:A2)+B1", "C1": "=B2*Tasa", "C2": "=B1+$A$2"},
+        "js": """async (H, hoja) => { H.nombres.guardar("Tasa", "=" + hoja + "!$D$1"); await new Promise((r) => setTimeout(r, 200));
+          const A = H.auditoria, F = NOM.formulas, datos = {};
+          const celdas = (l) => { const out = []; l.forEach((x) => { if (x.c1 != null) { for (let f = x.f1; f <= x.f2; f++) for (let c = x.c1; c <= x.c2; c++) out.push(F.ref(c, f)); } else out.push(F.ref(x.c, x.f)); }); return [...new Set(out)].sort(); };
+          for (const r of ["A1", "A2", "D1", "B1", "B2", "C1", "C2"]) { const p = F.parseRef(r); datos[r] = { prec: celdas(A.precedentes(p.c, p.f).aqui), dep: celdas(A.dependientes(p.c, p.f).aqui) }; }
+          A.rastrear("p", 2, 0); A.rastrear("p", 2, 0); const n = A.flechas().length;
+          return { mal: n >= 3 ? [] : ["flechas de C1 en dos niveles: " + n], datos }; }""",
+        "revisar": lambda x, r: revisar_auditoria(x, r),
+    },
     # Mostrar fórmulas (Ctrl+`): la hoja muestra la fórmula escrita y sale con showFormulas="1"
     "mostrar-formulas": {
         "celdas": {"A1": "2", "A2": "=A1*3", "A3": "=SUMA(A1:A2)"},
@@ -101,6 +112,31 @@ async ([b64, nombre, espacio]) => {
 """
 
 
+def celdas_de(addr):
+    """«A1:A2,B1» (dirección de Excel) → ["A1", "A2", "B1"]."""
+    import re
+    def col(x): n = 0; [n := n * 26 + ord(ch) - 64 for ch in x]; return n
+    def letra(n): r = ""; exec("while n:\n n, k = divmod(n - 1, 26)\n r = chr(65 + k) + r", {}, loc := {"n": n, "r": r}); return loc["r"]
+    out = set()
+    for parte in [p for p in addr.split(",") if p]:
+        a, _, b = parte.partition(":"); b = b or a
+        ma, mb = re.match(r"([A-Z]+)(\d+)", a), re.match(r"([A-Z]+)(\d+)", b)
+        for f in range(int(ma.group(2)), int(mb.group(2)) + 1):
+            for c in range(col(ma.group(1)), col(mb.group(1)) + 1): out.add(letra(c) + str(f))
+    return sorted(out)
+
+
+def revisar_auditoria(x, r):
+    mal = []
+    cel = x["hojas"][0]["celdas"]
+    for ref, d in r["res"]["datos"].items():
+        ex = cel.get(ref, {})
+        for k in ("prec", "dep"):
+            e = celdas_de(ex.get(k, "")) if ex else []
+            if e != d[k]: mal.append(f"{ref} {k}: NOM {d[k]} · Excel {e}")
+    return mal
+
+
 def igual(a, b):
     if isinstance(a, (int, float)) and isinstance(b, (int, float)): return abs(a - b) <= 1e-9 * max(1, abs(a))
     if isinstance(a, bool) or isinstance(b, bool): return a == b
@@ -125,7 +161,8 @@ def main():
             r = nav.p.evaluate(JS_CASO, [{k: v for k, v in c.items() if not callable(v)}, c["js"]])
             arch = SALE / f"{nombre}.xlsx"; arch.write_bytes(base64.b64decode(r["xlsx"]))
             fallas = []
-            if any(x for x in (r["res"] or []) if x): fallas.append(f"NOM no aceptó: {r['res']}")
+            malos = r["res"].get("mal", []) if isinstance(r["res"], dict) else [x for x in (r["res"] or []) if x]
+            if malos: fallas.append(f"NOM no aceptó: {malos}")
             # la vuelta: NOM abre lo que exportó
             v = nav.p.evaluate(JS_VUELTA, [r["xlsx"], arch.name, esp])
             if c.get("nombres") and v["nombres"] != c["nombres"]: fallas.append(f"vuelta: nombres {v['nombres']}")
