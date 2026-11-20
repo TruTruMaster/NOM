@@ -20,7 +20,8 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
     <!-- Sin respaldo del sistema: ni la copia en la nube ni el traspaso a otro teléfono se llevan
-         los datos de la app (la sesión abierta y la llave de los documentos de este teléfono). -->
+         los datos de la app (la sesión abierta y la llave de los documentos de este teléfono).
+         Red (res/xml/seguridad_red.xml): la red local sin cifrar, como siempre; la nube solo por HTTPS. -->
     <application
         android:allowBackup="false"
         android:fullBackupContent="@xml/sin_respaldo"
@@ -29,7 +30,7 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/seguridad_red"
         android:theme="@style/Tema.Nom">
         <activity
             android:name=".MainActivity"
