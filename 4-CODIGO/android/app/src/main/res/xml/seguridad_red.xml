@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Red de la app. La red local va por HTTP, como siempre: el teléfono habla con la computadora o con otro
+  teléfono del salón por http://192.168.x.x:8080 (y consigo mismo por 127.0.0.1); esas direcciones cambian
+  en cada red y aquí no se pueden escribir rangos de IP, así que la regla general lo permite. La nube va
+  solo por HTTPS, y solo con los certificados del sistema.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">nom.qd.je</domain>
+        <domain includeSubdomains="true">nomcolab.dpdns.org</domain>
+    </domain-config>
+</network-security-config>
