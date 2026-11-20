@@ -2,6 +2,17 @@
 
 Lo que cambió en cada versión, en corto (es la página «Novedades» de la ayuda; la escribe `4-CODIGO/ayuda/generar.py`). El diario completo, día por día, está en `LOG.md`.
 
+## 0.17.1 — noviembre de 2026
+
+- **Más firme con documentos y envíos grandes:** el servidor atiende por turnos lo que llega muy grande y pone topes a
+  lo que recibe (un envío de más de 32 MB, un cambio desmedido), sin que nadie note la diferencia al trabajar.
+- **Si el servidor se reinicia o está ocupado, lo que escribiste se vuelve a mandar solo** (antes se podía perder lo
+  último que alguien escribió en ese momento).
+- **Copia en otro NOM:** corre aparte, así guardar los documentos nunca espera a la red, y tiene un tiempo máximo.
+- **Entrar** es más rápido cuando entra un salón entero a la vez. Los nombres de cuenta nuevos usan las letras del
+  alfabeto latino (con acentos y ñ).
+- **App de Android:** la nube va siempre cifrada (HTTPS); el salón sigue igual. Dependencias al día.
+
 ## 0.17.0 — noviembre de 2026
 
 - **Las imágenes y el archivo de Office original van aparte del documento** (un almacén por espacio): un
