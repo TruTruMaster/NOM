@@ -50,4 +50,14 @@ class PaginasLimpiasTest {
                 + "<form action=\"/ayuda/buscar\"><a href=\"#uno\">1</a><a href=\"/legal\">Legal</a></form>",
                 PaginasLimpias.limpiar(html, "legal/terminos"));
     }
+
+    @org.junit.jupiter.api.Test
+    void laPortadaPorHttpVaSinLaPoliticaEnMeta() throws Exception {
+        String html = new String(getClass().getResourceAsStream("/static/index.html").readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("http-equiv=\"Content-Security-Policy\""));   // (la app la usa)
+        String sin = PaginasLimpias.sinPoliticaEnMeta(html);
+        org.junit.jupiter.api.Assertions.assertFalse(sin.contains("Content-Security-Policy"));
+        org.junit.jupiter.api.Assertions.assertTrue(sin.contains("<script src=\"js/nucleo.js\"></script>") && sin.contains("<meta charset"));
+        org.junit.jupiter.api.Assertions.assertEquals("<p>x</p>", PaginasLimpias.sinPoliticaEnMeta("<p>x</p>"));
+    }
 }

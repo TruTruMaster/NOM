@@ -2,6 +2,11 @@
 
 Lo que cambió en cada versión, en corto (es la página «Novedades» de la ayuda; la escribe `4-CODIGO/ayuda/generar.py`). El diario completo, día por día, está en `LOG.md`.
 
+## 0.18.1 — noviembre de 2026
+
+- **La página abre mucho más rápido la primera vez** (y después de cada actualización): el navegador ya baja sus
+  archivos a la vez y no uno por uno. Medido en `www.nom.qd.je`: de 8.5 s a cerca de 1 s hasta ver la pantalla de entrar.
+
 ## 0.18.0 — noviembre de 2026
 
 - **Herramientas de datos de Excel, como en Excel:** Buscar objetivo, nombres definidos y su administrador (la fórmula

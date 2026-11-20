@@ -55,6 +55,7 @@ public class PaginasApi {
     public ResponseEntity<String> portada(HttpServletRequest req) throws IOException {
         String html = leer("index.html");
         if (html == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        html = mx.wack.nom.core.servicio.PaginasLimpias.sinPoliticaEnMeta(html);   // (la política va en la cabecera)
         html = Buscadores.cabecera(html, Buscadores.base(req), "");
         String etiqueta = "\"" + Integer.toHexString(html.hashCode()) + "\"";
         if (new ServletWebRequest(req).checkNotModified(etiqueta)) return ResponseEntity.status(HttpStatus.NOT_MODIFIED).eTag(etiqueta).build();

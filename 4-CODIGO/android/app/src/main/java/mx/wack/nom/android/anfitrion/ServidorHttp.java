@@ -326,6 +326,8 @@ final class ServidorHttp {
             while ((n = a.read(buf)) > 0) b.write(buf, 0, n);
             datos = b.toByteArray();
             if (pagina != null) datos = PaginasLimpias.limpiar(new String(datos, StandardCharsets.UTF_8), pagina).getBytes(StandardCharsets.UTF_8);
+            // (la política de contenido ya va en la cabecera: sin el <meta>, el navegador baja los programas a la vez)
+            if (ruta.equals("index.html")) datos = PaginasLimpias.sinPoliticaEnMeta(new String(datos, StandardCharsets.UTF_8)).getBytes(StandardCharsets.UTF_8);
         } catch (IOException e) {
             responder(out, 404, "application/json;charset=UTF-8", Json.YO.escribir(Map.of("error", "No existe")), mantener, false);
             return;

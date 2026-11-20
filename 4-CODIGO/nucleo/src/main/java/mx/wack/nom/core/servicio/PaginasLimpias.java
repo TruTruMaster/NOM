@@ -82,4 +82,21 @@ public final class PaginasLimpias {
         if (j < 0) return i;
         return Math.min(i, j);
     }
+
+    /**
+     * La portada servida por HTTP, sin la política de contenido en un {@code <meta>}: el servidor ya la manda en la
+     * cabecera (FiltroCabeceras y el servidor del teléfono), y con el {@code <meta>} Chrome no lee por adelantado los
+     * programas de la página y los baja de uno en uno (medido el 20-nov a través de Cloudflare: 8.5 s la primera vez,
+     * 1.1 s sin él). La app (que abre sus propios archivos, sin cabeceras) la conserva.
+     */
+    public static String sinPoliticaEnMeta(String html) {
+        if (html == null) return null;
+        int i = html.indexOf("<meta http-equiv=\"Content-Security-Policy\"");
+        if (i < 0) return html;
+        int f = html.indexOf('>', i);
+        if (f < 0) return html;
+        int fin = f + 1;
+        while (fin < html.length() && (html.charAt(fin) == '\n' || html.charAt(fin) == '\r' || html.charAt(fin) == ' ')) fin++;
+        return html.substring(0, i) + html.substring(fin);
+    }
 }
