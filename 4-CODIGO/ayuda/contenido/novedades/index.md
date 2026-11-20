@@ -4,8 +4,24 @@ descripcion: Qué cambió en cada versión, en palabras sencillas.
 orden: 1
 aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-20
-version: 0.17.1
+version: 0.18.0
 ---
+## 0.18.0 — noviembre de 2026
+
+- **Herramientas de datos de Excel, como en Excel:** Buscar objetivo, nombres definidos y su administrador (la fórmula
+  conserva el nombre: `=B2*IVA`), cálculo manual con F9 y Mayús+F9, agrupar y desagrupar filas y columnas (el esquema,
+  con sus niveles), mostrar fórmulas (Ctrl+`), rastrear precedentes y dependientes, evaluar una fórmula paso a paso,
+  consolidar y tablas de datos. Comprobadas contra Excel 2024: dan lo mismo, y Excel abre lo que descarga NOM con todo eso.
+- **Bonos con el primer o el último período irregular** (`PRECIO.PER.IRREGULAR.1` y `.2`, `RENDTO.PER.IRREGULAR.1` y
+  `.2`): ya son 458 funciones.
+- **Los renglones de Word, donde los pone Word,** también en las celdas de las tablas, en los títulos, junto a lo que
+  flota y con versalitas, escala de caracteres, superíndices, sangrías negativas, recuadros y columnas de distinto ancho
+  (seis documentos de prueba con el 100 % de los renglones iguales a Word 2024).
+- **PowerPoint:** los renglones donde los pone PowerPoint también en las miniaturas, al terminar de escribir en un cuadro
+  y en el PNG de la diapositiva (que ahora lleva adentro las fuentes de la página).
+- Fuentes nuevas con las medidas de Office: Sitka Text, Lucida Sans Unicode e Ink Free. Las potencias imposibles dan
+  `#¡NUM!` o `#¡DIV/0!` como en Excel, y un número en notación científica se lee como número.
+
 ## 0.17.1 — noviembre de 2026
 
 - **Más firme con documentos y envíos grandes:** el servidor atiende por turnos lo que llega muy grande y pone topes a
