@@ -546,7 +546,7 @@
         e.preventDefault();
         const nombre = f.nombre.value.trim(), contrasena = f.contrasena.value, empresa = f.empresa.value.trim();
         if (!nombre) return mostrarError(f, { campo: "nombre", message: "Escribe un nombre de usuario" });
-        if (!/^[\p{L}\p{N}._-]{3,24}$/u.test(nombre)) return mostrarError(f, { campo: "nombre", message: "Usa de 3 a 24 letras, números, punto, guion o guion bajo, sin espacios" });
+        if (!/^[\p{Script=Latin}0-9._-]{3,24}$/u.test(nombre) || nombre.normalize("NFKC") !== nombre) return mostrarError(f, { campo: "nombre", message: "Usa de 3 a 24 letras, números, punto, guion o guion bajo, sin espacios" });
         if (contrasena.length < 8) return mostrarError(f, { campo: "contrasena", message: "La contraseña necesita al menos 8 letras, números o signos" });
         if (!f.acepto.checked) return mostrarError(f, { message: "Para crear la cuenta, lee y acepta los Términos y el Aviso de privacidad" });
         enviando(f, async () => {
@@ -618,7 +618,7 @@
       try {
         const info = await api.get("/api/red/info", undefined, { ms: 4000 });
         if (info.nom !== 1) throw new Error();
-        NOM.aviso("Conectado con " + info.equipo, { tipo: "ok" });
+        NOM.aviso("Conectado con " + (info.equipo || dir), { tipo: "ok" });
         if (NOM.revisarVersion) NOM.revisarVersion(info);
         listo();
       } catch (e) {

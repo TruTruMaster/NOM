@@ -367,14 +367,18 @@
     let ini = 0;
     for (let i = 0; i < vis.length; i++) if (vis[i].c === "\n" && !vis[i].e) { ps.push({ k: vis[i].id, ini, fin: i, mark: vis[i] }); ini = i + 1; }
     ps.push({ k: FIN, ini, fin: vis.length, mark: sec.fin });
+    // (los niveles de una lista van de 0 a 8, como en Word)
+    const nivelLista = (n) => Math.max(0, Math.min(8, Math.floor(+n) || 0));
     // Numeración de listas: contador por nivel; se reinicia cuando la lista se interrumpe, salvo
     // que el párrafo diga "continuar". "inicio" fija el número de ese renglón (8.2).
     let cont = [], previo = [];
-    const porLista = {};   // listas de Word: cada numId lleva su cuenta, aunque haya texto en medio (como Word)
+    const porLista = new Map();   // listas de Word: cada numId lleva su cuenta, aunque haya texto en medio (como Word)
     ps.forEach((p) => {
       const pa = S().attrs(p.mark);
       if (pa.lista === "numeros" && pa.numid) {
-        const cc = porLista[pa.numid] || (porLista[pa.numid] = []), nv = pa.nivel || 0;
+        let cc = porLista.get(pa.numid);
+        if (!cc) porLista.set(pa.numid, (cc = []));
+        const nv = nivelLista(pa.nivel);
         cc.length = nv + 1;
         cc[nv] = pa.inicio != null && pa.inicio !== "" && !isNaN(+pa.inicio) ? Math.max(0, +pa.inicio) : (cc[nv] || 0) + 1;
         p.num = pa.numtxt ? numeroWord(pa.numtxt, pa.numfmts, cc) : numeral(cc[nv], nv, pa.numfmt);
@@ -382,7 +386,7 @@
       }
       if (pa.lista === "numeros") {
         if (!cont.length && pa.continuar && previo.length) cont = previo.slice();
-        const nv = pa.nivel || 0;
+        const nv = nivelLista(pa.nivel);
         cont.length = nv + 1;
         cont[nv] = pa.inicio != null && pa.inicio !== "" && !isNaN(+pa.inicio) ? Math.max(0, +pa.inicio) : (cont[nv] || 0) + 1;
         p.num = pa.numtxt ? numeroWord(pa.numtxt, pa.numfmts, cont) : numeral(cont[nv], nv, pa.numfmt);

@@ -3,6 +3,8 @@
    y empaquetada dentro de la app Android (file://). */
 (function () {
   "use strict";
+  // Los objetos base de JavaScript quedan cerrados: nada les agrega propiedades nuevas (lo que ya tienen no cambia).
+  try { [Object.prototype, Array.prototype, Function.prototype, String.prototype, Number.prototype, Boolean.prototype].forEach((o) => Object.preventExtensions(o)); } catch (e) { /* navegador sin esto */ }
   const NOM = (window.NOM = window.NOM || {});
   // Versión de esta interfaz. Tienen que ir a la par de nucleo/.../core/Version.java y del APK:
   // INTERFAZ sube cuando cambia el formato de los documentos o lo que la interfaz sabe leer.

@@ -19,6 +19,22 @@
   const clave = (t, n) => t + "@" + n;
   const gana = (t, n, reg) => !reg || t > reg[1] || (t === reg[1] && n > reg[2]);
   const caracteres = (x) => Array.from(x || "");
+  // Nombres que no pueden ser de un atributo (son parte de todos los objetos), y lo más que puede abarcar una
+  // operación de mostrar/ocultar o de formato: lo mismo que acepta el servidor (core/crdt/Secuencia.java).
+  const RESERVADO = new Set(["__proto__", "constructor", "prototype"]);
+  const MAX_ALCANCE = 4000000;
+  const rangosValidos = (r) => {
+    if (!Array.isArray(r) || r.length > 5000) return false;
+    let total = 0;
+    for (const x of r) {
+      if (!Array.isArray(x) || x.length !== 3 || typeof x[0] !== "string" || !Number.isFinite(x[1]) || !Number.isFinite(x[2])) return false;
+      if (x[0] === FIN) continue;
+      if (x[1] < 0 || x[2] < x[1]) return false;
+      total += x[2] - x[1] + 1;
+      if (total > MAX_ALCANCE) return false;
+    }
+    return true;
+  };
   const mismo = (a, b) => JSON.stringify(a || null) === JSON.stringify(b || null);
 
   class Secuencia {
@@ -74,7 +90,7 @@
         const t = r.t + i;
         const it = { id: clave(t, r.n), t, n: r.n, c, iz: i === 0 ? (r.iz || null) : clave(t - 1, r.n), v: true, vt: t, vn: r.n, f: null };
         if (r.e) it.e = r.e;
-        if (r.a) { it.f = {}; for (const k in r.a) it.f[k] = [r.a[k], t, r.n]; }
+        if (r.a) { it.f = {}; for (const k in r.a) if (!RESERVADO.has(k)) it.f[k] = [r.a[k], t, r.n]; }
         return it;
       });
     }
@@ -124,6 +140,7 @@
 
     /** v y f: se aplican carácter por carácter como registros LWW. */
     _aplicarRangos(o) {
+      if (!rangosValidos(o.r)) return false;
       let cambio = false, falta = false;
       for (const [n, t1, t2] of o.r || []) {
         if (n === FIN) { if (this._aplicarA(this.fin, o)) cambio = true; continue; }
@@ -147,6 +164,7 @@
       }
       let cambio = false;
       for (const k in o.a) {
+        if (RESERVADO.has(k)) continue;
         const reg = it.f && it.f[k];
         if (!gana(o.t, o.n, reg)) continue;
         if (!it.f) it.f = {};
