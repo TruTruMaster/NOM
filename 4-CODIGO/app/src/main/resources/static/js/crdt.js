@@ -15,11 +15,22 @@
   })();
 
   const gana = (t, n, reg) => !reg || t > reg.t || (t === reg.t && n > (reg.n || ""));
+  // Nombres que no pueden ser de un bloque ni de un campo: son parte de todos los objetos de JavaScript
+  // (el servidor tampoco los acepta, core/crdt/Operacion.java).
+  const RESERVADO = new Set(["__proto__", "constructor", "prototype"]);
+  const propio = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const nombreValido = (k) => typeof k === "string" && k !== "" && !RESERVADO.has(k);
+  /** Quita del estado los nombres reservados (por si un documento los trae). */
+  const limpiarEstado = (est) => {
+    for (const k of RESERVADO) { if (propio(est.bloques, k)) delete est.bloques[k]; if (est.seq && propio(est.seq, k)) delete est.seq[k]; }
+    for (const b in est.bloques) { const x = est.bloques[b]; if (x && typeof x === "object") for (const k of RESERVADO) if (propio(x, k)) delete x[k]; }
+    return est;
+  };
 
   class DocCRDT {
     constructor(docId, estado, opc) {
       this.id = docId;
-      this.estado = estado && estado.bloques ? estado : { bloques: {}, reloj: 0 };
+      this.estado = limpiarEstado(estado && estado.bloques ? estado : { bloques: {}, reloj: 0 });
       if (!this.estado.seq) this.estado.seq = {};
       this._secs = {};
       // Un nodo por pestaña: dos pestañas del mismo equipo nunca repiten id de operación.
@@ -74,22 +85,22 @@
     valor(b, c) { const x = this.estado.bloques[b]; return x && x[c] ? x[c].v : undefined; }
     bloque(b) {
       const x = this.estado.bloques[b];
-      if (!x) return null;
+      if (!x || !nombreValido(b)) return null;
       const o = { id: b };
-      for (const c in x) o[c] = x[c].v;
+      for (const c in x) if (!RESERVADO.has(c)) o[c] = x[c].v;
       return o;
     }
     vivo(b) { const x = this.estado.bloques[b]; return !!x && !(x.eliminado && x.eliminado.v === true); }
     /** Bloques vivos del contenido (los comentarios van aparte: no se pintan ni se exportan). */
     vivos() {
       const r = [];
-      for (const id in this.estado.bloques) if (id !== "_doc" && id !== "_origen" && this.vivo(id) && this.valor(id, "tipo") !== "comentario") r.push(this.bloque(id));
+      for (const id in this.estado.bloques) if (id !== "_doc" && id !== "_origen" && !RESERVADO.has(id) && this.vivo(id) && this.valor(id, "tipo") !== "comentario") r.push(this.bloque(id));
       return r;
     }
     /** Comentarios y respuestas vivos (7). */
     comentarios() {
       const r = [];
-      for (const id in this.estado.bloques) if (this.valor(id, "tipo") === "comentario" && this.vivo(id)) r.push(this.bloque(id));
+      for (const id in this.estado.bloques) if (!RESERVADO.has(id) && this.valor(id, "tipo") === "comentario" && this.vivo(id)) r.push(this.bloque(id));
       return r.sort((a, b) => (a.t || 0) - (b.t || 0));
     }
     doc() { return this.bloque("_doc") || {}; }
@@ -99,7 +110,8 @@
     }
     /** Secuencia viva de un bloque de texto (se arma la primera vez desde el registro guardado). */
     secuencia(b) {
-      if (!this._secs[b]) this._secs[b] = new NOM.Secuencia(this.estado.seq[b] || null);
+      if (!nombreValido(b)) return new NOM.Secuencia(null);
+      if (!propio(this._secs, b)) this._secs[b] = new NOM.Secuencia((propio(this.estado.seq, b) && this.estado.seq[b]) || null);
       return this._secs[b];
     }
     tieneSecuencia(b) { const r = this.estado.seq[b]; return !!(r && (r.ins.length || r.fmt.length)); }
@@ -176,7 +188,10 @@
       if (!this.opc.local) this._programar(true);
       return entrada;
     }
-    _registro(b) { return this.estado.seq[b] || (this.estado.seq[b] = NOM.Secuencia.registroVacio()); }
+    _registro(b) {
+      if (!nombreValido(b)) return NOM.Secuencia.registroVacio();
+      return (propio(this.estado.seq, b) && this.estado.seq[b]) || (this.estado.seq[b] = NOM.Secuencia.registroVacio());
+    }
     /** La cola se escribe en el almacenamiento como mucho cada 300 ms (escribir no debe trabar). */
     _guardarCola() {
       if (!this._colaT) this._colaT = NOM.throttle(() => NOM.guardar(NOM.api.clave("cola." + this.id), this.pendientes), 300);
@@ -254,12 +269,15 @@
 
     // ---------------------------------------------------------- fusión
     _fusionar(op) {
+      if (!op || !nombreValido(op.bloque)) return {};
       if (op.s) return this._fusionarSeq(op);
       const cambios = {};
       if (op.t > this.estado.reloj) this.estado.reloj = op.t;
-      const b = this.estado.bloques[op.bloque] || (this.estado.bloques[op.bloque] = {});
+      const bl = this.estado.bloques;
+      const b = (propio(bl, op.bloque) && bl[op.bloque]) || (bl[op.bloque] = {});
       for (const c in op.campos) {
-        if (gana(op.t, op.n, b[c])) { b[c] = { v: op.campos[c], t: op.t, n: op.n }; cambios[c] = op.campos[c]; }
+        if (!propio(op.campos, c) || RESERVADO.has(c)) continue;
+        if (gana(op.t, op.n, propio(b, c) ? b[c] : null)) { b[c] = { v: op.campos[c], t: op.t, n: op.n }; cambios[c] = op.campos[c]; }
       }
       this._guardarCache();
       return cambios;
@@ -290,17 +308,24 @@
     fusionarEstado(remoto) {
       const lista = [];
       for (const b in remoto.bloques) {
+        if (!propio(remoto.bloques, b) || !nombreValido(b)) continue;
         const campos = remoto.bloques[b];
-        const loc = this.estado.bloques[b] || (this.estado.bloques[b] = {});
+        if (!campos || typeof campos !== "object") continue;
+        const bl = this.estado.bloques;
+        const loc = (propio(bl, b) && bl[b]) || (bl[b] = {});
         const cambios = {};
         for (const c in campos) {
+          if (!propio(campos, c) || RESERVADO.has(c)) continue;
           const r = campos[c];
-          if (gana(r.t, r.n, loc[c])) { loc[c] = { v: r.v, t: r.t, n: r.n }; cambios[c] = r.v; }
+          if (!r || typeof r !== "object") continue;
+          if (gana(r.t, r.n, propio(loc, c) ? loc[c] : null)) { loc[c] = { v: r.v, t: r.t, n: r.n }; cambios[c] = r.v; }
         }
         if (Object.keys(cambios).length) lista.push({ bloque: b, campos: cambios, local: false });
       }
       for (const b in remoto.seq || {}) {
+        if (!propio(remoto.seq, b) || !nombreValido(b)) continue;
         const r = remoto.seq[b];
+        if (!r || typeof r !== "object") continue;
         let algo = false;
         ["ins", "vis", "fmt"].forEach((k) => (r[k] || []).forEach((e) => {
           if (this._fusionarSeq({ bloque: b, t: e.t, n: e.n, s: e })._seq) algo = true;
@@ -358,6 +383,7 @@
         this.pendientes = this.pendientes.filter((o) => !enviados.has(o.id));
         if (this.pendientes.length) this._guardarCola(); else NOM.guardar(NOM.api.clave("cola." + this.id), this.pendientes);
         this.espera = 0;
+        this._fallos500 = 0;
         this.sinRed = false;
         this.ultimoEnvio = Date.now();
         this._fijarEstado(this.pendientes.length ? "enviando" : "ok");
@@ -382,8 +408,13 @@
           this.detenido = true;
           this._fijarEstado("lleno");
           this.opc.alLleno && this.opc.alLleno(e);
+        } else if (e.estado === 408 || e.estado === 429 || (e.estado >= 502 && e.estado <= 599) || (e.estado === 500 && (this._fallos500 = (this._fallos500 || 0) + 1) <= 5)) {
+          // El servidor está ocupado o reiniciándose (o el túnel no lo alcanza): se vuelve a mandar, nada se pierde.
+          this.espera = Math.min((this.espera || 1000) * 2, 15000);
+          this._fijarEstado("sin-red");
         } else {
           // Lote inválido: se descarta para no bloquear la cola para siempre.
+          this._fallos500 = 0;
           console.warn("Lote rechazado", e);
           const malos = new Set(lote.map((o) => o.id));
           this.pendientes = this.pendientes.filter((o) => !malos.has(o.id));
@@ -407,7 +438,7 @@
     }
     /** Reemplaza el estado por el del servidor (cuando rechazó cambios) y vuelve a aplicar lo que aún no se envía. */
     reemplazarEstado(remoto) {
-      this.estado = remoto && remoto.bloques ? remoto : { bloques: {}, reloj: 0 };
+      this.estado = limpiarEstado(remoto && remoto.bloques ? remoto : { bloques: {}, reloj: 0 });
       if (!this.estado.seq) this.estado.seq = {};
       this._secs = {};
       this.pendientes.forEach((op) => this._fusionar(op));

@@ -425,7 +425,12 @@
     if (zip && !(zip[0] === 0x50 && zip[1] === 0x4b)) return null;
     return zip;
   }
-  const aleatorio = (n) => { const r = new Uint8Array(n); if (raiz.crypto && raiz.crypto.getRandomValues) raiz.crypto.getRandomValues(r); else for (let i = 0; i < n; i++) r[i] = Math.floor(Math.random() * 256); return r; };
+  const aleatorio = (n) => {
+    if (!(raiz.crypto && raiz.crypto.getRandomValues)) throw new Error("Este navegador no puede generar llaves seguras para cifrar el archivo");
+    const r = new Uint8Array(n);
+    raiz.crypto.getRandomValues(r);
+    return r;
+  };
   // las partes de «\x06DataSpaces» que Office escribe junto al paquete cifrado (MS-OFFCRYPTO 2.1)
   function espaciosDeDatos() {
     const cadena = (s) => unir(le32(s.length * 2), utf16(s), new Uint8Array((4 - ((s.length * 2) % 4)) % 4));
