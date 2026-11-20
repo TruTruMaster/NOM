@@ -34,6 +34,11 @@ import mx.wack.nom.core.servicio.PaginasLimpias;
 final class ServidorHttp {
     private static final Bitacora log = Bitacora.de(ServidorHttp.class);
     private static final int MAX_CUERPO = 40 * 1024 * 1024;
+    /** Conexiones abiertas a la vez (un salón de 50, cada quien con su canal en vivo y lo que pide) y cuerpos que se
+        reciben a la vez, en KB: el teléfono tiene poca memoria. */
+    private static final int MAX_CONEXIONES = 300;
+    private final java.util.concurrent.Semaphore conexiones = new java.util.concurrent.Semaphore(MAX_CONEXIONES);
+    private static final java.util.concurrent.Semaphore EN_VUELO = new java.util.concurrent.Semaphore(96 * 1024);
 
     private final AssetManager assets;
     private final ApiTelefono api;
@@ -78,11 +83,11 @@ final class ServidorHttp {
         while (socket != null && !socket.isClosed()) {
             try {
                 Socket s = socket.accept();
-                hilos.execute(() -> conexion(s));
+                if (!conexiones.tryAcquire()) { try { s.close(); } catch (IOException ignorado) { } continue; }
+                try { hilos.execute(() -> { try { conexion(s); } finally { conexiones.release(); } }); }
+                catch (java.util.concurrent.RejectedExecutionException e) { conexiones.release(); try { s.close(); } catch (IOException ignorado) { } return; }
             } catch (IOException e) {
                 if (socket.isClosed()) return;
-            } catch (java.util.concurrent.RejectedExecutionException e) {
-                return;
             }
         }
     }
@@ -137,13 +142,17 @@ final class ServidorHttp {
         static Respuesta bytes(byte[] datos) { return new Respuesta(200, null, null, datos, "application/octet-stream"); }
     }
 
-    private static String linea(InputStream in) throws IOException {
+    private static String linea(InputStream in) throws IOException { return linea(in, Long.MAX_VALUE); }
+
+    /** Una línea de la petición; hasta: para cuándo tiene que haber llegado (una conexión que manda de a poco no se queda). */
+    private static String linea(InputStream in, long hasta) throws IOException {
         ByteArrayOutputStream b = new ByteArrayOutputStream(128);
         int c;
         while ((c = in.read()) != -1) {
             if (c == '\n') break;
             if (c != '\r') b.write(c);
             if (b.size() > 16 * 1024) throw new IOException("Línea demasiado larga");
+            if ((b.size() & 63) == 0 && System.currentTimeMillis() > hasta) throw new IOException("Petición demasiado lenta");
         }
         if (c == -1 && b.size() == 0) return null;
         return b.toString("UTF-8");
@@ -173,23 +182,38 @@ final class ServidorHttp {
             }
         }
         String l;
-        while ((l = linea(in)) != null && !l.isEmpty()) {
+        long hasta = System.currentTimeMillis() + 20_000;
+        while ((l = linea(in, hasta)) != null && !l.isEmpty()) {
+            if (System.currentTimeMillis() > hasta) throw new IOException("Petición demasiado lenta");
             int i = l.indexOf(':');
             if (i > 0) p.cabeceras.put(l.substring(0, i).trim().toLowerCase(Locale.ROOT), l.substring(i + 1).trim());
             if (p.cabeceras.size() > 100) throw new IOException("Demasiadas cabeceras");
         }
         String largo = p.cabecera("content-length");
         if (largo != null) {
-            int n = Integer.parseInt(largo.trim());
+            int n;
+            try { n = Integer.parseInt(largo.trim()); } catch (NumberFormatException e) { throw new IOException("Petición no válida"); }
             if (n < 0 || n > MAX_CUERPO) throw new IOException("Cuerpo demasiado grande");
-            byte[] b = new byte[n];
-            int leido = 0;
-            while (leido < n) {
-                int k = in.read(b, leido, n - leido);
-                if (k < 0) throw new IOException("Cuerpo incompleto");
-                leido += k;
+            // Se aparta lo que dice que va a mandar y se lee conforme llega (no se reserva todo de una vez).
+            int kb = (n + 1023) / 1024;
+            boolean turno;
+            try { turno = EN_VUELO.tryAcquire(kb, 15, java.util.concurrent.TimeUnit.SECONDS); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); turno = false; }
+            if (!turno) throw new IOException("Ocupado");
+            try {
+                ByteArrayOutputStream b = new ByteArrayOutputStream(Math.min(n, 64 * 1024));
+                byte[] buf = new byte[Math.min(Math.max(n, 1), 64 * 1024)];
+                int leido = 0;
+                while (leido < n) {
+                    int k = in.read(buf, 0, Math.min(buf.length, n - leido));
+                    if (k < 0) throw new IOException("Cuerpo incompleto");
+                    b.write(buf, 0, k);
+                    leido += k;
+                }
+                p.cuerpo = b.toByteArray();
+            } finally {
+                EN_VUELO.release(kb);
             }
-            p.cuerpo = b;
         }
         return p;
     }

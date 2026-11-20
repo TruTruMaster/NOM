@@ -55,7 +55,7 @@ public class ServicioAnfitrion extends Service {
     private ServidorHttp http;
     private Descubrimiento descubrimiento;
     private ServicioDocumentos documentos;
-    private ScheduledExecutorService reloj;
+    private ScheduledExecutorService reloj, copias;
     private PowerManager.WakeLock despierto;
     private WifiManager.WifiLock wifi;
     private WifiManager.MulticastLock difusion;
@@ -189,7 +189,13 @@ public class ServicioAnfitrion extends Service {
         reloj.scheduleAtFixedRate(seguro(documentos::autoguardar), 60, 60, TimeUnit.SECONDS);
         reloj.scheduleAtFixedRate(seguro(difusor::latido), 20, 20, TimeUnit.SECONDS);
         reloj.scheduleAtFixedRate(seguro(() -> primerPlano(null)), 30, 30, TimeUnit.SECONDS);
-        reloj.scheduleWithFixedDelay(seguro(sincronia::cadaRato), 90, 300, TimeUnit.SECONDS);
+        // La copia en otro servidor va en su propio hilo: guardar los documentos no espera a la red.
+        copias = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "nom-copias");
+            t.setDaemon(true);
+            return t;
+        });
+        copias.scheduleWithFixedDelay(seguro(sincronia::cadaRato), 90, 300, TimeUnit.SECONDS);
         // el almacén de binarios: lo que nadie usa desde hace 30 días sale (cada 6 horas)
         reloj.scheduleWithFixedDelay(seguro(binarios::limpiarTodo), 600, 6 * 3600, TimeUnit.SECONDS);
         // 6.4: respaldo del día (se revisa cada hora; si hoy ya hay uno, no hace nada).
@@ -217,6 +223,7 @@ public class ServicioAnfitrion extends Service {
     public void onDestroy() {
         activo = null;
         if (reloj != null) reloj.shutdownNow();
+        if (copias != null) copias.shutdownNow();
         try { if (documentos != null) documentos.alApagar(); } catch (Throwable e) { log.error("Al apagar", e); }
         if (descubrimiento != null) descubrimiento.detener();
         if (http != null) http.detener();
