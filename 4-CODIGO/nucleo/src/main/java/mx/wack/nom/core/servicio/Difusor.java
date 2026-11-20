@@ -65,6 +65,14 @@ public class Difusor {
 
     /** RNF Espacios 1: personas conectadas a la vez por espacio (antes 5; 50 desde el 13-nov-2026). */
     public static final int MAX_PERSONAS = 50;
+    /** Canales abiertos a la vez: por cuenta (varias pestañas y equipos), por pantalla de proyección y en todo el servidor. */
+    static final int MAX_CANALES_CUENTA = 40, MAX_PROYECTORES = 20, MAX_CANALES = 5_000;
+
+    private void exigirLugar(java.util.function.Predicate<Suscriptor> mismos, int tope, String mensaje) {
+        if (subs.size() >= MAX_CANALES) throw new ErrorNom(ErrorNom.DEMASIADOS, "El servidor tiene demasiadas conexiones abiertas: intenta en un momento");
+        int n = 0;
+        for (Suscriptor x : subs) if (mismos.test(x) && ++n >= tope) throw new ErrorNom(ErrorNom.DEMASIADOS, mensaje);
+    }
 
     private final List<Suscriptor> subs = new CopyOnWriteArrayList<>();
     private final int maxUsuarios;
@@ -93,6 +101,8 @@ public class Difusor {
             throw new ErrorNom(ErrorNom.CONFLICTO, "El espacio está lleno: ya hay " + maxUsuarios
                     + " personas conectadas. Intenta en un momento.", null, Map.of("max", maxUsuarios));
         }
+        exigirLugar(x -> x.proyector == null && u.id.equals(x.usuarioId), MAX_CANALES_CUENTA,
+                "Tienes demasiadas pestañas o equipos abiertos a la vez: cierra alguno e intenta de nuevo");
         Suscriptor s = new Suscriptor(canal, u, espacioId, docId, cliente == null ? "" : cliente);
         subs.add(s);
         Runnable fuera = () -> {
@@ -113,6 +123,7 @@ public class Difusor {
 
     /** Una pantalla de proyeccion para un documento (5.5). */
     public void suscribirProyector(String espacioId, String docId, String codigo, String presentador, Canal canal) {
+        exigirLugar(x -> codigo.equals(x.proyector), MAX_PROYECTORES, "Ya hay demasiadas pantallas siguiendo esta presentación");
         Suscriptor s = new Suscriptor(canal, espacioId, docId, codigo, presentador);
         subs.add(s);
         canal.alCerrar(() -> subs.remove(s));

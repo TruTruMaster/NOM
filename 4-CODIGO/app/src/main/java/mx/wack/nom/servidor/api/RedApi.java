@@ -32,9 +32,12 @@ public class RedApi {
         Map<String, Object> m = new java.util.LinkedHashMap<>();
         m.put("nom", 1);
         m.put("servidor", nodo.id());
-        m.put("equipo", nodo.equipo());
-        m.put("puerto", nodo.puerto());
-        m.put("direcciones", nodo.direcciones());
+        // El nombre del equipo y sus direcciones solo sirven en la red local (para entrar desde otro equipo del salón).
+        if (nodo.enRedLocal()) {
+            m.put("equipo", nodo.equipo());
+            m.put("puerto", nodo.puerto());
+            m.put("direcciones", nodo.direcciones());
+        }
         m.put("version", Version.APP);
         m.put("interfaz", Version.INTERFAZ);
         m.put("hora", System.currentTimeMillis());
@@ -51,6 +54,6 @@ public class RedApi {
     @GetMapping("/descubrir")
     public Map<String, Object> descubrir() {
         List<EspacioRemoto> lista = descubrimiento.buscarEnLan();
-        return Map.of("espacios", lista, "udp", descubrimiento.udpActivo(), "sinRed", nodo.direcciones().isEmpty());
+        return Map.of("espacios", lista, "udp", descubrimiento.udpActivo(), "sinRed", !nodo.enRedLocal() || nodo.direcciones().isEmpty());
     }
 }

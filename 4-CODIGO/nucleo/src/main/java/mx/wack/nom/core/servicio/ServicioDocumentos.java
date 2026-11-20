@@ -377,6 +377,7 @@ public class ServicioDocumentos {
         if (m == ModoEditor.TEXTO && e.formatoBase != null && !e.formatoBase.isEmpty()) inicial.put("formato", new LinkedHashMap<>(e.formatoBase));
         mot.fusionar(est, new Operacion(n + ":c1", Operacion.DOC, inicial, 1, n));
         if (iniciales != null) {
+            exigirTamanoEnvio(iniciales, Integer.MAX_VALUE);
             long peso = 0;
             for (Operacion op : iniciales) peso += pesoAprox(op.campos()) + pesoAprox(op.s()) + 64;
             if (peso > MAX_BYTES_ESTADO)
@@ -503,6 +504,7 @@ public class ServicioDocumentos {
                     entrega ? Map.of("permiso", p, "entregaLimite", d.entregaLimite) : Map.of("permiso", p));
         }
         if (ops == null || ops.isEmpty()) return Map.of("aplicadas", 0);
+        exigirTamanoEnvio(ops, MAX_OPS_ENVIO);
         boolean propietario = p == Permiso.PROPIETARIO;
         List<Operacion> aplicadas = new ArrayList<>();
         List<String[]> conMencion = new ArrayList<>();
@@ -749,6 +751,22 @@ public class ServicioDocumentos {
     }
 
     /** Cuanto ocupa, mas o menos, un valor al guardarse en JSON (sin armar el texto). */
+    /** Lo más que puede abarcar, sumando, lo que llega en un mismo envío (operaciones de mostrar/ocultar y de formato). */
+    static final long MAX_ALCANCE_ENVIO = 20_000_000L;
+    /** Operaciones por envío al documento abierto (la página manda de 300 en 300). */
+    static final int MAX_OPS_ENVIO = 5_000;
+
+    static void exigirTamanoEnvio(List<Operacion> ops, int maxOps) {
+        if (ops == null) return;
+        if (ops.size() > maxOps) throw ErrorNom.invalido("Demasiados cambios en un solo envío", "ops");
+        long total = 0;
+        for (Operacion op : ops) {
+            if (op == null) continue;
+            total += mx.wack.nom.core.crdt.Secuencia.alcance(op.s());
+            if (total > MAX_ALCANCE_ENVIO) throw ErrorNom.invalido("Demasiados cambios de formato en un solo envío", "ops");
+        }
+    }
+
     static long pesoAprox(Object v) {
         if (v == null) return 4;
         if (v instanceof CharSequence cs) return cs.length() + 2L;
@@ -1722,6 +1740,9 @@ public class ServicioDocumentos {
         return b.toString();
     }
 
+    /** Una etiqueta HTML (cada búsqueda termina en el siguiente '<' o '>'). */
+    private static final java.util.regex.Pattern SIN_ETIQUETA = java.util.regex.Pattern.compile("<[^<>]*+>");
+
     /** Todo el texto de un documento: letras del texto, celdas, figuras, notas y ecuaciones (sin comentarios). */
     private static String textoBuscable(EstadoDocumento est) {
         StringBuilder sb = new StringBuilder();
@@ -1738,7 +1759,7 @@ public class ServicioDocumentos {
                 if (k.equals("texto") || k.equals("titulo") || k.equals("etiqueta") || k.equals("alt") || k.equals("tex") || k.startsWith("c:") || k.startsWith("nota:"))
                     sb.append(t).append('\n');
                 else if (k.equals("html"))
-                    sb.append(t.replaceAll("<[^>]*>", " ").replace("&nbsp;", " ").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&amp;", "&")).append('\n');
+                    sb.append(SIN_ETIQUETA.matcher(t).replaceAll(" ").replace("&nbsp;", " ").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&amp;", "&")).append('\n');
             });
         }
         return sb.toString();
@@ -2197,6 +2218,7 @@ public class ServicioDocumentos {
 
     /** Operaciones que llegan de otro servidor: se integran sin revisar permisos (ya los reviso aquel). */
     public int fusionarExterno(String docId, List<Operacion> ops, String quien) {
+        exigirTamanoEnvio(ops, Integer.MAX_VALUE);
         Documento d = requerir(docId);
         List<Operacion> aplicadas = new ArrayList<>();
         synchronized (candado(docId)) {

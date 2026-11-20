@@ -50,6 +50,9 @@ public class NodoLocal implements Nodo {
 
     public String id() { return id; }
 
+    @Override
+    public boolean enRedLocal() { return Boolean.parseBoolean(env.getProperty("nom.descubrimiento.activo", "true")); }
+
     public int puerto() {
         String p = env.getProperty("local.server.port", env.getProperty("server.port", "8080"));
         return Integer.parseInt(p);

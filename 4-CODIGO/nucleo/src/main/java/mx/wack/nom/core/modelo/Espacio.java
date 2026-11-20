@@ -73,6 +73,12 @@ public class Espacio {
         public Map<String, Map<String, Long>> bases = new LinkedHashMap<>();
         /** documento de aqui -> hasta cuando ya se mando su bitacora (quien escribio que) al otro servidor. */
         public Map<String, Long> actividadHasta = new LinkedHashMap<>();
+        /**
+         * Hasta donde puede conectarse esta copia: "internet", "red" (tambien la red
+         * privada) o "equipo" (tambien este mismo equipo); lo decide la red de quien la configuro. null = una
+         * copia de antes: como "red". Ver ServicioSincronia.alcanceDe.
+         */
+        public String alcance;
     }
 
     public Permiso permisoDe(String usuarioId) {

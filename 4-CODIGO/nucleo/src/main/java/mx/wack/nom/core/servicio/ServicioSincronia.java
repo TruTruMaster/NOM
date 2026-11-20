@@ -5,7 +5,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.InetAddress;
 import java.net.URL;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -62,6 +64,117 @@ public class ServicioSincronia {
         ErrorRemoto(int codigo, String m) { super(m); this.codigo = codigo; }
     }
 
+    /** La dirección (o alguna de sus IP) queda fuera del alcance de quien configuró la copia. */
+    static final class DireccionInterna extends IOException {
+        DireccionInterna() { super("Esa dirección es de una red interna: la copia no se conecta ahí"); }
+    }
+
+    // ------------------------------------------------------------ a dónde se puede conectar
+
+    /*
+     * A dónde se conecta una copia: hasta donde llega quien la configura. Desde Internet, solo a Internet; desde una
+     * red privada (el salón, la casa), también a esa red; y solo desde este mismo equipo, también a este equipo. El
+     * alcance se guarda con la copia y se revisa en cada conexión, y las redirecciones no se siguen (se le dice a la
+     * persona qué dirección escribir).
+     */
+    public static final String EQUIPO = "equipo", RED = "red", INTERNET = "internet";
+
+    /** Hasta dónde llega quien pide, por su dirección de red (null = la petición salió de este mismo equipo). */
+    public static String alcanceDe(String origen) {
+        if (origen == null || origen.isBlank()) return EQUIPO;
+        // (solo una IP escrita: es la de quien pide; nunca se busca un nombre)
+        if (!origen.trim().matches("[0-9a-fA-F:.]{2,45}")) return INTERNET;
+        try {
+            // Una IP de este mismo equipo o de enlace local solo puede venir escrita en una cabecera de reenvío
+            // (una petición que de verdad sale de aquí no la trae): no se le cree.
+            return distancia(InetAddress.getByName(origen.trim())) == 1 ? RED : INTERNET;
+        } catch (UnknownHostException | RuntimeException e) {
+            return INTERNET;
+        }
+    }
+
+    /**
+     * Qué tan lejos queda una IP: 0 = este mismo equipo o una dirección especial (localhost, sin especificar,
+     * enlace local como 169.254.169.254, multidifusión), 1 = una red privada (LAN, CGNAT/Tailscale, IPv6 ULA),
+     * 2 = Internet.
+     */
+    static int distancia(InetAddress a) {
+        byte[] b = a.getAddress();
+        if (b.length == 16) {
+            // ::a.b.c.d, ::ffff:a.b.c.d y 64:ff9b::a.b.c.d (NAT64): cuenta la IPv4 de adentro.
+            boolean doce = true, diez = true;
+            for (int i = 0; i < 12; i++) if (b[i] != 0) { doce = false; break; }
+            for (int i = 0; i < 10; i++) if (b[i] != 0) { diez = false; break; }
+            boolean mapeada = diez && (b[10] & 255) == 0xff && (b[11] & 255) == 0xff;
+            boolean nat64 = (b[0] & 255) == 0 && (b[1] & 255) == 0x64 && (b[2] & 255) == 0xff && (b[3] & 255) == 0x9b;
+            for (int i = 4; nat64 && i < 12; i++) if (b[i] != 0) nat64 = false;
+            if (doce || mapeada || nat64) {
+                try { return distancia(InetAddress.getByAddress(java.util.Arrays.copyOfRange(b, 12, 16))); }
+                catch (UnknownHostException e) { return 0; }
+            }
+        }
+        if (a.isAnyLocalAddress() || a.isLoopbackAddress() || a.isLinkLocalAddress() || a.isMulticastAddress()) return 0;
+        if (b.length == 4 && ((b[0] & 255) == 0 || (b[0] & 255) >= 224)) return 0;
+        return ServicioFuentes.esPublica(a) ? 2 : 1;
+    }
+
+    /** ¿Puede una copia con ese alcance conectarse a esa IP? */
+    static boolean permitida(InetAddress a, String alcance) {
+        if (EQUIPO.equals(alcance)) return true;
+        int d = distancia(a);
+        return RED.equals(alcance) ? d >= 1 : d == 2;
+    }
+
+    /** El alcance de la copia que se hace en este hilo; sin poner, el más estricto (Internet). */
+    private static final ThreadLocal<String> ALCANCE = new ThreadLocal<>();
+
+    /** Lo más que se lee de una respuesta del otro servidor: un documento (25 MB como máximo) o un binario (48 MB). */
+    static final int MAX_RESPUESTA = 32 * 1024 * 1024, MAX_BINARIO = 50 * 1024 * 1024;
+    /** Tiempo total de cada petición y de la copia de un espacio entero (lo que falte se copia la próxima vez). */
+    static final long MAX_MS_PETICION = 120_000, MAX_MS_BINARIO = 300_000, MAX_MS_ESPACIO = 15 * 60_000;
+    /** Cuando la persona espera la respuesta (conectar o «copiar ahora»): lo demás sigue en la copia de cada 5 minutos. */
+    static final long MAX_MS_ESPERA = 100_000;
+    /** Documentos de allá que se emparejan en cada copia. */
+    static final int MAX_DOCS_REMOTOS = 2_000;
+    /** Hasta cuándo puede seguir la copia de este hilo. */
+    private static final ThreadLocal<Long> HASTA = new ThreadLocal<>();
+
+    /** Sin tiempo para seguir: la copia se corta y sigue la próxima vez. */
+    static final class SinTiempo extends IOException {
+        SinTiempo() { super("El otro NOM tardó demasiado en responder; se vuelve a intentar solo"); }
+    }
+
+    private static long limite(long porPeticion) {
+        long l = System.currentTimeMillis() + porPeticion;
+        Long h = HASTA.get();
+        return h == null ? l : Math.min(l, h);
+    }
+
+    /** Abre la conexión solo si TODAS las IP del nombre quedan al alcance, y sin seguir redirecciones. */
+    private static HttpURLConnection abrir(String direccion) throws IOException {
+        Long h = HASTA.get();
+        if (h != null && System.currentTimeMillis() > h) throw new SinTiempo();
+        URL url = new URL(direccion);
+        String host = url.getHost();
+        if (host == null || host.isEmpty()) throw new IOException("La dirección no tiene servidor");
+        if (host.startsWith("[") && host.endsWith("]")) host = host.substring(1, host.length() - 1);
+        String alcance = ALCANCE.get() == null ? INTERNET : ALCANCE.get();
+        InetAddress[] ips = InetAddress.getAllByName(host);
+        if (ips.length == 0) throw new DireccionInterna();
+        for (InetAddress a : ips) if (!permitida(a, alcance)) throw new DireccionInterna();
+        // (Java guarda unos segundos lo que contestó el DNS: la conexión usa las mismas IP que se revisaron)
+        HttpURLConnection c = (HttpURLConnection) url.openConnection();
+        c.setInstanceFollowRedirects(false);
+        return c;
+    }
+
+    /** A dónde manda una redirección (no se sigue: se le dice a la persona qué dirección escribir). */
+    private static String destino(HttpURLConnection c) {
+        String l = c.getHeaderField("Location");
+        if (l == null || l.isBlank()) return "";
+        return " (" + (l.length() > 120 ? l.substring(0, 120) + "…" : l) + "): escribe esa";
+    }
+
     // ------------------------------------------------------------ configurar
 
     static String normalizar(String url) {
@@ -77,13 +190,23 @@ public class ServicioSincronia {
     }
 
     /** El propietario conecta el espacio con su cuenta en otro servidor y se hace la primera copia. */
-    @SuppressWarnings("unchecked")
     public Map<String, Object> configurar(Usuario u, String espacioId, String servidor, String usuario, String contrasena) {
+        // El teléfono que comparte: quien lo pide está en su misma red (el salón).
+        return configurar(u, espacioId, servidor, usuario, contrasena, RED);
+    }
+
+    /** alcance: hasta dónde llega quien la configura (ver alcanceDe); la copia no llega más lejos. */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> configurar(Usuario u, String espacioId, String servidor, String usuario, String contrasena, String alcance) {
         Espacio e = espacios.requerir(espacioId);
         espacios.exigir(e, u, Permiso.PROPIETARIO);
         String base = normalizar(servidor);
         if (usuario == null || usuario.isBlank() || contrasena == null || contrasena.isEmpty())
             throw ErrorNom.invalido("Escribe tu usuario y tu contraseña de allá", "usuario");
+        String alc = EQUIPO.equals(alcance) || RED.equals(alcance) ? alcance : INTERNET;
+        ALCANCE.set(alc);
+        long ini = System.currentTimeMillis();
+        HASTA.set(ini + MAX_MS_ESPERA / 2);
         try {
             Object info = pedir("GET", base + "/api/red/info", null, null);
             if (!(info instanceof Map<?, ?> mi) || !(mi.get("nom") instanceof Number nom) || nom.intValue() != 1)
@@ -103,21 +226,27 @@ public class ServicioSincronia {
             s.usuario = usuario.trim();
             s.token = token;
             s.espacioRemoto = remoto;
+            s.alcance = alc;
             e.sincronia = s;
             espacios.guardar(e);
+        } catch (DireccionInterna ex) {
+            throw new ErrorNom(ErrorNom.PROHIBIDO, ex.getMessage(), "servidor");
         } catch (ErrorRemoto ex) {
             throw ErrorNom.invalido(ex.codigo == 401 || ex.codigo == 423 ? "El otro NOM no aceptó tu usuario o contraseña: " + ex.getMessage() : "El otro NOM respondió: " + ex.getMessage(), ex.codigo == 401 ? "contrasena" : null);
         } catch (IOException ex) {
             throw ErrorNom.invalido("No se pudo conectar con " + base + " (¿hay Internet o estás en el mismo Wi-Fi?)", "servidor");
+        } finally {
+            ALCANCE.remove();
+            HASTA.remove();
         }
-        return sincronizarEspacio(e);
+        return sincronizarEspacio(e, Math.max(10_000, ini + MAX_MS_ESPERA - System.currentTimeMillis()));
     }
 
     public Map<String, Object> sincronizar(Usuario u, String espacioId) {
         Espacio e = espacios.requerir(espacioId);
         espacios.exigir(e, u, Permiso.PROPIETARIO);
         if (e.sincronia == null) throw ErrorNom.invalido("Este espacio no tiene copia en otro NOM", null);
-        return sincronizarEspacio(e);
+        return sincronizarEspacio(e, MAX_MS_ESPERA);
     }
 
     public Map<String, Object> quitar(Usuario u, String espacioId) {
@@ -132,7 +261,7 @@ public class ServicioSincronia {
     public void cadaRato() {
         for (Espacio e : espacios.todos()) {
             if (e.sincronia == null || e.sincronia.token == null) continue;
-            try { sincronizarEspacio(e); } catch (RuntimeException ex) { log.aviso("Sincronización del espacio {}: {}", e.id, ex.getMessage()); }
+            try { sincronizarEspacio(e, MAX_MS_ESPACIO); } catch (RuntimeException ex) { log.aviso("Sincronización del espacio {}: {}", e.id, ex.getMessage()); }
         }
     }
 
@@ -186,8 +315,26 @@ public class ServicioSincronia {
         s.actividadHasta.put(d.id, ultima);
     }
 
+    /** Una copia a la vez por espacio (si ya hay una en curso, no se espera: se avisa). */
+    private final Map<String, java.util.concurrent.locks.ReentrantLock> enCurso = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private Map<String, Object> sincronizarEspacio(Espacio e, long maxMs) {
+        java.util.concurrent.locks.ReentrantLock c = enCurso.computeIfAbsent(e.id, k -> new java.util.concurrent.locks.ReentrantLock());
+        if (!c.tryLock()) {
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("estado", "en-curso");
+            r.put("error", "Ya se está copiando este espacio: espera un momento");
+            r.put("ultima", e.sincronia == null ? 0 : e.sincronia.ultima);
+            r.put("subidas", 0);
+            r.put("bajadas", 0);
+            r.put("documentos", e.sincronia == null || e.sincronia.docs == null ? 0 : e.sincronia.docs.size());
+            return r;
+        }
+        try { return copiarEspacio(e, maxMs); } finally { c.unlock(); }
+    }
+
     @SuppressWarnings("unchecked")
-    private synchronized Map<String, Object> sincronizarEspacio(Espacio e) {
+    private Map<String, Object> copiarEspacio(Espacio e, long maxMs) {
         Espacio.Sincronia s = e.sincronia;
         Map<String, Object> r = new LinkedHashMap<>();
         int subidas = 0, bajadas = 0, nuevosAqui = 0, nuevosAlla = 0, ramas = 0;
@@ -195,11 +342,19 @@ public class ServicioSincronia {
         if (s.actividadHasta == null) s.actividadHasta = new LinkedHashMap<>();
         long ahora = System.currentTimeMillis();
         boolean estuvoSinRed = s.sinRedDesde > 0 && ahora - s.sinRedDesde > UMBRAL_RAMA;
+        // Cada conexión de esta copia se revisa con el alcance de quien la configuró (una copia que no lo guarda se
+        // toma como de la red local, que es donde se usaban).
+        ALCANCE.set(s.alcance == null ? RED : s.alcance);
+        HASTA.set(ahora + maxMs);
         try {
             String base = s.servidor, tok = s.token, rem = s.espacioRemoto;
             List<Object> remotos = (List<Object>) pedir("GET", base + "/api/espacios/" + rem + "/documentos", tok, null);
             Map<String, Map<String, Object>> porId = new LinkedHashMap<>();
-            for (Object o : remotos) { Map<String, Object> x = (Map<String, Object>) o; porId.put(String.valueOf(x.get("id")), x); }
+            if (remotos == null) remotos = List.of();
+            for (Object o : remotos) {
+                if (porId.size() >= MAX_DOCS_REMOTOS) break;
+                if (o instanceof Map<?, ?> x0) { Map<String, Object> x = (Map<String, Object>) x0; porId.put(String.valueOf(x.get("id")), x); }
+            }
             Set<String> emparejados = new HashSet<>(s.docs.values());
             // Documentos nuevos de alla: se crean aqui.
             for (var x : porId.values()) {
@@ -287,6 +442,9 @@ public class ServicioSincronia {
             s.estado = "ok";
             s.error = null;
             s.sinRedDesde = 0;
+        } catch (DireccionInterna ex) {
+            s.estado = "error";
+            s.error = ex.getMessage();
         } catch (ErrorRemoto ex) {
             s.estado = ex.codigo == 401 ? "sesion" : "error";
             s.error = ex.codigo == 401 ? "La sesión en el otro NOM venció: vuelve a conectar el espacio." : ex.getMessage();
@@ -294,6 +452,9 @@ public class ServicioSincronia {
             s.estado = "sin-red";
             s.error = "Sin conexión con el otro NOM; se vuelve a intentar solo.";
             if (s.sinRedDesde == 0) s.sinRedDesde = ahora;
+        } finally {
+            ALCANCE.remove();
+            HASTA.remove();
         }
         espacios.guardar(e);
         r.put("estado", s.estado);
@@ -413,11 +574,11 @@ public class ServicioSincronia {
     }
 
     private byte[] pedirBytes(String metodo, String url, String token, byte[] cuerpo) throws IOException {
-        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        HttpURLConnection c = abrir(url);
         try {
             c.setRequestMethod(metodo);
             c.setConnectTimeout(8_000);
-            c.setReadTimeout(120_000);
+            c.setReadTimeout(60_000);
             if (token != null) c.setRequestProperty("Authorization", "Bearer " + token);
             if (cuerpo != null) {
                 c.setDoOutput(true);
@@ -426,19 +587,21 @@ public class ServicioSincronia {
                 try (OutputStream o = c.getOutputStream()) { o.write(cuerpo); }
             }
             int codigo = c.getResponseCode();
-            if (codigo >= 400) { leer(c.getErrorStream()); throw new ErrorRemoto(codigo, "Error " + codigo); }
-            try (InputStream in = c.getInputStream()) { return in.readAllBytes(); }
+            if (codigo >= 300 && codigo < 400) throw new ErrorRemoto(codigo, "El otro servidor manda a otra dirección" + destino(c));
+            long hasta = limite(MAX_MS_BINARIO);
+            if (codigo >= 400) { leer(c.getErrorStream(), 64 * 1024, hasta); throw new ErrorRemoto(codigo, "Error " + codigo); }
+            return leerBytes(c.getInputStream(), MAX_BINARIO, hasta);
         } finally {
             c.disconnect();
         }
     }
 
     private Object pedir(String metodo, String url, String token, Object cuerpo) throws IOException {
-        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        HttpURLConnection c = abrir(url);
         try {
             c.setRequestMethod(metodo);
             c.setConnectTimeout(8_000);
-            c.setReadTimeout(60_000);
+            c.setReadTimeout(30_000);
             c.setRequestProperty("Accept", "application/json");
             if (token != null) c.setRequestProperty("Authorization", "Bearer " + token);
             if (cuerpo != null) {
@@ -449,7 +612,8 @@ public class ServicioSincronia {
                 try (OutputStream o = c.getOutputStream()) { o.write(b); }
             }
             int codigo = c.getResponseCode();
-            String t = leer(codigo >= 400 ? c.getErrorStream() : c.getInputStream());
+            if (codigo >= 300 && codigo < 400) throw new ErrorRemoto(codigo, "El otro servidor manda a otra dirección" + destino(c));
+            String t = leer(codigo >= 400 ? c.getErrorStream() : c.getInputStream(), codigo >= 400 ? 64 * 1024 : MAX_RESPUESTA, limite(MAX_MS_PETICION));
             if (codigo >= 400) {
                 String m = "Error " + codigo;
                 try { Object e = json.leer(t); if (e instanceof Map<?, ?> em && em.get("error") != null) m = String.valueOf(em.get("error")); } catch (RuntimeException ignorado) { }
@@ -461,14 +625,23 @@ public class ServicioSincronia {
         }
     }
 
-    private static String leer(InputStream in) throws IOException {
-        if (in == null) return "";
+    private static String leer(InputStream in, int max, long hasta) throws IOException {
+        return new String(leerBytes(in, max, hasta), StandardCharsets.UTF_8);
+    }
+
+    /** Lee la respuesta con tope de tamaño y de tiempo (el otro servidor puede ser lento o mandar de más). */
+    private static byte[] leerBytes(InputStream in, int max, long hasta) throws IOException {
+        if (in == null) return new byte[0];
         try (InputStream i = in) {
             ByteArrayOutputStream b = new ByteArrayOutputStream();
             byte[] buf = new byte[32 * 1024];
             int n;
-            while ((n = i.read(buf)) > 0) b.write(buf, 0, n);
-            return b.toString("UTF-8");
+            while ((n = i.read(buf)) > 0) {
+                if (b.size() + n > max) throw new IOException("La respuesta del otro NOM es demasiado grande");
+                if (System.currentTimeMillis() > hasta) throw new SinTiempo();
+                b.write(buf, 0, n);
+            }
+            return b.toByteArray();
         }
     }
 }
