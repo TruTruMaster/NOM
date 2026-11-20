@@ -29,9 +29,24 @@ public class Tareas {
     @Scheduled(fixedDelay = 6 * 3_600_000, initialDelay = 600_000)
     public void limpiarBinarios() { binarios.limpiarTodo(); }
 
-    /** Los espacios conectados con otro servidor se copian cada 5 minutos (si hay red). */
+    /**
+     * Los espacios conectados con otro servidor se copian cada 5 minutos (si hay red), en su propio hilo: lo demás
+     * de esta lista (guardar los documentos, el latido del canal en vivo) no espera a otro servidor.
+     */
+    private final java.util.concurrent.ExecutorService hiloCopias = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "nom-copias");
+        t.setDaemon(true);
+        return t;
+    });
+    private final java.util.concurrent.atomic.AtomicBoolean copiando = new java.util.concurrent.atomic.AtomicBoolean();
+
     @Scheduled(fixedDelay = 300_000, initialDelay = 90_000)
-    public void sincronizar() { sincronia.cadaRato(); }
+    public void sincronizar() {
+        if (!copiando.compareAndSet(false, true)) return;
+        hiloCopias.execute(() -> {
+            try { sincronia.cadaRato(); } finally { copiando.set(false); }
+        });
+    }
 
     @Scheduled(fixedDelay = 800)
     public void persistir() { documentos.persistir(); }

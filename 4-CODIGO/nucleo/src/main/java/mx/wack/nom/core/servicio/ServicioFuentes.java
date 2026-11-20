@@ -150,16 +150,30 @@ public class ServicioFuentes {
         try { return uri.toURL(); } catch (Exception e) { throw ErrorNom.invalido("Esa dirección no es válida", "url"); }
     }
 
+    /** Tiempo total para leer una página (con sus redirecciones), y cuántas se leen a la vez en todo el servidor. */
+    private static final long MAX_MS_LECTURA = 20_000;
+    private static final java.util.concurrent.Semaphore LECTURAS = new java.util.concurrent.Semaphore(6, true);
+
     private Leido leer(String direccion) {
+        boolean turno;
+        try { turno = LECTURAS.tryAcquire(8, java.util.concurrent.TimeUnit.SECONDS); }
+        catch (InterruptedException e) { Thread.currentThread().interrupt(); turno = false; }
+        if (!turno) throw new ErrorNom(503, "El servidor está leyendo muchas páginas a la vez: intenta en un momento", null, Map.of("red", true));
+        try { return leerConTurno(direccion, System.currentTimeMillis() + MAX_MS_LECTURA); }
+        finally { LECTURAS.release(); }
+    }
+
+    private Leido leerConTurno(String direccion, long limite) {
         String actual = direccion;
         for (int saltos = 0; saltos <= 3; saltos++) {
+            if (System.currentTimeMillis() > limite) throw lento();
             URL u = revisar(actual);
             HttpURLConnection c = null;
             try {
                 c = (HttpURLConnection) u.openConnection();
                 c.setInstanceFollowRedirects(false);
                 c.setConnectTimeout(6_000);
-                c.setReadTimeout(10_000);
+                c.setReadTimeout(8_000);
                 c.setRequestProperty("User-Agent", AGENTE);
                 c.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.5");
                 c.setRequestProperty("Accept-Language", "es-MX,es;q=0.9,en;q=0.5");
@@ -173,7 +187,7 @@ public class ServicioFuentes {
                 if (cod >= 400) throw new ErrorNom(ErrorNom.NO_EXISTE, "La página respondió con un error (" + cod + ")", null, Map.of("estado", cod));
                 if (c.getContentLengthLong() > MAX_BYTES) throw new ErrorNom(ErrorNom.LLENO, "La página es demasiado grande para leerla");
                 String tipo = c.getContentType() == null ? "" : c.getContentType();
-                byte[] b = leerHasta(c.getInputStream(), MAX_BYTES);
+                byte[] b = leerHasta(c.getInputStream(), MAX_BYTES, limite);
                 return new Leido(new String(b, juego(tipo, b)), tipo, u.toString());
             } catch (ErrorNom e) {
                 throw e;
@@ -186,13 +200,18 @@ public class ServicioFuentes {
         throw new ErrorNom(ErrorNom.INVALIDO, "La página manda a otra demasiadas veces");
     }
 
-    private static byte[] leerHasta(InputStream in, int max) throws IOException {
+    private static ErrorNom lento() {
+        return new ErrorNom(503, "El sitio tardó demasiado en responder", null, Map.of("red", true));
+    }
+
+    private static byte[] leerHasta(InputStream in, int max, long limite) throws IOException {
         try (InputStream i = in; ByteArrayOutputStream o = new ByteArrayOutputStream()) {
             byte[] buf = new byte[16 * 1024];
             int n, total = 0;
             while ((n = i.read(buf)) > 0) {
                 total += n;
                 if (total > max) throw new ErrorNom(ErrorNom.LLENO, "La página es demasiado grande para leerla");
+                if (System.currentTimeMillis() > limite) throw lento();
                 o.write(buf, 0, n);
             }
             return o.toByteArray();
@@ -279,10 +298,45 @@ public class ServicioFuentes {
 
     // ------------------------------------------------------------ página web
 
-    private static final Pattern META = Pattern.compile("<meta\\b[^>]*>", Pattern.CASE_INSENSITIVE);
-    private static final Pattern ATRIB = Pattern.compile("([a-zA-Z:_.-]+)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+))");
-    private static final Pattern TITULO = Pattern.compile("<title[^>]*>(.*?)</title>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-    private static final Pattern LDJSON = Pattern.compile("<script[^>]*type\\s*=\\s*[\"']application/ld\\+json[\"'][^>]*>(.*?)</script>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    /** Cuánto de la página se analiza y en cuánto tiempo como máximo (se usa lo que se haya sacado hasta ahí). */
+    private static final int MAX_ANALISIS = 400_000;
+    static final long MAX_MS_ANALISIS = 1_500;
+    // Un atributo empieza donde empieza su nombre, y nada se vuelve a probar (la página puede ser cualquier cosa).
+    private static final Pattern ATRIB = Pattern.compile("(?<![a-zA-Z:_.-])([a-zA-Z:_.-]++)\\s*+=\\s*+(?:\"([^\"]*+)\"|'([^']*+)'|([^\\s>]++))");
+    private static final Pattern TIPO_LD = Pattern.compile("type\\s*+=\\s*+[\"']application/ld\\+json[\"']", Pattern.CASE_INSENSITIVE);
+
+    /** El análisis llegó a su tiempo máximo. */
+    static final class SinTiempo extends RuntimeException {
+        SinTiempo() { super(null, null, false, false); }
+    }
+
+    /** Un texto que revisa el reloj mientras una expresión regular lo recorre. */
+    static final class ConPlazo implements CharSequence {
+        private final CharSequence s;
+        private final long hasta;
+        private int cuenta;
+
+        ConPlazo(CharSequence s, long hasta) { this.s = s; this.hasta = hasta; }
+
+        @Override public char charAt(int i) {
+            if (++cuenta >= 4096) { cuenta = 0; vencido(hasta); }
+            return s.charAt(i);
+        }
+        @Override public int length() { return s.length(); }
+        @Override public CharSequence subSequence(int a, int b) { return new ConPlazo(s.subSequence(a, b), hasta); }
+        @Override public String toString() { return s.toString(); }
+    }
+
+    private static void vencido(long hasta) { if (System.nanoTime() - hasta > 0) throw new SinTiempo(); }
+
+    /** Minúsculas solo en las letras ASCII: mismo largo, así los índices sirven en el texto original. */
+    static String minusculasAscii(String s) {
+        char[] c = s.toCharArray();
+        for (int i = 0; i < c.length; i++) if (c[i] >= 'A' && c[i] <= 'Z') c[i] += 32;
+        return new String(c);
+    }
+
+    private static boolean dePalabra(char c) { return Character.isLetterOrDigit(c) || c == '_'; }
 
     static String sinEntidades(String s) {
         if (s == null) return null;
@@ -301,32 +355,60 @@ public class ServicioFuentes {
     /** Los datos para citar una página web: titulo, autores, fecha, sitio, tipo… */
     @SuppressWarnings("unchecked")
     Map<String, Object> datosDePagina(String html, String url) {
-        String cab = html.length() > 400_000 ? html.substring(0, 400_000) : html;
+        String cab = html.length() > MAX_ANALISIS ? html.substring(0, MAX_ANALISIS) : html;
+        // Las etiquetas se buscan en el texto (en minúsculas ASCII, como CASE_INSENSITIVE) y cada una se lee una sola
+        // vez: cada parte de la página se recorre a lo más una vez.
+        String bajo = minusculasAscii(cab);
+        long hasta = System.nanoTime() + MAX_MS_ANALISIS * 1_000_000L;
         Map<String, List<String>> metas = new LinkedHashMap<>();
-        Matcher m = META.matcher(cab);
-        while (m.find()) {
-            Map<String, String> at = new LinkedHashMap<>();
-            Matcher a = ATRIB.matcher(m.group());
-            while (a.find()) at.put(a.group(1).toLowerCase(Locale.ROOT), a.group(2) != null ? a.group(2) : a.group(3) != null ? a.group(3) : a.group(4));
-            String k = at.getOrDefault("name", at.getOrDefault("property", at.get("itemprop")));
-            String v = at.get("content");
-            if (k != null && v != null && !v.isBlank()) metas.computeIfAbsent(k.toLowerCase(Locale.ROOT), x -> new ArrayList<>()).add(sinEntidades(v));
+        try {
+            for (int i = bajo.indexOf("<meta"); i >= 0; ) {
+                vencido(hasta);
+                int fin = i + 5;
+                if (fin < bajo.length() && dePalabra(bajo.charAt(fin))) { i = bajo.indexOf("<meta", i + 1); continue; }
+                int cierre = bajo.indexOf('>', fin);
+                if (cierre < 0) break;   // sin '>' más adelante ya no hay etiquetas completas
+                Map<String, String> at = new LinkedHashMap<>();
+                Matcher a = ATRIB.matcher(new ConPlazo(cab.substring(i, cierre + 1), hasta));
+                while (a.find()) at.put(a.group(1).toLowerCase(Locale.ROOT), a.group(2) != null ? a.group(2) : a.group(3) != null ? a.group(3) : a.group(4));
+                String k = at.getOrDefault("name", at.getOrDefault("property", at.get("itemprop")));
+                String v = at.get("content");
+                if (k != null && v != null && !v.isBlank()) metas.computeIfAbsent(k.toLowerCase(Locale.ROOT), x -> new ArrayList<>()).add(sinEntidades(v));
+                i = bajo.indexOf("<meta", cierre + 1);
+            }
+        } catch (SinTiempo e) {
+            log.detalle("Página {}: el análisis llegó a su tiempo máximo (etiquetas meta)", url);
         }
         java.util.function.Function<String[], String> primero = (ks) -> { for (String k : ks) { List<String> l = metas.get(k); if (l != null && !l.isEmpty()) return l.get(0); } return null; };
-        // Datos estructurados (schema.org)
+        // Datos estructurados (schema.org): <script type="application/ld+json">…</script>
         String ldTitulo = null, ldFecha = null, ldEditor = null, ldTipo = null;
         List<String> ldAutores = new ArrayList<>();
-        Matcher ld = LDJSON.matcher(cab);
-        while (ld.find()) {
+        List<String> bloquesLd = new ArrayList<>();
+        try {
+            for (int i = bajo.indexOf("<script"); i >= 0 && bloquesLd.size() < 50; ) {
+                vencido(hasta);
+                int a = bajo.indexOf('>', i + 7);
+                if (a < 0) break;
+                // (si esta etiqueta no es de datos, tampoco lo es un "<script" que quede dentro de ella)
+                if (!TIPO_LD.matcher(new ConPlazo(cab.substring(i + 7, a), hasta)).find()) { i = bajo.indexOf("<script", a + 1); continue; }
+                int b = bajo.indexOf("</script>", a + 1);
+                if (b < 0) break;        // sin cierre, ninguna etiqueta de más adelante lo tiene
+                bloquesLd.add(cab.substring(a + 1, b));
+                i = bajo.indexOf("<script", b + 9);
+            }
+        } catch (SinTiempo e) {
+            log.detalle("Página {}: el análisis llegó a su tiempo máximo (datos estructurados)", url);
+        }
+        for (String bloqueLd : bloquesLd) {
             try {
-                Object o = json.leer(ld.group(1).trim());
+                Object o = json.leer(bloqueLd.trim());
                 List<Object> nodos = new ArrayList<>();
                 if (o instanceof List<?> l) nodos.addAll(l); else nodos.add(o);
                 for (int i = 0; i < nodos.size() && i < 40; i++) {
                     if (!(nodos.get(i) instanceof Map<?, ?> n)) continue;
                     if (n.get("@graph") instanceof List<?> g) nodos.addAll(g);
                     String tipo = texto(n.get("@type"));
-                    if (tipo == null || !tipo.matches("(?i).*(article|posting|webpage|book|video|report|thesis|creativework).*")) continue;
+                    if (tipo == null || tipo.length() > 200 || !tipo.matches("(?i).*(article|posting|webpage|book|video|report|thesis|creativework).*")) continue;
                     if (ldTipo == null) ldTipo = tipo;
                     if (ldTitulo == null) ldTitulo = texto(n.get("headline") != null ? n.get("headline") : n.get("name"));
                     if (ldFecha == null) ldFecha = texto(n.get("datePublished") != null ? n.get("datePublished") : n.get("dateCreated"));
@@ -345,7 +427,11 @@ public class ServicioFuentes {
         try { host = new URI(url).getHost().replaceFirst("^www\\.", ""); } catch (Exception ignorado) { }
         String titulo = primero.apply(new String[] { "citation_title", "og:title", "twitter:title", "dc.title" });
         if (titulo == null) titulo = ldTitulo;
-        if (titulo == null) { Matcher t = TITULO.matcher(cab); if (t.find()) titulo = sinEntidades(t.group(1)); }
+        if (titulo == null) {
+            // <title …>…</title>: la primera apertura y el primer cierre después de ella
+            int t0 = bajo.indexOf("<title"), a = t0 < 0 ? -1 : bajo.indexOf('>', t0 + 6), b = a < 0 ? -1 : bajo.indexOf("</title>", a + 1);
+            if (b >= 0) titulo = sinEntidades(cab.substring(a + 1, Math.min(b, a + 1 + 4_000)));
+        }
         poner(f, "titulo", titulo);
         List<String> autores = new ArrayList<>(metas.getOrDefault("citation_author", List.of()));
         if (autores.isEmpty()) autores.addAll(ldAutores);

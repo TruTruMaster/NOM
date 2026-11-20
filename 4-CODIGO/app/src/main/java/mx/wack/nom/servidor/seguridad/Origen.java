@@ -88,12 +88,15 @@ public final class Origen {
         // agrega en cada peticion (NOM_PROXY_SECRETO; Vercel reemplaza la que mande cualquiera).
         String ip = deVercel(req);
         if (ip != null) return ip;
-        String r = req.getHeader("CF-Connecting-IP");
+        // CF-Connecting-IP la pone Cloudflare, que entra por el túnel de este mismo equipo; en Azure no hay Cloudflare
+        // delante, así que ahí no se cree.
+        String r = local ? req.getHeader("CF-Connecting-IP") : null;
         if (r == null || r.isBlank()) {
             r = req.getHeader("X-Forwarded-For");
-            if (r != null && r.contains(",")) r = r.substring(0, r.indexOf(','));
+            // Cada intermediario agrega al final la dirección de donde le llegó: se toma la última.
+            if (r != null && r.contains(",")) r = r.substring(r.lastIndexOf(',') + 1);
             // Azure la manda con el puerto ("203.0.113.5:51234"): se queda solo la direccion.
-            if (r != null && r.trim().matches("\\d+(\\.\\d+){3}:\\d+")) r = r.substring(0, r.lastIndexOf(':'));
+            if (r != null && r.trim().matches("\\d+(\\.\\d+){3}:\\d+")) r = r.trim().substring(0, r.trim().lastIndexOf(':'));
         }
         if (r == null || r.isBlank()) return local ? null : remota;
         return r.trim();

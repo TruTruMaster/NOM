@@ -45,12 +45,50 @@ public class Secuencia {
 
     // ------------------------------------------------------------------ fusionar
 
+    /** Lo más que puede tocar una operación de mostrar/ocultar o de formato: caracteres, sumando todos sus rangos. */
+    public static final long MAX_ALCANCE = 4_000_000;
+
+    /** r = [[nodo, t1, t2], …] (o [fin, 0, 0]): listas de tres, nodo corto, 0 ≤ t1 ≤ t2 y sin pasar del tope en total. */
+    static boolean rangosValidos(List<?> r) {
+        long total = 0;
+        for (Object o : r) {
+            if (!(o instanceof List<?> rango) || rango.size() != 3 || !(rango.get(0) instanceof String rn) || rn.isEmpty() || rn.length() > 64
+                    || !(rango.get(1) instanceof Number a) || !(rango.get(2) instanceof Number b)) return false;
+            if (FIN.equals(rn)) continue;
+            long t1 = a.longValue(), t2 = b.longValue();
+            if (t1 < 0 || t2 < t1) return false;
+            total += Math.min(t2 - t1 + 1, MAX_ALCANCE + 1);
+            if (total > MAX_ALCANCE) return false;
+        }
+        return true;
+    }
+
+    /** Cuántos caracteres abarcan los rangos de una operación de mostrar/ocultar o de formato (0 si inserta). */
+    public static long alcance(Map<String, Object> s) {
+        if (s == null || !(s.get("r") instanceof List<?> r)) return 0;
+        long total = 0;
+        for (Object o : r) {
+            if (o instanceof List<?> rango && rango.size() == 3 && !FIN.equals(rango.get(0))
+                    && rango.get(1) instanceof Number a && rango.get(2) instanceof Number b && b.longValue() >= a.longValue())
+                total += Math.min(b.longValue() - a.longValue() + 1, MAX_ALCANCE + 1);
+        }
+        return total;
+    }
+
+    /** Atributos de formato: pocos, con nombres cortos y sin nombres reservados. */
+    static boolean atributosValidos(Object a) {
+        if (a == null) return true;
+        if (!(a instanceof Map<?, ?> m) || m.size() > 200) return false;
+        for (Object k : m.keySet()) if (!(k instanceof String ks) || ks.isEmpty() || ks.length() > 64 || Operacion.RESERVADOS.contains(ks)) return false;
+        return true;
+    }
+
     /** Guarda una operacion (k = i, v o f) si es nueva. Devuelve true si se guardo algo. */
     public synchronized boolean aplicar(Map<String, Object> s, long t, String n) {
         Object k = s.get("k");
         if ("i".equals(k)) return insertar(s, t, n);
-        if (!("v".equals(k) || "f".equals(k)) || !(s.get("r") instanceof List<?> r) || r.isEmpty() || r.size() > 5000) return false;
-        if ("f".equals(k) && !(s.get("a") instanceof Map)) return false;
+        if (!("v".equals(k) || "f".equals(k)) || !(s.get("r") instanceof List<?> r) || r.isEmpty() || r.size() > 5000 || !rangosValidos(r)) return false;
+        if ("f".equals(k) && (!(s.get("a") instanceof Map) || !atributosValidos(s.get("a")))) return false;
         String clave = k + ":" + t + "@" + n;
         if (!vistas().add(clave)) return false;
         Map<String, Object> e = new LinkedHashMap<>();
@@ -70,6 +108,7 @@ public class Secuencia {
         Object e = s.get("e");
         String x = e != null ? "￼" : s.get("x") instanceof String str ? str : null;
         if (x == null || x.isEmpty() || x.length() > 1_000_000) return false;
+        if (!atributosValidos(s.get("a")) || (s.get("iz") != null && !(s.get("iz") instanceof String iz0 && iz0.length() <= 100))) return false;
         int largo = x.codePointCount(0, x.length());
         TreeMap<Long, Map<String, Object>> deNodo = indice().computeIfAbsent(n, z -> new TreeMap<>());
         // Lo ya guardado de este nodo siempre es un prefijo (cada caracter depende del anterior).
@@ -252,7 +291,7 @@ public class Secuencia {
             String rn = String.valueOf(rango.get(0));
             if (FIN.equals(rn)) { aplicarA(carFin, esV, o, a, t, n); continue; }
             long t1 = ((Number) rango.get(1)).longValue(), t2 = ((Number) rango.get(2)).longValue();
-            for (long tt = t1; tt <= t2 && tt - t1 < 2_000_000; tt++) {
+            for (long tt = t1; tt <= t2 && tt - t1 < MAX_ALCANCE; tt++) {
                 Nodo nd = nodos.get(tt + "@" + rn);
                 if (nd != null) aplicarA(nd.car, esV, o, a, t, n);
             }
@@ -309,7 +348,7 @@ public class Secuencia {
             String rn = String.valueOf(rango.get(0));
             if (FIN.equals(rn)) { String d = duenoDesde(orden.size()); if (d != null) r.add(d); continue; }
             long t1 = ((Number) rango.get(1)).longValue(), t2 = ((Number) rango.get(2)).longValue();
-            for (long tt = t1; tt <= t2 && tt - t1 < 2_000_000; tt++) { Nodo nd = nodos.get(tt + "@" + rn); if (nd != null) tocados.add(nd); }
+            for (long tt = t1; tt <= t2 && tt - t1 < MAX_ALCANCE; tt++) { Nodo nd = nodos.get(tt + "@" + rn); if (nd != null) tocados.add(nd); }
         }
         if (tocados.isEmpty()) return r;
         // Una sola pasada de atras hacia adelante: cada caracter pertenece al siguiente salto visible.
@@ -404,7 +443,7 @@ public class Secuencia {
             String n = String.valueOf(rango.get(0));
             if (FIN.equals(n)) { l.add(m.get(FIN)); continue; }
             long t1 = ((Number) rango.get(1)).longValue(), t2 = ((Number) rango.get(2)).longValue();
-            for (long t = t1; t <= t2 && t - t1 < 2_000_000; t++) {
+            for (long t = t1; t <= t2 && t - t1 < MAX_ALCANCE; t++) {
                 Car c = m.get(t + "@" + n);
                 if (c != null) l.add(c);
             }

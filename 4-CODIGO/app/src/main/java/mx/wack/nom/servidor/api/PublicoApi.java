@@ -34,20 +34,45 @@ public class PublicoApi {
         this.documentos = documentos;
     }
 
+    /** Códigos que no existen, por red, en los últimos 10 minutos: quien prueba muchos espera un rato. */
+    private final Map<String, java.util.ArrayDeque<Long>> noExisten = new java.util.HashMap<>();
+    private static final int MAX_NO_EXISTEN = 120;
+    private static final long VENTANA = 600_000L;
+
+    private <T> T conTope(jakarta.servlet.http.HttpServletRequest req, java.util.function.Supplier<T> f) {
+        String de = mx.wack.nom.servidor.seguridad.Origen.de(req);
+        long ahora = System.currentTimeMillis();
+        if (de != null) synchronized (noExisten) {
+            java.util.ArrayDeque<Long> l = noExisten.get(de);
+            if (l != null) {
+                while (!l.isEmpty() && ahora - l.peekFirst() > VENTANA) l.pollFirst();
+                if (l.size() >= MAX_NO_EXISTEN) throw new mx.wack.nom.core.servicio.ErrorNom(mx.wack.nom.core.servicio.ErrorNom.DEMASIADOS, "Demasiados códigos que no existen desde esta red: espera unos minutos");
+            }
+        }
+        try { return f.get(); }
+        catch (mx.wack.nom.core.servicio.ErrorNom e) {
+            if (de != null && e.estado == mx.wack.nom.core.servicio.ErrorNom.NO_EXISTE) synchronized (noExisten) {
+                noExisten.computeIfAbsent(de, k -> new java.util.ArrayDeque<>()).addLast(ahora);
+                if (noExisten.size() > 5_000) noExisten.values().removeIf(q -> q.isEmpty() || ahora - q.peekLast() > VENTANA);
+            }
+            throw e;
+        }
+    }
+
     @GetMapping("/api/enlaces/{codigo}")
-    public Map<String, Object> enlace(@PathVariable String codigo) {
-        return espacios.infoEnlace(codigo);
+    public Map<String, Object> enlace(@PathVariable String codigo, jakarta.servlet.http.HttpServletRequest req) {
+        return conTope(req, () -> espacios.infoEnlace(codigo));
     }
 
     @PostMapping("/api/enlaces/{codigo}/invitado")
     public Map<String, Object> invitado(@PathVariable String codigo, @RequestBody Apodo a, jakarta.servlet.http.HttpServletRequest req) {
-        return espacios.entrarComoInvitado(codigo, a == null ? null : a.apodo(), mx.wack.nom.servidor.seguridad.Origen.de(req));
+        return conTope(req, () -> espacios.entrarComoInvitado(codigo, a == null ? null : a.apodo(), mx.wack.nom.servidor.seguridad.Origen.de(req)));
     }
 
     /** Fase 13: entrar con un alias al azar (o volver a ser el mismo, con la llave de este equipo). */
     @PostMapping("/api/enlaces/{codigo}/alias")
     public Map<String, Object> alias(@PathVariable String codigo, @RequestBody(required = false) Alias a, jakarta.servlet.http.HttpServletRequest req) {
-        return espacios.entrarConAlias(codigo, a == null ? null : a.id(), a == null ? null : a.llave(), mx.wack.nom.servidor.seguridad.Origen.de(req));
+        return conTope(req, () -> espacios.entrarConAlias(codigo, a == null ? null : a.id(), a == null ? null : a.llave(), mx.wack.nom.servidor.seguridad.Origen.de(req)));
     }
 
     /** Con sesion: la cuenta abierta entra al espacio con el permiso del enlace. */
@@ -68,14 +93,14 @@ public class PublicoApi {
     }
 
     @GetMapping("/api/proyeccion/{codigo}")
-    public Map<String, Object> proyeccion(@PathVariable String codigo) {
-        return documentos.verProyeccion(codigo);
+    public Map<String, Object> proyeccion(@PathVariable String codigo, jakarta.servlet.http.HttpServletRequest req) {
+        return conTope(req, () -> documentos.verProyeccion(codigo));
     }
 
     @GetMapping(value = "/api/proyeccion/{codigo}/eventos", produces = "text/event-stream")
-    public SseEmitter proyeccionEventos(@PathVariable String codigo) {
+    public SseEmitter proyeccionEventos(@PathVariable String codigo, jakarta.servlet.http.HttpServletRequest req) {
         CanalSse canal = new CanalSse();
-        documentos.suscribirProyeccion(codigo, canal);
+        conTope(req, () -> { documentos.suscribirProyeccion(codigo, canal); return null; });
         return canal.emisor;
     }
 }

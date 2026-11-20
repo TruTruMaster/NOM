@@ -107,6 +107,33 @@ try:
     prueba("El propietario le quita el acceso a la lectora", 200, r("PUT", f"/api/espacios/{esp}/accesos", {"usuario": "lectora", "permiso": None}, tok["duena"])[0])
     prueba("…y ya no puede abrir el espacio", 403, r("GET", f"/api/espacios/{esp}", t=tok["lectora"])[0])
     prueba("Nadie puede quitarle el espacio a su propietario", 400, r("PUT", f"/api/espacios/{esp}/accesos", {"usuario": "duena", "permiso": "LECTURA"}, tok["duena"])[0])
+
+    # 17 (20-nov): lo que el servidor acepta en un cambio y en un envío
+    def ops_de(*ops): return {"ops": list(ops), "cliente": "prueba", "dispositivo": "prueba"}
+    t0 = int(time.time() * 1000)
+    for nombre in ("__proto__", "constructor", "prototype"):
+        a = r("POST", f"/api/documentos/{doc}/ops", ops_de({"id": "r1" + nombre, "bloque": nombre, "campos": {"tipo": "x"}, "t": t0, "n": "prueba"}), t=tok["duena"])
+        b = r("POST", f"/api/documentos/{doc}/ops", ops_de({"id": "r2" + nombre, "bloque": "b9", "campos": {nombre: "x"}, "t": t0 + 1, "n": "prueba"}), t=tok["duena"])
+        prueba(f"17.1 (20-nov) {nombre} no se acepta como nombre de bloque ni de campo", [200, 0, 200, 0], [a[0], (a[1] or {}).get("aplicadas"), b[0], (b[1] or {}).get("aplicadas")])
+    bl = ((r("GET", f"/api/documentos/{doc}", t=tok["duena"])[1] or {}).get("estado") or {}).get("bloques") or {}
+    prueba("17.1 …y no queda guardado", False, any(k in bl for k in ("__proto__", "constructor", "prototype")) or "constructor" in (bl.get("b9") or {}))
+    t1 = time.time()
+    c3 = r("POST", f"/api/documentos/{doc}/ops", ops_de({"id": "r3", "bloque": "t1", "campos": {}, "t": t0 + 2, "n": "prueba", "s": {"k": "v", "v": False, "r": [["prueba", 1, 2_000_000]] * 5000}}), t=tok["duena"])[0]
+    prueba("17.2 (20-nov) Un cambio de texto que abarca de más no se acepta (y se responde al momento)", [400, True], [c3, time.time() - t1 < 5])
+    prueba("17.2 …ni más de 5000 cambios en un solo envío", 400, r("POST", f"/api/documentos/{doc}/ops", ops_de(*[{"id": f"m{i}", "bloque": "b8", "campos": {"x": i}, "t": t0 + 10 + i, "n": "prueba"} for i in range(5001)]), t=tok["duena"])[0])
+    prueba("17.3 (20-nov) Un valor con más de 100 000 elementos no se guarda", 0, (r("POST", f"/api/documentos/{doc}/ops", ops_de({"id": "r4", "bloque": "b7", "campos": {"x": [0] * 100_001}, "t": t0 + 9000, "n": "prueba"}), t=tok["duena"])[1] or {}).get("aplicadas"))
+    prueba("17.5 (20-nov) Los nombres de cuenta nuevos son del alfabeto latino", 400, r("POST", "/api/cuentas/registro", {"nombre": "Profes\u043era", "contrasena": CL})[0])
+    if not EXTERNO:   # (el teléfono sí atiende a la red local: ahí la información de red es la que se usa para entrar)
+        info = r("GET", "/api/red/info")[1] or {}
+        prueba("17.4 (20-nov) Sin red local, la información pública no dice el nombre del equipo ni sus direcciones", [False, False, False], ["equipo" in info, "direcciones" in info, "puerto" in info])
+        cx = http.client.HTTPConnection(B.split("//", 1)[1], timeout=20)
+        cx.putrequest("POST", f"/api/documentos/{doc}/ops")
+        for k, v in (("Content-Type", "application/json"), ("Authorization", "Bearer " + tok["duena"]), ("Content-Length", str(40 * 1024 * 1024))): cx.putheader(k, v)
+        cx.endheaders()
+        prueba("17.6 (20-nov) Un envío de más de 32 MB no se recibe", 413, cx.getresponse().status)
+        cx.close()
+        cods = [r("GET", "/api/proyeccion/ZZZZZZ", de="203.0.113.77")[0] for _ in range(121)]
+        prueba("17.7 (20-nov) Muchos códigos que no existen desde una red: después de 120, a esperar", [404, 429], [cods[0], cods[-1]])
     cods = [r("POST", "/api/cuentas/sesion", {"nombre": "ajena", "contrasena": "mala"})[0] for _ in range(6)]
     prueba("6 intentos fallidos bloquean la cuenta", 423, cods[-1])
     prueba("…y ni con la contraseña correcta entra (15 min)", 423, r("POST", "/api/cuentas/sesion", {"nombre": "ajena", "contrasena": CL})[0])
@@ -385,6 +412,31 @@ try:
     prueba("12.1 El boleto de otra persona no da su permiso (espacio ajeno)", 403, canal(f"/api/espacios/{salon}/eventos?boleto={bol(tok['duena'])}&cliente=prueba-b")[0])
     prueba("12.1 Sin boleto ni token el canal no abre", 401, canal(f"/api/espacios/{salon}/eventos?cliente=prueba-b")[0])
     boleto_viejo = bol(tk["maestra"]); t_boleto = time.time()   # se prueba que vence, más abajo
+
+    # La sesión en la dirección solo vale en el canal en vivo
+    prueba("12.1 (19-nov) ?token= fuera del canal en vivo no abre la sesión", 401, r("GET", f"/api/espacios?token={tk['maestra']}")[0])
+    prueba("12.1 (19-nov) …un boleto fuera del canal tampoco", 401, r("GET", f"/api/espacios?boleto={bol(tk['maestra'])}")[0])
+    prueba("12.1 (19-nov) …en el canal, ?token= sigue sirviendo (apps de antes)", [200, "text/event-stream"], list(canal(f"/api/espacios/{salon}/eventos?token={tk['maestra']}&cliente=prueba-t")))
+    prueba("12.1 (19-nov) …y con la cabecera todo sigue igual", 200, r("GET", "/api/espacios", t=tk["maestra"])[0])
+
+    # La copia en otro NOM llega hasta donde llega quien la configura
+    def sinc(srv, de):
+        # (r() no lee el cuerpo de un error: aquí sí, para saber que el 403 es por la red y no por permisos)
+        q = urllib.request.Request(B + f"/api/espacios/{salon}/sincronia", method="PUT",
+                                   data=json.dumps({"servidor": srv, "usuario": "x", "contrasena": "y"}).encode(),
+                                   headers={"Content-Type": "application/json", "Authorization": "Bearer " + tk["maestra"], "X-Forwarded-For": de})
+        try:
+            with urllib.request.urlopen(q, timeout=40) as x: return [x.status, False]
+        except urllib.error.HTTPError as e: return [e.code, "red interna" in e.read().decode("utf-8", "replace")]
+    if not EXTERNO:   # (el teléfono no recibe gente de Internet: ahí todos son de su red)
+        prueba("13.6 (19-nov) Desde Internet la copia no apunta al propio servidor (localhost)", [403, True], sinc("http://127.0.0.1:9", "8.8.8.8"))
+        prueba("13.6 (19-nov) …ni a su IPv6 local", [403, True], sinc("http://[::1]:9", "8.8.8.8"))
+        prueba("13.6 (19-nov) …ni a una IPv4 local escrita como IPv6 (::ffff:127.0.0.1)", [403, True], sinc("http://[::ffff:127.0.0.1]:9", "8.8.8.8"))
+        prueba("13.6 (19-nov) …ni a una red privada", [403, True], sinc("http://192.168.0.1:8080", "8.8.8.8"))
+        prueba("13.6 (19-nov) …ni a 100.64.0.0/10", [403, True], sinc("http://100.100.100.100:8080", "8.8.8.8"))
+        prueba("13.6 (19-nov) …ni a 169.254.169.254", [403, True], sinc("http://169.254.169.254", "8.8.8.8"))
+    prueba("13.6 (19-nov) Desde la red local tampoco al propio servidor", [403, True], sinc("http://127.0.0.1:9", "192.168.0.50"))
+    prueba("13.6 (19-nov) …pero sí a su red (ahí no hay un NOM: no conecta, pero no se prohíbe)", [400, False], sinc("http://192.0.2.1:9", "192.168.0.50"))
 
     # Almacenamiento de la cuenta: cuánto ocupa lo suyo y cuánto tiene permitido
     prueba("12.1 Ver el almacenamiento pide sesión", 401, r("GET", "/api/cuentas/almacenamiento")[0])

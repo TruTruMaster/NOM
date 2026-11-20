@@ -17,12 +17,15 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import mx.wack.nom.core.crdt.Operacion;
 import mx.wack.nom.core.modelo.Documento;
 import mx.wack.nom.core.modelo.Espacio;
 import mx.wack.nom.core.modelo.Permiso;
 import mx.wack.nom.core.modelo.Usuario;
 import mx.wack.nom.servidor.seguridad.FiltroSesion;
+import mx.wack.nom.servidor.seguridad.Origen;
 import mx.wack.nom.core.servicio.Difusor;
 import mx.wack.nom.core.servicio.ServicioDocumentos;
 import mx.wack.nom.core.servicio.ServicioEspacios;
@@ -182,11 +185,11 @@ public class EspaciosApi {
         return espacios.revocarEnlace(u, id, codigo);
     }
 
-    /** 6.5 Copia del espacio en otro servidor. */
+    /** 6.5 Copia del espacio en otro servidor. No llega más lejos que quien la configura (ver ServicioSincronia). */
     @PutMapping("/{id}/sincronia")
     public Map<String, Object> configurarSincronia(@RequestAttribute(FiltroSesion.ATRIBUTO) Usuario u, @PathVariable String id,
-                                                   @RequestBody Sincronizar s) {
-        return sincronia.configurar(u, id, s.servidor(), s.usuario(), s.contrasena());
+                                                   @RequestBody Sincronizar s, HttpServletRequest req) {
+        return sincronia.configurar(u, id, s.servidor(), s.usuario(), s.contrasena(), ServicioSincronia.alcanceDe(Origen.de(req)));
     }
 
     @PostMapping("/{id}/sincronia")

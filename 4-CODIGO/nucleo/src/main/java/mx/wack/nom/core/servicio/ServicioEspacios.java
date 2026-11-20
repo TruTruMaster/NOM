@@ -273,11 +273,14 @@ public class ServicioEspacios {
 
     public Map<String, Object> estadoConexion(Espacio e) {
         Map<String, Object> m = new LinkedHashMap<>();
-        List<String> dirs = nodo.direcciones();
+        boolean local = nodo.enRedLocal();
+        List<String> dirs = local ? nodo.direcciones() : List.of();
         m.put("activa", e.conexion.activa);
         m.put("desde", e.conexion.desde);
-        m.put("equipo", nodo.equipo());
-        m.put("puerto", nodo.puerto());
+        if (local) {
+            m.put("equipo", nodo.equipo());
+            m.put("puerto", nodo.puerto());
+        }
         m.put("direcciones", dirs);
         m.put("sinRed", dirs.isEmpty());
         return m;

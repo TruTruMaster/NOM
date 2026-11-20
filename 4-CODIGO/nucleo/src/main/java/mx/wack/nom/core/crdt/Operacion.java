@@ -46,10 +46,33 @@ public record Operacion(String id, String bloque, Map<String, Object> campos, lo
         (portada, preguntas guía y referencias del reporte): no lo escribió nadie. */
     public boolean reacomodo() { return m != null && "r".equals(m.get("o")); }
 
+    /** Nombres que no pueden ser de un bloque ni de un campo (en la página son parte de todos los objetos). */
+    public static final java.util.Set<String> RESERVADOS = java.util.Set.of("__proto__", "constructor", "prototype");
+
+    public static boolean nombreValido(String k) { return k != null && !k.isEmpty() && k.length() <= 200 && !RESERVADOS.contains(k); }
+
+    /** Elementos (de listas y mapas) que puede traer una operación entre todos sus valores. */
+    public static final int MAX_ELEMENTOS = 100_000;
+
+    /** Cuenta los elementos de un valor hasta pasar del tope (devuelve tope + 1 si se pasa). */
+    static int elementos(Object v, int tope) {
+        int n = 0;
+        java.util.ArrayDeque<Object> pila = new java.util.ArrayDeque<>();
+        if (v != null) pila.push(v);
+        while (!pila.isEmpty() && n <= tope) {
+            Object x = pila.pop();
+            if (x instanceof Map<?, ?> m) { n += m.size(); for (Object y : m.values()) if (y instanceof Map || y instanceof java.util.Collection) pila.push(y); }
+            else if (x instanceof java.util.Collection<?> c) { n += c.size(); for (Object y : c) if (y instanceof Map || y instanceof java.util.Collection) pila.push(y); }
+        }
+        return n;
+    }
+
     public boolean valida() {
         boolean cuerpo = s != null ? s.get("k") instanceof String && !DOC.equals(bloque)
-                : campos != null && !campos.isEmpty() && campos.size() <= 400;
-        return cuerpo && id != null && !id.isBlank() && bloque != null && !bloque.isBlank()
-                && n != null && !n.isBlank() && n.length() <= 64 && t > 0 && bloque.length() <= 64;
+                : campos != null && !campos.isEmpty() && campos.size() <= 400 && campos.keySet().stream().allMatch(Operacion::nombreValido);
+        return cuerpo && elementos(campos, MAX_ELEMENTOS) + elementos(s, MAX_ELEMENTOS) <= MAX_ELEMENTOS
+                && id != null && !id.isBlank() && id.length() <= 200 && bloque != null && !bloque.isBlank()
+                && n != null && !n.isBlank() && n.length() <= 64 && t > 0 && bloque.length() <= 64 && !RESERVADOS.contains(bloque)
+                && !RESERVADOS.contains(n);
     }
 }

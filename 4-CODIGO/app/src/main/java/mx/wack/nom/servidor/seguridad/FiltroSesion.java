@@ -11,8 +11,8 @@ import mx.wack.nom.core.servicio.ServicioCuentas;
 
 /**
  * Toda la API, salvo registro, inicio de sesion e info de red, exige un token.
- * Va en "Authorization: Bearer ..." o, para EventSource (que no puede mandar
- * cabeceras), en ?token=.
+ * Va en "Authorization: Bearer ...". Solo el canal en vivo (EventSource, que no puede mandar
+ * cabeceras) se identifica en la direccion: con un boleto de un solo uso o, las apps de antes, ?token=.
  */
 @Component
 public class FiltroSesion implements HandlerInterceptor {
@@ -35,9 +35,11 @@ public class FiltroSesion implements HandlerInterceptor {
         String cab = req.getHeader("Authorization");
         if (cab != null && cab.startsWith("Bearer ")) token = cab.substring(7).trim();
         // El canal en vivo no puede mandar cabeceras: trae un boleto de un solo uso (o, las versiones
-        // anteriores de la app, el token en la direccion).
-        if (token == null && req.getParameter("boleto") != null) token = cuentas.canjearBoleto(req.getParameter("boleto")).orElse(null);
-        if (token == null) token = req.getParameter("token");
+        // anteriores de la app, el token en la direccion). Las demas rutas, solo con la cabecera.
+        if (token == null && esCanalEnVivo(req)) {
+            if (req.getParameter("boleto") != null) token = cuentas.canjearBoleto(req.getParameter("boleto")).orElse(null);
+            if (token == null) token = req.getParameter("token");
+        }
         if (token == null || token.isBlank())
             throw new ErrorNom(ErrorNom.SIN_SESION, "Inicia sesion para continuar");
         Usuario u = cuentas.usuarioDeToken(token)
@@ -45,5 +47,12 @@ public class FiltroSesion implements HandlerInterceptor {
         req.setAttribute(ATRIBUTO, u);
         req.setAttribute("nom.token", token);
         return true;
+    }
+
+    /** Las dos rutas del canal en vivo: las unicas que aceptan la sesion en la direccion. */
+    private static final java.util.regex.Pattern CANAL = java.util.regex.Pattern.compile("^/api/(espacios|documentos)/[^/]+/eventos$");
+
+    static boolean esCanalEnVivo(HttpServletRequest req) {
+        return "GET".equals(req.getMethod()) && CANAL.matcher(req.getRequestURI()).matches();
     }
 }

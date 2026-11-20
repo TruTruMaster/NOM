@@ -116,6 +116,66 @@ public class ServicioCuentas {
         u.bloqueadoHasta = 0;
     }
 
+    // ------------------------------------------------------------ comprobar contraseñas sin detener a los demás
+    /**
+     * Comprobar una contraseña tarda ~0.1-0.3 s de un núcleo. Se hace fuera del candado general (las demás cuentas
+     * entran a la vez), con pocos turnos a la vez para que el servidor siga atendiendo lo demás, y los intentos de una
+     * MISMA cuenta van de uno en uno (así el tope de intentos no se rebasa mandando varios juntos).
+     */
+    private final java.util.concurrent.Semaphore turnos = new java.util.concurrent.Semaphore(Math.max(1, Runtime.getRuntime().availableProcessors() / 2), true);
+    private final Map<String, Object> candadosCuenta = new java.util.concurrent.ConcurrentHashMap<>();
+    /** Fallos por red en los últimos 10 minutos (también con nombres que no existen). */
+    private final Map<String, java.util.ArrayDeque<Long>> fallosRed = new java.util.HashMap<>();
+    private int fallosRedTope = 200;
+    private static final long DIEZ_MINUTOS = 600_000L;
+    /** Una contraseña al azar: quien escribe un nombre que no existe espera lo mismo que con uno que sí. */
+    private volatile String[] relleno;
+
+    /** Cuántos intentos fallidos se aceptan desde una misma red en 10 minutos (0 = sin límite). */
+    public void limitarFallosPorRed(int tope) { fallosRedTope = tope; }
+
+    private Object candadoDe(String usuarioId) {
+        if (candadosCuenta.size() > 50_000) candadosCuenta.clear();
+        return candadosCuenta.computeIfAbsent(usuarioId, k -> new Object());
+    }
+
+    private boolean comprobar(char[] secreto, String sal, String hash) {
+        boolean turno;
+        try { turno = turnos.tryAcquire(20, java.util.concurrent.TimeUnit.SECONDS); }
+        catch (InterruptedException e) { Thread.currentThread().interrupt(); turno = false; }
+        if (!turno) {
+            java.util.Arrays.fill(secreto, '\0');
+            throw new ErrorNom(ErrorNom.DEMASIADOS, "Hay muchas personas entrando a la vez: intenta de nuevo en unos segundos");
+        }
+        try { return cifrado.coincide(secreto, sal, hash); } finally { turnos.release(); }
+    }
+
+    private void comprobarRelleno(String secreto) {
+        String[] r = relleno;
+        if (r == null) {
+            String sal = cifrado.nuevaSal();
+            r = relleno = new String[] { sal, cifrado.hash(cifrado.token().toCharArray(), sal) };
+        }
+        comprobar(secreto.toCharArray(), r[0], r[1]);
+    }
+
+    /** Muchos fallos desde una misma red (con cualquier nombre): se espera un rato antes de dejar probar más. */
+    private synchronized void exigirRedSinAbuso(String origen, long ahora) {
+        if (origen == null || origen.isBlank() || fallosRedTope <= 0) return;
+        java.util.ArrayDeque<Long> l = fallosRed.get(origen);
+        if (l == null) return;
+        while (!l.isEmpty() && ahora - l.peekFirst() > DIEZ_MINUTOS) l.pollFirst();
+        if (l.size() >= fallosRedTope) throw new ErrorNom(ErrorNom.DEMASIADOS, "Demasiados intentos fallidos desde esta red: espera unos minutos.");
+    }
+
+    private synchronized void anotarFalloRed(String origen, long ahora) {
+        if (origen == null || origen.isBlank()) return;
+        java.util.ArrayDeque<Long> l = fallosRed.computeIfAbsent(origen, x -> new java.util.ArrayDeque<>());
+        l.addLast(ahora);
+        while (l.size() > Math.max(fallosRedTope, 1) + 1) l.pollFirst();
+        if (fallosRed.size() > 5_000) fallosRed.values().removeIf(q -> q.isEmpty() || ahora - q.peekLast() > DIEZ_MINUTOS);
+    }
+
     /** Tope de cuentas nuevas por hora (un programa no debe poder llenar el disco registrando cuentas). */
     private void anotarRegistro(String origen, String equipo, long ahora) {
         if (origen == null || origen.isBlank()) return;   // el propio equipo (pruebas, administracion)
@@ -255,7 +315,9 @@ public class ServicioCuentas {
         nombre = nombre == null ? "" : nombre.trim();
         if (nombre.isEmpty()) throw ErrorNom.invalido("Escribe un nombre de usuario", "nombre");
         if (contrasena == null || contrasena.isEmpty()) throw ErrorNom.invalido("Escribe una contraseña", "contrasena");
-        if (!nombre.matches("[\\p{L}\\p{N}._-]{3,24}"))
+        // Letras del alfabeto latino (con acentos y ñ), números, punto y guiones: un nombre no puede imitar a otro con
+        // letras de otro alfabeto que se ven iguales (ni con letras anchas o ligaduras).
+        if (!nombre.matches("[\\p{IsLatin}0-9._-]{3,24}") || !java.text.Normalizer.isNormalized(nombre, java.text.Normalizer.Form.NFKC))
             throw ErrorNom.invalido("Usa de 3 a 24 letras, números, punto, guion o guion bajo, sin espacios", "nombre");
         if (contrasena.length() < 8)
             throw ErrorNom.invalido("La contraseña necesita al menos 8 caracteres", "contrasena");
@@ -466,24 +528,43 @@ public class ServicioCuentas {
      */
     public String recuperar(String nombre, String codigo, String nueva) { return recuperar(nombre, codigo, nueva, null); }
 
-    public synchronized String recuperar(String nombre, String codigo, String nueva, String origen) {
+    public String recuperar(String nombre, String codigo, String nueva, String origen) {
         if (nombre == null || nombre.isBlank()) throw ErrorNom.invalido("Escribe tu usuario", "nombre");
         if (normalizarCodigo(codigo).length() != 16) throw ErrorNom.invalido("El código tiene 16 letras y números (por ejemplo ABCD-EFGH-JKMN-PQRS)", "codigo");
         if (nueva == null || nueva.length() < 8) throw ErrorNom.invalido("La contraseña nueva necesita al menos 8 caracteres", "nueva");
         long ahora = System.currentTimeMillis();
-        Usuario u = repo.porNombre(nombre).orElse(null);
-        if (u == null || u.sinContrasena() || u.hashRecuperacion == null) throw new ErrorNom(ErrorNom.SIN_SESION, "Usuario o código incorrectos");
-        exigirSinBloqueo(u, origen, ahora);
-        if (!cifrado.coincide(normalizarCodigo(codigo).toCharArray(), u.salRecuperacion, u.hashRecuperacion)) {
-            fallo(u, origen, ahora);
+        exigirRedSinAbuso(origen, ahora);
+        Usuario u;
+        synchronized (this) { u = repo.porNombre(nombre).filter(x -> !x.sinContrasena() && x.hashRecuperacion != null).orElse(null); }
+        if (u == null) {
+            comprobarRelleno(codigo);
+            anotarFalloRed(origen, ahora);
             throw new ErrorNom(ErrorNom.SIN_SESION, "Usuario o código incorrectos");
         }
-        u.sal = cifrado.nuevaSal();
-        u.hashContrasena = cifrado.hash(nueva.toCharArray(), u.sal);
-        acierto(u, origen);
-        repo.borrarSesionesDe(u.id);
-        log.info("Contraseña recuperada con código: {}", u.nombre);
-        return nuevoCodigoRecuperacion(u);
+        synchronized (candadoDe(u.id)) {
+            ahora = System.currentTimeMillis();
+            String id = u.id;
+            synchronized (this) {
+                u = repo.porId(id).filter(x -> !x.sinContrasena() && x.hashRecuperacion != null).orElse(null);
+                if (u == null) throw new ErrorNom(ErrorNom.SIN_SESION, "Usuario o código incorrectos");
+                exigirSinBloqueo(u, origen, ahora);
+            }
+            boolean ok = comprobar(normalizarCodigo(codigo).toCharArray(), u.salRecuperacion, u.hashRecuperacion);
+            String sal = ok ? cifrado.nuevaSal() : null, hash = ok ? cifrado.hash(nueva.toCharArray(), sal) : null;
+            synchronized (this) {
+                if (!ok) {
+                    anotarFalloRed(origen, ahora);
+                    fallo(u, origen, ahora);
+                    throw new ErrorNom(ErrorNom.SIN_SESION, "Usuario o código incorrectos");
+                }
+                u.sal = sal;
+                u.hashContrasena = hash;
+                acierto(u, origen);
+                repo.borrarSesionesDe(u.id);
+                log.info("Contraseña recuperada con código: {}", u.nombre);
+                return nuevoCodigoRecuperacion(u);
+            }
+        }
     }
 
     private Sesion nuevaSesion(Usuario u, long ahora) {
@@ -500,61 +581,90 @@ public class ServicioCuentas {
     public Sesion iniciarSesion(String nombre, String contrasena) { return iniciarSesion(nombre, contrasena, null); }
 
     /** origen: la direccion de red de quien entra (null = no se sabe: los fallos cuentan todos juntos). */
-    public synchronized Sesion iniciarSesion(String nombre, String contrasena, String origen) {
+    public Sesion iniciarSesion(String nombre, String contrasena, String origen) {
         if (nombre == null || nombre.isBlank() || contrasena == null || contrasena.isEmpty())
             throw ErrorNom.invalido("Escribe tu usuario y tu contraseña", nombre == null || nombre.isBlank() ? "nombre" : "contrasena");
         long ahora = System.currentTimeMillis();
-        Optional<Usuario> encontrado = repo.porNombre(nombre);
-        if (encontrado.isEmpty()) {
-            // Mensaje generico: no revela si el nombre existe (CU-02, 2a).
+        exigirRedSinAbuso(origen, ahora);
+        // Alias, copias de la nube y cuentas retiradas no tienen contrasena que se pueda usar.
+        Usuario u;
+        synchronized (this) { u = repo.porNombre(nombre).filter(x -> !x.sinContrasena()).orElse(null); }
+        if (u == null) {
+            // Mensaje generico y el mismo tiempo: no revela si el nombre existe (CU-02, 2a).
+            comprobarRelleno(contrasena);
+            anotarFalloRed(origen, ahora);
             throw new ErrorNom(ErrorNom.SIN_SESION, "Usuario o contraseña incorrectos");
         }
-        Usuario u = encontrado.get();
-        // Alias, copias de la nube y cuentas retiradas no tienen contrasena que se pueda usar.
-        if (u.sinContrasena()) throw new ErrorNom(ErrorNom.SIN_SESION, "Usuario o contraseña incorrectos");
-        exigirSinBloqueo(u, origen, ahora);
-        if (!cifrado.coincide(contrasena.toCharArray(), u.sal, u.hashContrasena)) {
-            int quedan = fallo(u, origen, ahora);
-            throw new ErrorNom(ErrorNom.SIN_SESION, "Usuario o contraseña incorrectos. "
-                    + (quedan == 1 ? "Te queda 1 intento." : "Te quedan " + quedan + " intentos."),
-                    null, Map.of("intentosRestantes", quedan));
+        synchronized (candadoDe(u.id)) {
+            ahora = System.currentTimeMillis();
+            String id = u.id;
+            synchronized (this) {
+                u = repo.porId(id).filter(x -> !x.sinContrasena()).orElse(null);
+                if (u == null) throw new ErrorNom(ErrorNom.SIN_SESION, "Usuario o contraseña incorrectos");
+                exigirSinBloqueo(u, origen, ahora);
+            }
+            boolean ok = comprobar(contrasena.toCharArray(), u.sal, u.hashContrasena);
+            synchronized (this) {
+                if (!ok) {
+                    anotarFalloRed(origen, ahora);
+                    int quedan = fallo(u, origen, ahora);
+                    throw new ErrorNom(ErrorNom.SIN_SESION, "Usuario o contraseña incorrectos. "
+                            + (quedan == 1 ? "Te queda 1 intento." : "Te quedan " + quedan + " intentos."),
+                            null, Map.of("intentosRestantes", quedan));
+                }
+                acierto(u, origen);
+                repo.guardar(u);
+                return nuevaSesion(u, ahora);
+            }
         }
-        acierto(u, origen);
-        repo.guardar(u);
-        return nuevaSesion(u, ahora);
     }
 
     /** Comprueba la contrasena de la cuenta abierta (para lo delicado: cambiarla, borrar la cuenta). */
+    /** Llamar con el candado de la cuenta (candadoDe) y SIN el general: el cálculo va afuera. */
     private void exigirContrasena(Usuario u, String contrasena, String origen, String campo) {
         if (u.sinContrasena()) throw ErrorNom.prohibido("Los alias y las cuentas de invitado no tienen contraseña");
         if (contrasena == null || contrasena.isEmpty()) throw ErrorNom.invalido("Escribe tu contraseña actual", campo);
         long ahora = System.currentTimeMillis();
-        exigirSinBloqueo(u, origen, ahora);
-        if (!cifrado.coincide(contrasena.toCharArray(), u.sal, u.hashContrasena)) {
-            fallo(u, origen, ahora);
-            throw new ErrorNom(ErrorNom.INVALIDO, "Esa no es tu contraseña actual", campo);
+        String sal, hash;
+        synchronized (this) {
+            exigirSinBloqueo(u, origen, ahora);
+            Usuario hoy = repo.porId(u.id).orElse(u);
+            sal = hoy.sal;
+            hash = hoy.hashContrasena;
         }
-        acierto(u, origen);
+        boolean ok = comprobar(contrasena.toCharArray(), sal, hash);
+        synchronized (this) {
+            if (!ok) {
+                fallo(u, origen, ahora);
+                throw new ErrorNom(ErrorNom.INVALIDO, "Esa no es tu contraseña actual", campo);
+            }
+            acierto(u, origen);
+        }
     }
 
     /**
      * Cambiar la contrasena sabiendo la actual. Cierra las demas sesiones (otros equipos tienen que
      * volver a entrar) y devuelve una sesion nueva para este.
      */
-    public synchronized Sesion cambiarContrasena(Usuario u, String actual, String nueva, String origen) {
+    public Sesion cambiarContrasena(Usuario u, String actual, String nueva, String origen) {
         if (nueva == null || nueva.length() < 8) throw ErrorNom.invalido("La contraseña nueva necesita al menos 8 caracteres", "nueva");
-        exigirContrasena(u, actual, origen, "actual");
-        u.sal = cifrado.nuevaSal();
-        u.hashContrasena = cifrado.hash(nueva.toCharArray(), u.sal);
-        repo.guardar(u);
-        repo.borrarSesionesDe(u.id);
-        log.info("Contraseña cambiada: {}", u.nombre);
-        return nuevaSesion(u, System.currentTimeMillis());
+        synchronized (candadoDe(u.id)) {
+            exigirContrasena(u, actual, origen, "actual");
+            String sal = cifrado.nuevaSal(), hash = cifrado.hash(nueva.toCharArray(), sal);
+            synchronized (this) {
+                u.sal = sal;
+                u.hashContrasena = hash;
+                repo.guardar(u);
+                repo.borrarSesionesDe(u.id);
+                log.info("Contraseña cambiada: {}", u.nombre);
+                return nuevaSesion(u, System.currentTimeMillis());
+            }
+        }
     }
 
     /** Antes de borrar una cuenta: que quien lo pide sepa su contrasena. */
-    public synchronized void confirmarParaBorrar(Usuario u, String contrasena, String origen) {
-        exigirContrasena(u, contrasena, origen, "contrasena");
+    public void confirmarParaBorrar(Usuario u, String contrasena, String origen) {
+        synchronized (candadoDe(u.id)) { exigirContrasena(u, contrasena, origen, "contrasena"); }
     }
 
     /** Borra la cuenta y sus sesiones. Lo que tenia en los espacios lo quita antes ServicioDocumentos. */

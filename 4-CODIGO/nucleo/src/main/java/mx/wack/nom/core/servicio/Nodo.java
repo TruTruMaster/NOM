@@ -19,4 +19,7 @@ public interface Nodo {
 
     /** Direcciones de difusión (broadcast) de cada red, para anunciar los espacios. */
     List<InetAddress> difusion();
+
+    /** ¿Atiende a una red local (la computadora o el teléfono del salón)? En la nube no: su nombre y sus direcciones no se dicen. */
+    default boolean enRedLocal() { return true; }
 }
