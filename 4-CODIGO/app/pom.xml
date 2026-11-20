@@ -5,7 +5,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.1.1</version>
+        <version>4.1.3</version>
         <relativePath/>
     </parent>
 
@@ -19,6 +19,11 @@
         <!-- Requerimientos de software: JDK/JRE 17 o superior -->
         <java.version>17</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Tomcat y Jackson en sus versiones más recientes, por encima de las que fija Spring Boot
+             (las gestiona con estas mismas propiedades); al subir de versión de Spring Boot, revisar
+             si ya se pueden quitar. -->
+        <tomcat.version>11.0.29</tomcat.version>
+        <jackson.version>3.1.8</jackson.version>
     </properties>
 
     <dependencies>
