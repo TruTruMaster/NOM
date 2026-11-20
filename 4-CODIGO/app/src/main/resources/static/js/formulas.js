@@ -1716,6 +1716,84 @@
     for (let k = 1; k <= N; k++) p += cup / Math.pow(1 + r, k - 1 + DSC / E2);
     return p - (cup * A) / E2;
   }
+  // ---- bonos con el primer o el último período irregular (ODDFPRICE, ODDFYIELD, ODDLPRICE, ODDLYIELD). El período
+  // irregular se parte en «cuasi cupones» (los períodos normales que caben en él), como en las fórmulas de Excel.
+  /** La fecha que queda k períodos de cupón después de la de ancla (k < 0: antes). Con finDeMes, si la de ancla es fin de
+      mes, todas lo son (el primer período); si no, el día se recorta al largo del mes (el último período: medido en Excel). */
+  function fechaCuasi(ancla, k, frec, finDeMes = true) {
+    const v = fechaDe(ancla), meses = 12 / frec;
+    const fin = finDeMes && v.getUTCDate() === new Date(Date.UTC(v.getUTCFullYear(), v.getUTCMonth() + 1, 0)).getUTCDate();
+    const tm = v.getUTCFullYear() * 12 + v.getUTCMonth() + k * meses, y = Math.floor(tm / 12), m = tm - y * 12;
+    const ult = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    return Math.round((Date.UTC(y, m, fin ? ult : Math.min(v.getUTCDate(), ult)) - BASE) / DIA);
+  }
+  /** Largo normal de un período de cupón: sus días reales con base 1; si no, 360/frec (365/frec con base 3). */
+  const largoNormal = (ini, fin, frec, base) => (base === 1 ? fin - ini : base === 3 ? 365 / frec : 360 / frec);
+  /** Último período irregular: suma de DC/NL, A/NL y DSC/NL de sus cuasi cupones, del último interés al vencimiento. Como
+      Excel: el largo normal de un cuasi cupón es el de sus días reales con las bases 1, 2 y 3 (360/frec con 30/360). */
+  function periodoFinal(liq, venc, ult, frec, base) {
+    let dc = 0, a = 0, dsc = 0;
+    for (let k = 1; k < 4000; k++) {
+      const ini = fechaCuasi(ult, k - 1, frec, false), fin = fechaCuasi(ult, k, frec, false);
+      if (ini >= venc) break;
+      const nl = base === 0 || base === 4 ? 360 / frec : fin - ini;
+      const dci = fin < venc ? nl : diasBase(ini, venc, base);
+      const ai = fin < liq ? dci : ini < liq ? diasBase(ini, liq, base) : 0;
+      const s0 = Math.max(liq, ini), s1 = Math.min(venc, fin);
+      dc += dci / nl; a += ai / nl; if (s1 > s0) dsc += diasBase(s0, s1, base) / nl;
+    }
+    return { dc, a, dsc };
+  }
+  function precioPrimerIrregular(liq, venc, emi, pcup, tasa, rend, red, frec, base) {
+    const m = frec, C = (100 * tasa) / m, x = 1 + rend / m;
+    const c = cupones(liq, pcup, frec), E2 = cupDias(c, frec, base);
+    const n = cupones(pcup, venc, frec).num;   // cupones normales después del primero
+    const dfc = diasBase(emi, pcup, base);
+    if (dfc < E2) {   // primer cupón corto
+      const dsc = diasBase(liq, pcup, base), A = diasBase(emi, liq, base), y = dsc / E2;
+      let p = red / Math.pow(x, n + y) + (C * dfc) / E2 / Math.pow(x, y);
+      for (let k = 1; k <= n; k++) p += C / Math.pow(x, k + y);
+      return p - (A / E2) * C;
+    }
+    // primer cupón largo: los cuasi cupones del período irregular, del primer cupón hacia atrás hasta la emisión
+    let dcnl = 0, anl = 0;
+    for (let k = 0; k < 4000; k++) {
+      const fin = fechaCuasi(pcup, -k, frec), ini = fechaCuasi(pcup, -k - 1, frec);
+      if (fin <= emi) break;
+      const nl = base === 1 ? fin - ini : E2;
+      const dci = ini > emi ? nl : diasBase(emi, fin, base);
+      const i0 = Math.max(emi, ini), i1 = Math.min(liq, fin);
+      dcnl += dci / nl; if (i1 > i0) anl += diasBase(i0, i1, base) / nl;
+    }
+    const dsc = base === 2 || base === 3 ? diasBase(liq, c.ncd, base) : E2 - diasBase(c.pcd, liq, base);
+    const nq = cuasiEntre(liq, pcup, frec);   // cuasi cupones enteros entre la liquidación y el primer cupón
+    const y = dsc / E2;
+    let p = red / Math.pow(x, y + nq + n) + (C * dcnl) / Math.pow(x, nq + y);
+    for (let k = 1; k <= n; k++) p += C / Math.pow(x, k + nq + y);
+    return p - C * anl;
+  }
+  /** Cuasi cupones enteros entre la liquidación y el primer cupón, contados como Excel: pasos de 12/frec meses desde la
+      liquidación (desde su fin de mes si el primer cupón es fin de mes) mientras no se llegue al primer cupón. */
+  function cuasiEntre(liq, pcup, frec) {
+    const p = fechaDe(pcup), largoMes = (y, m) => new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    let fin = p.getUTCDate() === largoMes(p.getUTCFullYear(), p.getUTCMonth());
+    if (!fin && p.getUTCMonth() !== 1 && p.getUTCDate() > 28) { const l = fechaDe(liq); fin = l.getUTCDate() === largoMes(l.getUTCFullYear(), l.getUTCMonth()); }
+    const mover = (s, meses) => {
+      const d = fechaDe(s), tm = d.getUTCFullYear() * 12 + d.getUTCMonth() + meses, y = Math.floor(tm / 12), m = tm - y * 12, ult = largoMes(y, m);
+      return Math.round((Date.UTC(y, m, fin ? ult : Math.min(d.getUTCDate(), ult)) - BASE) / DIA);
+    };
+    const ini = mover(liq, 0);
+    let n = liq < ini ? 1 : 0, f = mover(ini, 12 / frec);
+    while (f < pcup && n < 4000) { n++; f = mover(f, 12 / frec); }
+    return n;
+  }
+  function validarIrregular(liq, venc, otra, tasa, rend, red, frec, base, primero, pcup) {
+    if (!(liq < venc) || tasa < 0 || rend < 0 || red <= 0 || ![1, 2, 4].includes(frec) || base < 0 || base > 4) throw E("#NUM!");
+    if (primero ? !(otra < liq && liq < pcup && pcup < venc) : !(otra < liq)) throw E("#NUM!");
+    // Con el primer período irregular, el vencimiento tiene que caer en el calendario de cupones que empieza en el primer
+    // cupón (Excel da #¡NUM! si no: medido con un vencimiento a fin de febrero de un año bisiesto y con frecuencia anual).
+    if (primero) { let k = 1, f = fechaCuasi(pcup, 1, frec); while (f < venc && k < 4000) f = fechaCuasi(pcup, ++k, frec); if (f !== venc) throw E("#NUM!"); }
+  }
   function duracionBono(liq, venc, tasa, rend, frec, base) {
     const c = cupones(liq, venc, frec), E2 = cupDias(c, frec, base), DSC = cupDiasNC(c, liq, frec, base), N = c.num;
     const cup = (100 * tasa) / frec, r = rend / frec;
@@ -1960,6 +2038,41 @@
       for (let k = 0; k < 100; k++) { const p = precioBono(liq, venc, tasa, r, red, frec, base) - pr, h = 1e-7, d = (precioBono(liq, venc, tasa, r + h, red, frec, base) - precioBono(liq, venc, tasa, r - h, red, frec, base)) / (2 * h); const n = r - p / d; if (Math.abs(n - r) < 1e-12) return n; r = n; }
       return r;
     },
+    "PRECIO.PER.IRREGULAR.1": (a) => {
+      const liq = entero(a[0]), venc = entero(a[1]), emi = entero(a[2]), pcup = entero(a[3]), tasa = num(a[4]), rend = num(a[5]), red = num(a[6]), frec = Math.floor(num(a[7])), base = a[8] === undefined ? 0 : Math.floor(num(a[8]));
+      validarIrregular(liq, venc, emi, tasa, rend, red, frec, base, true, pcup);
+      return precioPrimerIrregular(liq, venc, emi, pcup, tasa, rend, red, frec, base);
+    },
+    "RENDTO.PER.IRREGULAR.1": (a) => {
+      const liq = entero(a[0]), venc = entero(a[1]), emi = entero(a[2]), pcup = entero(a[3]), tasa = num(a[4]), pr = num(a[5]), red = num(a[6]), frec = Math.floor(num(a[7])), base = a[8] === undefined ? 0 : Math.floor(num(a[8]));
+      validarIrregular(liq, venc, emi, tasa, 0, red, frec, base, true, pcup);
+      if (pr <= 0) throw E("#NUM!");
+      // Newton sobre el precio (Excel no tiene fórmula cerrada para este)
+      let r = tasa > 0 ? tasa : 0.05;
+      for (let k = 0; k < 200; k++) {
+        const f = (y) => precioPrimerIrregular(liq, venc, emi, pcup, tasa, y, red, frec, base) - pr;
+        const v = f(r), h = Math.max(1e-7, Math.abs(r) * 1e-7), d = (f(r + h) - f(r - h)) / (2 * h);
+        if (!isFinite(d) || d === 0) break;
+        const nr = r - v / d;
+        if (Math.abs(nr - r) < 1e-12) { r = nr; break; }
+        r = nr <= -frec ? (r - frec) / 2 : nr;
+      }
+      if (!isFinite(r)) throw E("#NUM!");
+      return r;
+    },
+    "PRECIO.PER.IRREGULAR.2": (a) => {
+      const liq = entero(a[0]), venc = entero(a[1]), ult = entero(a[2]), tasa = num(a[3]), rend = num(a[4]), red = num(a[5]), frec = Math.floor(num(a[6])), base = a[7] === undefined ? 0 : Math.floor(num(a[7]));
+      validarIrregular(liq, venc, ult, tasa, rend, red, frec, base, false);
+      const s = periodoFinal(liq, venc, ult, frec, base), C = (100 * tasa) / frec;
+      return (red + C * s.dc) / (1 + (rend / frec) * s.dsc) - C * s.a;
+    },
+    "RENDTO.PER.IRREGULAR.2": (a) => {
+      const liq = entero(a[0]), venc = entero(a[1]), ult = entero(a[2]), tasa = num(a[3]), pr = num(a[4]), red = num(a[5]), frec = Math.floor(num(a[6])), base = a[7] === undefined ? 0 : Math.floor(num(a[7]));
+      validarIrregular(liq, venc, ult, tasa, 0, red, frec, base, false);
+      if (pr <= 0) throw E("#NUM!");
+      const s = periodoFinal(liq, venc, ult, frec, base), C = (100 * tasa) / frec;
+      return ((red + C * s.dc - (pr + C * s.a)) / (pr + C * s.a)) * (frec / s.dsc);
+    },
     DURACION: (a) => { const liq = entero(a[0]), venc = entero(a[1]), tasa = num(a[2]), rend = num(a[3]), frec = Math.floor(num(a[4])), base = a[5] === undefined ? 0 : Math.floor(num(a[5])); if (liq >= venc || tasa < 0 || rend < 0 || ![1, 2, 4].includes(frec) || base < 0 || base > 4) throw E("#NUM!"); return duracionBono(liq, venc, tasa, rend, frec, base); },
     "DURACION.MODIF": (a) => { const liq = entero(a[0]), venc = entero(a[1]), tasa = num(a[2]), rend = num(a[3]), frec = Math.floor(num(a[4])), base = a[5] === undefined ? 0 : Math.floor(num(a[5])); if (liq >= venc || tasa < 0 || rend < 0 || ![1, 2, 4].includes(frec) || base < 0 || base > 4) throw E("#NUM!"); return duracionBono(liq, venc, tasa, rend, frec, base) / (1 + rend / frec); },
     "TASA.DESC": (a) => { const liq = entero(a[0]), venc = entero(a[1]), pr = num(a[2]), red = num(a[3]), base = a[4] === undefined ? 0 : Math.floor(num(a[4])); if (liq >= venc || pr <= 0 || red <= 0) throw E("#NUM!"); return ((red - pr) / red) / fracAnio(liq, venc, base); },
@@ -2041,7 +2154,7 @@
     PERCENTRANK: "RANGO.PERCENTIL", PROB: "PROBABILIDAD", STEYX: "ERROR.TIPICO.XY", "ERROR.TÍPICO.XY": "ERROR.TIPICO.XY", LINEST: "ESTIMACION.LINEAL", "ESTIMACIÓN.LINEAL": "ESTIMACION.LINEAL",
     LOGEST: "ESTIMACION.LOGARITMICA", "ESTIMACIÓN.LOGARÍTMICA": "ESTIMACION.LOGARITMICA", GROWTH: "CRECIMIENTO",
     CUMIPMT: "PAGO.INT.ENTRE", CUMPRINC: "PAGO.PRINC.ENTRE", COUPDAYBS: "CUPON.DIAS.L1", COUPDAYS: "CUPON.DIAS", COUPDAYSNC: "CUPON.DIAS.L2", COUPNCD: "CUPON.FECHA.L2",
-    COUPPCD: "CUPON.FECHA.L1", COUPNUM: "CUPON.NUM", PRICE: "PRECIO", YIELD: "RENDTO", DURATION: "DURACION", "DURACIÓN": "DURACION", MDURATION: "DURACION.MODIF", "DURACIÓN.MODIF": "DURACION.MODIF",
+    COUPPCD: "CUPON.FECHA.L1", COUPNUM: "CUPON.NUM", PRICE: "PRECIO", YIELD: "RENDTO", ODDFPRICE: "PRECIO.PER.IRREGULAR.1", ODDFYIELD: "RENDTO.PER.IRREGULAR.1", ODDLPRICE: "PRECIO.PER.IRREGULAR.2", ODDLYIELD: "RENDTO.PER.IRREGULAR.2", DURATION: "DURACION", "DURACIÓN": "DURACION", MDURATION: "DURACION.MODIF", "DURACIÓN.MODIF": "DURACION.MODIF",
     DISC: "TASA.DESC", INTRATE: "TASA.INT", PRICEDISC: "PRECIO.DESCUENTO", RECEIVED: "CANTIDAD.RECIBIDA", YIELDDISC: "RENDTO.DESC", PRICEMAT: "PRECIO.VENCIMIENTO", YIELDMAT: "RENDTO.VENCTO",
     ACCRINT: "INT.ACUM", ACCRINTM: "INT.ACUM.V", TBILLPRICE: "LETRA.DE.TES.PRECIO", TBILLYIELD: "LETRA.DE.TES.RENDTO", TBILLEQ: "LETRA.DE.TES.EQV.A.BONO", AMORLINC: "AMORTIZ.LIN", AMORDEGRC: "AMORTIZ.PROGRE",
   });
@@ -2054,7 +2167,7 @@
     "MIN.SI.CONJUNTO": "_xlfn.MINIFS", DIAS: "_xlfn.DAYS", CONCATENAR: "CONCATENATE", DESVEST: "STDEV", DESVESTP: "STDEVP", VAR: "VAR", VARP: "VARP", JERARQUIA: "RANK", MODA: "MODE" });
   // (18-nov-2026: los nombres con dígitos y los de Excel 2010 en adelante, con _xlfn.)
   Object.assign(INGLES, { "ACOT": "_xlfn.ACOT", "ACOTH": "_xlfn.ACOTH", "COT": "_xlfn.COT", "COTH": "_xlfn.COTH", "CSC": "_xlfn.CSC", "CSCH": "_xlfn.CSCH", "SEC": "_xlfn.SEC", "SECH": "_xlfn.SECH", "MULTIPLO.SUPERIOR.EXACTO": "_xlfn.CEILING.PRECISE", "MULTIPLO.INFERIOR.EXACTO": "_xlfn.FLOOR.PRECISE", "MULTIPLO.SUPERIOR.ISO": "_xlfn.ISO.CEILING", "COMBINA": "_xlfn.COMBINA", "PERMUTACIONES.A": "_xlfn.PERMUTATIONA", "SUMAX2MENOSY2": "SUMX2MY2", "SUMAX2MASY2": "SUMX2PY2", "SUMAXMENOSY2": "SUMXMY2", "DIAS.LAB.INTL": "_xlfn.NETWORKDAYS.INTL", "DIA.LAB.INTL": "_xlfn.WORKDAY.INTL", "COEFICIENTE.ASIMETRIA.P": "_xlfn.SKEW.P", "FI": "_xlfn.PHI", "GAUSS": "_xlfn.GAUSS", "GAMMA": "_xlfn.GAMMA", "GAMMA.LN.EXACTO": "_xlfn.GAMMALN.PRECISE", "FUN.ERROR.EXACTO": "_xlfn.ERF.PRECISE", "FUN.ERROR.COMPL.EXACTO": "_xlfn.ERFC.PRECISE", "DISTR.NORM.N": "_xlfn.NORM.DIST", "DISTR.NORM.ESTAND.N": "_xlfn.NORM.S.DIST", "INV.NORM": "_xlfn.NORM.INV", "INV.NORM.ESTAND": "_xlfn.NORM.S.INV", "DISTR.EXP.N": "_xlfn.EXPON.DIST", "DISTR.BINOM.N": "_xlfn.BINOM.DIST", "POISSON.DIST": "_xlfn.POISSON.DIST", "DISTR.GAMMA.N": "_xlfn.GAMMA.DIST", "INV.GAMMA": "_xlfn.GAMMA.INV", "DISTR.CHICUAD": "_xlfn.CHISQ.DIST", "DISTR.CHICUAD.CD": "_xlfn.CHISQ.DIST.RT", "INV.CHICUAD": "_xlfn.CHISQ.INV", "INV.CHICUAD.CD": "_xlfn.CHISQ.INV.RT", "DISTR.T.N": "_xlfn.T.DIST", "DISTR.T.2C": "_xlfn.T.DIST.2T", "DISTR.T.CD": "_xlfn.T.DIST.RT", "INV.T": "_xlfn.T.INV", "INV.T.2C": "_xlfn.T.INV.2T", "DISTR.F.N": "_xlfn.F.DIST", "DISTR.F.CD": "_xlfn.F.DIST.RT", "INV.F": "_xlfn.F.INV", "INV.F.CD": "_xlfn.F.INV.RT", "DISTR.BETA.N": "_xlfn.BETA.DIST", "INV.BETA.N": "_xlfn.BETA.INV", "INTERVALO.CONFIANZA.NORM": "_xlfn.CONFIDENCE.NORM", "INTERVALO.CONFIANZA.T": "_xlfn.CONFIDENCE.T", "PERCENTIL.EXC": "_xlfn.PERCENTILE.EXC", "CUARTIL.EXC": "_xlfn.QUARTILE.EXC", "P.DURACION": "_xlfn.PDURATION", "RRI": "_xlfn.RRI", "BIN.A.HEX": "BIN2HEX", "BIN.A.OCT": "BIN2OCT", "HEX.A.BIN": "HEX2BIN", "HEX.A.OCT": "HEX2OCT", "OCT.A.BIN": "OCT2BIN", "OCT.A.HEX": "OCT2HEX", "BIT.Y": "_xlfn.BITAND", "BIT.O": "_xlfn.BITOR", "BIT.XO": "_xlfn.BITXOR", "BIT.DESPLIZQDA": "_xlfn.BITLSHIFT", "BIT.DESPLDCHA": "_xlfn.BITRSHIFT" });
-  Object.assign(INGLES, { "BUSCAR": "LOOKUP", "VALOR.NUMERO": "_xlfn.NUMBERVALUE", "VALORATEXTO": "_xlfn.VALUETOTEXT", "MATRIZATEXTO": "_xlfn.ARRAYTOTEXT", "URLCODIF": "_xlfn.ENCODEURL", "ENCONTRARB": "FINDB", "HALLARB": "SEARCHB", "REEMPLAZARB": "REPLACEB", "COMPLEJO": "COMPLEX", "IMAGINARIO": "IMAGINARY", "IM.REAL": "IMREAL", "IM.ABS": "IMABS", "IM.ANGULO": "IMARGUMENT", "IM.CONJUGADA": "IMCONJUGATE", "IM.COS": "IMCOS", "IM.SENO": "IMSIN", "IM.COSH": "_xlfn.IMCOSH", "IM.SENOH": "_xlfn.IMSINH", "IM.TAN": "_xlfn.IMTAN", "IM.COT": "_xlfn.IMCOT", "IM.SEC": "_xlfn.IMSEC", "IM.CSC": "_xlfn.IMCSC", "IM.SECH": "_xlfn.IMSECH", "IM.CSCH": "_xlfn.IMCSCH", "IM.EXP": "IMEXP", "IM.LN": "IMLN", "IM.LOG10": "IMLOG10", "IM.LOG2": "IMLOG2", "IM.RAIZ2": "IMSQRT", "IM.POT": "IMPOWER", "IM.DIV": "IMDIV", "IM.SUSTR": "IMSUB", "IM.SUM": "IMSUM", "IM.PRODUCT": "IMPRODUCT", "DISTR.BINOM.SERIE": "_xlfn.BINOM.DIST.RANGE", "INV.BINOM": "_xlfn.BINOM.INV", "DISTR.HIPERGEOM.N": "_xlfn.HYPGEOM.DIST", "DISTR.HIPERGEOM": "HYPGEOMDIST", "NEGBINOM.DIST": "_xlfn.NEGBINOM.DIST", "DISTR.LOGNORM": "_xlfn.LOGNORM.DIST", "INV.LOGNORM": "_xlfn.LOGNORM.INV", "DISTR.LOG.NORM": "LOGNORMDIST", "DISTR.LOG.INV": "LOGINV", "DISTR.WEIBULL": "_xlfn.WEIBULL.DIST", "DIST.WEIBULL": "WEIBULL", "PRUEBA.T.N": "_xlfn.T.TEST", "PRUEBA.T": "TTEST", "PRUEBA.F.N": "_xlfn.F.TEST", "PRUEBA.F": "FTEST", "PRUEBA.CHICUAD": "_xlfn.CHISQ.TEST", "PRUEBA.CHI": "CHITEST", "PRUEBA.Z.N": "_xlfn.Z.TEST", "PRUEBA.Z": "ZTEST", "MODA.VARIOS": "_xlfn.MODE.MULT", "RANGO.PERCENTIL.INC": "_xlfn.PERCENTRANK.INC", "RANGO.PERCENTIL.EXC": "_xlfn.PERCENTRANK.EXC", "RANGO.PERCENTIL": "PERCENTRANK", "PROBABILIDAD": "PROB", "ERROR.TIPICO.XY": "STEYX", "ESTIMACION.LINEAL": "LINEST", "ESTIMACION.LOGARITMICA": "LOGEST", "CRECIMIENTO": "GROWTH", "PAGO.INT.ENTRE": "CUMIPMT", "PAGO.PRINC.ENTRE": "CUMPRINC", "CUPON.DIAS.L1": "COUPDAYBS", "CUPON.DIAS": "COUPDAYS", "CUPON.DIAS.L2": "COUPDAYSNC", "CUPON.FECHA.L2": "COUPNCD", "CUPON.FECHA.L1": "COUPPCD", "CUPON.NUM": "COUPNUM", "PRECIO": "PRICE", "RENDTO": "YIELD", "DURACION": "DURATION", "DURACION.MODIF": "MDURATION", "TASA.DESC": "DISC", "TASA.INT": "INTRATE", "PRECIO.DESCUENTO": "PRICEDISC", "CANTIDAD.RECIBIDA": "RECEIVED", "RENDTO.DESC": "YIELDDISC", "PRECIO.VENCIMIENTO": "PRICEMAT", "RENDTO.VENCTO": "YIELDMAT", "INT.ACUM": "ACCRINT", "INT.ACUM.V": "ACCRINTM", "LETRA.DE.TES.PRECIO": "TBILLPRICE", "LETRA.DE.TES.RENDTO": "TBILLYIELD", "LETRA.DE.TES.EQV.A.BONO": "TBILLEQ", "AMORTIZ.LIN": "AMORLINC", "AMORTIZ.PROGRE": "AMORDEGRC" });
+  Object.assign(INGLES, { "BUSCAR": "LOOKUP", "VALOR.NUMERO": "_xlfn.NUMBERVALUE", "VALORATEXTO": "_xlfn.VALUETOTEXT", "MATRIZATEXTO": "_xlfn.ARRAYTOTEXT", "URLCODIF": "_xlfn.ENCODEURL", "ENCONTRARB": "FINDB", "HALLARB": "SEARCHB", "REEMPLAZARB": "REPLACEB", "COMPLEJO": "COMPLEX", "IMAGINARIO": "IMAGINARY", "IM.REAL": "IMREAL", "IM.ABS": "IMABS", "IM.ANGULO": "IMARGUMENT", "IM.CONJUGADA": "IMCONJUGATE", "IM.COS": "IMCOS", "IM.SENO": "IMSIN", "IM.COSH": "_xlfn.IMCOSH", "IM.SENOH": "_xlfn.IMSINH", "IM.TAN": "_xlfn.IMTAN", "IM.COT": "_xlfn.IMCOT", "IM.SEC": "_xlfn.IMSEC", "IM.CSC": "_xlfn.IMCSC", "IM.SECH": "_xlfn.IMSECH", "IM.CSCH": "_xlfn.IMCSCH", "IM.EXP": "IMEXP", "IM.LN": "IMLN", "IM.LOG10": "IMLOG10", "IM.LOG2": "IMLOG2", "IM.RAIZ2": "IMSQRT", "IM.POT": "IMPOWER", "IM.DIV": "IMDIV", "IM.SUSTR": "IMSUB", "IM.SUM": "IMSUM", "IM.PRODUCT": "IMPRODUCT", "DISTR.BINOM.SERIE": "_xlfn.BINOM.DIST.RANGE", "INV.BINOM": "_xlfn.BINOM.INV", "DISTR.HIPERGEOM.N": "_xlfn.HYPGEOM.DIST", "DISTR.HIPERGEOM": "HYPGEOMDIST", "NEGBINOM.DIST": "_xlfn.NEGBINOM.DIST", "DISTR.LOGNORM": "_xlfn.LOGNORM.DIST", "INV.LOGNORM": "_xlfn.LOGNORM.INV", "DISTR.LOG.NORM": "LOGNORMDIST", "DISTR.LOG.INV": "LOGINV", "DISTR.WEIBULL": "_xlfn.WEIBULL.DIST", "DIST.WEIBULL": "WEIBULL", "PRUEBA.T.N": "_xlfn.T.TEST", "PRUEBA.T": "TTEST", "PRUEBA.F.N": "_xlfn.F.TEST", "PRUEBA.F": "FTEST", "PRUEBA.CHICUAD": "_xlfn.CHISQ.TEST", "PRUEBA.CHI": "CHITEST", "PRUEBA.Z.N": "_xlfn.Z.TEST", "PRUEBA.Z": "ZTEST", "MODA.VARIOS": "_xlfn.MODE.MULT", "RANGO.PERCENTIL.INC": "_xlfn.PERCENTRANK.INC", "RANGO.PERCENTIL.EXC": "_xlfn.PERCENTRANK.EXC", "RANGO.PERCENTIL": "PERCENTRANK", "PROBABILIDAD": "PROB", "ERROR.TIPICO.XY": "STEYX", "ESTIMACION.LINEAL": "LINEST", "ESTIMACION.LOGARITMICA": "LOGEST", "CRECIMIENTO": "GROWTH", "PAGO.INT.ENTRE": "CUMIPMT", "PAGO.PRINC.ENTRE": "CUMPRINC", "CUPON.DIAS.L1": "COUPDAYBS", "CUPON.DIAS": "COUPDAYS", "CUPON.DIAS.L2": "COUPDAYSNC", "CUPON.FECHA.L2": "COUPNCD", "CUPON.FECHA.L1": "COUPPCD", "CUPON.NUM": "COUPNUM", "PRECIO": "PRICE", "RENDTO": "YIELD", "PRECIO.PER.IRREGULAR.1": "ODDFPRICE", "RENDTO.PER.IRREGULAR.1": "ODDFYIELD", "PRECIO.PER.IRREGULAR.2": "ODDLPRICE", "RENDTO.PER.IRREGULAR.2": "ODDLYIELD", "DURACION": "DURATION", "DURACION.MODIF": "MDURATION", "TASA.DESC": "DISC", "TASA.INT": "INTRATE", "PRECIO.DESCUENTO": "PRICEDISC", "CANTIDAD.RECIBIDA": "RECEIVED", "RENDTO.DESC": "YIELDDISC", "PRECIO.VENCIMIENTO": "PRICEMAT", "RENDTO.VENCTO": "YIELDMAT", "INT.ACUM": "ACCRINT", "INT.ACUM.V": "ACCRINTM", "LETRA.DE.TES.PRECIO": "TBILLPRICE", "LETRA.DE.TES.RENDTO": "TBILLYIELD", "LETRA.DE.TES.EQV.A.BONO": "TBILLEQ", "AMORTIZ.LIN": "AMORLINC", "AMORTIZ.PROGRE": "AMORDEGRC" });
   Object.assign(INGLES, { ESFORMULA: "_xlfn.ISFORMULA" });
   Object.assign(INGLES, { SUBTOTALES: "SUBTOTAL", AGREGAR: "_xlfn.AGGREGATE", COINCIDIRX: "_xlfn.XMATCH", CONVERTIR: "CONVERT", "DEC.A.BIN": "DEC2BIN", "DEC.A.OCT": "DEC2OCT",
     "DEC.A.HEX": "DEC2HEX", "BIN.A.DEC": "BIN2DEC", "OCT.A.DEC": "OCT2DEC", "HEX.A.DEC": "HEX2DEC", "NUMERO.ARABE": "_xlfn.ARABIC", BASE: "_xlfn.BASE" });
@@ -2369,6 +2482,10 @@
     "CUPON.FECHA.L2": ["liquidación; vencimiento; frecuencia; [base]", "Fecha del siguiente cupón."],
     "CUPON.FECHA.L1": ["liquidación; vencimiento; frecuencia; [base]", "Fecha del cupón anterior."],
     "CUPON.NUM": ["liquidación; vencimiento; frecuencia; [base]", "Cupones por pagar."],
+    "PRECIO.PER.IRREGULAR.1": ["liquidación; vencimiento; emisión; primer_cupón; tasa; rendimiento; amortización; frecuencia; [base]", "Precio por 100 de un valor con el primer período irregular."],
+    "RENDTO.PER.IRREGULAR.1": ["liquidación; vencimiento; emisión; primer_cupón; tasa; precio; amortización; frecuencia; [base]", "Rendimiento de un valor con el primer período irregular."],
+    "PRECIO.PER.IRREGULAR.2": ["liquidación; vencimiento; último_interés; tasa; rendimiento; amortización; frecuencia; [base]", "Precio por 100 de un valor con el último período irregular."],
+    "RENDTO.PER.IRREGULAR.2": ["liquidación; vencimiento; último_interés; tasa; precio; amortización; frecuencia; [base]", "Rendimiento de un valor con el último período irregular."],
     "PRECIO": ["liquidación; vencimiento; tasa; rendimiento; reembolso; frecuencia; [base]", "Precio de un bono."],
     "RENDTO": ["liquidación; vencimiento; tasa; precio; reembolso; frecuencia; [base]", "Rendimiento de un bono."],
     "DURACION": ["liquidación; vencimiento; cupón; rendimiento; frecuencia; [base]", "Duración de Macaulay."],

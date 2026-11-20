@@ -122,13 +122,20 @@ lados de un dibujo y contornos (estrecho, a través), y los cuadros de texto.
 | Vista | Saltos de página, diseño de página, cuadrícula, encabezados, zoom, inmovilizar, macros, celda de enfoque, modo oscuro | Inmovilizar (fijar filas y columnas): sí; cuadrícula como la del archivo. Vista de saltos, de diseño, celda de enfoque y macros: no |
 | VBA, Python en Excel, Power Query (M), Power Pivot y DAX, cubos | | No |
 
-**Funciones.** NOM tiene **454** (con sus nombres en español y en inglés), con matrices dinámicas, `LET` y `LAMBDA`
-(18-nov: +224). La lista de Excel 2024 sale del propio Excel (la biblioteca de tipos de `WorksheetFunction`, 416
+**Funciones.** NOM tiene **458** (con sus nombres en español y en inglés), con matrices dinámicas, `LET` y `LAMBDA`
+(18-nov: +224; 20-nov: las 4 de bonos con período irregular). La lista de Excel 2024 sale del propio Excel (la biblioteca de tipos de `WorksheetFunction`, 416
 funciones, `windows/lista_funciones.py`): de esas faltan solo las de idiomas de doble byte o tailandés (`BAHTTEXT`,
 `THAI*`, `PHONETIC`), las que piden un servicio externo (`RTD`, `WEBSERVICE`, `FILTERXML`, `STOCKHISTORY`, `FIELDVALUE`),
-`FORECAST.ETS*` (4), `ODDFPRICE`/`ODDFYIELD`/`ODDLPRICE`/`ODDLYIELD` e `IMAGE`.
+`FORECAST.ETS*` (4) e `IMAGE`. **Bonos con el primer o el último período irregular** (`PRECIO.PER.IRREGULAR.1`/`.2`,
+`RENDTO.PER.IRREGULAR.1`/`.2` = `ODDFPRICE`, `ODDLPRICE`, `ODDFYIELD`, `ODDLYIELD`; 20-nov): **66 de 75** casos iguales a
+Excel 2024 (los cuatro ejemplos de la documentación de Microsoft, períodos cortos y largos, las cinco bases y las tres
+frecuencias). Medido en Excel: en el último período no se aplica la regla de fin de mes y el largo normal de un cuasi
+cupón es el real con las bases 1, 2 y 3; en el primero, los cuasi cupones entre la liquidación y el primer cupón se
+cuentan con pasos desde la liquidación, y si el vencimiento no cae en el calendario del primer cupón da `#¡NUM!`. Los 9
+que no: el último interés a fin de mes con cupones trimestrales o base real, y real/real con primer período largo y
+primer cupón a fin de mes (`CONOCIDAS` de `funciones_excel.py`).
 Comprobadas contra **Excel 2024 real** (`funciones_excel.py`: Excel escribe cada fórmula con `Formula2`, calcula y
-devuelve el valor o el error exacto): **499 de 500** fórmulas iguales. La que no: `BESSELJ` con x ≥ 8 (Excel se aparta
+devuelve el valor o el error exacto): **565 de 575** fórmulas iguales (20-nov; antes 499 de 500). La que no: `BESSELJ` con x ≥ 8 (Excel se aparta
 del valor exacto en ~5e-7 y no se encontró su método; NOM da el exacto). Las funciones iterativas (`TIR`, `TIR.NO.PER`,
 `TASA`) se comparan con la precisión que Excel documenta (1e-8).
 No existen en Excel 2024 (son de Microsoft 365; dan `#NAME?` en la PC de prueba, así que no hay contra qué compararlas):
