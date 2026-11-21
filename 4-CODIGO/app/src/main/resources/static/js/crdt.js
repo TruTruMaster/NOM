@@ -114,7 +114,10 @@
       if (!propio(this._secs, b)) this._secs[b] = new NOM.Secuencia((propio(this.estado.seq, b) && this.estado.seq[b]) || null);
       return this._secs[b];
     }
-    tieneSecuencia(b) { const r = this.estado.seq[b]; return !!(r && (r.ins.length || r.fmt.length)); }
+    tieneSecuencia(b) {
+      const r = propio(this.estado.seq, b) ? this.estado.seq[b] : null;
+      return !!(r && ((r.ins && r.ins.length) || (r.fmt && r.fmt.length)));
+    }
     deLaPagina(p) {
       const pags = this.paginas();
       return this.vivos().filter((b) => (b.pagina || pags[0]) === p || (!pags.includes(b.pagina) && p === pags[0]))
@@ -515,6 +518,7 @@
       ops.push({ id: prefijo + ":" + i++, bloque: b, campos, t: 2, n: prefijo });
     }
     for (const b in doc.estado.seq || {}) {
+      if (!propio(doc.estado.seq, b)) continue;
       const reg = doc.estado.seq[b];
       ["ins", "vis", "fmt"].forEach((k) => (reg[k] || []).forEach((e) => {
         const { t, n, ...s } = e;

@@ -150,6 +150,18 @@ public class ServicioCuentas {
         try { return cifrado.coincide(secreto, sal, hash); } finally { turnos.release(); }
     }
 
+    /** Sal y hash nuevos para una contraseña ya comprobada, con turno (null si no hay turno: se hará la próxima vez). */
+    private String[] rehacerHash(String contrasena) {
+        boolean turno;
+        try { turno = turnos.tryAcquire(5, java.util.concurrent.TimeUnit.SECONDS); }
+        catch (InterruptedException e) { Thread.currentThread().interrupt(); turno = false; }
+        if (!turno) return null;
+        try {
+            String sal = cifrado.nuevaSal();
+            return new String[] { sal, cifrado.hash(contrasena.toCharArray(), sal) };
+        } finally { turnos.release(); }
+    }
+
     private void comprobarRelleno(String secreto) {
         String[] r = relleno;
         if (r == null) {
@@ -604,6 +616,8 @@ public class ServicioCuentas {
                 exigirSinBloqueo(u, origen, ahora);
             }
             boolean ok = comprobar(contrasena.toCharArray(), u.sal, u.hashContrasena);
+            // Una cuenta con el hash de antes pasa al formato nuevo ahora que se sabe la contraseña.
+            String[] nuevo = ok && cifrado.necesitaActualizar(u.hashContrasena) ? rehacerHash(contrasena) : null;
             synchronized (this) {
                 if (!ok) {
                     anotarFalloRed(origen, ahora);
@@ -613,6 +627,7 @@ public class ServicioCuentas {
                             null, Map.of("intentosRestantes", quedan));
                 }
                 acierto(u, origen);
+                if (nuevo != null) { u.sal = nuevo[0]; u.hashContrasena = nuevo[1]; }
                 repo.guardar(u);
                 return nuevaSesion(u, ahora);
             }
