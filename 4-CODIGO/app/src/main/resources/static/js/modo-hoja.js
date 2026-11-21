@@ -805,6 +805,128 @@
           aviso(`Tabla de datos en ${textoRango(r)}: ${res.celdas} celdas. Ctrl+Z para deshacer`, { tipo: "ok" });
         };
       }
+      // ------------------------------------------------------------ minigráficos (Insertar → Minigráficos, como Excel)
+      // t.mg: [{ tipo: "line"|"column"|"stacked", s: [[celda, «Hoja!B2:G2»]], c: { serie, neg, marc, prim, ult, alto, bajo },
+      // marcas, alto, bajo, prim, ult, neg (qué puntos se marcan), grosor (pt), vacias ("gap"|"zero"|"span") }]
+      /** Los valores de un rango de datos de un minigráfico (de esta hoja o de otra): números, o null si la celda no tiene. */
+      function valoresMg(f, ev) {
+        const m = /^(?:(?:'((?:[^']|'')+)'|([^!]+))!)?\$?([A-Z]{1,3})\$?(\d+)(?::\$?([A-Z]{1,3})\$?(\d+))?$/i.exec(String(f || "").trim());
+        if (!m) return [];
+        const hoja = m[1] != null ? m[1].replace(/''/g, "'") : m[2];
+        let e2 = ev;
+        if (hoja && hoja.toLowerCase() !== F().nombreDeHoja(doc(), t).toLowerCase()) {
+          const tb = F().hojasDe(doc()).find((h) => F().nombreDeHoja(doc(), h).toLowerCase() === hoja.toLowerCase());
+          if (!tb) return [];
+          e2 = F().evaluadorDeTabla(doc(), tb);
+        }
+        const a = F().parseRef(m[3] + m[4]), b = F().parseRef((m[5] || m[3]) + (m[6] || m[4])), out = [];
+        for (let f2 = Math.min(a.f, b.f); f2 <= Math.max(a.f, b.f); f2++) for (let c2 = Math.min(a.c, b.c); c2 <= Math.max(a.c, b.c); c2++) {
+          const v = e2.valor(c2, f2), n = typeof v === "number" ? v : v && typeof v === "object" && typeof v.valueOf() === "number" ? +v : null;
+          out.push(n != null && isFinite(n) ? n : null);
+        }
+        return out;
+      }
+      /** El dibujo de un minigráfico en una celda de w×h px (SVG, como lo pinta Excel). */
+      function svgMg(g, vals, w, h) {
+        const c = g.c || {}, serie = c.serie || "#376092";
+        if (g.vacias === "zero") vals = vals.map((v) => (v == null ? 0 : v));
+        const nums = vals.filter((v) => v != null);
+        if (!nums.length || w < 6 || h < 6) return "";
+        const n = vals.length, min = Math.min(...nums), max = Math.max(...nums);
+        const iMax = vals.indexOf(max), iMin = vals.indexOf(min), iPri = vals.findIndex((v) => v != null), iUlt = vals.length - 1 - [...vals].reverse().findIndex((v) => v != null);
+        // el color de cada punto: el bajo, el alto, el primero, el último y los negativos se marcan si el grupo lo pide
+        const colorDe = (i, base) => (g.alto && i === iMax && c.alto ? c.alto : g.bajo && i === iMin && c.bajo ? c.bajo : g.prim && i === iPri && c.prim ? c.prim : g.ult && i === iUlt && c.ult ? c.ult : g.neg && vals[i] < 0 && c.neg ? c.neg : base);
+        // (medido en Excel 2024: 1/8 del alto arriba y abajo, 3 px a los lados; cada punto o barra al centro de su espacio, las
+        // barras del 70 % de él; la base, el cero si hay negativos y si no, el mínimo —una raya de 1 px—)
+        const pX = 3, pY = Math.max(2, Math.round(h / 8)), slot = (w - 2 * pX) / n, Xc = (i) => pX + slot * (i + 0.5);
+        let cuerpo = "";
+        if (g.tipo === "line") {
+          const Y = (v) => (max === min ? h / 2 : pY + ((max - v) / (max - min)) * (h - 2 * pY));
+          const tramos = [];
+          let actual = [];
+          vals.forEach((v, i) => { if (v == null) { if (g.vacias !== "span" && actual.length) { tramos.push(actual); actual = []; } return; } actual.push([Xc(i), Y(v)]); });
+          if (actual.length) tramos.push(actual);
+          const sw = Math.max(0.5, ((+g.grosor || 0.75) * 96) / 72);
+          cuerpo += tramos.map((t2) => (t2.length === 1 ? "" : `<polyline points="${t2.map((q) => q[0].toFixed(2) + "," + q[1].toFixed(2)).join(" ")}" fill="none" stroke="${serie}" stroke-width="${sw.toFixed(2)}" stroke-linejoin="round" stroke-linecap="round"/>`)).join("");
+          const r = Math.max(1.75, sw);
+          vals.forEach((v, i) => {
+            if (v == null) return;
+            const k = colorDe(i, null);
+            if (g.marcas || k) cuerpo += `<circle cx="${Xc(i).toFixed(2)}" cy="${Y(v).toFixed(2)}" r="${r.toFixed(2)}" fill="${k || c.marc || serie}"/>`;
+          });
+        } else {
+          const ancho = Math.max(1, slot * 0.7), x0 = (i) => Xc(i) - ancho / 2;
+          if (g.tipo === "stacked") {
+            const medio = h / 2;
+            vals.forEach((v, i) => { if (!v) return; cuerpo += `<rect x="${x0(i).toFixed(2)}" y="${(v > 0 ? pY : medio).toFixed(2)}" width="${ancho.toFixed(2)}" height="${(medio - pY).toFixed(2)}" fill="${colorDe(i, serie)}"/>`; });
+          } else {
+            const base = Math.max(min, Math.min(max, 0)), Y = (v) => (max === min ? h - pY : pY + ((max - v) / (max - min)) * (h - 2 * pY));
+            vals.forEach((v, i) => { if (v == null) return; const y0 = Y(Math.max(v, base)), y1 = Y(Math.min(v, base)); cuerpo += `<rect x="${x0(i).toFixed(2)}" y="${Math.min(y0, y1 - 1).toFixed(2)}" width="${ancho.toFixed(2)}" height="${Math.max(1, y1 - y0).toFixed(2)}" fill="${colorDe(i, serie)}"/>`; });
+          }
+        }
+        return `<svg class="xl-mg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">${cuerpo}</svg>`;
+      }
+      function pintarMinigraficos(ev) {
+        $$("svg.xl-mg", rej).forEach((s) => s.remove());
+        $$("td.con-mg", rej).forEach((x) => x.classList.remove("con-mg"));
+        const mg = t && Array.isArray(t.mg) ? t.mg : null;
+        if (!mg || !mg.length) return;
+        ev = ev || evaluar();
+        mg.forEach((g) => (g.s || []).forEach(([donde, f]) => {
+          const p = F().parseRef(String(donde).replace(/\$/g, ""));
+          const td = p && celda(p.c, p.f);
+          if (!td) return;
+          td.classList.add("con-mg");
+          td.insertAdjacentHTML("beforeend", svgMg(g, valoresMg(f, ev), td.clientWidth, td.clientHeight));
+        }));
+      }
+      /** Insertar → Minigráficos: de línea, de columna o de pérdidas y ganancias, con los datos y las celdas donde van. */
+      function crearMinigraficos(tipo, datos, ubicacion) {
+        if (ed.soloLectura || !t) return "Solo puedes ver esta hoja";
+        const pr = (x) => { const m = /^\$?([A-Z]{1,3})\$?(\d+)(?::\$?([A-Z]{1,3})\$?(\d+))?$/i.exec(String(x || "").trim()); if (!m) return null; const a = F().parseRef(m[1] + m[2]), b = F().parseRef((m[3] || m[1]) + (m[4] || m[2])); return { c1: Math.min(a.c, b.c), c2: Math.max(a.c, b.c), f1: Math.min(a.f, b.f), f2: Math.max(a.f, b.f) }; };
+        const d = pr(datos), u = pr(ubicacion);
+        if (!d || !u) return "Escribe los rangos como en Excel (por ejemplo B2:G5 y H2:H5)";
+        const nU = (u.c2 - u.c1 + 1) * (u.f2 - u.f1 + 1), porFila = u.c1 === u.c2;
+        if (u.c1 !== u.c2 && u.f1 !== u.f2) return "Las celdas para los minigráficos van en una sola fila o columna";
+        const filasD = d.f2 - d.f1 + 1, colsD = d.c2 - d.c1 + 1;
+        if (nU > 1 && (porFila ? filasD : colsD) !== nU) return "El rango de datos no corresponde al de ubicación (una fila o columna de datos por celda)";
+        const hoja = F().nombreDeHoja(doc(), t), q = /[^\w.]/.test(hoja) ? `'${hoja.replace(/'/g, "''")}'` : hoja, s = [];
+        for (let k = 0; k < nU; k++) {
+          const celdaU = porFila ? F().ref(u.c1, u.f1 + k) : F().ref(u.c1 + k, u.f1);
+          const rango = nU === 1 ? `${F().ref(d.c1, d.f1)}:${F().ref(d.c2, d.f2)}` : porFila ? `${F().ref(d.c1, d.f1 + k)}:${F().ref(d.c2, d.f1 + k)}` : `${F().ref(d.c1 + k, d.f1)}:${F().ref(d.c1 + k, d.f2)}`;
+          s.push([celdaU, `${q}!${rango}`]);
+        }
+        const g = { tipo: tipo === "column" || tipo === "stacked" ? tipo : "line", s, c: { serie: "#376092", neg: "#D00000", marc: "#D00000", prim: "#D00000", ult: "#D00000", alto: "#D00000", bajo: "#D00000" } };
+        if (g.tipo === "stacked") g.neg = 1;
+        const ocupadas = new Set(s.map((x) => x[0]));
+        const mg = (Array.isArray(t.mg) ? t.mg : []).map((x) => Object.assign({}, x, { s: (x.s || []).filter((y) => !ocupadas.has(y[0])) })).filter((x) => x.s.length);
+        mg.push(g);
+        cambiarT({ mg });
+        return { grupos: mg.length, celdas: s.length };
+      }
+      function quitarMinigraficos(r) {
+        r = r || rango();
+        const fuera = (ref) => { const p = F().parseRef(ref); return !(p && p.c >= r.c1 && p.c <= r.c2 && p.f >= r.f1 && p.f <= r.f2); };
+        const mg = (Array.isArray(t.mg) ? t.mg : []).map((x) => Object.assign({}, x, { s: (x.s || []).filter((y) => fuera(y[0])) })).filter((x) => x.s.length);
+        cambiarT({ mg: mg.length ? mg : null });
+      }
+      function dialogoMinigraficos() {
+        const r = rango(), sel0 = r.c1 === r.c2 && r.f1 === r.f2 ? "" : `${F().ref(r.c1, r.f1)}:${F().ref(r.c2, r.f2)}`;
+        const cuerpo = html(`<form class="col" style="gap:10px">
+          <div class="fila" style="gap:12px"><label class="fila" style="gap:6px"><input type="radio" name="mgt" value="line" checked> Línea</label><label class="fila" style="gap:6px"><input type="radio" name="mgt" value="column"> Columna</label><label class="fila" style="gap:6px"><input type="radio" name="mgt" value="stacked"> Pérdidas y ganancias</label></div>
+          <label class="col">Rango de datos <input data-datos autocomplete="off" value="${esc(sel0)}" placeholder="B2:G5"></label>
+          <label class="col">Ubicación (una celda por fila de datos) <input data-ubic autocomplete="off" placeholder="H2:H5"></label></form>`);
+        const pie = html(`<div style="display:contents"><button class="btn" data-quitar type="button">Quitar los de la selección</button><span class="crece"></span><button class="btn" data-no type="button">Cancelar</button><button class="btn primario" data-si>Aceptar</button></div>`);
+        const h = NOM.hoja({ titulo: "Minigráficos", icono: "bar-chart", cuerpo, pie });
+        $("[data-no]", pie).onclick = () => h.cerrar();
+        $("[data-quitar]", pie).onclick = () => { quitarMinigraficos(); h.cerrar(); };
+        $("[data-si]", pie).onclick = (ev) => {
+          ev.preventDefault();
+          const res = crearMinigraficos($("input[name=mgt]:checked", cuerpo).value, $("[data-datos]", cuerpo).value, $("[data-ubic]", cuerpo).value);
+          if (typeof res === "string") return aviso(res, { tipo: "aviso", ms: 5000 });
+          h.cerrar();
+        };
+      }
       // ------------------------------------------------------------ estilos de celda (Inicio → Estilos de celda, como Excel)
       // (las definiciones: js/estilos-celda-datos.js, sacadas de cómo ve NOM los estilos hechos en Excel 2024)
       const CATEGORIAS = { letra: ["n", "i", "u", "k", "tl", "tp", "tf"], relleno: ["r", "rx"], bordes: ["bd", "bx"], numero: ["f"], alineacion: ["al", "aj", "ax"] };
@@ -1943,6 +2065,7 @@
         aplicarFijas();
         pintarSeleccion();
         pintarGraficas();
+        pintarMinigraficos(ev);
         pintarBandeja();
         marcarCopiado();
         pintarFlechas();
@@ -3499,6 +3622,7 @@
               { texto: "Lista desplegable…", corto: "Lista…", icono: "list-checks", off: lect, fn: dialogoValidacion },
               { texto: "Formato condicional…", corto: "Condicional", icono: "paint-bucket", off: lect, fn: dialogoCondicional },
               { texto: "Estilos de celda…", corto: "Estilos", icono: "paint-bucket", off: lect, fn: galeriaEstilosCelda },
+              { texto: "Minigráficos…", corto: "Minigráficos", icono: "bar-chart", off: lect, fn: dialogoMinigraficos },
               { texto: "Borrar formato", corto: "Sin formato", icono: "remove-formatting", off: lect, fn: borrarFormato },
               { texto: "Ancho de columna…", corto: "Ancho…", icono: "move-horizontal", off: lect, fn: anchoColumnas },
               { texto: "Alto de fila…", corto: "Alto…", icono: "move-vertical", off: lect, fn: altoFilas }] }] },
@@ -3605,6 +3729,7 @@
           { texto: "Formato de celdas…", icono: "settings", atajo: "Ctrl+1", fn: dialogoFormato },
           { texto: "Formato condicional…", icono: "paint-bucket", fn: dialogoCondicional },
           { texto: "Estilos de celda…", icono: "paint-bucket", fn: galeriaEstilosCelda },
+          { texto: "Minigráficos…", icono: "bar-chart", fn: dialogoMinigraficos },
           { texto: "Lista desplegable o validación…", icono: "list-checks", fn: dialogoValidacion },
           { texto: "Borrar formato", icono: "remove-formatting", fn: borrarFormato },
           { texto: "Rellenar hacia abajo", icono: "arrow-down", atajo: "Ctrl+D", fn: () => rellenarCopia("abajo") },
@@ -3671,6 +3796,7 @@
           td.title = a.formula;
         });
         pintarGraficas();
+        pintarMinigraficos(ev);
         aplicarFijas();
         colocarAsa();
         if (document.activeElement !== fx && !editor) fx.value = textoBarra(sel.c, sel.f);
@@ -3725,7 +3851,7 @@
       this.api = { rango, tabla: () => t, evaluar, seleccion: () => ({ ...sel }),
         // herramientas de datos como las de Excel (también para las pruebas contra Excel real)
         herramientas: { quitarDuplicados, regionActual, textoEnColumnas, partirTexto, buscarObjetivo, consolidar, tablaDatos: crearTablaDatos, rellenoRapido },
-        enfoque: alternarEnfoque, enfoqueActivo: () => enfoque, estiloCelda: aplicarEstiloCelda,
+        enfoque: alternarEnfoque, enfoqueActivo: () => enfoque, estiloCelda: aplicarEstiloCelda, minigraficos: { crear: crearMinigraficos, quitar: quitarMinigraficos },
         escenarios: { lista: escenariosHoja, guardar: guardarEscenario, quitar: quitarEscenario, mostrar: mostrarEscenario, resumen: resumenEscenarios },
         dialogos: { duplicados: dialogoDuplicados, textoColumnas: dialogoTextoColumnas, objetivo: dialogoObjetivo, nombres: administradorNombres, consolidar: dialogoConsolidar, tablaDatos: dialogoTablaDatos, escenarios: administradorEscenarios, rellenoRapido: ejecutarRellenoRapido, estilosCelda: galeriaEstilosCelda },
         calculo: { modo: modoCalculo, fijar: fijarModoCalculo, ahora: calcularAhora },

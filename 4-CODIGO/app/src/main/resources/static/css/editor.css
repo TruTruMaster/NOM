@@ -196,6 +196,9 @@
 .clas-mini { position: relative; overflow: hidden; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); pointer-events: none; }
 /* Comprobar accesibilidad: el párrafo al que se fue, un momento resaltado */
 .acc-marca { outline: 2px solid var(--acento, #1D7A4C); outline-offset: 3px; border-radius: 2px; transition: outline-color .6s; }
+/* Minigráficos de Excel (Insertar → Minigráficos): el dibujo ocupa la celda */
+.rejilla-hoja td.con-mg { position: relative; }
+.rejilla-hoja td.con-mg > svg.xl-mg { position: absolute; left: 0; top: 0; pointer-events: none; }
 /* Celda de enfoque (Vista, como Excel 2024): la fila y la columna de la celda elegida */
 .rejilla-hoja td.enfoque { box-shadow: inset 0 0 0 9999px rgba(33, 115, 70, .14); }
 @media print { .rejilla-hoja td.enfoque { box-shadow: none; } }

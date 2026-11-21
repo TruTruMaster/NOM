@@ -297,6 +297,30 @@
       return `<scenario name="${x(sc.n)}"${sc.b ? ' locked="1"' : ""}${sc.o ? ' hidden="1"' : ""} count="${cs.length}"${sc.u ? ` user="${x(sc.u)}"` : ""}${sc.com ? ` comment="${x(sc.com)}"` : ""}>`
         + cs.map(([r, v]) => `<inputCells r="${x(r)}" val="${x(v == null ? "" : String(v))}"/>`).join("") + "</scenario>"; }).join("") + "</scenarios>";
   }
+  // ------------------------------------------------------------ minigráficos de Excel (x14:sparklineGroups)
+  const URI_MG = "{05C60535-1F16-4fd2-B633-F4F36F0B64E0}";
+  const COLORES_MG = [["serie", "colorSeries"], ["neg", "colorNegative"], ["eje", "colorAxis"], ["marc", "colorMarkers"], ["prim", "colorFirst"], ["ult", "colorLast"], ["alto", "colorHigh"], ["bajo", "colorLow"]];
+  const BANDERAS_MG = [["marcas", "markers"], ["alto", "high"], ["bajo", "low"], ["prim", "first"], ["ult", "last"], ["neg", "negative"], ["eje", "displayXAxis"], ["ocultas", "displayHidden"], ["rtl", "rightToLeft"]];
+  /** El ext con los minigráficos de una hoja (t.mg: [{ tipo, s: [[celda, datos]], c: {colores}, marcas…, grosor, vacias }]). */
+  function xmlMinigraficos(mg) {
+    if (!Array.isArray(mg) || !mg.length) return "";
+    const col = (k, el, g) => (g.c && g.c[k] ? `<x14:${el} rgb="FF${x(String(g.c[k]).replace("#", "").toUpperCase())}"/>` : "");
+    return `<ext uri="${URI_MG}" xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"><x14:sparklineGroups xmlns:xm="http://schemas.microsoft.com/office/excel/2006/main">`
+      + mg.map((g) => {
+        const at2 = [];
+        if (g.grosor && Math.abs(+g.grosor - 0.75) > 0.001) at2.push(`lineWeight="${+g.grosor}"`);
+        if (g.tipo === "column" || g.tipo === "stacked") at2.push(`type="${g.tipo}"`);
+        at2.push(`displayEmptyCellsAs="${g.vacias === "zero" || g.vacias === "span" ? g.vacias : "gap"}"`);
+        BANDERAS_MG.forEach(([k, a]) => { if (g[k]) at2.push(`${a}="1"`); });
+        return `<x14:sparklineGroup ${at2.join(" ")}>${COLORES_MG.map(([k, el]) => col(k, el, g)).join("")}<x14:sparklines>`
+          + (g.s || []).map(([celda, f]) => `<x14:sparkline><xm:f>${x(f)}</xm:f><xm:sqref>${x(celda)}</xm:sqref></x14:sparkline>`).join("") + "</x14:sparklines></x14:sparklineGroup>";
+      }).join("") + "</x14:sparklineGroups></ext>";
+  }
+  /** El extLst de una hoja con los minigráficos de t.mg en vez de los que tenía (lo demás del extLst se queda). */
+  function extConMinigraficos(interior, mg) {
+    const sin = String(interior || "").replace(new RegExp(`<(\\w+:)?ext\\b[^>]*uri="${URI_MG.replace(/[{}]/g, "\\$&")}"[\\s\\S]*?</(\\w+:)?ext>`, "i"), "");
+    return sin + xmlMinigraficos(mg);
+  }
   /** La protección de una hoja de Excel (sheetProtection): { p (contraseña), permite: [...], sinSelBloq, sinSelLibre, objetos, escenarios }. */
   function protHojaDe(sp) {
     const si = (k) => /^(1|true)$/.test(sp.getAttribute(k) || ""), no = (k) => /^(0|false)$/.test(sp.getAttribute(k) || "");
@@ -3755,7 +3779,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
   function parcharHoja(xml, base, t, fab, ev) {
     const O = NOM.origen;
     const celdas = new Map(), filasAlto = new Set(), colsCamb = new Set(), filasEsq = new Set(), colsAncho = new Set();
-    let cM = false, cPane = false, cCf = false, cDv = false, cProt = false, cVf = false, cEsc = false;
+    let cM = false, cPane = false, cCf = false, cDv = false, cProt = false, cVf = false, cEsc = false, cMg = false;
     const llaves = new Set(Object.keys(base));
     Object.keys(t).forEach((k) => llaves.add(k));
     llaves.forEach((k) => {
@@ -3775,8 +3799,9 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       else if (k === "vf") cVf = true;
       else if (k === "prot") cProt = true;
       else if (k === "esc") cEsc = true;
+      else if (k === "mg") cMg = true;
     });
-    if (!celdas.size && !filasAlto.size && !filasEsq.size && !colsCamb.size && !cM && !cPane && !cCf && !cDv && !cProt && !cVf && !cEsc) return null;
+    if (!celdas.size && !filasAlto.size && !filasEsq.size && !colsCamb.size && !cM && !cPane && !cCf && !cDv && !cProt && !cVf && !cEsc && !cMg) return null;
     // Matrices dinámicas: si la hoja cambió, lo que derrama cada fórmula se vuelve a escribir con sus valores de hoy
     // (y se borra lo que ya no alcanza); la fórmula, si cambió el tamaño de lo que derrama (su «ref»).
     if (celdas.size && ev.derrame) {
@@ -3945,6 +3970,8 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     if (cProt) S.pon("sheetProtection", t.prot && typeof t.prot === "object" ? pf(xmlProtHoja(t.prot)) : "");
     // los escenarios (se agregaron, se cambiaron o se quitaron aquí)
     if (cEsc) S.pon("scenarios", pf(xmlEscenarios(t.esc)));
+    // los minigráficos (se agregaron, se cambiaron o se quitaron aquí): su ext en el extLst, sin tocar lo demás de él
+    if (cMg) { const sec = S.una("extLst"), dentro = extConMinigraficos(sec ? xml.slice(sec.ci, sec.cf) : "", t.mg); S.pon("extLst", dentro ? pf("<extLst>") + dentro + pf("</extLst>") : ""); }
     return S.aplicar();
   }
 
@@ -3993,7 +4020,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     const combinadas = fab.combinadas(t);
     const reglas = Object.keys(t).filter((k) => k.startsWith("cf:")).map((k) => fab.regla(t[k])).join("");
     const validaciones = Object.keys(t).filter((k) => k.startsWith("dv:")).map((k) => fab.validacion(t[k])).filter(Boolean);
-    return XML + `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetViews>${vista}</sheetViews><sheetFormatPr defaultColWidth="16.43" defaultRowHeight="15"${esqFmt}/>${cols ? `<cols>${cols}</cols>` : ""}<sheetData>${filas}</sheetData>${t.prot && typeof t.prot === "object" ? xmlProtHoja(t.prot) : ""}${xmlEscenarios(t.esc)}${combinadas.length ? `<mergeCells count="${combinadas.length}">${combinadas.join("")}</mergeCells>` : ""}${reglas}${validaciones.length ? `<dataValidations count="${validaciones.length}">${validaciones.join("")}</dataValidations>` : ""}<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>${dibujo || ""}</worksheet>`;
+    return XML + `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetViews>${vista}</sheetViews><sheetFormatPr defaultColWidth="16.43" defaultRowHeight="15"${esqFmt}/>${cols ? `<cols>${cols}</cols>` : ""}<sheetData>${filas}</sheetData>${t.prot && typeof t.prot === "object" ? xmlProtHoja(t.prot) : ""}${xmlEscenarios(t.esc)}${combinadas.length ? `<mergeCells count="${combinadas.length}">${combinadas.join("")}</mergeCells>` : ""}${reglas}${validaciones.length ? `<dataValidations count="${validaciones.length}">${validaciones.join("")}</dataValidations>` : ""}<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>${dibujo || ""}${Array.isArray(t.mg) && t.mg.length ? `<extLst>${xmlMinigraficos(t.mg)}</extLst>` : ""}</worksheet>`;
   }
   const CT_HOJA = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
   const CT_DIBUJO = "application/vnd.openxmlformats-officedocument.drawing+xml", CT_GRAFICA = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
@@ -4264,7 +4291,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
   // libro los guarda en «_doc» (nombres), para el Administrador de nombres · 8 esquema: el nivel de cada fila (ol:) y de
   // cada columna (olc:) agrupada · 9 «mostrar fórmulas» de la hoja (vf) · 10 tablas de datos (t="dataTable": cada celda
   // de su lugar lleva =TABLA(fila;columna), como la muestra Excel).
-  const VERSION_XL = 11;
+  const VERSION_XL = 12;
   function modeloXlsx(z, version) {
     const V = version || VERSION_XL;
     const P = (t) => new DOMParser().parseFromString(t, "application/xml");
@@ -5019,6 +5046,22 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       if (V >= 6) { const sp = todos(doc, "sheetProtection")[0]; if (sp && /^(1|true)$/.test(at(sp, "sheet") || "")) campos.prot = protHojaDe(sp); }
       // (versión 11) los escenarios (Datos → Análisis de hipótesis → Administrador de escenarios)
       if (V >= 11) { const se = todos(doc, "scenarios")[0], e = se ? escenariosDe(se) : null; if (e) campos.esc = e; }
+      // (versión 12) los minigráficos (Insertar → Minigráficos): sus grupos, colores, marcas y de dónde salen sus datos
+      if (V >= 12) {
+        const gs = [...doc.getElementsByTagNameNS("*", "sparklineGroup")].map((g) => {
+          const r = { tipo: at(g, "type") === "column" ? "column" : at(g, "type") === "stacked" ? "stacked" : "line", c: {}, s: [] };
+          COLORES_MG.forEach(([k, el]) => { const n = [...g.children].find((q) => q.localName === el); const cc = n ? color(n) : null; if (cc) r.c[k] = cc; });
+          BANDERAS_MG.forEach(([k, a]) => { if (/^(1|true)$/.test(at(g, a) || "")) r[k] = 1; });
+          if (+at(g, "lineWeight")) r.grosor = +at(g, "lineWeight");
+          if (at(g, "displayEmptyCellsAs")) r.vacias = at(g, "displayEmptyCellsAs");
+          [...g.getElementsByTagNameNS("*", "sparkline")].forEach((sp) => {
+            const f = [...sp.children].find((q) => q.localName === "f"), sq = [...sp.children].find((q) => q.localName === "sqref");
+            if (sq && sq.textContent.trim()) r.s.push([sq.textContent.trim(), f ? f.textContent.trim() : ""]);
+          });
+          return r.s.length ? r : null;
+        }).filter(Boolean);
+        if (gs.length) campos.mg = gs;
+      }
       const pane = todos(doc, "pane")[0];
       if (pane && at(pane, "state") === "frozen") { if (+at(pane, "ySplit")) campos.fijasF = +at(pane, "ySplit"); if (+at(pane, "xSplit")) campos.fijasC = +at(pane, "xSplit"); }
       todos(doc, "dataValidation").forEach((dv, k) => {
