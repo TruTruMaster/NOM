@@ -104,6 +104,7 @@ def pruebas(modo, out):
             ("funciones_excel", [PY, o("funciones_excel.py")], True, 120, None),
             ("almacen_binarios", [PY, o("almacen_binarios.py")], True, 200, None),
             ("campos_word", [PY, o("campos_real.py")], True, 120, None),
+            ("numlineas_word", [PY, o("numlineas_real.py")], True, 150, None),
             ("metarchivos_word", [PY, o("metarchivos_real.py")], False, 300, None),
         ]
     return L

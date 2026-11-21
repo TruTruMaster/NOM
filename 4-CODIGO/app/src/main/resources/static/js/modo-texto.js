@@ -496,6 +496,8 @@
     if (pa.alin) at += ` data-alin="${esc(pa.alin)}"`;
     // (con qué idioma se parten sus palabras: lo lee el acomodo como Word)
     if (guionesPintar) at += ` data-gi="${esc(guionesPintar.idioma)}"`;
+    // («Suprimir números de línea» de Word: sus renglones no se numeran ni cuentan)
+    if (pa.sinNumLin) at += ` data-sinnl="1"`;
     if (pa.dueno) {
       at += ` data-dueno="${esc(pa.dueno)}" data-dueno-nombre="${esc(ctx.nombres.get(pa.dueno) || "Asignado")}"`;
       st += `--dueno:${esc(ctx.colores.get(pa.dueno) || "#6B6875")};`;
@@ -2415,6 +2417,9 @@
         /** Campos de Word: actualizar (F9), ver códigos (Alt+F9), insertar uno. */
         actualizarCampos: () => actualizarCampos(),
         alternarGuiones: () => alternarGuiones(),
+        numerosDeLinea: (m) => numerosDeLinea(m),
+        suprimirNumerosLinea: () => suprimirNumerosLinea(),
+        dialogoNumerosLinea: () => dialogoNumerosLinea(),
         alternarCodigos: () => alternarCodigos(),
         insertarCampo: () => insertarCampo(),
         /** Inserta texto con formato donde quedó el cursor (reemplaza lo elegido). */
@@ -3544,6 +3549,104 @@
         }
         return out;
       }
+      // ------------------------------------------------------------ números de línea (Word: Disposición → Números de línea)
+      /**
+       * Como Word 2024 (medido con pruebas/office/windows/hacer_numlineas.py y el PDF que exporta): cuenta cada renglón de
+       * los párrafos del cuerpo —también los vacíos; no las celdas de tabla, los cuadros de texto, las notas, el
+       * encabezado ni el pie—, salvo los de un párrafo con «Suprimir números de línea»; se ven los múltiplos de «cada»; el
+       * número va a la izquierda de su columna, con el borde derecho a la distancia del texto (automática: 0.25"; con
+       * varias columnas, 0.125") y en la
+       * línea base del renglón, con la letra del estilo Normal; se reinicia en cada página, en cada sección o sigue.
+       * La configuración: [cada, inicio, distancia en px o null, "p" | "s" | "c"] (pa.sx de cada sección o _doc.pagina).
+       */
+      let lienzoNum = null;
+      function ascenso(fuente) {
+        if (!lienzoNum) lienzoNum = document.createElement("canvas").getContext("2d");
+        lienzoNum.font = fuente;
+        const m = lienzoNum.measureText("0");
+        return { a: m.fontBoundingBoxAscent || 0, d: m.fontBoundingBoxDescent || 0 };
+      }
+      const fuenteDeEl = (el) => { const c = getComputedStyle(el); return { css: `${c.fontStyle} ${c.fontWeight} ${c.fontSize} ${c.fontFamily}`, lh: parseFloat(c.lineHeight) }; };
+      function renglonesNumerables(el, clip) {
+        const er = el.getBoundingClientRect(), zz = er.height / (el.offsetHeight || 1) || 1;
+        const out = [];
+        const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), rg = document.createRange();
+        for (let n = w.nextNode(); n; n = w.nextNode()) {
+          if (!n.length || !n.parentElement || n.parentElement.closest(".wd-corte, [data-obj], .wd-oculto, .wd-pintado")) continue;
+          rg.selectNodeContents(n);
+          for (const q of rg.getClientRects()) {
+            if (q.height < 0.5) continue;
+            const yc = (q.top + q.bottom) / 2;
+            if (clip != null && yc - er.top > clip * zz) continue;   // (lo recortado se ve en otra columna)
+            const u = out.find((x) => Math.abs(x.yc - yc) < Math.min(x.alto, q.height) / 2);
+            if (u) { if (q.left < u.x) { u.x = q.left; u.top = q.top; u.ref = n.parentElement; } continue; }
+            out.push({ yc, top: q.top, alto: q.height, x: q.left, ref: n.parentElement });
+          }
+        }
+        if (!out.length) {
+          // un párrafo vacío también es un renglón: su línea base, con la letra de su marca de párrafo
+          const cs = getComputedStyle(el), f = fuenteDeEl(el), as = ascenso(f.css);
+          const arriba = er.top + (parseFloat(cs.borderTopWidth) + parseFloat(cs.paddingTop)) * zz;
+          const medio = f.lh > 0 ? (f.lh - as.a - as.d) / 2 : 0;
+          out.push({ yc: arriba + (f.lh > 0 ? f.lh / 2 : as.a) * zz, top: arriba + medio * zz, alto: (as.a + as.d) * zz, x: er.left + parseFloat(cs.paddingLeft) * zz, ref: el });
+        }
+        return out.sort((a, b) => a.yc - b.yc);
+      }
+      function pintarNumerosLinea() {
+        if (vista !== "paginas") return;
+        const capas = $$(".wd-pagina", capaPaginas);
+        if (!capas.length) return;
+        const secs = seccionesDoc();
+        // (lo que se puso desde NOM vale para todo el documento, como «Aplicar a: Todo el documento» de Word)
+        const todo = doc().valor("_doc", "numLineas");
+        const lnDoc = todo ? todo.v : (doc().valor("_doc", "pagina") || {}).numLin;
+        const cfgDe = (k) => (todo ? (Array.isArray(todo.v) ? todo.v : null) : secs.length ? (secs[k] && Array.isArray(secs[k].g.ln) ? secs[k].g.ln : null) : Array.isArray(lnDoc) ? lnDoc : null);
+        if (todo ? !Array.isArray(todo.v) : secs.length ? !secs.some((x) => Array.isArray(x.g.ln)) : !Array.isArray(lnDoc)) return;
+        const pg = pagina(), z = zoom || 1;
+        const rects = capas.map((c) => c.getBoundingClientRect());
+        const paginaDe = (y) => { for (let i = 0; i < rects.length; i++) if (y >= rects[i].top - 1 && y < rects[i].bottom + 1) return i; return -1; };
+        const secDe = (i) => { let k = 0; for (let j = 0; j < secs.length; j++) if (secs[j].i <= i) k = j; return k; };
+        const rs = [];
+        const hijosC = cuerpo.children;
+        const agregar = (el, i, clip) => {
+          const k = secs.length ? secDe(i) : 0;
+          if (!cfgDe(k) || el.dataset.sinnl != null || el.querySelector(".wd-obj.bloque, table")) return;
+          for (const r of renglonesNumerables(el, clip)) { r.sec = k; r.pag = paginaDe(r.yc); if (r.pag >= 0) rs.push(r); }
+        };
+        // (el párrafo vacío que lleva el salto de sección —el siguiente empieza sección— no se numera, como en Word)
+        const finDeSeccion = (i) => { const sig = hijosC[i + 1]; return !!sig && (sig.dataset.sx != null || sig.dataset.sec != null) && !hijosC[i].textContent.replace(/[\u00ad\u200b]/g, "").trim() && !hijosC[i].querySelector("[data-obj]"); };
+        for (let i = 0; i < hijosC.length; i++) if (!finDeSeccion(i)) agregar(hijosC[i], i, hijosC[i].dataset.clip != null ? +hijosC[i].dataset.clip : null);
+        // (lo que sigue de un párrafo en otra columna: la copia de la capa de continuaciones)
+        if (capaSigue && capaSigue.isConnected) for (const c of capaSigue.querySelectorAll(".wd-sigue")) agregar(c, +c.dataset.par, null);
+        // columna de cada renglón (las de su sección) y el orden de lectura: hoja, sección, columna, de arriba abajo
+        for (const r of rs) {
+          const g = secs.length ? secs[r.sec].g : null, cols = g ? columnasDe(g) : [{ x: 0 }], mi = g ? g.m[2] : pg.m.iz;
+          const x = (r.x - rects[r.pag].left) / z - mi;
+          let c = 0;
+          for (let j = 0; j < cols.length; j++) if (cols[j].x <= x + 2) c = j;
+          r.col = c; r.borde = mi + cols[c].x; r.varias = cols.length > 1;
+        }
+        rs.sort((a, b) => a.pag - b.pag || a.sec - b.sec || a.col - b.col || a.yc - b.yc);
+        const fb = formatoBase();
+        const fNum = `normal 400 ${+fb.tam || 11}pt ${fb.fuente ? cssFuente(fb.fuente) : "Calibri, Carlito, sans-serif"}`, aNum = ascenso(fNum).a;
+        const porPag = new Map();
+        let n = 0, ultPag = -1, ultSec = -1;
+        for (const r of rs) {
+          const [cada, ini, dist, reinicio] = cfgDe(r.sec);
+          if (r.sec !== ultSec) { if (reinicio !== "c" || ultSec < 0) n = ini - 1; }
+          else if (reinicio === "p" && r.pag !== ultPag) n = ini - 1;
+          n++;
+          ultPag = r.pag; ultSec = r.sec;
+          if (n % Math.max(1, cada)) continue;
+          const base = (r.top - rects[r.pag].top) / z + ascenso(fuenteDeEl(r.ref).css).a;
+          // (distancia automática de Word, medida: 0.25" con una columna y 0.125" con varias)
+          const derecha = r.borde - (dist != null ? dist : r.varias ? 12 : 24);
+          let h = porPag.get(r.pag) || "";
+          h += `<span class="wd-numlin wd-pintado" style="top:${(base - aNum).toFixed(2)}px;right:${(rects[r.pag].width / z - derecha).toFixed(2)}px">${n}</span>`;
+          porPag.set(r.pag, h);
+        }
+        porPag.forEach((h, p) => { const d = document.createElement("div"); d.className = "wd-numlineas"; d.style.font = fNum; d.innerHTML = h; capas[p].append(d); });
+      }
       /** Las columnas de una sección: [{ x (desde el margen izquierdo), w }] en px. */
       function columnasDe(g) {
         const util = g.w - g.m[2] - g.m[3], n = Math.max(1, +g.c || 1);
@@ -3952,6 +4055,7 @@
         if (cuerpo.querySelector(":scope > [data-capital]")) { pintarCapitales(); tomarRegistros(); }
         pintarNotasFinales();
         if (capaPaginas.innerHTML !== h) capaPaginas.innerHTML = h;
+        pintarNumerosLinea();
         pintarEstado();
         pintarCursores();
         if (seguirCursor) { seguirCursor = false; desplazarAlCursor(); }
@@ -4075,6 +4179,7 @@
         if (cuerpo.querySelector(":scope > [data-capital]")) { pintarCapitales(); tomarRegistros(); }
         pintarNotasFinales();
         if (capaPaginas.innerHTML !== h) capaPaginas.innerHTML = h;
+        pintarNumerosLinea();
         pintarEstado();
         pintarCursores();
         if (seguirCursor) { seguirCursor = false; desplazarAlCursor(); }
@@ -5221,10 +5326,73 @@
         cache.clear(); reconciliar();
         NOM.aviso(g ? "Sin guiones automáticos" : "Guiones automáticos: las palabras se parten al final del renglón, como en Word", { tipo: "ok" });
       }
+      /** Los números de línea que se ven ahora ([cada, inicio, distancia, reinicio] o null): los del documento o los de la
+          sección del cursor. */
+      function numerosLineaActuales() {
+        const todo = doc().valor("_doc", "numLineas");
+        if (todo) return Array.isArray(todo.v) ? todo.v : null;
+        const secs = seccionesDoc();
+        if (!secs.length) { const v = (doc().valor("_doc", "pagina") || {}).numLin; return Array.isArray(v) ? v : null; }
+        const pi = parrafoEn(leerSel().ini);
+        let g = null;
+        for (const x of secs) if (x.i <= pi) g = x.g;
+        return g && Array.isArray(g.ln) ? g.ln : null;
+      }
+      /** Disposición → Números de línea de Word: "no", "c" (continuos), "p" (cada página), "s" (cada sección) o [cada,
+          inicio, distancia en px o null, reinicio]. Vale para todo el documento. */
+      function numerosDeLinea(modo) {
+        if (ed.soloLectura) return;
+        const ant = numerosLineaActuales() || [1, 1, null, "p"];
+        const v = modo === "no" ? null : Array.isArray(modo) ? modo : [ant[0], ant[1], ant[2], modo];
+        doc().cambiar("_doc", { numLineas: { v } }, { origen: "comando" });
+        programarPaginar();
+        NOM.aviso(v ? "Números de línea: " + { c: "continuos", p: "se reinician en cada página", s: "se reinician en cada sección" }[v[3]] + (v[0] > 1 ? `, cada ${v[0]}` : "") : "Sin números de línea", { tipo: "ok" });
+      }
+      /** «Suprimir números de línea» en los párrafos elegidos (o quitarlo). */
+      function suprimirNumerosLinea() {
+        const ps = parrafosDeSel();
+        const todos = ps.every((p) => S().attrs(p.mark).sinNumLin);
+        formatoParrafo({ sinNumLin: todos ? null : true }, ps);
+      }
+      function dialogoNumerosLinea() {
+        if (ed.soloLectura) return;
+        const a = numerosLineaActuales() || [1, 1, null, "p"];
+        const cuerpoH = html(`<form class="col" style="gap:10px">
+          <label class="fila" style="gap:8px"><input type="checkbox" data-act ${numerosLineaActuales() ? "checked" : ""}> Agregar números de línea</label>
+          <label class="col">Empezar en <input class="input" type="number" min="1" max="32767" data-ini value="${+a[1] || 1}"></label>
+          <label class="col">Distancia del texto (cm; vacío = automática) <input class="input" type="text" inputmode="decimal" data-dist value="${a[2] != null ? (Math.round((a[2] / CM) * 100) / 100).toString() : ""}" placeholder="Automática"></label>
+          <label class="col">Intervalo (cada cuántos renglones se ve el número) <input class="input" type="number" min="1" max="100" data-cada value="${+a[0] || 1}"></label>
+          <fieldset class="col" style="border:0;padding:0;gap:4px"><legend>Numeración</legend>
+            ${[["p", "Reiniciar en cada página"], ["s", "Reiniciar en cada sección"], ["c", "Continua"]].map(([k, t]) => `<label class="fila" style="gap:8px"><input type="radio" name="nl-r" value="${k}" ${a[3] === k ? "checked" : ""}> ${t}</label>`).join("")}
+          </fieldset></form>`);
+        const pie = html(`<div style="display:contents"><button class="btn" data-no type="button">Cancelar</button><button class="btn primario" data-si>Aceptar</button></div>`);
+        const h = NOM.hoja({ titulo: "Números de línea", icono: "list-ordered", cuerpo: cuerpoH, pie });
+        $("[data-no]", pie).onclick = () => h.cerrar();
+        $("[data-si]", pie).onclick = (ev) => {
+          ev.preventDefault();
+          if (!$("[data-act]", cuerpoH).checked) { numerosDeLinea("no"); h.cerrar(); return; }
+          const ini = Math.round(+$("[data-ini]", cuerpoH).value), cada = Math.round(+$("[data-cada]", cuerpoH).value);
+          const dt = String($("[data-dist]", cuerpoH).value).trim().replace(",", ".");
+          const dist = dt === "" || /^auto/i.test(dt) ? null : parseFloat(dt);
+          if (!(ini >= 1 && ini <= 32767)) return aviso("«Empezar en» va de 1 a 32767", { tipo: "aviso" });
+          if (!(cada >= 1 && cada <= 100)) return aviso("El intervalo va de 1 a 100", { tipo: "aviso" });
+          if (dist != null && !(dist >= 0 && dist <= 5)) return aviso("La distancia va de 0 a 5 cm", { tipo: "aviso" });
+          const r = ($("input[name=nl-r]:checked", cuerpoH) || {}).value || "p";
+          numerosDeLinea([cada, ini, dist == null ? null : Math.round(dist * CM * 10) / 10, r]);
+          h.cerrar();
+        };
+      }
       function menuMas(b) {
+        const nl = numerosLineaActuales(), snl = parrafosDeSel().every((p) => S().attrs(p.mark).sinNumLin);
         NOM.menu(b, [
           { titulo: "Formato" },
           { texto: "Guiones automáticos (dividir palabras)", icono: "minus", marcado: !!doc().valor("_doc", "guiones"), fn: alternarGuiones },
+          { texto: "Números de línea: ninguno", icono: "list-ordered", marcado: !nl, fn: () => numerosDeLinea("no") },
+          { texto: "Números de línea: continuos", icono: "list-ordered", marcado: !!nl && nl[3] === "c", fn: () => numerosDeLinea("c") },
+          { texto: "Números de línea: reiniciar en cada página", icono: "list-ordered", marcado: !!nl && nl[3] === "p", fn: () => numerosDeLinea("p") },
+          { texto: "Números de línea: reiniciar en cada sección", icono: "list-ordered", marcado: !!nl && nl[3] === "s", fn: () => numerosDeLinea("s") },
+          { texto: "Suprimir números de línea en este párrafo", icono: "list-x", marcado: snl, fn: suprimirNumerosLinea },
+          { texto: "Opciones de números de línea…", icono: "settings", fn: dialogoNumerosLinea },
           { texto: "Tachado", icono: "strikethrough", atajo: "Ctrl+Mayús+X", fn: () => alternar("s") },
           { texto: "Superíndice", icono: "superscript", atajo: "Ctrl+Mayús++", fn: () => formato({ va: attrsEnCursor().a.va === "sup" ? null : "sup" }) },
           { texto: "Subíndice", icono: "subscript", atajo: "Ctrl+=", fn: () => formato({ va: attrsEnCursor().a.va === "sub" ? null : "sub" }) },
@@ -5682,6 +5850,12 @@
       const a = [];
       if (this.textoApi && NOM.campos) {
         a.push({ texto: "Guiones automáticos (dividir palabras al final del renglón)", icono: "minus", fn: () => this.textoApi.alternarGuiones(), claves: "guiones dividir partir palabras silabas hyphenation word disposicion" });
+        a.push({ texto: "Números de línea: continuos", icono: "list-ordered", fn: () => this.textoApi.numerosDeLinea("c"), claves: "numeros de linea renglones numerar line numbers disposicion continuos" });
+        a.push({ texto: "Números de línea: reiniciar en cada página", icono: "list-ordered", fn: () => this.textoApi.numerosDeLinea("p"), claves: "numeros de linea renglones numerar line numbers disposicion pagina" });
+        a.push({ texto: "Números de línea: reiniciar en cada sección", icono: "list-ordered", fn: () => this.textoApi.numerosDeLinea("s"), claves: "numeros de linea renglones numerar line numbers disposicion seccion" });
+        a.push({ texto: "Sin números de línea", icono: "list-ordered", fn: () => this.textoApi.numerosDeLinea("no"), claves: "numeros de linea quitar ninguno line numbers" });
+        a.push({ texto: "Suprimir números de línea en este párrafo", icono: "list-x", fn: () => this.textoApi.suprimirNumerosLinea(), claves: "numeros de linea suprimir parrafo line numbers" });
+        a.push({ texto: "Opciones de números de línea…", icono: "settings", fn: () => this.textoApi.dialogoNumerosLinea(), claves: "numeros de linea opciones intervalo empezar distancia line numbers" });
         a.push({ texto: "Actualizar campos (F9)", icono: "refresh-cw", fn: () => this.textoApi.actualizarCampos(), claves: "campos word fecha seq ref pageref numero pagina actualizar f9" });
         a.push({ texto: "Ver los códigos de los campos (Alt+F9)", icono: "code", fn: () => this.textoApi.alternarCodigos(), claves: "campos codigos word alt f9" });
         a.push({ texto: "Insertar un campo (como en Word)…", icono: "braces", fn: () => this.textoApi.insertarCampo(), claves: "campo word fecha page seq ref insertar" });

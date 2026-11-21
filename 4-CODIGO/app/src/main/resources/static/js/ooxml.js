@@ -360,6 +360,18 @@
 
   // ------------------------------------------------------------ Word (.docx)
   const TWIP = 15;   // 1 px (96 ppp) = 15 twips
+  /** w:lnNumType de Word para [cada, inicio, distancia en px o null, reinicio "p" | "s" | "c"] ("" sin números de línea).
+      Word guarda el inicio menos 1 y, sin w:restart, reinicia en cada página. */
+  const lnNumTypeXml = (v) => (!Array.isArray(v) ? "" : `<w:lnNumType w:countBy="${Math.max(1, Math.min(100, Math.round(+v[0] || 1)))}"${+v[1] > 1 ? ` w:start="${Math.round(+v[1]) - 1}"` : ""}${v[2] != null && isFinite(+v[2]) ? ` w:distance="${Math.round(+v[2] * TWIP)}"` : ""}${v[3] === "c" ? ' w:restart="continuous"' : v[3] === "s" ? ' w:restart="newSection"' : ""}/>`);
+  /** Un w:sectPr con estos números de línea (o sin ninguno), en su lugar del esquema. */
+  function conNumLineas(sect, v) {
+    if (/<w:sectPrChange\b/.test(sect)) return sect;   // (con un cambio de sección marcado: tal cual)
+    const s = sect.replace(/<w:lnNumType\b[^>]*\/>/g, ""), x = lnNumTypeXml(v);
+    if (!x) return s;
+    if (/^<w:sectPr\b[^>]*\/>$/.test(s)) return s.replace(/\/>$/, ">") + x + "</w:sectPr>";
+    const m = /<w:(pgNumType|cols|formProt|vAlign|noEndnote|titlePg|textDirection|bidi|rtlGutter|docGrid|printerSettings)\b|<\/w:sectPr>/.exec(s);
+    return m ? s.slice(0, m.index) + x + s.slice(m.index) : s;
+  }
   /** Lo que es de una celda de tabla (texto y formato): su firma dice si cambió desde que se importó. */
   const CAMPOS_CELDA = ["c", "n", "i", "k", "r", "al", "m", "z", "va", "td", "bxw", "bxd", "h"];
   function firmaCelda(o, ref) {
@@ -1194,6 +1206,13 @@
           sect = sect.replace(/<w:pgSz\b[^>]*\/>/, "").replace(/<w:pgMar\b[^>]*\/>/, "");
           sect = /<w:sectPr\b[^>]*\/>$/.test(sect) ? sect.replace(/\/>$/, ">") + E.pgSz + mar + "</w:sectPr>" : sect.replace(/(<w:sectPr\b[^>]*>(?:\s*<w:(?:headerReference|footerReference|footnotePr|endnotePr|type)\b[^>]*\/>)*)/, "$1" + E.pgSz + mar);
         }
+        // números de línea puestos desde NOM: valen para todo el documento (cada sección del archivo)
+        let cuerpoN = cuerpo;
+        if (cambio("numLineas")) {
+          const v = (doc.valor("_doc", "numLineas") || {}).v;
+          sect = conNumLineas(sect, v);
+          cuerpoN = cuerpo.replace(/<w:sectPr\b[^>]*\/>|<w:sectPr\b[\s\S]*?<\/w:sectPr>/g, (m) => conNumLineas(m, v));
+        }
         const CAMPOS_EP = ["encabezado", "pie", "numeros", "numPos", "numFmt", "numInicio", "primeraDistinta", "encAlin", "pieAlin", "encabezadoImg", "marcaAgua"];
         const epCambio = CAMPOS_EP.some(cambio);
         const sufijo = PRE;
@@ -1217,7 +1236,7 @@
         if (extra) abre = xd.slice(0, raiz.ci - 1) + extra + ">" + xd.slice(raiz.ci, body.ci);
         // Lo de alrededor de la sección final (saltos de línea del original) también se conserva.
         const antesSect = su ? antesDe(su) : "", trasSect = su && /^\s*$/.test(xd.slice(su.f, body.cf)) ? xd.slice(su.f, body.cf) : "";
-        pq.pon(DOC, abre + cuerpo + antesSect + sect + trasSect + xd.slice(body.cf));
+        pq.pon(DOC, abre + cuerpoN + antesSect + sect + trasSect + xd.slice(body.cf));
         // ---- relaciones e imágenes nuevas
         const usadosEnCuerpo = (id) => cuerpo.includes('"' + id + '"');
         rels.filter((r) => (r.tipo === T.img || r.tipo === T.enlace) && usadosEnCuerpo(r.id)).forEach((r) => pq.agregaRel(DOC, r.id, r.tipo, r.destino, r.externo));
@@ -1312,6 +1331,8 @@
         if (!numActual || numActual.tipo !== clave || inicio != null) numActual = { tipo: clave, id: nuevaInstancia(clave, inicio != null ? inicio : 1) };
         ppr += `<w:numPr><w:ilvl w:val="${pa.nivel || 0}"/><w:numId w:val="${numActual.id}"/></w:numPr>`;
       } else if (pa.lista !== "tareas") { if (numActual) numAnterior = numActual; numActual = null; }
+      // «Suprimir números de línea» (orden del esquema: después de la numeración, antes de los bordes)
+      if (pa.sinNumLin) ppr += "<w:suppressLineNumbers/>";
       const cm = (v) => Math.round((+v || 0) * CMT);
       if (pa.lista === "tareas") ppr += `<w:ind w:left="${360 * ((pa.nivel || 0) + 1)}" w:hanging="360"/>`;
       else if (!pa.lista && (pa.sangria || pa.sangiz || pa.sangder || pa.primera != null || pa.francesa)) {
@@ -1328,6 +1349,14 @@
         ppr += `<w:pBdr>${[["s", "top"], ["z", "left"], ["i", "bottom"], ["d", "right"]].filter(([k]) => bm[4].includes(k)).map(([, l]) => `<w:${l} w:val="${valW}" w:sz="${sz}" w:space="4" w:color="${bm[3].slice(1).toUpperCase()}"/>`).join("")}</w:pBdr>`;
       }
       if (hexW(pa.sombra)) ppr += `<w:shd w:val="clear" w:color="auto" w:fill="${hexW(pa.sombra)}"/>`;
+      // las tabulaciones del párrafo (las que tenía en Word: si no, al escribir el párrafo de nuevo se perdían) y «no
+      // dividir con guiones» (orden del esquema: fondo, tabulaciones, guiones, sentido)
+      if (Array.isArray(pa.tabs) && pa.tabs.length) {
+        const TIPO_W = { i: "left", c: "center", d: "right", p: "decimal", b: "bar" }, REL = new Set(["dot", "hyphen", "underscore", "heavy", "middleDot"]);
+        const tt = pa.tabs.filter((t) => Array.isArray(t) && isFinite(+t[0]) && +t[0] >= 0 && +t[0] <= 1584).map((t) => `<w:tab w:val="${TIPO_W[t[1]] || "left"}"${REL.has(t[2]) ? ` w:leader="${t[2]}"` : ""} w:pos="${Math.round(+t[0] * 20)}"/>`);
+        if (tt.length) ppr += `<w:tabs>${tt.join("")}</w:tabs>`;
+      }
+      if (pa.sinGuiones) ppr += "<w:suppressAutoHyphens/>";
       if (pa.dir === "rtl") ppr += "<w:bidi/>";
       if (pa.antes != null || pa.despues != null || linea) ppr += `<w:spacing${pa.antes != null ? ` w:before="${Math.round(pa.antes * 20)}"` : ""}${pa.despues != null ? ` w:after="${Math.round(pa.despues * 20)}"` : ""}${linea}/>`;
       if (ind) ppr += ind[0];
@@ -1443,7 +1472,7 @@
     if (notas.length) rels.push({ id: "rIdNotas", tipo: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes", destino: "footnotes.xml" });
     const notasXml = XML + `<w:footnotes ${NSW}><w:footnote w:type="separator" w:id="-1"><w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:separator/></w:r></w:p></w:footnote><w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>${notas.map((t, i) => `<w:footnote w:id="${baseNota + i + 1}"><w:p><w:pPr><w:pStyle w:val="TextoNota"/></w:pPr><w:r><w:rPr><w:rStyle w:val="RefNota"/></w:rPr><w:footnoteRef/></w:r><w:r><w:t xml:space="preserve"> ${x(t)}</w:t></w:r></w:p></w:footnote>`).join("")}</w:footnotes>`;
     const documento = XML + `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">
-<w:body>${cuerpo || "<w:p/>"}<w:sectPr>${refs}<w:pgSz w:w="${(hor ? TAM[1] : TAM[0]) * TWIP}" w:h="${(hor ? TAM[0] : TAM[1]) * TWIP}"${hor ? ' w:orient="landscape"' : ""}/><w:pgMar w:top="${mv(m.s)}" w:right="${mv(m.d)}" w:bottom="${mv(m.i)}" w:left="${mv(m.iz)}" w:header="720" w:footer="720" w:gutter="0"/>${ep2.inicio > 1 ? `<w:pgNumType w:start="${ep2.inicio}"/>` : ""}${ep2.primera && (hayEnc || hayPie) ? "<w:titlePg/>" : ""}</w:sectPr></w:body></w:document>`;
+<w:body>${cuerpo || "<w:p/>"}<w:sectPr>${refs}<w:pgSz w:w="${(hor ? TAM[1] : TAM[0]) * TWIP}" w:h="${(hor ? TAM[0] : TAM[1]) * TWIP}"${hor ? ' w:orient="landscape"' : ""}/><w:pgMar w:top="${mv(m.s)}" w:right="${mv(m.d)}" w:bottom="${mv(m.i)}" w:left="${mv(m.iz)}" w:header="720" w:footer="720" w:gutter="0"/>${lnNumTypeXml(doc.valor("_doc", "numLineas") ? (doc.valor("_doc", "numLineas") || {}).v : (doc.valor("_doc", "pagina") || {}).numLin)}${ep2.inicio > 1 ? `<w:pgNumType w:start="${ep2.inicio}"/>` : ""}${ep2.primera && (hayEnc || hayPie) ? "<w:titlePg/>" : ""}</w:sectPr></w:body></w:document>`;
     const ep = (id, nombre, rpr, ppr, extra) => `<w:style w:type="paragraph" w:styleId="${id}"><w:name w:val="${nombre}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:uiPriority w:val="9"/><w:qFormat/>${extra || ""}${ppr ? `<w:pPr>${ppr}</w:pPr>` : ""}${rpr ? `<w:rPr>${rpr}</w:rPr>` : ""}</w:style>`;
     // 1.4 El formato base del documento (el del espacio) es el estilo Normal de Word.
     const fb = doc.valor("_doc", "formato") || {};
@@ -1732,6 +1761,8 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       if (jc) r.jc = jc;
       const sg = hijo(ppr, "suppressAutoHyphens");
       if (sg) r.sinGuiones = !["0", "false", "off"].includes(val(sg) || "1");
+      const snl = hijo(ppr, "suppressLineNumbers");
+      if (snl) r.sinNumLin = !["0", "false", "off"].includes(val(snl) || "1");
       // Tabulaciones de Word: [posición en pt desde el margen, tipo (i, c, d, p = decimal, b = barra), relleno]
       const tbs = hijo(ppr, "tabs");
       if (tbs) {
@@ -2470,6 +2501,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         if (e) { pa.estilo = e; break; }
       }
       if (c.sinGuiones) pa.sinGuiones = true;
+      if (c.sinNumLin) pa.sinNumLin = true;
       if (c.tabs && c.tabs.length) pa.tabs = c.tabs;
       // la marca de párrafo (¶) con su propia letra y tamaño: de ella sale el alto del renglón donde está
       const mr = hijo(ppr, "rPr");
@@ -2544,13 +2576,26 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       const m = mg ? [Math.abs(g(mg, "top")), Math.abs(g(mg, "bottom")), g(mg, "left") + g(mg, "gutter"), g(mg, "right")].map((x) => Math.round((x / TWIP) * 10) / 10) : [96, 96, 96, 96];
       const pn = hijo(sect, "pgNumType");
       return { sect, w, h, hor: w > h, cols: n, tipo: val(hijo(sect, "type")) || "nextPage", m, igual, esp, anchos, sep: !!co && /^(1|true|on)$/.test(at(co, "sep") || ""),
-        va: val(hijo(sect, "vAlign")) || "top", numIni: pn && at(pn, "start") != null ? +at(pn, "start") : null, numFmt: pn ? at(pn, "fmt") || null : null };
+        va: val(hijo(sect, "vAlign")) || "top", numIni: pn && at(pn, "start") != null ? +at(pn, "start") : null, numFmt: pn ? at(pn, "fmt") || null : null, ln: numLineasDe(hijo(sect, "lnNumType")) };
+    }
+    /**
+     * Números de línea de Word (w:lnNumType): [cada cuántos se ve, con cuál empieza, distancia al texto en px (null =
+     * automática), reinicio: "p" cada página, "s" cada sección, "c" continuo]. Word guarda el inicio menos 1 (medido: con
+     * «empezar en 3» escribe w:start="2"). Sin countBy no se ve nada.
+     */
+    function numLineasDe(n) {
+      if (!n) return null;
+      const cada = Math.round(+(at(n, "countBy") || 0) || 0);
+      if (cada < 1) return null;
+      const dist = at(n, "distance");
+      const r = at(n, "restart");
+      return [Math.min(100, cada), Math.max(1, Math.min(32767, (+(at(n, "start") || 0) || 0) + 1)), dist != null && dist !== "" && +dist > 0 ? Math.round((+dist / TWIP) * 10) / 10 : null, r === "continuous" ? "c" : r === "newSection" ? "s" : "p"];
     }
     /** La hoja de una sección como la guarda el párrafo que la empieza (pa.sx): tamaño, márgenes, columnas, tipo de
         salto, alineación vertical y número de página con que empieza (si Word lo reinicia). */
     const sxDe = (s) => JSON.stringify({ w: Math.round(s.w * 10) / 10, h: Math.round(s.h * 10) / 10, m: s.m, c: s.cols, e: Math.round(s.esp * 10) / 10, a: s.anchos || undefined,
       l: s.sep ? 1 : undefined, t: s.tipo === "continuous" ? "c" : s.tipo === "oddPage" ? "i" : s.tipo === "evenPage" ? "p" : "n", v: s.va !== "top" ? s.va : undefined, n: s.numIni != null ? s.numIni : undefined,
-      f: s.numFmt && s.numFmt !== "decimal" ? s.numFmt : undefined });
+      f: s.numFmt && s.numFmt !== "decimal" ? s.numFmt : undefined, ln: s.ln || undefined });
     const secciones = [];
     hijos(cuerpo).forEach((c) => {
       const sp = c.localName === "p" ? hijo(hijo(c, "pPr"), "sectPr") : c.localName === "sectPr" ? c : null;
@@ -2558,7 +2603,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     });
     let nSec = 0, secPendiente = secciones.length && secciones[0].cols > 1 ? "c|" + secciones[0].cols + " columnas" : null;
     // Con secciones de otra hoja, con columnas o centradas: cada sección lleva su hoja en su primer párrafo (pa.sx)
-    const geoSec = (s) => [Math.round(s.w), Math.round(s.h), s.m.join(","), s.cols, Math.round(s.esp), JSON.stringify(s.anchos), s.sep, s.va].join("|");
+    const geoSec = (s) => [Math.round(s.w), Math.round(s.h), s.m.join(","), s.cols, Math.round(s.esp), JSON.stringify(s.anchos), s.sep, s.va, JSON.stringify(s.ln)].join("|");
     const conSecciones = secciones.length > 0 && (new Set(secciones.map(geoSec)).size > 1 || secciones.some((s) => s.cols > 1 || s.va !== "top"));
     let sxPendiente = conSecciones ? sxDe(secciones[0]) : null, sxK = 0;
     const paSx = [];   // [pa, índice de la sección]
@@ -2845,6 +2890,8 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       pagina = { tam: tam || "otro", orient: sec0.hor ? "h" : "v", // (en Word un margen de arriba o de abajo negativo quiere decir "fijo": la medida es la misma)
         margen: mg ? { s: Math.round(Math.abs(g(mg, "top")) / TWIP), i: Math.round(Math.abs(g(mg, "bottom")) / TWIP), iz: Math.round(g(mg, "left") / TWIP), d: Math.round(g(mg, "right") / TWIP) } : undefined };
       if (!tam) { pagina.w = Math.round(lado); pagina.h = Math.round(largo); }   // tamaño que no es de los comunes: sus medidas (px, hoja vertical)
+      // números de línea (si todas las secciones los tienen igual; si no, cada sección los trae en su pa.sx)
+      if (sec0.ln && !conSecciones) pagina.numLin = sec0.ln;
       const pb = hijo(sect, "pgBorders");
       const lb = pb ? ladoBorde(hijo(pb, "top")) || ladoBorde(hijo(pb, "left")) || ladoBorde(hijo(pb, "bottom")) || ladoBorde(hijo(pb, "right")) : null;
       // borde de página: grosor (pt), estilo, color y a cuántos px del canto de la hoja (o del texto) va

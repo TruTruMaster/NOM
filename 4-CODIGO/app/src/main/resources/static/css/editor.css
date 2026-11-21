@@ -1271,6 +1271,9 @@
    renglón por sus letras). */
 .wd-acomodo { hyphens: none; }
 .wd-guionv { user-select: none; pointer-events: none; }
+/* Números de línea de Word (modo-texto.js, pintarNumerosLinea): en el margen, a la izquierda de cada renglón */
+.wd-numlineas { position: absolute; inset: 0; pointer-events: none; user-select: none; }
+.wd-numlin { position: absolute; white-space: nowrap; line-height: normal; color: inherit; }
 /* El texto de un documento corta sus renglones como Word: sin el «balance» de los títulos ni el «pretty» de los párrafos que
    usa la interfaz (nom.css). Con «balance», un título de dos renglones se partía a la mitad (w05). Solo el estilo: el modo
    (nowrap de lo que no se parte) se queda. */

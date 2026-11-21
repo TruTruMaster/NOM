@@ -34,8 +34,9 @@ def empacar(destino):
         t.add(CODIGO / "app/target/nom-colab.jar", arcname="NOM/4-CODIGO/app/target/nom-colab.jar")
         for d in ("corpus", "corpus-web", "corpus-reales", "openxml-bin"):
             if (CACHE / d).exists(): agregar(CACHE / d, ".cache/nom-pruebas/" + d)
-        t3 = CACHE / "office-real/archivos/t03-todo-powerpoint.pptx"
-        if t3.exists(): t.add(t3, arcname=".cache/nom-pruebas/office-real/archivos/" + t3.name)
+        for nombre in ("t03-todo-powerpoint.pptx", "w16-numlineas.docx", "w16-numlineas.pdf"):
+            f = CACHE / "office-real/archivos" / nombre
+            if f.exists(): t.add(f, arcname=".cache/nom-pruebas/office-real/archivos/" + f.name)
 
 
 def main():
