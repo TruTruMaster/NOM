@@ -738,8 +738,8 @@ sesión anterior: `./desplegar.sh roles` para las columnas nuevas de usuarios.
 
 ## Orden recomendado para la siguiente sesión
 
-**Desde el 21 de noviembre de 2026:** empezar por `docs/RELEVO-21NOV.md` (0.18.1 publicada; primero el resultado de
-`prueba_funciones` y el pendiente del plan privado).
+**Desde el 21 de noviembre de 2026:** empezar por `docs/RELEVO-21NOV.md` (0.19.0 publicada: la app de Android con su
+propio origen, guiones y números de línea como Word; sigue todo `PARIDAD-OFFICE.md` en «Sí» contra Office real).
 
 **Desde el 20 de noviembre de 2026 (noche):** empezar por `docs/RELEVO-20NOV-NOCHE.md` (0.18.1 publicada; sigue todo
 `PARIDAD-OFFICE.md` en «Sí» contra Office real).
