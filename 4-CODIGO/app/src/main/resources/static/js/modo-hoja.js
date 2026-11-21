@@ -805,6 +805,39 @@
           aviso(`Tabla de datos en ${textoRango(r)}: ${res.celdas} celdas. Ctrl+Z para deshacer`, { tipo: "ok" });
         };
       }
+      // ------------------------------------------------------------ estilos de celda (Inicio → Estilos de celda, como Excel)
+      // (las definiciones: js/estilos-celda-datos.js, sacadas de cómo ve NOM los estilos hechos en Excel 2024)
+      const CATEGORIAS = { letra: ["n", "i", "u", "k", "tl", "tp", "tf"], relleno: ["r", "rx"], bordes: ["bd", "bx"], numero: ["f"], alineacion: ["al", "aj", "ax"] };
+      /**
+       * Aplica un estilo de celda de Excel al rango: como Excel, lo que el estilo define (letra, relleno, bordes, número,
+       * alineación) reemplaza lo que la celda tenía en esa categoría; «Normal» lo quita todo. Devuelve el número de celdas o
+       * el motivo.
+       */
+      function aplicarEstiloCelda(nombre, r) {
+        if (ed.soloLectura || !t) return "Solo puedes ver esta hoja";
+        const E = (NOM.ESTILOS_CELDA || {})[nombre];
+        if (!E) return "No conozco ese estilo";
+        r = r || rango();
+        const ev = evaluar(), cambios = {};
+        const cats = nombre === "Normal" ? Object.keys(CATEGORIAS) : Object.keys(CATEGORIAS).filter((g) => CATEGORIAS[g].some((k) => k in E.t || k in E.n));
+        let n = 0;
+        cadaCelda(r, (c, f, ref) => {
+          const v = ev.valor(c, f), esNum = typeof v === "number" || (v && typeof v === "object" && typeof v.valueOf() === "number");
+          const def = esNum ? E.n : E.t;
+          cats.forEach((g) => CATEGORIAS[g].forEach((k) => { cambios[k + ":" + ref] = def[k] != null ? def[k] : null; }));
+          n++;
+        });
+        cambiarT(cambios);
+        return n;
+      }
+      function galeriaEstilosCelda() {
+        const E = NOM.ESTILOS_CELDA || {}, grupos = {};
+        Object.entries(E).forEach(([k, d]) => (grupos[d.g] = grupos[d.g] || []).push([k, d]));
+        const muestra = (d) => { const s = []; if (d.t.r) s.push(`background:${d.t.r}`); if (d.t.k) s.push(`color:${d.t.k}`); if (d.t.n) s.push("font-weight:700"); if (d.t.i) s.push("font-style:italic"); if (d.t.bd) s.push(`border:1px solid ${(/#[0-9A-F]{6}/i.exec(d.t.bx || "") || ["#7F7F7F"])[0]}`); if (+d.t.tp) s.push(`font-size:${Math.min(15, +d.t.tp)}pt`); return s.join(";"); };
+        const cuerpo = html(`<div class="col" style="gap:10px">${["Bueno, malo y neutral", "Datos y modelo", "Títulos y encabezados", "Estilos de celda temáticos", "Formato de número"].filter((g) => grupos[g]).map((g) => `<section class="col" style="gap:4px"><b class="chico">${esc(g)}</b><div class="fila" style="gap:6px;flex-wrap:wrap">${grupos[g].map(([k, d]) => `<button class="btn chico" type="button" data-estilo-celda="${esc(k)}" style="${esc(muestra(d))}">${esc(d.es)}</button>`).join("")}</div></section>`).join("")}</div>`);
+        const h = NOM.hoja({ titulo: "Estilos de celda", icono: "paint-bucket", cuerpo, ancha: true });
+        $$("[data-estilo-celda]", cuerpo).forEach((b) => (b.onclick = () => { const r = aplicarEstiloCelda(b.dataset.estiloCelda); if (typeof r === "string") return aviso(r, { tipo: "aviso" }); h.cerrar(); }));
+      }
       // ------------------------------------------------------------ relleno rápido (Datos → Relleno rápido, Ctrl+E)
       /**
        * El texto con que el relleno rápido ve una celda, como Excel: el de su valor (escrito «12.50», es «12.5»; un número
@@ -3465,6 +3498,7 @@
               { texto: "Fijar", icono: "snowflake", off: lect, sub: menuFijar(null).filter((x) => x && x.texto).map((x) => Object.assign({}, x, { corto: x.texto.replace(/^Hasta la /, "Hasta ").slice(0, 14) })) },
               { texto: "Lista desplegable…", corto: "Lista…", icono: "list-checks", off: lect, fn: dialogoValidacion },
               { texto: "Formato condicional…", corto: "Condicional", icono: "paint-bucket", off: lect, fn: dialogoCondicional },
+              { texto: "Estilos de celda…", corto: "Estilos", icono: "paint-bucket", off: lect, fn: galeriaEstilosCelda },
               { texto: "Borrar formato", corto: "Sin formato", icono: "remove-formatting", off: lect, fn: borrarFormato },
               { texto: "Ancho de columna…", corto: "Ancho…", icono: "move-horizontal", off: lect, fn: anchoColumnas },
               { texto: "Alto de fila…", corto: "Alto…", icono: "move-vertical", off: lect, fn: altoFilas }] }] },
@@ -3570,6 +3604,7 @@
           { titulo: "Celdas" },
           { texto: "Formato de celdas…", icono: "settings", atajo: "Ctrl+1", fn: dialogoFormato },
           { texto: "Formato condicional…", icono: "paint-bucket", fn: dialogoCondicional },
+          { texto: "Estilos de celda…", icono: "paint-bucket", fn: galeriaEstilosCelda },
           { texto: "Lista desplegable o validación…", icono: "list-checks", fn: dialogoValidacion },
           { texto: "Borrar formato", icono: "remove-formatting", fn: borrarFormato },
           { texto: "Rellenar hacia abajo", icono: "arrow-down", atajo: "Ctrl+D", fn: () => rellenarCopia("abajo") },
@@ -3594,6 +3629,7 @@
         { texto: "Quitar flechas", icono: "x", fn: () => { const a = NOM.editorActual.modoApi.api.auditoria; if (a) a.quitar(); }, claves: "auditoria quitar flechas" },
         { texto: "Evaluar fórmula", icono: "square-function", fn: () => { const a = NOM.editorActual.modoApi.api.auditoria; if (a) a.evaluar(); }, claves: "auditoria evaluar formula paso a paso depurar" },
         { texto: "Mostrar fórmulas (Ctrl+`)", icono: "square-function", fn: () => { const a = NOM.editorActual.modoApi.api.formulasVisibles; if (a) a(); }, claves: "ver formulas mostrar formulas auditoria" },
+        { texto: "Estilos de celda", icono: "paint-bucket", fn: dlg("estilosCelda"), claves: "estilos de celda bueno malo neutral entrada salida titulo encabezado enfasis moneda millares porcentaje" },
         { texto: "Celda de enfoque", icono: "target", fn: () => { const a = NOM.editorActual.modoApi.api.enfoque; if (a) a(); }, claves: "celda de enfoque focus cell resaltar fila columna vista" },
         { texto: "Borrar esquema", icono: "eraser", fn: borrarEsquema },
           { titulo: "Fórmulas" },
@@ -3689,9 +3725,9 @@
       this.api = { rango, tabla: () => t, evaluar, seleccion: () => ({ ...sel }),
         // herramientas de datos como las de Excel (también para las pruebas contra Excel real)
         herramientas: { quitarDuplicados, regionActual, textoEnColumnas, partirTexto, buscarObjetivo, consolidar, tablaDatos: crearTablaDatos, rellenoRapido },
-        enfoque: alternarEnfoque, enfoqueActivo: () => enfoque,
+        enfoque: alternarEnfoque, enfoqueActivo: () => enfoque, estiloCelda: aplicarEstiloCelda,
         escenarios: { lista: escenariosHoja, guardar: guardarEscenario, quitar: quitarEscenario, mostrar: mostrarEscenario, resumen: resumenEscenarios },
-        dialogos: { duplicados: dialogoDuplicados, textoColumnas: dialogoTextoColumnas, objetivo: dialogoObjetivo, nombres: administradorNombres, consolidar: dialogoConsolidar, tablaDatos: dialogoTablaDatos, escenarios: administradorEscenarios, rellenoRapido: ejecutarRellenoRapido },
+        dialogos: { duplicados: dialogoDuplicados, textoColumnas: dialogoTextoColumnas, objetivo: dialogoObjetivo, nombres: administradorNombres, consolidar: dialogoConsolidar, tablaDatos: dialogoTablaDatos, escenarios: administradorEscenarios, rellenoRapido: ejecutarRellenoRapido, estilosCelda: galeriaEstilosCelda },
         calculo: { modo: modoCalculo, fijar: fijarModoCalculo, ahora: calcularAhora },
         esquema: { agrupar, alternar: alternarGrupo, nivel: mostrarNivel, detalle, borrar: borrarEsquema },
         formulasVisibles: alternarFormulas,

@@ -155,7 +155,13 @@ Falta: párrafos justificados o centrados con tabuladores, contornos (estrecho, 
 | Cálculo | Automático, automático salvo tablas, manual, F9 | **Sí** (19-nov): automático, automático excepto tablas de datos y manual (las fórmulas se quedan con su valor hasta F9 —libro— o Mayús+F9 —hoja—, con el botón «Calcular» de Excel); `calcMode` se lee y se escribe. `libro_excel.py`: NOM no recalcula sin F9 y Excel 2024 abre en manual lo que descarga NOM, con los mismos valores |
 | Inicio · Fuente y alineación | Fuente, tamaño, negrita, color, relleno, bordes, alinear, ajustar texto, combinar, girar | Sí (también tramas y degradados de Excel, bordes diagonales, texto girado y apilado, sangría, reducir hasta ajustar) |
 | Inicio · Número | Formatos de número, decimales, moneda, fecha, personalizado | Sí (código «como en Excel») |
-| Inicio · Estilos | Formato condicional, dar formato como tabla, estilos de celda | Formato condicional: sí (también los del archivo). Dar formato como tabla y estilos de celda: se ven; crearlos: no |
+| Inicio · Estilos | Formato condicional, dar formato como tabla, estilos de celda | Formato condicional: sí (también los del archivo). **Estilos de celda: sí** (21-nov: Más → Estilos de celda…, la ruedita y
+la paleta: los 47 de Excel —bueno, malo y neutral; datos y modelo; títulos y encabezados; énfasis 1-6 con 20, 40 y 60 %;
+millares, moneda y porcentaje— con su vista previa; como Excel, lo que define el estilo reemplaza lo de la celda y
+«Normal» lo quita; definiciones sacadas de cómo ve NOM los estilos hechos en Excel —`herramientas/estilos_celda.py` →
+`js/estilos-celda-datos.js`—; `estilos_celda_real.py` 6 de 6: aplicados desde NOM, Excel pinta las 94 celdas igual que
+en su propio libro; el nombre del estilo no se guarda en el archivo —Excel ve la celda en «Normal» con ese formato— y en un
+libro nuevo de NOM la letra base es Calibri, no la Aptos Narrow de Excel 2024). Dar formato como tabla: se ve; crearla: no |
 | Inicio · Celdas | Insertar, eliminar, formato (alto, ancho, ocultar, proteger) | Sí; proteger hoja con sus permisos: sí |
 | Inicio · Edición | Autosuma, rellenar, borrar, ordenar y filtrar, buscar y seleccionar | Sí (orden y filtro **solo para mí** o para todos: extra) |
 | Insertar | Tabla dinámica, gráficas, minigráficos, imágenes, formas, cuadro de texto, vínculo, casilla, símbolos | Gráficas: sí (las de NOM; las de Excel se ven en su lugar, también 3D, cascada, histograma, Pareto, embudo, rectángulos, solar, cajas). Imágenes, formas, SmartArt y WordArt del archivo **se ven**; insertarlos: no. Tabla dinámica, minigráficos, segmentaciones y casilla en celda: no |
