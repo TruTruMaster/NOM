@@ -4,8 +4,22 @@ descripcion: Qué cambió en cada versión, en palabras sencillas.
 orden: 1
 aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-21
-version: 0.20.0
+version: 0.21.0
 ---
+## 0.21.0 — noviembre de 2026
+
+- **Word, más herramientas de Inicio:** crear y modificar estilos (Estilos…), Tabulaciones…, Ordenar párrafos… (como
+  Word: por texto, número o fecha) y mostrar las marcas de formato (¶). También convertir texto en tabla y tabla en texto.
+- **Word, Vista:** modo de lectura (el texto en columnas, de pantalla en pantalla), cuadrícula y abrir el mismo documento
+  en una ventana nueva.
+- **Excel:** minigráficos (de línea, columna y pérdidas y ganancias) que se ven como en Excel y se crean desde NOM, los
+  estilos de celda de Excel (Bueno, Entrada, Título, Énfasis…) y la celda de enfoque.
+- **PowerPoint, Vista:** clasificador de diapositivas (arrastrar para ordenarlas), vista de lectura y página de notas para
+  imprimir.
+- **Comprobar accesibilidad** (en Archivo): avisa de imágenes sin texto alternativo, tablas sin encabezado, diapositivas
+  sin título, poco contraste y más, como Office.
+- **Arreglos:** el texto alternativo de las imágenes de Word y Excel ya se conserva al abrirlos.
+
 ## 0.20.0 — noviembre de 2026
 
 - **Control de cambios con Word:** los cambios marcados de un Word (lo que alguien agregó o borró) se abren como
