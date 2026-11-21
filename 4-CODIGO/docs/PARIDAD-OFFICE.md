@@ -79,7 +79,13 @@ de Word: posición en cm, izquierda, centro, derecha, decimal o barra, relleno d
 eliminar y eliminar todas, y las predeterminadas del documento; `tabulaciones_real.py` 5 de 5: Word lee las mismas
 paradas en los 9 párrafos y las mismas predeterminadas, y NOM pinta el documento con el 100 % de los renglones como Word;
 la regla para arrastrarlas: no) |
-| Inicio · Estilos | Galería de estilos, crear y modificar | A medias: Normal, Título 1-3 y los del archivo se ven; crear o cambiar estilos: no |
+| Inicio · Estilos | Galería de estilos, crear y modificar | **Sí** (21-nov: Más → Formato → Estilos…: aplicar, modificar
+—también los de NOM: Título 1-3, Título, Subtítulo, Cita, Código; el Normal es «Formato del documento»—, nuevo a partir
+del párrafo y eliminar; fuente, tamaño, negrita, cursiva, subrayado, color, alineación, espacio antes y después e
+interlineado; lo propio de cada párrafo gana, como en Word; los propios salen como estilos de Word —`w:customStyle`— y
+los modificados cambian su definición, también en un Word que vino de Word; los estilos propios de un Word conservan su
+nombre al abrirlo; `estilos_real.py` 12 de 12 contra Word 2024: Word ve los mismos estilos y cada párrafo con el suyo,
+NOM pinta el documento con el 100 % de los renglones como Word, y los Word medidos siguen igual) |
 | Inicio · Edición | Buscar, reemplazar, seleccionar | Sí |
 | Insertar · Páginas | Portada, página en blanco, salto | Salto sí; portada de la galería no («Armar reporte» hace la suya) |
 | Insertar · Tablas | Insertar, dibujar, convertir, Excel incrustado | Insertar, combinar, bordes, rellenos, encabezado, anchos: sí; estilos de tabla de Word se ven; dibujar, convertir texto↔tabla y Excel incrustado: no |

@@ -470,20 +470,26 @@
   }
   /** Los guiones automáticos del documento que se pinta ahora (los fija el editor al pintar): { idioma, mayus } o null. */
   let guionesDocActual = () => null;
+  /** Los estilos del documento que se pinta ahora (_doc.estilosP; los fija el editor al pintar). */
+  let estilosDocActual = () => ({});
+  const PAR_ESTILO = ["alin", "antes", "despues", "interlineado"];
   const BLOQUE_OBJ = new Set(["tabla", "salto", "saltocol", "linea", "indice"]);
   function htmlObjeto(it) {
     const t = (it.e && it.e.tipo) || "x";
     return `<span class="wd-obj wd-${esc(t)}${BLOQUE_OBJ.has(t) ? " bloque" : ""}" data-obj data-id="${esc(it.id)}" contenteditable="false"></span>`;
   }
   function htmlParrafo(vis, p) {
-    const pa = S().attrs(p.mark);
+    // (lo de párrafo de su estilo —alineación, espacio, interlineado— se pinta como si fuera del párrafo; lo suyo gana)
+    const pa0 = S().attrs(p.mark), est = pa0.estilo ? estilosDocActual()[pa0.estilo] : null;
+    const pa = est && !est.deWord ? Object.assign(solo(est, PAR_ESTILO), pa0) : pa0;
     const gDoc = guionesDocActual();
     // (cada párrafo se parte con las reglas del idioma de su texto: un párrafo en inglés dentro de un documento en español)
     const gIdi = gDoc && (pa.lg || gDoc.idioma);
     guionesPintar = gDoc && !pa.sinGuiones && NOM.guiones && NOM.guiones.listo(gIdi) ? (gIdi === gDoc.idioma ? gDoc : Object.assign({}, gDoc, { idioma: gIdi })) : null;
     const tag = pa.estilo === "h1" || pa.estilo === "h2" || pa.estilo === "h3" ? pa.estilo : "p";
     let at = ` data-k="${esc(p.k)}"`, st = "";
-    if (pa.estilo && tag === "p") at += ` data-estilo="${esc(pa.estilo)}"`;
+    // (un estilo propio —«u:…»— va en otro atributo: las reglas de [data-estilo] son las de los estilos de NOM)
+    if (pa.estilo && tag === "p") at += String(pa.estilo).startsWith("u:") ? ` data-estilo-p="${esc(pa.estilo)}"` : ` data-estilo="${esc(pa.estilo)}"`;
     if (pa.lista) {
       at += ` data-lista="${esc(pa.lista)}" data-nivel="${+pa.nivel || 0}"`;
       if (p.num) at += ` data-num="${p.num}"`;
@@ -829,6 +835,8 @@
         const gConf = configGuiones();
         guionesDocActual = () => gConf;
         marcasPintar = verMarcas;
+        const estP = doc().valor("_doc", "estilosP") || {};
+        estilosDocActual = () => estP;
         // Texto suelto fuera de los párrafos (lo deja el navegador al reemplazar todo con Ctrl+A):
         // ya se leyó al modelo, así que se quita y se vuelve a pintar dentro de su párrafo.
         for (const n of [...cuerpo.childNodes]) if (n.nodeType !== 1) n.remove();
@@ -2609,6 +2617,7 @@
       this.sugerencias = { lista: sugerencias, resolver: resolverSugerencia, activo: () => modoSug, alternar: alternarSugerencias, marcas: () => marcas, fijarMarcas };
       this.ordenar = { parrafos: ordenarParrafos, dialogo: dialogoOrdenar, orden: ordenDeParrafos, estilo: (e) => formatoParrafo({ estilo: e }) };
       this.marcasFormato = { alternar: alternarMarcasFormato, activo: () => verMarcas };
+      this.estilos = { lista: listaEstilos, guardar: guardarEstilo, eliminar: eliminarEstilo, dialogo: dialogoEstilos, aplicar: (k) => formatoParrafo({ estilo: k || null }) };
       this.tabulaciones = { dialogo: dialogoTabulaciones, poner: (lista) => formatoParrafo({ tabs: lista && lista.length ? lista : null }) };
 
       // ------------------------------------------------------------ Fase 9: lo que usan las citas, las fichas y "Armar reporte"
@@ -3656,6 +3665,7 @@
       const formatoBase = () => doc().valor("_doc", "formato") || {};
       const baseTam = () => +formatoBase().tam || 11;
       function aplicarFormato() {
+        cssEstilosDoc();
         const fb = formatoBase();
         cuerpo.style.fontFamily = fb.fuente ? cssFuente(fb.fuente) : "";
         cuerpo.style.setProperty("--af", altoFuente(fb.fuente || "Calibri"));
@@ -5333,6 +5343,7 @@
         let seq = false;
         lista.forEach((c) => {
           if (c.seq) { if (origen !== "teclado" && origen !== "comando") seq = true; return; }
+          if (c.bloque === "_doc" && "estilosP" in c.campos) { cssEstilosDoc(); refrescarEstilos(); cache.clear(); reconciliar(); return; }
           if (c.bloque === "_doc") { if (["pagina", "encabezado", "pie", "numeros", "formato", "numPos", "numFmt", "numInicio", "primeraDistinta", "encAlin", "pieAlin", "encabezadoImg", "marcaAgua"].some((k) => k in c.campos)) aplicarPagina(); return; }
           if (origen === "celda" && c.local) return;
           // Tablas e imágenes del texto: se actualizan en su lugar (sin quitar el foco de una celda).
@@ -5664,6 +5675,7 @@
           { texto: "MAYÚSCULAS / minúsculas", icono: "case-sensitive", atajo: "Mayús+F3", fn: cambiarMayusculas },
           { texto: "Borrar formato", icono: "remove-formatting", atajo: "Ctrl+\\", fn: borrarFormato },
           { texto: "Párrafo (sangrías, espacio)…", icono: "pilcrow", fn: dialogoParrafo },
+          { texto: "Estilos…", icono: "type", fn: dialogoEstilos },
           { texto: "Tabulaciones…", icono: "indent-increase", fn: dialogoTabulaciones },
           { texto: "Ordenar párrafos…", icono: "arrow-up-down", fn: dialogoOrdenar },
           { texto: verMarcas ? "Ocultar marcas de formato (¶)" : "Mostrar marcas de formato (¶)", icono: "pilcrow", marcado: verMarcas, fn: () => alternarMarcasFormato() },
@@ -5763,6 +5775,119 @@
           h.cerrar();
           formatoParrafo({ tabs: lista.length ? lista : null }, ps);
         };
+        pintar();
+      }
+      // ------------------------------------------------------------ estilos del documento (Inicio → Estilos, como Word)
+      // _doc.estilosP: { clave: { n (nombre), fuente, tam, b, i, u, color, alin, antes, despues, interlineado, id (el de
+      // Word), deWord (vino de un Word y no se ha cambiado aquí) } }. Claves: las de NOM (h1, h2, h3, titulo, subtitulo,
+      // cita, codigo) si se modificaron, y «u:…» las propias.
+      const estilosDoc = () => Object.assign({}, doc().valor("_doc", "estilosP") || {});
+      function listaEstilos() {
+        const est = estilosDoc();
+        const propios = Object.entries(est).filter(([k, e]) => k.startsWith("u:") && e && e.n).map(([k, e]) => ({ v: k, t: e.n })).sort((a, b) => a.t.localeCompare(b.t, "es"));
+        return ESTILOS.concat(propios);
+      }
+      function refrescarEstilos() {
+        if (!ctl.estilo) return;
+        const v = ctl.estilo.value;
+        ctl.estilo.innerHTML = listaEstilos().map((s) => `<option value="${esc(s.v || "")}">${esc(s.t)}</option>`).join("");
+        ctl.estilo.value = v;
+      }
+      /** Las reglas de letra de cada estilo (lo de párrafo entra en htmlParrafo, como si fuera del párrafo). */
+      function cssEstilosDoc() {
+        const est = estilosDoc();
+        let el = raiz.querySelector("style[data-estilos-doc]");
+        if (!el) { el = document.createElement("style"); el.dataset.estilosDoc = ""; raiz.prepend(el); }
+        if (!raiz.dataset.eid) raiz.dataset.eid = "e" + Math.random().toString(36).slice(2, 8);
+        const pre = `.wd[data-eid="${raiz.dataset.eid}"] .wd-cuerpo > `;
+        el.textContent = Object.entries(est).filter(([, e]) => e && !e.deWord).map(([k, e]) => {
+          const sel = /^h[123]$/.test(k) ? k : k.startsWith("u:") ? `[data-estilo-p="${CSS.escape(k)}"]` : `[data-estilo="${CSS.escape(k)}"]`, r = [];
+          if (e.fuente) r.push(`font-family:${cssFuente(e.fuente)}`, `--af:${altoFuente(e.fuente)}`);
+          if (+e.tam) r.push(`font-size:${+e.tam}pt`);
+          if (e.b != null) r.push(`font-weight:${e.b ? 700 : 400}`);
+          if (e.i != null) r.push(`font-style:${e.i ? "italic" : "normal"}`);
+          if (e.u != null) r.push(`text-decoration:${e.u ? "underline" : "none"}`);
+          if (e.color) r.push(`color:${e.color}`);
+          return r.length ? `${pre}${sel}{${r.join(";")}}` : "";
+        }).join("\n");
+      }
+      /** Guarda un estilo (clave null: uno nuevo, con nombre). Devuelve su clave o el motivo si no se puede. */
+      function guardarEstilo(clave, def) {
+        if (ed.soloLectura) return "Solo puedes ver este documento";
+        const est = estilosDoc(), nombre = String(def.n || "").trim();
+        if (!clave) {
+          if (!nombre) return "Escribe el nombre del estilo";
+          if (listaEstilos().some((s) => s.t.toLowerCase() === nombre.toLowerCase())) return "Ya hay un estilo con ese nombre";
+          clave = "u:" + NOM.DocCRDT.nuevoId().replace(/[^A-Za-z0-9]/g, "").slice(-8);
+        }
+        const limpio = {};
+        for (const k of ["n", "fuente", "tam", "b", "i", "u", "color", "alin", "antes", "despues", "interlineado"]) if (def[k] != null && def[k] !== "") limpio[k] = def[k];
+        if (!clave.startsWith("u:")) delete limpio.n;
+        if (est[clave] && est[clave].id) limpio.id = est[clave].id;   // (el de Word se queda con su id)
+        est[clave] = limpio;
+        doc().cambiar("_doc", { estilosP: est });
+        return clave;
+      }
+      function eliminarEstilo(clave) {
+        const est = estilosDoc();
+        if (!est[clave]) return;
+        const ps = psPintado.filter((p) => S().attrs(p.mark).estilo === clave);
+        if (ps.length) formatoParrafo({ estilo: null }, ps);
+        delete est[clave];
+        doc().cambiar("_doc", { estilosP: est });
+      }
+      /** Modificar estilo / Nuevo estilo (con clave null, a partir del párrafo donde está el cursor). */
+      function dialogoEstilo(clave, listo) {
+        const est = estilosDoc(), viejo = clave ? est[clave] || {} : null;
+        const { a, pa } = attrsEnCursor();
+        const ini = viejo || { fuente: a.fuente, tam: a.tam, b: a.b || undefined, i: a.i || undefined, u: a.u || undefined, color: a.color, alin: pa.alin, antes: pa.antes, despues: pa.despues, interlineado: pa.interlineado };
+        const base = clave ? (ESTILOS.find((s) => s.v === clave) || { t: (viejo && viejo.n) || clave }).t : "";
+        const tri = (k) => `<select data-${k}><option value="">Como el texto</option><option value="1" ${ini[k] === true ? "selected" : ""}>Sí</option><option value="0" ${ini[k] === false ? "selected" : ""}>No</option></select>`;
+        const cuerpo = html(`<form class="col" style="gap:10px">
+          ${!clave || clave.startsWith("u:") ? `<label class="col">Nombre <input data-n maxlength="60" autocomplete="off" value="${esc((viejo && viejo.n) || "")}"></label>` : `<p class="suave">Estilo «${esc(base)}»: lo que cambies se aplica a todos sus párrafos.</p>`}
+          <div class="fila" style="gap:8px;flex-wrap:wrap"><label class="col crece">Fuente <select data-fuente><option value="">Como el documento</option>${Object.keys(FUENTES).map((f) => `<option ${ini.fuente === f ? "selected" : ""}>${esc(f)}</option>`).join("")}</select></label>
+            <label class="col">Tamaño (pt) <input data-tam inputmode="decimal" style="width:5em" value="${esc(ini.tam || "")}"></label>
+            <label class="col">Color <input data-color type="color" value="${esc(ini.color || "#000000")}"></label>
+            <label class="fila" style="gap:4px;align-self:flex-end"><input type="checkbox" data-sincolor ${ini.color ? "" : "checked"}> Sin color propio</label></div>
+          <div class="fila" style="gap:8px;flex-wrap:wrap"><label class="col">Negrita ${tri("b")}</label><label class="col">Cursiva ${tri("i")}</label><label class="col">Subrayado ${tri("u")}</label>
+            <label class="col">Alineación <select data-alin><option value="">Como el texto</option>${[["izq", "Izquierda"], ["centro", "Centro"], ["der", "Derecha"], ["just", "Justificado"]].map(([v, t]) => `<option value="${v}" ${ini.alin === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
+          <div class="fila" style="gap:8px;flex-wrap:wrap"><label class="col">Espacio antes (pt) <input data-antes inputmode="decimal" style="width:5em" value="${esc(ini.antes != null ? ini.antes : "")}"></label>
+            <label class="col">Después (pt) <input data-despues inputmode="decimal" style="width:5em" value="${esc(ini.despues != null ? ini.despues : "")}"></label>
+            <label class="col">Interlineado <select data-li><option value="">Como el texto</option>${[[1, "Sencillo"], [1.15, "1.15"], [1.5, "1.5 líneas"], [2, "Doble"]].map(([v, t]) => `<option value="${v}" ${+ini.interlineado === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div></form>`);
+        const pie = html(`<div style="display:contents"><button class="btn" data-no type="button">Cancelar</button><button class="btn primario" data-si>${clave ? "Guardar" : "Crear y aplicar"}</button></div>`);
+        const h = NOM.hoja({ titulo: clave ? "Modificar estilo" : "Nuevo estilo a partir del párrafo", icono: "type", cuerpo, pie });
+        const num = (q) => { const v = parseFloat(String($(q, cuerpo).value).replace(",", ".")); return isFinite(v) ? v : null; };
+        const tv = (k) => { const v = $(`[data-${k}]`, cuerpo).value; return v === "" ? null : v === "1"; };
+        $("[data-no]", pie).onclick = () => { h.cerrar(); listo && listo(); };
+        $("[data-si]", pie).onclick = (ev) => {
+          ev.preventDefault();
+          const def = { n: $("[data-n]", cuerpo) ? $("[data-n]", cuerpo).value : undefined, fuente: $("[data-fuente]", cuerpo).value || null, tam: num("[data-tam]"),
+            b: tv("b"), i: tv("i"), u: tv("u"), color: $("[data-sincolor]", cuerpo).checked ? null : $("[data-color]", cuerpo).value.toUpperCase(),
+            alin: $("[data-alin]", cuerpo).value || null, antes: num("[data-antes]"), despues: num("[data-despues]"), interlineado: +$("[data-li]", cuerpo).value || null };
+          const r = guardarEstilo(clave, def);
+          if (!r || (!r.startsWith("u:") && !/^(h[123]|titulo|subtitulo|cita|codigo)$/.test(r))) return aviso(r || "No se pudo guardar", { tipo: "aviso", ms: 5000 });
+          h.cerrar();
+          if (!clave) formatoParrafo({ estilo: r });
+          listo && listo();
+        };
+      }
+      function dialogoEstilos() {
+        const cuerpo = html(`<div class="col" style="gap:6px"><div class="lista" data-lista></div><p class="suave chico">Modificar un estilo cambia todos sus párrafos (lo que cada párrafo tenga propio, como en Word, se queda).</p></div>`);
+        const pie = html(`<div style="display:contents"><button class="btn" data-quitar type="button">Eliminar</button><button class="btn" data-mod type="button">Modificar…</button><button class="btn" data-nuevo type="button">Nuevo…</button><span class="crece"></span><button class="btn primario" data-aplicar type="button">Aplicar</button></div>`);
+        const h = NOM.hoja({ titulo: "Estilos", icono: "type", cuerpo, pie, ancha: true });
+        const actual = S().attrs((parrafosDeSel()[0] || {}).mark || {}).estilo || "";
+        let k = actual;
+        const pintar = () => {
+          const est = estilosDoc();
+          $("[data-lista]", cuerpo).innerHTML = listaEstilos().map((s) => `<label class="lista-item fila" style="gap:8px;align-items:center"><input type="radio" name="est" value="${esc(s.v || "")}" ${(s.v || "") === k ? "checked" : ""}><span class="crece">${esc(s.t)}${est[s.v || ""] && !est[s.v].deWord && !(s.v || "").startsWith("u:") ? ' <span class="suave chico">(modificado)</span>' : ""}</span></label>`).join("");
+          $$("input[name=est]", cuerpo).forEach((x) => (x.onchange = () => { k = x.value; botones(); }));
+          botones();
+        };
+        const botones = () => { $("[data-quitar]", pie).disabled = !k.startsWith("u:"); $("[data-mod]", pie).disabled = !k; };
+        $("[data-aplicar]", pie).onclick = () => { formatoParrafo({ estilo: k || null }); h.cerrar(); };
+        $("[data-mod]", pie).onclick = () => { if (k) dialogoEstilo(k, pintar); };
+        $("[data-nuevo]", pie).onclick = () => { h.cerrar(); dialogoEstilo(null); };
+        $("[data-quitar]", pie).onclick = () => { if (k.startsWith("u:")) { eliminarEstilo(k); k = ""; pintar(); } };
         pintar();
       }
       function dialogoParrafo() {
@@ -5928,7 +6053,7 @@
       const selectFuente = `<select class="mini-select wd-sel-fuente" aria-label="Fuente" data-micro="Fuente|Tipo de letra del texto seleccionado."><option value="">Calibri</option>${Object.keys(FUENTES).filter((f) => f !== "Calibri").map((f) => `<option value="${esc(f)}" style="font-family:${esc(cssFuente(f))}">${esc(f)}</option>`).join("")}<option value="_otra" hidden></option></select>`;
       const tamHtml = `<span class="wd-tam" data-micro="Tamaño de letra|En puntos, como en Word.|Ctrl+] / Ctrl+["><button class="icono-btn chico" data-tam="-" aria-label="Reducir tamaño">${ico("minus", "ico-s")}</button><input class="mini-select" inputmode="decimal" aria-label="Tamaño de letra" list="wd-tamanos" size="3"><datalist id="wd-tamanos">${TAMANOS.map((t) => `<option value="${t}">`).join("")}</datalist><button class="icono-btn chico" data-tam="+" aria-label="Aumentar tamaño">${ico("plus", "ico-s")}</button></span>`;
       this._herr = [
-        { html: selectEstilo, montar: (n) => { ctl.estilo = n; n.onchange = () => { formatoParrafo({ estilo: n.value || null }); cuerpo.focus({ preventScroll: true }); }; } },
+        { html: selectEstilo, montar: (n) => { ctl.estilo = n; refrescarEstilos(); n.onchange = () => { formatoParrafo({ estilo: n.value || null }); cuerpo.focus({ preventScroll: true }); }; } },
         { html: selectFuente, montar: (n) => { ctl.fuente = n; ctl.fuenteOtra = n.querySelector("[value=_otra]"); n.onchange = () => { if (n.value !== "_otra") formato({ fuente: n.value || null }); cuerpo.focus({ preventScroll: true }); }; } },
         { html: tamHtml, montar: (n) => {
           ctl.tam = $("input", n);

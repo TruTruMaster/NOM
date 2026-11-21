@@ -417,6 +417,74 @@
     return (h >>> 0).toString(36) + t.length.toString(36);
   }
   const ESTILO_WORD = { titulo: "Title", subtitulo: "Subtitle", h1: "Heading1", h2: "Heading2", h3: "Heading3", cita: "Quote", codigo: "Codigo" };
+  // ------------------------------------------------------------ estilos de párrafo de NOM como estilos de Word
+  const ORDEN_RPR = ["rStyle", "rFonts", "b", "bCs", "i", "iCs", "caps", "smallCaps", "strike", "dstrike", "outline", "shadow", "emboss", "imprint", "noProof", "snapToGrid", "vanish", "webHidden", "color", "spacing", "w", "kern", "position", "sz", "szCs", "highlight", "u", "effect", "bdr", "shd", "fitText", "vertAlign", "rtl", "cs", "em", "lang", "eastAsianLayout", "specVanish", "oMath"];
+  const ORDEN_PPR = ["pStyle", "keepNext", "keepLines", "pageBreakBefore", "framePr", "widowControl", "numPr", "suppressLineNumbers", "pBdr", "shd", "tabs", "suppressAutoHyphens", "kinsoku", "wordWrap", "overflowPunct", "topLinePunct", "autoSpaceDE", "autoSpaceDN", "bidi", "adjustRightInd", "snapToGrid", "spacing", "ind", "contextualSpacing", "mirrorIndents", "suppressOverlap", "jc", "textDirection", "textAlignment", "textboxTightWrap", "outlineLvl", "divId", "cnfStyle", "rPr", "sectPr", "pPrChange"];
+  /** Los hijos de un rPr o pPr con los de «nuevos» en lugar de los suyos, en el orden que pide Word. */
+  function conHijos(xml, nuevos, orden) {
+    const hijos = [];
+    const re = /<w:([A-Za-z]+)\b[^>]*?(?:\/>|>[\s\S]*?<\/w:\1>)/g;
+    let m;
+    while ((m = re.exec(xml || ""))) if (!(m[1] in nuevos)) hijos.push([m[1], m[0]]);
+    for (const k in nuevos) if (nuevos[k]) hijos.push([k, nuevos[k]]);
+    return hijos.sort((a, b) => orden.indexOf(a[0]) - orden.indexOf(b[0])).map((h) => h[1]).join("");
+  }
+  const JC_W = { izq: "left", centro: "center", der: "right", just: "both" };
+  /** Lo que un estilo de NOM cambia: { rpr: {tag: xml}, ppr: {tag: xml} } (spacing junta lo que ya tenía). */
+  function piezasEstilo(e, spacingViejo) {
+    const rpr = {}, ppr = {}, si = (v, tag) => (v === true ? `<w:${tag}/>` : `<w:${tag} w:val="0"/>`);
+    if (e.fuente) rpr.rFonts = `<w:rFonts w:ascii="${x(e.fuente)}" w:hAnsi="${x(e.fuente)}" w:eastAsia="${x(e.fuente)}" w:cs="${x(e.fuente)}"/>`;
+    if (e.b != null) { rpr.b = si(e.b, "b"); rpr.bCs = si(e.b, "bCs"); }
+    if (e.i != null) { rpr.i = si(e.i, "i"); rpr.iCs = si(e.i, "iCs"); }
+    if (e.color) rpr.color = `<w:color w:val="${x(String(e.color).replace("#", "").toUpperCase())}"/>`;
+    if (+e.tam) { rpr.sz = `<w:sz w:val="${Math.round(+e.tam * 2)}"/>`; rpr.szCs = `<w:szCs w:val="${Math.round(+e.tam * 2)}"/>`; }
+    if (e.u != null) rpr.u = `<w:u w:val="${e.u ? "single" : "none"}"/>`;
+    if (e.antes != null || e.despues != null || +e.interlineado) {
+      const at2 = {};
+      String(spacingViejo || "").replace(/w:(\w+)="([^"]*)"/g, (q, k, v) => { at2[k] = v; return q; });
+      if (e.antes != null) at2.before = String(Math.round(+e.antes * 20));
+      if (e.despues != null) at2.after = String(Math.round(+e.despues * 20));
+      if (+e.interlineado) { at2.line = String(Math.round(+e.interlineado * 240)); at2.lineRule = "auto"; }
+      ppr.spacing = `<w:spacing ${Object.entries(at2).map(([k, v]) => `w:${k}="${x(v)}"`).join(" ")}/>`;
+    }
+    if (JC_W[e.alin]) ppr.jc = `<w:jc w:val="${JC_W[e.alin]}"/>`;
+    return { rpr, ppr };
+  }
+  /** La definición de un estilo (<w:style … w:styleId="id">) en un styles.xml, con lo que cambia el estilo de NOM. */
+  function parcharEstiloXml(xml, id, e) {
+    const re = new RegExp(`<w:style\\b[^>]*w:styleId="${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*>[\\s\\S]*?</w:style>`);
+    const m = re.exec(xml);
+    if (!m) return xml;
+    let st = m[0];
+    const pprM = /<w:pPr>([\s\S]*?)<\/w:pPr>/.exec(st), rprM = /<w:rPr>([\s\S]*?)<\/w:rPr>/.exec(st);
+    const sp = pprM && /<w:spacing\b[^>]*\/>/.exec(pprM[1]);
+    const { rpr, ppr } = piezasEstilo(e, sp && sp[0]);
+    if (Object.keys(ppr).length) {
+      const nuevo = `<w:pPr>${conHijos(pprM ? pprM[1] : "", ppr, ORDEN_PPR)}</w:pPr>`;
+      st = pprM ? st.replace(pprM[0], nuevo) : rprM ? st.replace(rprM[0], nuevo + rprM[0]) : st.replace("</w:style>", nuevo + "</w:style>");
+    }
+    if (Object.keys(rpr).length) {
+      const r2 = /<w:rPr>([\s\S]*?)<\/w:rPr>/.exec(st), nuevo = `<w:rPr>${conHijos(r2 ? r2[1] : "", rpr, ORDEN_RPR)}</w:rPr>`;
+      st = r2 ? st.replace(r2[0], nuevo) : st.replace("</w:style>", nuevo + "</w:style>");
+    }
+    return xml.replace(m[0], st);
+  }
+  /** El id de Word de un estilo propio de NOM («u:…»): el que traía de Word, o «Nom…». */
+  const idEstiloPropio = (estP, k) => (estP[k] && estP[k].id) || "Nom" + String(k).slice(2).replace(/[^A-Za-z0-9]/g, "");
+  /** Un styles.xml de NOM con los estilos de NOM modificados y los propios. */
+  function conEstilosDoc(xml, estP) {
+    let defs = "";
+    for (const [k, e] of Object.entries(estP || {})) {
+      if (!e || e.deWord) continue;
+      if (ESTILO_WORD[k]) { xml = parcharEstiloXml(xml, ESTILO_WORD[k], e); continue; }
+      if (!k.startsWith("u:") || !e.n) continue;
+      const id = idEstiloPropio(estP, k);
+      const base = `<w:style w:type="paragraph" w:customStyle="1" w:styleId="${x(id)}"><w:name w:val="${x(e.n)}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/></w:style>`;
+      defs += parcharEstiloXml(base, id, e);
+    }
+    return defs ? xml.replace("</w:styles>", defs + "</w:styles>") : xml;
+  }
+
   const ALIN_WORD = { centro: "center", der: "right", just: "both" };
   const hexW = (c) => (/^#[0-9a-f]{6}$/i.test(c || "") ? c.slice(1).toUpperCase() : null);
 
@@ -457,6 +525,7 @@
     let PRE = "", baseAbs = 10, baseNum = 20, baseNota = 0, baseDib = 0;
     const medios = [], rels = [{ id: "rIdEst", tipo: T.estilos, destino: "styles.xml" }, { id: "rIdNum", tipo: T.num, destino: "numbering.xml" }, { id: "rIdConf", tipo: T.conf, destino: "settings.xml" }];
     const ps = NOM.textoRico.parrafosDe(doc, { cambios: true });
+    const estP = doc.valor("_doc", "estilosP") || {};
     let nImg = 0, nLink = 0, nCambio = 800000;
     const fechaCambio = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
     // 8.2 Listas: una definición (abstractNum) por formato de número o viñeta, y una instancia (num)
@@ -639,6 +708,7 @@
       }
       const NOMBRES = { Title: "title", Subtitle: "subtitle", Heading1: "heading 1", Heading2: "heading 2", Heading3: "heading 3", Quote: "quote", Codigo: "código", ListParagraph: "list paragraph", Caption: "caption",
         TextoNota: "footnote text", RefNota: "footnote reference", TOCHeading: "toc heading", TDC1: "toc 1", TDC2: "toc 2", TDC3: "toc 3", Hyperlink: "hyperlink", TablaNom: "table grid", Header: "header", Footer: "footer" };
+      for (const [k, e] of Object.entries(estP)) if (k.startsWith("u:") && e && e.n && !e.deWord) NOMBRES[idEstiloPropio(estP, k)] = String(e.n).toLowerCase();
       const faltan = new Map();   // id nuestro → id con el que se agrega al original
       const idEstilo = (id) => {
         const nm = NOMBRES[id];
@@ -1317,6 +1387,14 @@
             pq.agregaRel(DOC, "rId" + PRE + "Notas", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes", "footnotes.xml");
           }
         }
+        // ---- estilos que se modificaron aquí (Estilos…): su definición en el original, con lo cambiado
+        let estMod = estTxt;
+        if (estTxt) for (const [k, e] of Object.entries(estP)) {
+          if (!e || e.deWord) continue;
+          const id = k.startsWith("u:") ? (e.id && idsEst.has(e.id) ? e.id : null) : ESTILO_WORD[k] && porNombre[NOMBRES[ESTILO_WORD[k]]];
+          if (id != null) estMod = parcharEstiloXml(estMod, id, e);
+        }
+        if (estMod !== estTxt && !faltan.size) pq.pon(estRuta, estMod);
         // ---- estilos de NOM que el original no tenía
         if (faltan.size) {
           let defs = "";
@@ -1324,7 +1402,7 @@
             const m = new RegExp('<w:style [^>]*w:styleId="' + id + '">[\\s\\S]*?</w:style>').exec(E.estilos);
             if (m) defs += m[0].replace('w:styleId="' + id + '"', 'w:styleId="' + idNuevo + '"').replace(/<w:(basedOn|next) w:val="Normal"\/>/g, `<w:$1 w:val="${normal}"/>`);
           });
-          if (estTxt) { const k = estTxt.lastIndexOf("</w:styles>"); if (k > 0) pq.pon(estRuta, estTxt.slice(0, k) + defs + estTxt.slice(k)); }
+          if (estMod) { const k = estMod.lastIndexOf("</w:styles>"); if (k > 0) pq.pon(estRuta, estMod.slice(0, k) + defs + estMod.slice(k)); }
           else {
             pq.pon(carpeta + "styles.xml", XML + `<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${defs}</w:styles>`);
             pq.tipo(carpeta + "styles.xml", "application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml");
@@ -1349,6 +1427,7 @@
       }
       let ppr = "";
       if (ESTILO_WORD[pa.estilo]) ppr += `<w:pStyle w:val="${ESTILO_WORD[pa.estilo]}"/>`;
+      else if (String(pa.estilo || "").startsWith("u:") && estP[pa.estilo]) ppr += `<w:pStyle w:val="${x(idEstiloPropio(estP, pa.estilo))}"/>`;
       else if (pa.lista) ppr += '<w:pStyle w:val="ListParagraph"/>';
       // entre páginas (orden del esquema: keepNext, keepLines, pageBreakBefore, widowControl); los títulos ya van
       // con el siguiente por su estilo
@@ -1545,7 +1624,7 @@
     // 1.4 El formato base del documento (el del espacio) es el estilo Normal de Word.
     const fb = doc.valor("_doc", "formato") || {};
     const ligera = fb.fuente ? `<w:rFonts w:ascii="${x(fb.fuente)}" w:hAnsi="${x(fb.fuente)}"/>` : '<w:rFonts w:asciiTheme="majorHAnsi" w:hAnsiTheme="majorHAnsi" w:ascii="Calibri Light" w:hAnsi="Calibri Light"/>';
-    const estilos = XML + `<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+    let estilos = XML + `<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
 <w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="${x(fb.fuente || "Calibri")}" w:hAnsi="${x(fb.fuente || "Calibri")}" w:eastAsia="${x(fb.fuente || "Calibri")}" w:cs="${x(fb.fuente || "Calibri")}"/><w:sz w:val="${Math.round((+fb.tam || 11) * 2)}"/><w:szCs w:val="${Math.round((+fb.tam || 11) * 2)}"/><w:lang w:val="es-MX"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="160" w:line="${Math.round((+fb.interlineado || 1.15) * 240)}" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
 <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/>${+fb.primera ? `<w:pPr><w:ind w:firstLine="${Math.round(+fb.primera * 567)}"/></w:pPr>` : ""}</w:style>
 ${ep("Caption", "caption", '<w:i/><w:iCs/><w:sz w:val="18"/><w:szCs w:val="18"/>', '<w:spacing w:after="200" w:line="240" w:lineRule="auto"/><w:ind w:firstLine="0"/><w:jc w:val="center"/>')}
@@ -1583,6 +1662,7 @@ ${[...abstractos.entries()].map(([k, id]) => definicion(k, id)).join("")}
 <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num><w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>
 ${instancias.map((n) => `<w:num w:numId="${n.id}"><w:abstractNumId w:val="${n.abs}"/>${n.inicio != null ? `<w:lvlOverride w:ilvl="0"><w:startOverride w:val="${n.inicio}"/></w:lvlOverride>` : ""}</w:num>`).join("")}</w:numbering>`;
     const ajustes = XML + `<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:defaultTabStop w:val="${Math.round((+doc.valor("_doc", "tabDef") || 36) * 20)}"/>${doc.valor("_doc", "guiones") ? `<w:autoHyphenation/><w:hyphenationZone w:val="${Math.round((+(doc.valor("_doc", "guiones") || {}).zona || 18) * 20)}"/>` : ""}<w:characterSpacingControl w:val="doNotCompress"/>${notas.length ? '<w:footnotePr><w:footnote w:id="-1"/><w:footnote w:id="0"/></w:footnotePr>' : ""}<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`;
+    estilos = conEstilosDoc(estilos, estP);   // (los modificados y los propios: Estilos…)
     if (OGR) return OGR.ensamblar({ estilos, numeracion, notasXml, extras, refs, relsEnc, primera: ep2.primera && (hayEnc || hayPie), pgSz: `<w:pgSz w:w="${(hor ? TAM[1] : TAM[0]) * TWIP}" w:h="${(hor ? TAM[0] : TAM[1]) * TWIP}"${hor ? ' w:orient="landscape"' : ""}/>`, mv, m });
     const titulo = doc.valor("_doc", "nombre") || "Documento";
     // Sin fecha: el mismo documento da siempre exactamente el mismo archivo.
@@ -1696,7 +1776,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     // estilos: id → nombre en inglés ("heading 1", "Title"…), y de cada uno su estilo base y sus
     // propiedades, para saber con qué letra y qué espaciado se ve de verdad cada párrafo (en un
     // documento real casi nada trae formato propio: la fuente y el interlineado vienen del estilo)
-    const estilos = {}, defEstilo = {};
+    const estilos = {}, defEstilo = {}, estilosW = {};   // (estilosW: los estilos propios del Word que usan sus párrafos)
     let rprDef = null, pprDef = null, idNormal = null, idTablaNormal = null;
     const stTxt = await z.texto("word/styles.xml");
     if (stTxt) {
@@ -1705,7 +1785,8 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       [...ds.getElementsByTagNameNS(W, "style")].forEach((s) => {
         const nm = (val(hijo(s, "name")) || "").toLowerCase(), id = at(s, "styleId"), tipo = at(s, "type");
         estilos[id] = nm;
-        defEstilo[id] = { nombre: nm, tipo, base: val(hijo(s, "basedOn")), ppr: hijo(s, "pPr"), rpr: hijo(s, "rPr"), nodo: tipo === "table" ? s : undefined };
+        defEstilo[id] = { nombre: nm, tipo, base: val(hijo(s, "basedOn")), ppr: hijo(s, "pPr"), rpr: hijo(s, "rPr"), nodo: tipo === "table" ? s : undefined,
+          propio: tipo === "paragraph" && /^(1|true)$/.test(at(s, "customStyle") || "") ? val(hijo(s, "name")) || id : undefined };
         if (tipo === "paragraph" && ["1", "true"].includes(at(s, "default") || "") && idNormal == null) idNormal = id;
         if (tipo === "table" && ["1", "true"].includes(at(s, "default") || "") && idTablaNormal == null) idTablaNormal = id;
       });
@@ -2582,6 +2663,8 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         const e = ESTILO_POR_NOMBRE(defEstilo[id].nombre);
         if (e) { pa.estilo = e; break; }
       }
+      // un estilo propio del Word (hecho por alguien en Word, o en NOM): su párrafo lo conserva con su nombre
+      if (!pa.estilo && defEstilo[idSt] && defEstilo[idSt].propio) { pa.estilo = "u:" + idSt; estilosW["u:" + idSt] = { n: defEstilo[idSt].propio, id: idSt, deWord: 1 }; }
       if (c.sinGuiones) pa.sinGuiones = true;
       if (c.sinNumLin) pa.sinNumLin = true;
       if (c.tabs && c.tabs.length) pa.tabs = c.tabs;
@@ -3032,6 +3115,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       return { texto: texto.slice(0, 300), alin: usados === 1 ? ["izq", "centro", "der"][limpios.findIndex(Boolean)] : "izq", num };
     }
     const docCampos = {};
+    if (Object.keys(estilosW).length) docCampos.estilosP = estilosW;
     // Para los campos de Word (AUTHOR, TITLE, CREATEDATE, SAVEDATE…, y el formato de fecha del idioma): las propiedades
     // del documento (docProps/core.xml y app.xml) y el idioma del texto (docDefaults).
     try {
