@@ -13,6 +13,7 @@ Operaciones:
                        "otro": null}, "seguidos": false, "calificador": "\""}  ó  {"anchos": [0, 5, 12]}
   buscar_objetivo     {"celda": "B3", "valor": 100, "cambiando": "B1"}
   tabla_datos         {"rango": "A4:C8", "fila": "B1", "col": "B2"} (una de las dos o las dos)
+  relleno_rapido      {"rango": "B1:B9"} (los ejemplos arriba en esa columna; Range.FlashFill llena el resto)
 """
 import json, sys
 from comun import excel
@@ -65,6 +66,8 @@ try:
                 if c.get("fila"): kw["RowInput"] = h.Range(c["fila"])
                 if c.get("col"): kw["ColumnInput"] = h.Range(c["col"])
                 h.Range(c["rango"]).Table(**kw)
+            elif op == "relleno_rapido":
+                h.Range(c["rango"]).FlashFill()
             elif op == "buscar_objetivo":
                 ok = h.Range(c["celda"]).GoalSeek(Goal=c["valor"], ChangingCell=h.Range(c["cambiando"]))
                 res.setdefault(c["id"], {})["logrado"] = bool(ok)

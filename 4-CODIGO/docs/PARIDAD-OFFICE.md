@@ -134,8 +134,14 @@ la paleta —agregar, modificar, eliminar, mostrar y resumen—, como Excel: has
 los escenarios, con los valores de cada uno, el nombre definido en vez de $B$1 y el formato de Excel —morado, gris, rayas,
 grupos y sin cuadrícula—; `escenarios_real.py`: 19 de 19 contra Excel 2024 —x11-escenarios.xlsx hecho en Excel: los 4
 escenarios, «Mostrar», los 30 números del resumen y sus 259 propiedades de formato iguales; cambiados o hechos en NOM, Excel
-lee los mismos y su resumen da lo mismo—; `comparar_real.py`: x11 con el 100 % del texto y los fondos). Relleno rápido y
-previsión: no |
+lee los mismos y su resumen da lo mismo—; `comparar_real.py`: x11 con el 100 % del texto y los fondos). **Relleno rápido:
+sí** (21-nov: Ctrl+E, Más → Datos, la ruedita y la paleta; de uno o más ejemplos aprende cómo se arma cada celda con las
+demás columnas de su fila —pedazos, palabras contadas desde el principio o el final, signos, texto fijo, MAYÚSCULAS,
+minúsculas y Nombre Propio— y llena las vacías como si se escribieran; lee cada celda por su valor como Excel —escrito
+«12.50» es «12.5»—, no toma un encabezado como ejemplo y en una fila que no sigue el patrón usa el siguiente programa que
+sí, como Excel; `js/relleno-rapido.js`; `datos_excel.py`: 31 de 31 casos contra `Range.FlashFill` de Excel 2024 —uno a
+propósito distinto: de «aNA péREZ» → «Ana Pérez», Excel da «Aluis Pgómez» y NOM «Luis Gómez»— y Ctrl+E/Ctrl+Z con el
+teclado). Previsión: no |
 | Revisar | Ortografía, notas, comentarios, proteger hoja y libro | Notas del archivo se ven; comentarios de NOM y proteger: sí |
 | Vista | Saltos de página, diseño de página, cuadrícula, encabezados, zoom, inmovilizar, macros, celda de enfoque, modo oscuro | Inmovilizar (fijar filas y columnas): sí; cuadrícula como la del archivo. Vista de saltos, de diseño, celda de enfoque y macros: no |
 | VBA, Python en Excel, Power Query (M), Power Pivot y DAX, cubos | | No |

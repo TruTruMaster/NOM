@@ -805,6 +805,55 @@
           aviso(`Tabla de datos en ${textoRango(r)}: ${res.celdas} celdas. Ctrl+Z para deshacer`, { tipo: "ok" });
         };
       }
+      // ------------------------------------------------------------ relleno rápido (Datos → Relleno rápido, Ctrl+E)
+      /**
+       * El texto con que el relleno rápido ve una celda, como Excel: el de su valor (escrito «12.50», es «12.5»; un número
+       * largo, entero aunque la columna no lo deje ver), o con formato de número, el que se ve.
+       */
+      function textoRelleno(ev, c, f) {
+        if (crudo(c, f) === "") return "";
+        const v = ev.valor(c, f), fmt = t["f:" + F().ref(c, f)];
+        if (v == null || v === "" || v instanceof F().ErrorF) return "";
+        const n = typeof v === "number" ? v : v && typeof v === "object" && typeof v.valueOf() === "number" ? +v : null;
+        if (n != null) return fmt && fmt !== "General" ? String(F().aplicarFormato(v, fmt)) : String(+n.toPrecision(15));
+        if (typeof v === "boolean") return v ? "VERDADERO" : "FALSO";
+        return String(v);
+      }
+      /**
+       * Relleno rápido, como Excel: en la columna de r (o la de la celda elegida), los ejemplos ya escritos enseñan cómo se
+       * arma cada celda con las demás columnas de su fila (las de la región de datos alrededor) y se llenan las vacías como si
+       * se escribieran («0001» queda como el número 1). El motor está en relleno-rapido.js. Devuelve { llenas, filas } o el motivo.
+       */
+      function rellenoRapido(r) {
+        if (ed.soloLectura || !t) return "Solo puedes ver esta hoja";
+        if (!NOM.rellenoRapido) return "El relleno rápido no está disponible";
+        r = r || rango();
+        const col = r.c1, reg = regionActual(col, r.f1);
+        const varias = r.f2 > r.f1, f1 = varias ? Math.max(r.f1, reg.f1) : reg.f1, f2 = varias ? Math.min(r.f2, reg.f2) : reg.f2;
+        const cols = [];
+        for (let c = reg.c1; c <= reg.c2; c++) if (c !== col) cols.push(c);
+        if (!cols.length) return "Pon los datos en las columnas de junto y, en esta, uno o dos ejemplos de lo que quieres sacar de ellos";
+        const ev = evaluar(), ejemplos = [], vacias = [];
+        for (let f = f1; f <= f2; f++) {
+          const entradas = cols.map((c) => textoRelleno(ev, c, f)), cr = String(crudo(col, f));
+          if (cr === "") { if (entradas.some((x) => x !== "")) vacias.push({ f, entradas }); }
+          else if (!cr.startsWith("=")) ejemplos.push({ entradas, salida: textoRelleno(ev, col, f) });
+        }
+        if (!ejemplos.length) return "Escribe primero uno o dos ejemplos en esta columna: lo que quieres sacar de los datos de su fila";
+        if (!vacias.length) return "No hay celdas vacías que llenar en esta columna";
+        const res = NOM.rellenoRapido.rellenar(ejemplos, vacias.map((x) => x.entradas));
+        const cambios = {};
+        let llenas = 0;
+        if (res) res.salidas.forEach((x, i) => { if (x == null || x === "") return; cambios["c:" + F().ref(col, vacias[i].f)] = x[0] === "=" ? "'" + x : x; llenas++; });
+        if (!llenas) return "El relleno rápido no encontró un patrón con esos ejemplos: escribe uno más y vuelve a intentarlo (Ctrl+E)";
+        cambiarT(cambios);
+        return { llenas, filas: vacias.length, encabezado: !!res.encabezado };
+      }
+      function ejecutarRellenoRapido() {
+        const r = rellenoRapido();
+        if (typeof r === "string") return aviso(r, { tipo: "aviso", ms: 6000 });
+        aviso(`Relleno rápido: ${r.llenas} ${r.llenas === 1 ? "celda" : "celdas"}. Ctrl+Z para deshacer`, { tipo: "ok" });
+      }
       // ------------------------------------------------------------ escenarios (Datos → Análisis de hipótesis → Administrador de escenarios)
       /** Los escenarios de esta hoja, como los guarda Excel (ooxml.js, escenariosDe): { lista: [{ n, c: [[celda, valor]], com }], … }. */
       const escenariosHoja = () => { const e = t && t.esc; return e && Array.isArray(e.lista) ? JSON.parse(JSON.stringify(e)) : { lista: [] }; };
@@ -2508,6 +2557,7 @@
         if (mod && k === "u") { e.preventDefault(); alternarFormato("u"); return; }
         if (mod && k === "d") { e.preventDefault(); rellenarCopia("abajo"); return; }
         if (mod && k === "r") { e.preventDefault(); rellenarCopia("derecha"); return; }
+        if (mod && k === "e" && !e.shiftKey && !e.altKey && !ed.soloLectura) { e.preventDefault(); ejecutarRellenoRapido(); return; }
         if (mod && k === "1") { e.preventDefault(); dialogoFormato(); return; }
         if (mod && k === "a") { e.preventDefault(); ancla = { c: (t.cols || 10) - 1, f: (t.filas || 30) - 1 }; sel = { c: 0, f: 0 }; pintarSeleccion(); return; }
         if (mod && e.shiftKey && (e.key === "+" || e.key === "=")) { e.preventDefault(); menuInsertar(celda(sel.c, sel.f) || rej); return; }
@@ -3424,6 +3474,7 @@
           { texto: "Ancho", icono: "move-horizontal", off: lect, sub: [{ texto: "Ancho de columna…", corto: "Ancho…", icono: "move-horizontal", fn: anchoColumnas }, { texto: "Ajustar al contenido", corto: "Ajustar", icono: "maximize-2", fn: () => { const r = rango(); for (let k = r.c1; k <= r.c2; k++) ajustarAncho(k); } }] },
           { texto: "Quitar duplicados…", corto: "Duplicados", icono: "copy-x", off: lect, fn: () => dialogoDuplicados() },
           { texto: "Texto en columnas…", corto: "En columnas", icono: "columns-3", off: lect, fn: () => dialogoTextoColumnas() },
+          { texto: "Relleno rápido", corto: "Relleno", icono: "wand-sparkles", off: lect, fn: () => ejecutarRellenoRapido() },
           { texto: "Ordenar para todos", corto: "Para todos", icono: "arrow-up-down", off: lect, sub: [{ texto: "A → Z (cambia las celdas)", corto: "A → Z", icono: "arrow-up", fn: () => ordenarDeVerdad(c, true) }, { texto: "Z → A (cambia las celdas)", corto: "Z → A", icono: "arrow-down", fn: () => ordenarDeVerdad(c, false) }] },
           { texto: "Más", icono: "more-horizontal", sub: [
             { texto: `Fijar hasta ${F().colLetra(c)}`, icono: "snowflake", off: lect, fn: () => fijar({ fijasC: c + 1 }) },
@@ -3517,6 +3568,7 @@
           { titulo: "Datos" },
           { texto: "Quitar duplicados…", icono: "copy-x", fn: () => dialogoDuplicados() },
           { texto: "Texto en columnas…", icono: "columns-3", fn: () => dialogoTextoColumnas() },
+          { texto: "Relleno rápido (Ctrl+E)", icono: "wand-sparkles", fn: () => ejecutarRellenoRapido() },
           { texto: "Buscar objetivo…", icono: "target", fn: () => dialogoObjetivo() },
           { texto: "Tabla de datos…", icono: "table", fn: () => dialogoTablaDatos() },
           { texto: "Administrador de escenarios…", icono: "list-checks", fn: () => administradorEscenarios() },
@@ -3624,9 +3676,9 @@
       // Lo que usan otros módulos (datos → reporte, combinar correspondencia).
       this.api = { rango, tabla: () => t, evaluar, seleccion: () => ({ ...sel }),
         // herramientas de datos como las de Excel (también para las pruebas contra Excel real)
-        herramientas: { quitarDuplicados, regionActual, textoEnColumnas, partirTexto, buscarObjetivo, consolidar, tablaDatos: crearTablaDatos },
+        herramientas: { quitarDuplicados, regionActual, textoEnColumnas, partirTexto, buscarObjetivo, consolidar, tablaDatos: crearTablaDatos, rellenoRapido },
         escenarios: { lista: escenariosHoja, guardar: guardarEscenario, quitar: quitarEscenario, mostrar: mostrarEscenario, resumen: resumenEscenarios },
-        dialogos: { duplicados: dialogoDuplicados, textoColumnas: dialogoTextoColumnas, objetivo: dialogoObjetivo, nombres: administradorNombres, consolidar: dialogoConsolidar, tablaDatos: dialogoTablaDatos, escenarios: administradorEscenarios },
+        dialogos: { duplicados: dialogoDuplicados, textoColumnas: dialogoTextoColumnas, objetivo: dialogoObjetivo, nombres: administradorNombres, consolidar: dialogoConsolidar, tablaDatos: dialogoTablaDatos, escenarios: administradorEscenarios, rellenoRapido: ejecutarRellenoRapido },
         calculo: { modo: modoCalculo, fijar: fijarModoCalculo, ahora: calcularAhora },
         esquema: { agrupar, alternar: alternarGrupo, nivel: mostrarNivel, detalle, borrar: borrarEsquema },
         formulasVisibles: alternarFormulas,
@@ -3652,6 +3704,7 @@
         { texto: "Quitar duplicados", icono: "copy-x", fn: dlg("duplicados"), claves: "repetidos duplicados unicos" },
         { texto: "Consolidar", icono: "layers", fn: dlg("consolidar"), claves: "consolidar juntar sumar varias hojas rangos resumen" },
         { texto: "Texto en columnas", icono: "columns-3", fn: dlg("textoColumnas"), claves: "separar partir dividir columnas coma" },
+        { texto: "Relleno rápido", icono: "wand-sparkles", atajo: "Ctrl E", fn: dlg("rellenoRapido"), claves: "relleno rapido flash fill patron ejemplos extraer unir nombres iniciales" },
         ...(NOM.datos ? [{ texto: "Hacer un reporte con estos datos", icono: "bar-chart", fn: () => NOM.datos.reporteDeDatos(NOM.editorActual), claves: "encuesta google forms resumen graficas frecuencias estadistica" }] : []),
         { texto: "Insertar fila o columna", icono: "between-horizontal-start", fn: () => { const b = document.querySelector('[data-micro^="Insertar o eliminar filas"]'); if (b) b.click(); }, claves: "fila columna insertar eliminar borrar" },
         { texto: "Formato de celdas", icono: "settings", atajo: "Ctrl 1", fn: () => document.querySelector("[data-rejilla]") && document.querySelector("[data-rejilla]").dispatchEvent(new KeyboardEvent("keydown", { key: "1", ctrlKey: true, bubbles: true })), claves: "moneda porcentaje decimales fecha alinear bordes relleno" },

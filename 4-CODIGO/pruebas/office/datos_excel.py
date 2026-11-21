@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Herramientas de datos de la hoja (quitar duplicados, texto en columnas, buscar objetivo) contra Excel 2024 real.
+"""Herramientas de datos de la hoja (quitar duplicados, texto en columnas, buscar objetivo, consolidar, tablas de datos,
+relleno rápido) contra Excel 2024 real.
 
-  datos_excel.py [--solo-excel]
+  datos_excel.py [--solo-excel | --solo-nom] [--casos PREFIJO[,PREFIJO…]]
 
 1. Arma los casos (CASOS) y los manda a la computadora con Windows: windows/datos_excel.py los hace en Excel y
    devuelve cada celda (valor y texto que se ve). La verdad queda en ~/.cache/nom-pruebas/office-real/datos-excel.json.
 2. Hace lo mismo en NOM (la API de la hoja: NOM.editorActual.hojaApi.herramientas) y compara celda por celda.
 """
-import json, os, sys, tempfile
+import json, os, re, sys, tempfile
 from pathlib import Path
 AQUI = Path(__file__).resolve().parent
 sys.path.insert(0, str(AQUI))
@@ -71,15 +72,72 @@ CASOS = [
 ]
 
 
-def verdad_excel():
+def _ff(id_, entradas, ejemplos, **kw):
+    """Un caso de relleno rápido: las columnas de entrada (una lista por fila) y, en la columna siguiente, los ejemplos de
+    las primeras filas; Excel (Range.FlashFill) y NOM llenan el resto de esa columna."""
+    n = len(entradas[0]) if entradas and isinstance(entradas[0], list) else 1
+    filas = [(list(e) if isinstance(e, list) else [e]) + ([ejemplos[i]] if i < len(ejemplos) else []) for i, e in enumerate(entradas)]
+    col = chr(65 + n)
+    return dict({"id": id_, "op": "relleno_rapido", "datos": filas, "rango": f"{col}1:{col}{len(entradas)}"}, **kw)
+
+
+NOMBRES_FF = ["Ana Pérez López", "Luis Gómez", "María José Ruiz Díaz", "Pedro Sánchez", "Sofía Hernández Mora", "Jorge Luis Borges"]
+CORREOS_FF = ["ana.perez@correo.mx", "luis_gomez@uni.edu.mx", "maria@x.com", "j.ruiz@empresa.com.mx"]
+CASOS += [
+    _ff("ff-nombre", NOMBRES_FF, ["Ana"]),
+    _ff("ff-apellido-ultimo", NOMBRES_FF, ["López", "Gómez"]),
+    _ff("ff-apellido-segundo", NOMBRES_FF, ["Pérez"]),
+    _ff("ff-iniciales", ["Ana Pérez", "Luis Gómez", "María Ruiz", "Pedro Sánchez"], ["A. Pérez"]),
+    _ff("ff-iniciales-tres", ["Ana María Pérez", "Luis Felipe Gómez", "Rosa Elena Ruiz"], ["AMP"]),
+    _ff("ff-mayusculas", ["ana pérez", "luis gómez", "maría ruiz", "josé de la o"], ["ANA PÉREZ"]),
+    _ff("ff-minusculas", ["ANA PÉREZ", "Luis Gómez", "MaRía RuIz"], ["ana pérez"]),
+    # (a propósito distinto: Excel 2024 no cambia las mayúsculas a «Nombre Propio» y arma «Aluis Pgómez» y «Aaría P ruiz»
+    # con letras fijas; NOM da lo que se pidió)
+    _ff("ff-propio", ["aNA péREZ", "LUIS GÓMEZ", "maría ruiz"], ["Ana Pérez"],
+        distinto=[["aNA péREZ", "Ana Pérez"], ["LUIS GÓMEZ", "Luis Gómez"], ["maría ruiz", "María Ruiz"]]),
+    _ff("ff-unir-coma", [["Ana", "Pérez"], ["Luis", "Gómez"], ["María", "Ruiz"]], ["Pérez, Ana"]),
+    _ff("ff-correo", [["Ana", "Lopez"], ["Luis", "Gomez"], ["Maria", "Ruiz"]], ["ana.lopez@empresa.mx"]),
+    _ff("ff-usuario", CORREOS_FF, ["ana.perez"]),
+    _ff("ff-dominio", CORREOS_FF, ["correo.mx"]),
+    _ff("ff-numero", ["Pedido 1234 enviado", "Pedido 56 pendiente", "Pedido 789012 entregado", "Pedido 3 cancelado"], ["1234"]),
+    _ff("ff-telefono", [5512345678, 3398765432, 8110002000], ["(55) 1234-5678"]),
+    _ff("ff-codigo-medio", ["ABC-123-XY", "DE-4567-Z", "FGHI-89-UVW"], ["123"]),
+    _ff("ff-parentesis", ["Monterrey (NL)", "Guadalajara (JAL)", "Mérida (YUC)", "Toluca (MEX)"], ["NL"]),
+    _ff("ff-antes-coma", ["Guadalajara, Jalisco", "Puebla, Puebla", "San Luis Potosí, SLP", "León, Guanajuato"], ["Guadalajara"]),
+    _ff("ff-primeras3", ["Enero", "Febrero", "Marzo", "Abril", "Mayo"], ["Ene"]),
+    _ff("ff-ultimas4", ["CURP1234", "RFC98765", "ID4321", "XYZ0001"], ["1234"]),
+    _ff("ff-intercambiar", ["Pérez, Ana", "Gómez, Luis", "Ruiz, María"], ["Ana Pérez"]),
+    _ff("ff-dos-columnas", [["MX-001", "Ana"], ["US-002", "Luis"], ["CA-003", "Eva"]], ["Ana (MX)"]),
+    _ff("ff-encabezado", ["Nombre completo", "Ana Pérez", "Luis Gómez", "Eva Ruiz"], ["Nombre", "Ana"]),
+    # (más difíciles: dos ejemplos que cambian lo que daría uno solo, decimales, filas que no siguen el patrón, un
+    # encabezado que no es ejemplo, usuarios con la inicial, los últimos cuatro de un número, insertar un guion)
+    _ff("ff-dos-ejemplos", NOMBRES_FF, ["Pérez", "Gómez"]),
+    _ff("ff-decimal", ["Precio: 12.50 MXN", "Precio: 7.05 MXN", "Precio: 1250.75 MXN", "Precio: 3 MXN"], ["12.50"]),
+    _ff("ff-falta", ["Pedido 1234 enviado", "Pedido pendiente", "Pedido 77 listo", "Otro 5"], ["1234"]),
+    _ff("ff-encabezado-distinto", ["Nombre completo", "Ana Pérez", "Luis Gómez", "Eva Ruiz"], ["Primer nombre", "Ana"]),
+    _ff("ff-usuario-inicial", ["Ana Lopez", "Luis Gomez", "Maria Jose Ruiz", "Eva Mora"], ["alopez"]),
+    _ff("ff-ultimos4", ["Cuenta 0012345678", "Cuenta 9988776655", "Tarjeta 4111222233334444"], ["5678"]),
+    _ff("ff-guion", ["ABC123", "XY45", "QRST6789", "A1"], ["ABC-123"]),
+    _ff("ff-puntos", ["21.11.2026", "05.01.2025", "30.06.2024"], ["2026"]),
+    _ff("ff-palabras", ["uno-dos-tres", "rojo-verde-azul", "a-b-c"], ["uno dos tres"]),
+]
+
+
+def verdad_excel(casos):
+    """Lo que hace Excel con esos casos (se agrega a lo que ya estaba en VERDAD: con --casos se pueden pedir solo unos)."""
     with tempfile.TemporaryDirectory() as d:
         ent = Path(d) / "datos-casos.json"
-        ent.write_text(json.dumps(CASOS, ensure_ascii=False), encoding="utf-8")
+        ent.write_text(json.dumps(casos, ensure_ascii=False), encoding="utf-8")
         remoto.subir([ent], "nomoffice")
         r = remoto.correr_office("datos", "datos_excel.py", "datos-casos.json", "datos-verdad.json", timeout=900)
         print(r.stdout[-800:])
-        if not remoto.bajar("nomoffice/datos-verdad.json", VERDAD): raise SystemExit("Excel no dejó el resultado")
-    return json.load(open(VERDAD, encoding="utf-8"))
+        nueva = Path(d) / "verdad.json"
+        if not remoto.bajar("nomoffice/datos-verdad.json", nueva): raise SystemExit("Excel no dejó el resultado")
+        todo = json.load(open(VERDAD, encoding="utf-8")) if VERDAD.exists() else {}
+        todo.update(json.load(open(nueva, encoding="utf-8")))
+        VERDAD.parent.mkdir(parents=True, exist_ok=True)
+        json.dump(todo, open(VERDAD, "w", encoding="utf-8"), ensure_ascii=False, indent=0)
+    return todo
 
 
 JS_CASO = r"""
@@ -98,6 +156,7 @@ async (c) => {
   else if (c.op === "texto_columnas") res = H.herramientas.textoEnColumnas(r, c.anchos ? { anchos: c.anchos } : { sep: c.sep, seguidos: !!c.seguidos, calificador: c.calificador == null ? '"' : c.calificador });
   else if (c.op === "consolidar") res = H.herramientas.consolidar(c.destino, c.fuentes, c.funcion, !!c.fila, !!c.columna);
   else if (c.op === "tabla_datos") res = H.herramientas.tablaDatos(r, c.fila || "", c.col || "");
+  else if (c.op === "relleno_rapido") res = H.herramientas.rellenoRapido ? H.herramientas.rellenoRapido(r) : "no hay relleno rápido";
   else if (c.op === "buscar_objetivo") {
     const o = H.herramientas.buscarObjetivo(c.celda, c.valor, c.cambiando);
     await new Promise((r) => setTimeout(r, 150));
@@ -120,6 +179,33 @@ async (c) => {
 """
 
 
+def elegidos():
+    """Los casos a correr: todos, o con --casos PREFIJO[,PREFIJO…] los que empiezan así."""
+    if "--casos" not in sys.argv: return CASOS
+    pref = sys.argv[sys.argv.index("--casos") + 1].split(",")
+    return [c for c in CASOS if any(c["id"].startswith(x) for x in pref)]
+
+
+def teclado_relleno(nav, N, a, esp):
+    """El relleno rápido con el teclado, como en Excel: un ejemplo, elegir la celda de abajo, Ctrl+E; y Ctrl+Z lo quita."""
+    d = N.documento(a["token"], esp, "HOJA", "ff-teclado")
+    p = nav.p
+    p.goto(N.B + "/#/doc/" + d); p.wait_for_function("() => NOM.editorActual && NOM.editorActual.modoApi && NOM.editorActual.modoApi.api", timeout=30000)
+    p.wait_for_timeout(500)
+    p.evaluate("""() => { const ed = NOM.editorActual, t = ed.modoApi.api.tabla();
+      ed.doc.cambiar(t.id, { 'c:A1': 'Ana Pérez', 'c:A2': 'Luis Gómez', 'c:A3': 'Eva Ruiz', 'c:B1': 'Ana' }); return 1; }""")
+    p.wait_for_timeout(400)
+    p.locator('td[data-c="1"][data-f="1"]').click(); p.wait_for_timeout(200)
+    p.keyboard.press("Control+e"); p.wait_for_timeout(600)
+    val = lambda: p.evaluate("() => { const ev = NOM.editorActual.modoApi.api.evaluar(); return [1, 2].map((f) => ev.valor(1, f)); }")
+    llenas = val()
+    p.keyboard.press("Control+z"); p.wait_for_timeout(600)
+    despues = val()
+    ok = llenas == ["Luis", "Eva"] and all(x in (None, "") for x in despues)
+    print(("  bien " if ok else "  MAL  ") + "ff-teclado (Ctrl+E llena B2:B3; Ctrl+Z lo quita)" + ("" if ok else f"  llenas {llenas} · después de Ctrl+Z {despues}"), flush=True)
+    return ok
+
+
 def con_nom(verdad):
     sys.path.insert(0, str(AQUI.parent / "interfaz"))
     import nomprueba as N
@@ -128,7 +214,7 @@ def con_nom(verdad):
     nav = N.Navegador(movil=False); nav.entrar(a)
     bien = mal = 0
     try:
-        for c in CASOS:
+        for c in elegidos():
             v = verdad.get(c["id"], {})
             if "celdas" not in v: continue
             d = N.documento(a["token"], esp, "HOJA", c["id"])
@@ -154,13 +240,24 @@ def con_nom(verdad):
                 # (y las fechas: la PC de prueba muestra mes/día/año —Excel en inglés de EE. UU.— y NOM día/mes/año, como
                 # en México; se compara la fecha misma)
                 fecha = isinstance(x["v"], (int, float)) and "/" in x["t"]
-                if fecha or (x["t"].startswith("#") and set(x["t"]) == {"#"}):
+                # (un número que no cabe en la columna de Excel —64 px— se ve «5.51E+09»; las de NOM son más anchas)
+                cientifico = isinstance(x["v"], (int, float)) and re.match(r"^-?\d+(\.\d+)?E[+-]\d+$", x["t"])
+                if fecha or cientifico or (x["t"].startswith("#") and set(x["t"]) == {"#"}):
                     a, b = x["v"], r["valores"][i][j]
                     return a == b or (isinstance(a, (int, float)) and isinstance(b, (int, float)) and abs(a - b) < 1e-9)
                 return x["t"].strip() == n.strip()
+            if c.get("distinto"):
+                # a propósito distinto de Excel: lo que debe dar NOM
+                igual = [[x.strip() for x in fila] for fila in r["celdas"]] == c["distinto"]
+                bien += igual; mal += not igual
+                print(("  bien " if igual else "  MAL  ") + c["id"] + f" (a propósito distinto: Excel {xl})" + ("" if igual else f"\n     NOM   {r['celdas']}"), flush=True)
+                continue
             igual = all(igual_celda(i, j) for i in range(len(xl)) for j in range(len(xl[i])))
             bien += igual; mal += not igual
             print(("  bien " if igual else "  MAL  ") + c["id"] + ("" if igual else f"\n     Excel {xl}\n     NOM   {r['celdas']}"), flush=True)
+        if any(c["op"] == "relleno_rapido" for c in elegidos()):
+            ok = teclado_relleno(nav, N, a, esp)
+            bien += ok; mal += not ok
     finally:
         nav.cerrar()
     print(f"\nHerramientas de datos contra Excel 2024: {bien} bien, {mal} mal")
@@ -170,8 +267,8 @@ def con_nom(verdad):
 def main():
     if "--solo-nom" in sys.argv and VERDAD.exists():
         return 1 if con_nom(json.load(open(VERDAD, encoding="utf-8"))) else 0
-    v = verdad_excel()
-    for c in CASOS:
+    v = verdad_excel(elegidos())
+    for c in elegidos():
         x = v.get(c["id"], {})
         print(f"== {c['id']}" + (f"  ERROR {x['error']}" if "error" in x else ""))
         for fila in x.get("celdas", []): print("   ", [f"{k['t']}" for k in fila])
