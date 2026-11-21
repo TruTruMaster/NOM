@@ -71,7 +71,7 @@ archivo de Office se muestra (y se conserva al descargar), pero no se crea ni se
 | Insertar · Símbolos | Ecuación, símbolo | Sí (ecuaciones con notación tipo LaTeX, a OMML de Word) |
 | Dibujar | Pluma, entintado | No en el texto (la pluma existe al presentar) |
 | Diseño | Temas, conjuntos de estilos, colores, fuentes, marca de agua, color y bordes de página | Marca de agua sí; color y bordes de página se ven; temas, conjuntos de estilos, colores y fuentes del documento: no |
-| Disposición | Márgenes, orientación, tamaño, columnas, saltos, números de línea, guiones, sangría, espacio, organizar | Márgenes, orientación, tamaño, saltos de página, sangría y espacio: sí. Columnas: las del archivo se ven como Word (18-nov: las de una sección continua se equilibran como Word; el índice a dos columnas de w07 ya no se encima); en NOM, «dos lado a lado» como bloque. Saltos de sección: se ven. **División automática de palabras: sí** (18-nov: «Guiones automáticos» del archivo —zona, mayúsculas, «No dividir con guiones» por párrafo— se respeta, se activa y desactiva en Más y se guarda al descargar; patrones de TeX en inglés y español. Medido contra Word en w13-guiones: 57.1 % de renglones idénticos, 19.6 % sin dividir. Lo que falta: Word usa su propio diccionario y parte algunas palabras en otro lugar —«extra-ordinariamente», «con-exión» en inglés—; ver RELEVO-18NOV-TARDE). **Números de línea: no** |
+| Disposición | Márgenes, orientación, tamaño, columnas, saltos, números de línea, guiones, sangría, espacio, organizar | Márgenes, orientación, tamaño, saltos de página, sangría y espacio: sí. Columnas: las del archivo se ven como Word (18-nov: las de una sección continua se equilibran como Word; el índice a dos columnas de w07 ya no se encima); en NOM, «dos lado a lado» como bloque. Saltos de sección: se ven. **División automática de palabras: sí, como Word** (20-nov: el diccionario es el de Word 2024 —83 158 palabras preguntadas a Word real en español e inglés, cada una con los dos idiomas, aprendidas como patrones con patgen: 100 % y 99.99 % iguales a Word, 95.8 % y 78.4 % en palabras que no se le enseñaron; `herramientas/guiones/`—; cada párrafo con el idioma de su texto (`w:lang`); la regla de cuándo parte Word, medida en 3284 renglones —`windows/hacer_guiones2.py`, `analisis/guiones_decision.py`—: 99.4 % de las decisiones a la izquierda y 99.5 % en justificado; la zona de división no cambia nada en Word 2013 y después; «Limitar guiones consecutivos», «no dividir en mayúsculas» y «No dividir con guiones» por párrafo; lo que no cabe ni en un renglón entero se parte como Word —en un guion o en la última letra—. **w13-guiones 58.9 → 100 %** de renglones idénticos, w10 35.1 → 90.4 %, w15-guiones (976 renglones a la izquierda y justificados) 97.1 % y 99.1 %). **Números de línea: no** |
 | Referencias | Tabla de contenido, notas al pie y al final, citas y bibliografía, títulos, tabla de ilustraciones, índice, tabla de autoridades | Tabla de contenido y notas al pie: sí. **Notas al final: sí** (18-nov: numeradas aparte —i, ii, iii o el formato del archivo—, después del último renglón con la raya corta de Word, también con secciones; w07 contra Word 2024: 122 de 123 renglones idénticos). Citas y bibliografía: **las de NOM** (APA, fuentes por DOI, ISBN o dirección); las de Word (`CITATION`, `Sources.xml`): no. Títulos «Figura 1.»: sí. Tabla de ilustraciones, índice (`XE`) y tabla de autoridades: no. Investigar (Wikipedia, libros, artículos): sí, extra |
 | Correspondencia | Combinar correspondencia, sobres, etiquetas, reglas | **La de NOM** (texto con `{{campos}}` + una hoja = un documento por fila); la de Word (`MERGEFIELD`, origen de datos), sobres y etiquetas: no |
 | Revisar | Ortografía, Editor, contar palabras, accesibilidad, traducir, idioma, comentarios, control de cambios, comparar, proteger | Contar palabras, comentarios y proteger: sí. **Control de cambios: a medias** (NOM tiene su modo sugerencia con aceptar y rechazar; los cambios marcados de un Word se muestran ya aplicados, sin sus marcas). Comparar, traducir, idioma y Editor: no |
@@ -81,14 +81,18 @@ archivo de Office se muestra (y se conserva al descargar), pero no se crea ni se
 | Controles de contenido y formularios | Casilla, lista, fecha, texto | Se conservan y su texto se edita; como formulario: no |
 | VBA, modo seguro, automatización | | No |
 
-Medido contra Word 2024 real (renglones idénticos, 19-nov; desde ese día la verdad de Word trae también los renglones
-de cada celda de tabla y `comparar_real.py` los compara: un objeto en el renglón cuenta como «/», como lo lee Word, y
-los renglones con una ecuación no cuentan): **w01 100 %** (137), **w02 100 %** (239), **w03 100 %** (176), **w04 100 %**
-(229), **w05 98.5 %** (744, con las celdas), **w06 99.3 %** (140), **w07 99.2 %** (123), **w08 100 %**, **w09 100 %** (282,
-con las celdas), w10 35.1 %, **w11 100 %**, w12 86.1 %, w13 58.9 %, **w14 99.6 %** (1064), t01 95.4 % (2642, con las
-celdas). Al empezar el 19-nov: w01 94.9, w02 96.2, w03 96.6, w04 94.3, w05 85.7 (sin celdas), w06 83.8, w07 96.5, w09
-98.2, t01 90.8 (sin celdas). Lo que falta está en `RELEVO-19NOV.md` §3 (w10 y w13: el diccionario de guiones de Word;
-w12: texto a los dos lados de un dibujo y contornos; t01: lo de todos).
+Medido contra Word 2024 real (renglones idénticos, 20-nov noche; la verdad de Word trae también los renglones de cada
+celda de tabla y `comparar_real.py` los compara: un objeto en el renglón cuenta como «/», como lo lee Word, y los
+renglones con una ecuación no cuentan): **w01 100 %** (137), **w02 100 %** (239), **w03 100 %** (176), **w04 100 %**
+(229), **w05 98.5 %** (744, con las celdas), **w06 99.3 %** (140), w07 98.4 % (121 de 123; uno de los dos es un campo DATE:
+la verdad de Word es del 19-nov y NOM, como Word al abrirlo, pone la fecha de hoy), **w08 100 %**, **w09 100 %** (282, con las celdas), w10 90.4 %, **w11 100 %**, w12 86.1 %,
+**w13 100 %**, **w14 99.6 %** (1064), t01 95.6 % (2642, con las celdas), w15-guiones-z18 97.1 % (971), **w15-guiones-lim2
+99.1 %** (969). Al empezar el 19-nov: w01 94.9, w02 96.2, w03 96.6, w04 94.3, w05 85.7 (sin celdas), w06 83.8, w07 96.5,
+w09 98.2, w10 35.1, w13 58.9, t01 90.8 (sin celdas). Lo que falta está en `RELEVO-20NOV-NOCHE.md` §3 (w12: texto a los dos
+lados de un dibujo y contornos; w10: una palabra de 96 letras con su idioma inglés y la dirección web que sigue; t01: lo
+de todos). Desde el 20-nov `comparar_real.py` separa los renglones de NOM por sus cortes (dos renglones que se enciman
+con interlineado exacto ya no se juntan) y compara el texto de Wingdings/Symbol con las letras de siempre (Word lo da en
+el área privada U+F0xx).
 
 **Cómo corta Word un renglón** (medido con w14: `windows/hacer_renglones.py`, `analisis/acomodo_word.py`): a la
 izquierda, todo lo que cabe con los anchos EXACTOS de la fuente, sin tolerancia; justificado (Word 2013 y después),
@@ -99,8 +103,8 @@ Office) y lo fuerza con cortes de pantalla (`acomodarComoWord` en `modo-texto.js
 texto hasta un 0.1 % más angosto). Desde el 19-nov también: títulos, celdas de tabla (con el ancho de Word de su
 columna), versalitas, escala de caracteres, superíndices, sangrías negativas, recuadros (el borde sale al margen solo de
 su lado), columnas de distinto ancho, letra capital y junto a un objeto que flota (cada renglón con el ancho que le deja).
-Falta: párrafos justificados o centrados con tabuladores, guiones automáticos (los acomoda el navegador), texto a los dos
-lados de un dibujo y contornos (estrecho, a través), y los cuadros de texto.
+Desde el 20-nov también los guiones automáticos (ver Disposición). Falta: párrafos justificados o centrados con
+tabuladores, texto a los dos lados de un dibujo y contornos (estrecho, a través), y los cuadros de texto.
 
 ## 4. Excel
 

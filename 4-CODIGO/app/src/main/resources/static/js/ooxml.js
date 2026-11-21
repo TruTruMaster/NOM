@@ -2437,6 +2437,27 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     }
     const ESTILO_POR_NOMBRE = (nm) => (/^heading 1$|^título 1$/.test(nm) ? "h1" : /^heading 2$|^título 2$/.test(nm) ? "h2" : /^heading [3-9]$|^título [3-9]$/.test(nm) ? "h3"
       : nm === "title" || nm === "título" ? "titulo" : nm === "subtitle" || nm === "subtítulo" ? "subtitulo" : /quote|cita/.test(nm) ? "cita" : null);
+    // ---- el idioma del texto (w:lang): con él parte Word las palabras al final del renglón (js/guiones.js)
+    const langDe = (rpr) => { const l = rpr && hijo(rpr, "lang"); return l ? (l.getAttributeNS(W, "val") || l.getAttribute("w:val") || null) : null; };
+    const langEstilo = (id, prof) => { const d = id != null ? defEstilo[id] : null; if (!d || (prof || 0) > 20) return null; return langDe(d.rpr) || langEstilo(d.base, (prof || 0) + 1); };
+    const idiomaDoc = langDe(rprDef) || "es-MX";
+    /** El idioma de la mayoría de las letras de un párrafo (de sus corridas, de su estilo o del documento). */
+    function idiomaParrafo(p, ppr) {
+      const idSt = val(hijo(ppr, "pStyle")) != null && defEstilo[val(hijo(ppr, "pStyle"))] ? val(hijo(ppr, "pStyle")) : idNormal;
+      const base = langEstilo(idSt) || idiomaDoc;
+      const cuenta = new Map();
+      for (const t of p.getElementsByTagNameNS(W, "t")) {
+        let q = t.parentNode;
+        while (q && q.localName !== "p") q = q.parentNode;
+        if (q !== p) continue;   // (lo de un cuadro de texto dentro del párrafo no cuenta)
+        const rpr = t.parentNode && hijo(t.parentNode, "rPr");
+        const lg = langDe(rpr) || langEstilo(val(hijo(rpr, "rStyle"))) || base;
+        cuenta.set(lg, (cuenta.get(lg) || 0) + t.textContent.length);
+      }
+      let mejor = base, n = 0;
+      for (const [k, v] of cuenta) if (v > n) { mejor = k; n = v; }
+      return mejor;
+    }
     /** Formato del párrafo y la letra que heredan sus corridas: { pa, letra }. */
     function attrsParrafo(ppr) {
       const pa = {}, idSt = val(hijo(ppr, "pStyle")) != null && defEstilo[val(hijo(ppr, "pStyle"))] ? val(hijo(ppr, "pStyle")) : idNormal;
@@ -2762,6 +2783,8 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
             if (hijo(ppr, "sectPr") && secciones[nSec + 1]) { secPendiente = marcaSeccion(secciones[nSec + 1], secciones[nSec]); if (conSecciones) { sxPendiente = sxDe(secciones[nSec + 1]); sxK = nSec + 1; } nSec++; }
           }
           await runs(c, ap.letra, tramos, info);
+          // (el idioma del párrafo si no es el del documento: no se pinta, solo dice cómo partir las palabras)
+          { const lg = idiomaParrafo(c, ppr); if (lg && lg !== idiomaDoc) pa.lg = lg; }
           if (info.cortes && info.cortes.length) {
             // Saltos de página o de columna dentro del párrafo: el texto se parte donde va cada salto (antes del texto,
             // en medio o al final). El espacio de antes es del primer pedazo y el de después, del último (como Word:

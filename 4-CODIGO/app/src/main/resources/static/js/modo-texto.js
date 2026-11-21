@@ -332,7 +332,9 @@
         if (n.nodeType !== 1) continue;
         const tag = n.tagName;
         if (n.hasAttribute("data-obj")) { out.push({ c: OBJ, id: n.getAttribute("data-id"), a }); enParrafo++; continue; }
-        if (n.classList && (n.classList.contains("wd-guion") || n.classList.contains("wd-pintado"))) continue;   // (de pantalla: no es del documento)
+        // (el guion suave del navegador no es del documento; si el cursor quedó adentro y se escribió ahí, eso sí)
+        if (n.classList && n.classList.contains("wd-guion")) { const t = n.textContent.replace(/\u00ad/g, ""); if (t) texto(t, a, pre); continue; }
+        if (n.classList && n.classList.contains("wd-pintado")) continue;   // (de pantalla: no es del documento)
         if (OMITIR.has(tag) || n.hidden || (n.style && n.style.display === "none")) continue;
         if (tag === "BR") { out.push({ c: SALTO, a, br: true }); enParrafo++; continue; }
         if (tag === "IMG") {
@@ -472,7 +474,9 @@
   function htmlParrafo(vis, p) {
     const pa = S().attrs(p.mark);
     const gDoc = guionesDocActual();
-    guionesPintar = gDoc && !pa.sinGuiones && NOM.guiones && NOM.guiones.listo(gDoc.idioma) ? gDoc : null;
+    // (cada párrafo se parte con las reglas del idioma de su texto: un párrafo en inglés dentro de un documento en español)
+    const gIdi = gDoc && (pa.lg || gDoc.idioma);
+    guionesPintar = gDoc && !pa.sinGuiones && NOM.guiones && NOM.guiones.listo(gIdi) ? (gIdi === gDoc.idioma ? gDoc : Object.assign({}, gDoc, { idioma: gIdi })) : null;
     const tag = pa.estilo === "h1" || pa.estilo === "h2" || pa.estilo === "h3" ? pa.estilo : "p";
     let at = ` data-k="${esc(p.k)}"`, st = "";
     if (pa.estilo && tag === "p") at += ` data-estilo="${esc(pa.estilo)}"`;
@@ -490,6 +494,8 @@
       if (pa.lista === "tareas" && pa.hecho) at += ` data-hecho="true"`;
     }
     if (pa.alin) at += ` data-alin="${esc(pa.alin)}"`;
+    // (con qué idioma se parten sus palabras: lo lee el acomodo como Word)
+    if (guionesPintar) at += ` data-gi="${esc(guionesPintar.idioma)}"`;
     if (pa.dueno) {
       at += ` data-dueno="${esc(pa.dueno)}" data-dueno-nombre="${esc(ctx.nombres.get(pa.dueno) || "Asignado")}"`;
       st += `--dueno:${esc(ctx.colores.get(pa.dueno) || "#6B6875")};`;
@@ -714,8 +720,15 @@
       function configGuiones() {
         const g = doc().valor("_doc", "guiones");
         if (!g || !NOM.guiones || window.__sinGuiones) return null;
-        const conf = { idioma: doc().valor("_doc", "idioma") || "es-MX", mayus: g.mayus, zona: g.zona };
-        if (!NOM.guiones.listo(conf.idioma)) NOM.guiones.cargar(conf.idioma).then((ok) => { if (ok && cuerpo.isConnected) { cache.clear(); reconciliar(); } });
+        const conf = { idioma: doc().valor("_doc", "idioma") || "es-MX", mayus: g.mayus, zona: g.zona, limite: +g.limite || 0 };
+        // (los dos juegos: un párrafo puede venir en el otro idioma —w:lang—)
+        const vistos = new Set();
+        for (const idi of [conf.idioma, "es-MX", "en-US"]) {
+          const j = NOM.guiones.juego(idi);
+          if (!j || vistos.has(j)) continue;
+          vistos.add(j);
+          if (!NOM.guiones.listo(idi)) NOM.guiones.cargar(idi).then((ok) => { if (ok && cuerpo.isConnected) { cache.clear(); reconciliar(); } });
+        }
         return conf;
       }
       function reconciliar() {
@@ -747,8 +760,10 @@
           if (actual !== el) cuerpo.insertBefore(el, actual || null);
         }
         // (ya en la página, donde se pueden medir: el avance de la escala de caracteres y la zona de división de Word)
-        for (const el of medir) { ajustarEscalas(el); ajustarGuiones(el); }
+        for (const el of medir) ajustarEscalas(el);
         acomodarComoWord(medir.concat(celdasDe(medir)));
+        // (los guiones de lo que no se acomodó como Word los parte el navegador: ahí se ajusta la zona)
+        for (const el of medir) if (!el.classList.contains("wd-acomodo")) ajustarGuiones(el);
         while (cuerpo.children.length > ps.length) cuerpo.lastElementChild.remove();
         for (const k of [...elems.keys()]) if (!vivos.has(k)) { elems.delete(k); cache.delete(k); }
         ajustarEspacios();
@@ -889,15 +904,33 @@
         }
         return t;
       }
-      /** Quita lo de pantalla de un acomodo anterior (cortes y relleno) y junta el texto que se partió. */
-      function quitarAcomodo(el) {
-        const pint = el.querySelectorAll(".wd-rompe, .wd-relleno, .wd-tabw");
-        if (!pint.length && !el.classList.contains("wd-acomodo")) return;
-        pint.forEach((x) => x.remove());
-        el.classList.remove("wd-acomodo", "con-tab");
-        el.style.wordSpacing = "";
-        delete el.dataset.acw;
-        el.normalize();
+      /**
+       * Quita lo de pantalla de un acomodo anterior (cortes y relleno) y junta el texto que se partió. Con `restaurar` (lo
+       * normal), si el acomodo quitó los guiones suaves del navegador, se vuelven a poner (el navegador vuelve a partir).
+       */
+      function quitarAcomodo(el, restaurar = true) {
+        const pint = el.querySelectorAll(".wd-rompe, .wd-relleno, .wd-tabw, .wd-guionv");
+        if (pint.length || el.classList.contains("wd-acomodo")) {
+          pint.forEach((x) => x.remove());
+          el.classList.remove("wd-acomodo", "con-tab");
+          el.style.wordSpacing = "";
+          delete el.dataset.acw;
+          el.normalize();
+        }
+        if (restaurar) restaurarSuaves(el);
+      }
+      /** Vuelve a poner los guiones suaves del navegador que quitó el acomodo (los mismos lugares que pone el pintado). */
+      function restaurarSuaves(el) {
+        if (el.dataset.sinSuaves == null) return;
+        delete el.dataset.sinSuaves;
+        const gi = el.dataset.gi, conf = guionesDocActual();
+        if (!gi || !conf || !NOM.guiones || !NOM.guiones.listo(gi)) return;
+        const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), ts = [];
+        for (let t = w.nextNode(); t; t = w.nextNode()) if (!t.parentElement.closest(".wd-pintado, .wd-guion, [data-obj]")) ts.push(t);
+        for (const t of ts) {
+          const ls = NOM.guiones.lugares(t.nodeValue, { idioma: gi, mayus: conf.mayus });
+          for (let i = ls.length - 1; i >= 0; i--) { const resto = t.splitText(ls[i]); const g = document.createElement("span"); g.className = "wd-guion"; g.textContent = "\u00ad"; resto.before(g); }
+        }
       }
       /** Lo que hay que leer de un párrafo para acomodarlo (todo lectura: no cambia nada). null si no se acomoda. */
       function leerAcomodo(el, compat15) {
@@ -910,8 +943,10 @@
         if (esCelda && el.isContentEditable && el.contains(document.activeElement)) return no("celda con el cursor");
         if (el.dataset.capital != null) return no("letra capital");
         if (el.dir === "rtl") return no("derecha a izquierda");
+        // (texto vertical —una celda con el texto girado—: sus renglones van a lo alto; los acomoda el navegador)
+        if (/^vertical/.test(getComputedStyle(el).writingMode || "")) return no("texto vertical");
         // (lo que flota —imagen o forma anclada— no ocupa lugar en el renglón: no cuenta)
-        { const q = [...el.querySelectorAll(".wd-guion, .wd-tab, img, table")].find((x) => !x.closest("[data-obj].flota-w, [data-obj].libre")); if (q) return no("contiene " + (q.className || q.tagName)); }
+        { const q = [...el.querySelectorAll(".wd-tab, img, table")].find((x) => !x.closest("[data-obj].flota-w, [data-obj].libre")); if (q) return no("contiene " + (q.className || q.tagName)); }
         // (un salto de renglón manual sí cuenta; el <br> del final, que solo le da alto al párrafo, no)
         if ([...el.querySelectorAll("br:not(.wd-pintado)")].some((b) => b !== el.lastChild)) return no("salto de renglón");
         // (el texto que se aparta de un objeto que flota cambia de ancho renglón por renglón: ese lo acomoda el navegador)
@@ -985,13 +1020,14 @@
                 const t = v.slice(i, j);
                 const w = anchoF(f, f.kern && !esp, t, esc) + f.ls * [...t].length;
                 // (en la escala de caracteres cada palabra con su espacio es una caja: solo se corta después de ella)
-                fichas.push({ t, w, esp, rompe: !caja && !esp && RAYA.test(t[t.length - 1]) && j < v.length && !ESP_W.test(v[j]), nodo: c, fin: j, caja });
+                fichas.push({ t, w, esp, rompe: !caja && !esp && RAYA.test(t[t.length - 1]) && j < v.length && !ESP_W.test(v[j]), nodo: c, fin: j, caja, fo: f, sc: esc });
                 i = j;
               }
               continue;
             }
             if (c.nodeType !== 1) continue;
             if (c.classList.contains("wd-pintado") || c.classList.contains("wd-cel-marca")) continue;   // (la viñeta de una celda: el primer renglón empieza después de ella)
+            if (c.classList.contains("wd-guion")) continue;   // (guion suave del navegador: aquí los cortes los decide el acomodo)
             if (c.classList.contains("wd-oculto") || c.style.display === "none") continue;
             if (c.classList.contains("wd-escala")) { if (caja) { mal = "escala dentro de escala"; return; } rec(c, esc * (+c.dataset.k || 1), c); continue; }
             if (c.hasAttribute("data-obj")) {
@@ -1006,6 +1042,46 @@
         })(el, 1, null);
         if (espera) return { espera: true };
         if (mal) return no(mal === true ? "fuente" : mal);
+        // Guiones automáticos: cada palabra se parte en fichas en los lugares donde Word la puede partir (js/guiones.js); la
+        // de la izquierda de cada lugar lleva el ancho del guion y cuántas letras de la palabra quedan después
+        const gi = el.dataset.gi && NOM.guiones && NOM.guiones.listo(el.dataset.gi) ? el.dataset.gi : null;
+        if (gi) {
+          const conf = guionesDocActual() || {};
+          for (let a = 0; a < fichas.length;) {
+            if (fichas[a].esp || fichas[a].tab || fichas[a].obj) { a++; continue; }
+            let b = a;
+            while (b + 1 < fichas.length && !fichas[b + 1].esp && !fichas[b + 1].tab && !fichas[b + 1].obj && !fichas[b].rompe) b++;
+            const pal = fichas.slice(a, b + 1);
+            const txt = pal.map((x) => x.t).join("");
+            const opc = { idioma: gi, mayus: conf.mayus };
+            // (todos los lugares; los «normales» sirven siempre, los demás solo si no cabe ni en un renglón entero)
+            const ls = pal.some((x) => x.caja || !x.fo) ? [] : NOM.guiones.lugares(txt, opc, true);
+            if (!ls.length) { a = b + 1; continue; }
+            const normales = new Set(NOM.guiones.lugares(txt, opc));
+            const nuevas = [];
+            let base = 0;
+            for (const x of pal) {
+              // (los lugares dentro de esta ficha y el de su final, si cae ahí: donde estaba un guion suave)
+              const corte = ls.filter((p) => p > base && p <= base + x.t.length).map((p) => p - base);
+              const ks = corte.includes(x.t.length) ? corte : corte.concat([x.t.length]);
+              let k0 = 0;
+              for (const k of ks) {
+                const t = x.t.slice(k0, k);
+                const parte = k0 === 0 && k === x.t.length ? Object.assign({}, x) : { t, w: anchoF(x.fo, x.fo.kern, t, x.sc) + x.fo.ls * [...t].length, esp: false, rompe: k === x.t.length ? x.rompe : false, nodo: x.nodo, fin: x.fin - (x.t.length - k), fo: x.fo, sc: x.sc };
+                if (corte.includes(k)) {
+                  // (letras de la palabra que quedan para el renglón de abajo)
+                  const resto = txt.slice(base + k).match(/^[A-Za-zÀ-ÖØ-öø-ÿĀ-ſ]*/)[0].length;
+                  parte.pg = { gw: anchoF(x.fo, false, "-", x.sc), sig: resto, nor: normales.has(base + k) };
+                }
+                nuevas.push(parte);
+                k0 = k;
+              }
+              base += x.t.length;
+            }
+            fichas.splice(a, b - a + 1, ...nuevas);
+            a += nuevas.length;
+          }
+        }
         if (fichas.length < 2) return no("una sola ficha");
         const hayTab = fichas.some((f) => f.tab);
         // (con tabulaciones solo a la izquierda: en justificado Word estira solo lo de después de la última)
@@ -1069,12 +1145,55 @@
           };
           if (hayTab) return no("tabulación junto a lo que flota");
         }
-        return { el, alin, fichas, A1: (der - x0) / z + ajuste, A: (der - izq) / z + ajuste, A1v: (der - x0) / z, Av: (der - izq) / z, ancho: (der - izq) / z, encoge: compat15 && alin === "just", tabs, hayTab, esCelda, quita };
+        // Lo que no tiene espacios y no cabe ni en un renglón entero (una dirección web, una palabra larguísima): Word lo parte
+        // donde se acaba el renglón si no hay dónde ponerle guion. Cada letra es una ficha (con su lugar para partir).
+        {
+          const An = Math.min((der - izq) / z + ajuste, (der - x0) / z + ajuste);
+          for (let a = 0; a < fichas.length;) {
+            if (fichas[a].esp || fichas[a].tab || fichas[a].obj) { a++; continue; }
+            let b = a, wt = fichas[a].w;
+            while (b + 1 < fichas.length && !fichas[b + 1].esp && !fichas[b + 1].tab && !fichas[b + 1].obj) { b++; wt += fichas[b].w; }
+            if (wt <= An || fichas.slice(a, b + 1).some((x) => x.caja || !x.fo)) { a = b + 1; continue; }
+            const nuevas = [];
+            for (const x of fichas.slice(a, b + 1)) {
+              const cs = [...x.t];
+              let pos = x.fin - x.t.length;
+              cs.forEach((ch, q) => {
+                pos += ch.length;
+                const ultima = q === cs.length - 1;
+                const parte = { t: ch, w: anchoF(x.fo, false, ch, x.sc) + x.fo.ls, esp: false, rompe: ultima ? x.rompe : false, nodo: x.nodo, fin: pos, fo: x.fo, sc: x.sc, pc: true };
+                if (ultima && x.pg) parte.pg = x.pg;
+                nuevas.push(parte);
+              });
+            }
+            fichas.splice(a, b - a + 1, ...nuevas);
+            a += nuevas.length;
+          }
+        }
+        const gconf = gi ? guionesDocActual() || {} : null;
+        return { el, alin, fichas, A1: (der - x0) / z + ajuste, A: (der - izq) / z + ajuste, A1v: (der - x0) / z, Av: (der - izq) / z, ancho: (der - izq) / z, encoge: compat15 && alin === "just", tabs, hayTab, esCelda, quita,
+          guiones: gi ? { limite: +gconf.limite || 0, compat15, zona: (+gconf.zona || 18) * (96 / 72) } : null };
       }
+      /**
+       * Guiones automáticos (medido en Word 2024 con 3284 renglones de 4 fuentes, 3 tamaños y 3 anchos:
+       * pruebas/office/windows/hacer_guiones2.py y analisis/guiones_decision.py): la palabra que no cabe se parte solo si no
+       * se pudo meter entera encogiendo los espacios, y nunca dejando menos de 3 letras abajo (js/guiones.js).
+       *  - A la izquierda (y centrado o a la derecha): si sin ella el hueco hasta el margen pasa de 18.3 pt, en el último
+       *    lugar donde el pedazo y su guion caben (99.4 % de las decisiones). La «zona de división» del archivo no cambia
+       *    nada en Word 2013 y después (medido con 0.1", 0.25" y 0.5": lo mismo).
+       *  - Justificado (Word 2013 y después): si sin ella cada espacio se estiraría más de 0.4875 de su ancho, en el lugar
+       *    que deja los espacios más parejos (encoger cuenta el doble que estirar, hasta un 25 % por espacio: la misma
+       *    regla que para meter una palabra entera) (99.5 %).
+       *  - «Limitar guiones consecutivos a»: Word lo respeta; sin límite, no hay límite.
+       */
+      const UMBRAL_GUION_IZQ = 18.3 * (96 / 72), ESTIRA_GUION_JUST = 0.4875;
       /** Dónde corta Word: índices de las fichas después de las cuales termina cada renglón (menos el último). */
       function cortesWord(L) {
         const F = L.fichas, n = F.length, cortes = [];
-        let ini = 0, renglon = 0;
+        L.cortesGuion = new Set();
+        L.cortesLetra = new Set();
+        const G = L.guiones;
+        let ini = 0, renglon = 0, seguidos = 0;
         while (ini < n) {
           while (ini < n && F[ini].esp) ini++;   // (los espacios de después de un corte se quedan en el renglón de arriba)
           if (ini >= n) break;
@@ -1082,21 +1201,43 @@
           // (el primer renglón ya empieza después de lo que flota a su izquierda: x0 se midió así)
           const A = (renglon === 0 ? L.A1 - (q ? q[1] : 0) : L.A - (q ? q[0] + q[1] : 0)) + 1e-6;
           // w: lo escrito sin los espacios del final; ult: el último lugar donde se puede cortar con lo de antes dentro
-          let w = 0, pend = 0, ult = -1, wUlt = 0, pasa = false;
+          // e: los espacios de en medio del renglón (su ancho natural); cand: dónde se puede partir la palabra que va
+          // wTok: dónde empezó lo que no tiene espacios; letras: dónde se puede partir por letra (lo que no cabe en un renglón)
+          let w = 0, pend = 0, ult = -1, wUlt = 0, pasa = false, e = 0, eUlt = 0, cand = [], letras = [], wTok = 0, nuevoTok = true;
           const x0 = L.tabs ? (renglon === 0 ? L.tabs.x0 : L.tabs.izq) : 0;
           for (let j = ini; j < n; j++) {
             const t = F[j];
             // (Word también corta después de una tabulación: lo que sigue y no cabe baja al renglón de abajo)
-            if (t.tab) { t.w = anchoTab(L.tabs, x0 + w + pend, t, x0 + (renglon === 0 ? L.A1 : L.A)); w += pend + t.w; pend = 0; if (w <= A) { ult = j; wUlt = w; } else { pasa = true; break; } continue; }
+            if (t.tab) { t.w = anchoTab(L.tabs, x0 + w + pend, t, x0 + (renglon === 0 ? L.A1 : L.A)); w += pend + t.w; pend = 0; nuevoTok = true; if (w <= A) { ult = j; wUlt = w; eUlt = e; cand = []; letras = []; } else { pasa = true; break; } continue; }
             if (t.esp) {
-              if (!pend) { if (w <= A) { ult = j; wUlt = w; } else { pasa = true; break; } }
+              if (!pend) { if (w <= A) { ult = j; wUlt = w; eUlt = e; cand = []; letras = []; } else { pasa = true; break; } }
               pend += t.w;
+              nuevoTok = true;
               continue;
             }
+            e += pend;
+            if (nuevoTok) { wTok = w + pend; nuevoTok = false; }
             w += pend + t.w; pend = 0;
-            if (t.rompe) { if (w <= A) { ult = j; wUlt = w; } else { pasa = true; break; } }
+            if (t.pg) cand.push({ j, w: w + t.pg.gw, sig: t.pg.sig, e, nor: t.pg.nor });
+            if (t.pc) letras.push({ j, w });
+            if (t.rompe) { if (w <= A) { ult = j; wUlt = w; eUlt = e; cand = []; letras = []; nuevoTok = true; } else { pasa = true; break; } }
           }
           if (!pasa && w <= A) break;   // lo que queda cabe: es el último renglón
+          // Lo que no tiene espacios y no cabe ni en un renglón entero: Word lo empieza aquí y lo parte en el último guion que
+          // cabe (de cualquier pedazo, también después de «/» o «.») o, si no hay, en la última letra que cabe
+          if (ult < 0 || (w - wTok > L.A + 1e-6 && (cand.length || letras.length))) {
+            let el2 = null, conGuion = false;
+            for (const c of cand) if (c.sig >= NOM.guiones.MIN_SIGUE && c.w <= A) { el2 = c; conGuion = true; }
+            if (!el2) for (const c of letras) if (c.w <= A && c.j + 1 < n) el2 = c;
+            if (el2) {
+              cortes.push(el2.j);
+              (conGuion ? L.cortesGuion : L.cortesLetra).add(el2.j);
+              seguidos = conGuion ? seguidos + 1 : 0;
+              ini = el2.j + 1;
+              renglon++;
+              continue;
+            }
+          }
           if (ult < 0) { if (window.__razAcomodo) window.__razAcomodo.set(L.el, q && (q[0] || q[1]) ? "no cabe ni una palabra junto a lo que flota" : "palabra más ancha que el renglón"); return null; }     // una palabra más ancha que el renglón: que la parta el navegador
           let corte = ult;
           if (L.encoge) {
@@ -1114,6 +1255,28 @@
               corte = k;
             }
           }
+          // la palabra que no cupo: ¿se parte con guion? (ver arriba)
+          let guion = false;
+          if (G && corte === ult && cand.length && (!G.limite || seguidos < G.limite) && w - wTok <= L.A + 1e-6) {
+            const hueco = A - wUlt;
+            let elegido = null;
+            if (L.alin === "just" && G.compat15) {
+              if (hueco > ESTIRA_GUION_JUST * eUlt) {
+                let mejor = Infinity;
+                for (const c of cand) {
+                  if (c.sig < NOM.guiones.MIN_SIGUE || !c.nor) continue;
+                  const sobra = c.w - A;
+                  if (sobra > 0 && sobra > 0.25 * c.e) continue;
+                  const costo = sobra > 0 ? 2 * sobra : -sobra;
+                  if (costo < mejor - 1e-9 || (costo <= mejor + 1e-9 && elegido && c.j > elegido.j)) { mejor = costo; elegido = c; }
+                }
+              }
+            } else if (hueco > (G.compat15 ? UMBRAL_GUION_IZQ : G.zona)) {
+              for (const c of cand) if (c.nor && c.sig >= NOM.guiones.MIN_SIGUE && c.w <= A) elegido = c;
+            }
+            if (elegido) { corte = elegido.j; guion = true; L.cortesGuion.add(corte); }
+          }
+          seguidos = guion ? seguidos + 1 : 0;
           cortes.push(corte);
           ini = corte + 1;
           renglon++;
@@ -1148,17 +1311,25 @@
         const el = L.el, F = L.fichas;
         // lo que se pone en pantalla, de atrás hacia adelante (así cada texto se parte después de lo que falta poner):
         // los cortes de renglón y el espacio de cada tabulación (la tabulación misma no mide nada: tab-size 0)
-        const puntos = cortes.map((c) => { while (c + 1 < F.length && F[c + 1].esp) c++; return [c, "br"]; });
+        // (un corte con guion va dentro de la palabra: sin los espacios de después, que no hay)
+        const puntos = cortes.map((c) => { if (L.cortesGuion && L.cortesGuion.has(c)) return [c, "brg"]; if (L.cortesLetra && L.cortesLetra.has(c)) return [c, "br"]; while (c + 1 < F.length && F[c + 1].esp) c++; return [c, "br"]; });
         F.forEach((f, q) => { if (f.tab) puntos.push([q, "tab"]); });
         // (en el mismo lugar, el corte primero: así el espacio de la tabulación queda antes del corte)
-        puntos.sort((a, b) => b[0] - a[0] || (a[1] === "br" ? -1 : 1));
+        puntos.sort((a, b) => b[0] - a[0] || (a[1] !== "tab" ? -1 : 1));
         for (const [q, tipo] of puntos) {
           const f = F[q];
           let nuevo;
-          if (tipo === "br") { nuevo = document.createElement("br"); nuevo.className = "wd-rompe wd-pintado"; }
+          if (tipo === "br" || tipo === "brg") {
+            nuevo = document.createElement("br");
+            nuevo.className = "wd-rompe wd-pintado";
+            // (el guion de Word al final del renglón: de pantalla, con la letra de su palabra)
+            // (no editable: el cursor no puede quedar adentro —lo escrito ahí se perdía—)
+            if (tipo === "brg") { const g = document.createElement("span"); g.className = "wd-guionv wd-pintado"; g.contentEditable = "false"; g.textContent = "-"; const fr = document.createDocumentFragment(); fr.append(g, nuevo); nuevo = fr; }
+          }
           else {
             nuevo = document.createElement("span");
             nuevo.className = "wd-tabw wd-pintado";
+            nuevo.contentEditable = "false";   // (el cursor no puede quedar adentro)
             nuevo.style.width = f.w.toFixed(2) + "px";
             if (f.lider) {
               const ch = { dot: ".", hyphen: "-", middleDot: "·" }[f.lider];
@@ -1168,10 +1339,13 @@
             }
           }
           if (f.obj) { f.obj.after(nuevo); continue; }
-          if (f.caja && tipo === "br") { f.caja.after(nuevo); continue; }   // (después de la palabra con escala, no dentro)
+          if (f.caja && tipo !== "tab") { f.caja.after(nuevo); continue; }   // (después de la palabra con escala, no dentro)
           if (f.fin >= f.nodo.nodeValue.length) f.nodo.after(nuevo);
           else f.nodo.splitText(f.fin).before(nuevo);
         }
+        // (los guiones suaves del navegador ya no hacen falta: aquí parte el acomodo; quitarlos evita que el cursor quede
+        // dentro de uno y que lo escrito ahí se pierda)
+        if (L.guiones) { const gs = el.querySelectorAll(".wd-guion"); if (gs.length) { gs.forEach((x) => x.remove()); el.normalize(); el.dataset.sinSuaves = "1"; } }
         if (L.hayTab) el.classList.add("con-tab");
         if (L.esCelda) el.dataset.alin = L.alin;   // (para el CSS del justificado y la holgura; una celda no se lee del DOM con esto)
         el.classList.add("wd-acomodo");
@@ -1207,7 +1381,8 @@
       function acomodarComoWord(els) {
         if (vista !== "paginas" || window.__sinAcomodo) { els.forEach(quitarAcomodo); return; }
         const compat15 = cuerpo.classList.contains("encoge");
-        els.forEach(quitarAcomodo);
+        // (sin restaurar los guiones suaves: se vuelven a poner solo en los que al final no se acomodan)
+        els.forEach((el) => quitarAcomodo(el, false));
         const leidos = els.map((el) => { try { return leerAcomodo(el, compat15); } catch (e) { return null; } });
         els.forEach((el, i) => { if (leidos[i] && leidos[i].espera) delete el.dataset.acv; else el.dataset.acv = anchoContenido(el).toFixed(3); });
         for (const L of leidos) {
@@ -1216,6 +1391,7 @@
           if (!cortes || (!cortes.length && L.alin !== "just" && !L.hayTab)) continue;
           escribirAcomodo(L, cortes);
         }
+        for (const el of els) if (!el.classList.contains("wd-acomodo")) restaurarSuaves(el);
       }
       /**
        * Escala de la pantalla de un elemento (el zoom de la hoja). El cociente con offsetWidth (entero) se equivoca hasta
@@ -1567,6 +1743,12 @@
         return n;
       }
       function posDe(node, off) {
+        // (dentro de un guion suave del navegador: el lugar del guion, más lo que se haya escrito ahí antes del cursor)
+        const gu = node && (node.nodeType === 3 ? node.parentElement : node).closest && (node.nodeType === 3 ? node.parentElement : node).closest(".wd-guion");
+        if (gu && gu.parentNode) {
+          const base = posDe(gu.parentNode, Array.prototype.indexOf.call(gu.parentNode.childNodes, gu));
+          return base == null ? null : base + (node.nodeType === 3 ? cps(node.nodeValue.slice(0, off).replace(/\u00ad/g, "")).length : 0);
+        }
         if (node === cuerpo) {
           const p = psPintado[Math.min(off, psPintado.length - 1)];
           return off >= psPintado.length ? visPintado.length : p ? p.ini : 0;
@@ -2938,6 +3120,8 @@
       cuerpo.addEventListener("beforeinput", (e) => {
         if (ed.soloLectura) return;
         if (e.target.closest && e.target.closest("[data-celda]")) return;
+        // (si el cursor seguía dentro de algo de pantalla, lo escrito va donde corresponde en el texto)
+        if (sacarDePantalla() && e.inputType === "insertText" && e.data && e.cancelable && !e.isComposing) { e.preventDefault(); insertarTexto(e.data); return; }
         // 3.5 El párrafo de otra persona no se cambia (el servidor también lo rechaza).
         const ajeno = ajenoEnSeleccion(leerSel());
         if (ajeno && e.cancelable) {
@@ -3051,7 +3235,48 @@
         enviarCursor();
         if (brocha && !s.col && !brochaArrastrando) aplicarBrocha();
       }
+      /**
+       * El cursor dentro de algo de pantalla (el guion suave del navegador, .wd-guion, o el guion de Word al final del
+       * renglón): lo que se escribiera ahí no es del documento y se perdía. Se pasa justo al lado (antes del elemento si
+       * estaba al principio de su texto; si no, después), que es el mismo lugar del texto.
+       */
+      function sacarDePantalla() {
+        if (componiendo) return false;
+        const s = getSelection();
+        if (!s.rangeCount) return false;
+        const r = s.getRangeAt(0);
+        const PANT = ".wd-guion, .wd-pintado";
+        // (al lado, dentro del texto vecino: en la frontera de un elemento, Chrome escribe dentro del de antes)
+        const textoVecino = (q, antes) => {
+          for (let n = antes ? q.previousSibling : q.nextSibling; n; n = antes ? n.previousSibling : n.nextSibling) {
+            if (n.nodeType === 3) return n.nodeValue.length || !antes ? [n, antes ? n.nodeValue.length : 0] : null;
+            if (n.nodeType !== 1 || n.matches(PANT) || n.tagName === "BR" || n.hasAttribute("data-obj")) return null;
+            const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT);
+            let t = null;
+            for (let x = w.nextNode(); x; x = w.nextNode()) { if (x.parentElement.closest(PANT)) continue; t = x; if (!antes) break; }
+            if (t) return [t, antes ? t.nodeValue.length : 0];
+          }
+          return null;
+        };
+        const fuera = (n, o) => {
+          const e = n && (n.nodeType === 1 ? n : n.parentElement);
+          const q = e && e.closest && e.closest(PANT);
+          if (!q || !cuerpo.contains(q) || !q.parentNode) return null;
+          const antes = n.nodeType === 3 && o === 0;
+          const i = Array.prototype.indexOf.call(q.parentNode.childNodes, q);
+          return textoVecino(q, antes) || textoVecino(q, !antes) || (antes ? [q.parentNode, i] : [q.parentNode, i + 1]);
+        };
+        const a = fuera(r.startContainer, r.startOffset), b = fuera(r.endContainer, r.endOffset);
+        if (!a && !b) return false;
+        const nr = document.createRange();
+        nr.setStart(...(a || [r.startContainer, r.startOffset]));
+        nr.setEnd(...(b || [r.endContainer, r.endOffset]));
+        if (r.collapsed) nr.collapse(true);
+        s.removeAllRanges(); s.addRange(nr);
+        return true;
+      }
       const selDeb = NOM.debounce(alCambiarSeleccion, 60);
+      document.addEventListener("selectionchange", () => { if (cuerpo.contains(document.activeElement) || cuerpo === document.activeElement) sacarDePantalla(); });
       document.addEventListener("selectionchange", selDeb);
       let brochaArrastrando = false;
       cuerpo.addEventListener("pointerdown", () => { brochaArrastrando = true; });
@@ -4500,7 +4725,7 @@
         const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
         const r = document.createRange();
         for (let n = w.nextNode(); n; n = w.nextNode()) {
-          if (!n.length || (n.parentElement && n.parentElement.closest(enCelda ? ".wd-corte" : "[data-obj], .wd-corte"))) continue;
+          if (!n.length || (n.parentElement && n.parentElement.closest(enCelda ? ".wd-corte, .wd-guion, .wd-guionv" : "[data-obj], .wd-corte, .wd-guion, .wd-guionv"))) continue;
           r.setStart(n, n.length - 1); r.setEnd(n, n.length);
           // Cada letra se ubica por su centro: un subíndice al final de la línea de arriba baja tanto que
           // su borde de arriba ya parecía de esta línea (el corte quedaba antes de él: un renglón de más).

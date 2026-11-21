@@ -1,17 +1,23 @@
 /* NOM · División automática de palabras, como «Guiones automáticos» de Word.
 
    Word parte las palabras al final del renglón con las reglas del IDIOMA DEL TEXTO (un documento en inglés con texto en
-   español se parte con las reglas del inglés: «con-exión», «in-cluye»). Aquí se usan los patrones de TeX (algoritmo de
-   Liang, los mismos que usan TeX y muchos procesadores de texto; js/vendor/guiones-*.js, con su licencia) y se cargan
-   solo cuando un documento los pide.
+   español se parte con las reglas del inglés: «con-ex-ión», «in-cluye»). Los puntos donde Word puede partir cada palabra
+   salen de Word 2024 real (herramientas/guiones: 70 000 palabras en español y en inglés, cada una con los dos idiomas),
+   aprendidos como patrones de Liang con patgen; js/guiones-es.js y js/guiones-en-us.js se cargan solo cuando un documento
+   los pide.
 
-   Cómo se dibuja: en cada lugar donde una palabra se puede partir se pone un guion suave dentro de un elemento
-   marcado (<span class="wd-guion">&shy;</span>); el navegador parte ahí si hace falta y dibuja el guion. Ese elemento NO
-   es parte del documento: el editor lo ignora al leer lo escrito y al contar posiciones (modo-texto.js). */
+   Cuándo parte Word (medido en Word 2024, pruebas/office/analisis/guiones_decision.py; el acomodo está en modo-texto.js):
+   nunca deja menos de 3 letras al principio del renglón siguiente ni menos de 2 al final del de arriba, ni más guiones
+   seguidos que «Limitar guiones consecutivos»; la «zona de división» no cambia nada en Word 2013 y después.
+
+   Cómo se dibuja en el navegador (los párrafos que no acomoda modo-texto.js): en cada lugar donde una palabra se puede
+   partir se pone un guion suave dentro de un elemento marcado (<span class="wd-guion">&shy;</span>); el navegador parte
+   ahí si hace falta y dibuja el guion. Ese elemento NO es parte del documento: el editor lo ignora al leer lo escrito y al
+   contar posiciones (modo-texto.js). */
 (function () {
   "use strict";
   const NOM = window.NOM;
-  const ARCHIVOS = { "en-us": "js/vendor/guiones-en-us.js", es: "js/vendor/guiones-es.js" };
+  const ARCHIVOS = { "en-us": "js/guiones-en-us.js", es: "js/guiones-es.js" };
   const compilados = {}, cargando = {};
   /** El idioma de Word («en-US», «es-MX») → el juego de patrones que hay. */
   function juego(idioma) {
@@ -64,6 +70,9 @@
     if (w.length < minI + minD) return [];
     const ex = c.exc.get(w);
     if (ex) { const r = []; let k = 0; for (const ch of ex) { if (ch === "-") r.push(k); else k++; } return r; }
+    // (Word solo parte dentro de las primeras 64 letras de una palabra: en una de 96, su último lugar es el 61, en los dos
+    // idiomas)
+    if (w.length > LARGO_WORD) return puntos(w.slice(0, LARGO_WORD), idioma).filter((p) => p <= LARGO_WORD - 3);
     const s = "." + w + ".", n = s.length, v = new Array(n + 1).fill(0);
     for (let i = 0; i < n; i++) {
       for (let k = i + 1; k <= Math.min(n, i + c.largo); k++) {
@@ -77,30 +86,42 @@
     return r;
   }
   const LETRA = /[A-Za-zÀ-ÖØ-öø-ÿĀ-ſ]/;
+  const LARGO_WORD = 64;
+  /** Letras que Word deja, como mínimo, al principio del renglón siguiente. */
+  const MIN_SIGUE = 3;
+  // Lo que va justo antes de una palabra y no deja partirla (medido en Word 2024: «/colaboración» no se parte; «(colaboración»,
+  // «"colaboración», «#colaboración» o «colaboración/» sí). Lo de después nunca estorba.
+  const NO_ANTES = /[\d@/\\_.:;,+&=*~^|\u2010-\u2015-]/;
+  /**
+   * Dónde se puede partir cada palabra de un texto (posiciones del texto, en orden), con las reglas de Word: palabras de 4
+   * letras o más, al menos 3 letras al principio del renglón siguiente, nada en una palabra en MAYÚSCULAS si opc.mayus es
+   * falso, y nada en la que va pegada después de NO_ANTES. Con `todos`, también esas: Word las usa cuando lo que no tiene
+   * espacios (una dirección web) no cabe ni en un renglón entero. opc: { idioma, mayus }.
+   */
+  function lugares(txt, opc, todos) {
+    const idioma = opc && opc.idioma, out = [];
+    if (!listo(idioma)) return out;
+    const re = /[A-Za-zÀ-ÖØ-öø-ÿĀ-ſ]{4,}/g;
+    let m;
+    while ((m = re.exec(txt))) {
+      const w = m[0], antes = txt[m.index - 1];
+      if (antes && (LETRA.test(antes) || (!todos && NO_ANTES.test(antes)))) continue;
+      if (opc.mayus === false && w === w.toUpperCase()) continue;
+      // (Word nunca deja menos de 3 letras al principio del renglón siguiente en el texto corrido)
+      for (const p of puntos(w, idioma)) if (w.length - p >= MIN_SIGUE) out.push(m.index + p);
+    }
+    return out;
+  }
   /**
    * Un texto ya escapado para HTML con los lugares para partir (el texto original va en `txt`, sin escapar). opc:
    * { idioma, mayus } (mayus: falso = no partir palabras en MAYÚSCULAS, como «No dividir palabras en mayúsculas»).
    */
   function marcar(txt, esc, opc) {
-    const idioma = opc && opc.idioma;
-    if (!listo(idioma)) return esc(txt);
-    let out = "";
-    const re = /[A-Za-zÀ-ÖØ-öø-ÿĀ-ſ]{4,}/g;
-    let ult = 0, m;
-    while ((m = re.exec(txt))) {
-      const w = m[0];
-      out += esc(txt.slice(ult, m.index));
-      ult = m.index + w.length;
-      // (una palabra pegada a otra cosa —un número, un guion— se deja: Word tampoco la parte así)
-      const antes = txt[m.index - 1], despues = txt[ult];
-      if ((antes && (LETRA.test(antes) || /[\d@/\\_]/.test(antes))) || (despues && /[\d@/\\_]/.test(despues)) || (opc.mayus === false && w === w.toUpperCase())) { out += esc(w); continue; }
-      const ps = puntos(w, idioma);
-      if (!ps.length) { out += esc(w); continue; }
-      let k = 0;
-      for (const p of ps) { out += esc(w.slice(k, p)) + '<span class="wd-guion">­</span>'; k = p; }
-      out += esc(w.slice(k));
-    }
-    return out + esc(txt.slice(ult));
+    const ls = lugares(txt, opc);
+    if (!ls.length) return esc(txt);
+    let out = "", k = 0;
+    for (const p of ls) { out += esc(txt.slice(k, p)) + '<span class="wd-guion">\u00ad</span>'; k = p; }
+    return out + esc(txt.slice(k));
   }
-  NOM.guiones = { cargar, listo, puntos, marcar, juego };
+  NOM.guiones = { cargar, listo, puntos, lugares, marcar, juego, MIN_SIGUE };
 })();

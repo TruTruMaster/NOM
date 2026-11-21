@@ -738,6 +738,9 @@ sesión anterior: `./desplegar.sh roles` para las columnas nuevas de usuarios.
 
 ## Orden recomendado para la siguiente sesión
 
+**Desde el 20 de noviembre de 2026 (noche):** empezar por `docs/RELEVO-20NOV-NOCHE.md` (0.18.1 publicada; sigue todo
+`PARIDAD-OFFICE.md` en «Sí» contra Office real).
+
 **Desde el 20 de noviembre de 2026:** empezar por `docs/RELEVO-20NOV.md` (0.17.1 publicada; sigue lo de
 `RELEVO-19NOV.md`: todo `PARIDAD-OFFICE.md` en «Sí» contra Office real).
 

@@ -6,7 +6,9 @@ Arma un Word con párrafos justificados y a la izquierda, lo importa y comprueba
   2. copiar un pedazo que cruza un corte no lleva saltos al portapapeles (ni guiones de pantalla);
   3. escribir a la mitad de un renglón pone la letra donde va y el párrafo se vuelve a acomodar;
   4. lo descargado como .docx no trae saltos de renglón (w:br) en esos párrafos;
-  5. en la vista sin páginas no hay cortes de pantalla.
+  5. en la vista sin páginas no hay cortes de pantalla;
+  6. con «Guiones automáticos» (un Word en español con un párrafo en inglés): el guion del final del renglón es de
+     pantalla (ni el texto, ni copiar, ni escribir, ni lo descargado lo llevan) y cada párrafo se parte con su idioma.
 """
 import base64, io, os, sys, zipfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -39,6 +41,90 @@ def docx_prueba():
         r = p.add_run(t); r.font.name = "Calibri"; r.font.size = Pt(11)
         p.paragraph_format.tab_stops.add_tab_stop(Pt(432), WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS)
     b = io.BytesIO(); d.save(b); return b.getvalue()
+
+
+EN = ("Real-time collaboration allows several people to edit the same document without losing any change, even when the "
+      "connection fails. Each section of the document includes tables, images and references that must be preserved "
+      "exactly when opened in another application.")
+
+
+def docx_guiones():
+    """Español justificado y a la izquierda, y un párrafo con el idioma en inglés; angostos (muchos cortes)."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    d = Document()
+    d.settings.element.append(OxmlElement("w:autoHyphenation"))
+    for texto, alin, lang in ((TEXTO, WD_ALIGN_PARAGRAPH.JUSTIFY, None), (TEXTO, WD_ALIGN_PARAGRAPH.LEFT, None), (EN, WD_ALIGN_PARAGRAPH.LEFT, "en-US")):
+        p = d.add_paragraph()
+        r = p.add_run(texto); r.font.name = "Calibri"; r.font.size = Pt(11)
+        if lang:
+            l = OxmlElement("w:lang"); l.set(qn("w:val"), lang); r._element.get_or_add_rPr().append(l)
+        p.alignment = alin
+        p.paragraph_format.right_indent = Pt(220)
+    # el idioma del documento: español
+    st = d.styles.element.find(qn("w:docDefaults"))
+    rpr = st.find(qn("w:rPrDefault")).find(qn("w:rPr"))
+    l = rpr.find(qn("w:lang"))
+    if l is None: l = OxmlElement("w:lang"); rpr.append(l)
+    l.set(qn("w:val"), "es-MX")
+    b = io.BytesIO(); d.save(b); return b.getvalue()
+
+
+TEXTO_DOM = """(par) => { let t = ''; (function rec(n) { for (let c = n.firstChild; c; c = c.nextSibling) { if (c.nodeType === 3) t += c.nodeValue; else if (c.nodeType === 1 && !c.classList.contains('wd-pintado') && !c.classList.contains('wd-guion')) rec(c); } })(par); return t; }"""
+
+
+def guiones(P, esp):
+    p = P.p
+    r = p.evaluate("""async ([b64, esp]) => { const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      const r = await NOM.formatos.importar(new File([u], 'guiones.docx')); const espacio = (await NOM.api.get('/api/espacios')).find((e) => e.id === esp);
+      const d = await NOM.binarios.crearEnEspacio(espacio, r.nombre, r.modo, r.ops); return { id: d.id }; }""", [base64.b64encode(docx_guiones()).decode(), esp])
+    p.goto(N.B + "/#/doc/" + r["id"])
+    p.wait_for_function("() => document.querySelectorAll('.wd-cuerpo .wd-guionv').length >= 3", timeout=30000)
+    p.wait_for_timeout(800)
+    g = p.evaluate("""() => [...document.querySelectorAll('.wd-cuerpo > p')].slice(0, 3).map((el) => ({ gi: el.dataset.gi || null, n: el.querySelectorAll('.wd-guionv').length,
+        bien: [...el.querySelectorAll('.wd-guionv')].every((x) => x.textContent === '-' && x.nextSibling && x.nextSibling.nodeName === 'BR') }))""")
+    check(f"guiones automáticos: guiones de pantalla al final del renglón ({[x['n'] for x in g]})", sum(x["n"] for x in g) >= 3 and all(x["bien"] for x in g), g)
+    check("cada párrafo con el idioma de su texto (es-MX, es-MX, en-US)", [x["gi"] for x in g] == ["es-MX", "es-MX", "en-US"], [x["gi"] for x in g])
+    textos = p.evaluate(f"() => [...document.querySelectorAll('.wd-cuerpo > p')].slice(0, 3).map({TEXTO_DOM})")
+    check("…y el texto del documento no los lleva", textos == [TEXTO, TEXTO, EN], [t[:40] for t in textos])
+    # copiar a través de un corte con guion
+    copiado = p.evaluate("""() => { const g = document.querySelector('.wd-cuerpo .wd-guionv'), par = g.closest('p');
+        let antes = g.previousSibling; while (antes && antes.nodeType !== 3) antes = antes.lastChild || antes.previousSibling;
+        let despues = g.nextSibling.nextSibling; while (despues && despues.nodeType !== 3) despues = despues.firstChild || despues.nextSibling;
+        const r = document.createRange(); r.setStart(antes, Math.max(0, antes.nodeValue.length - 3)); r.setEnd(despues, Math.min(3, despues.nodeValue.length));
+        const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+        const dt = new DataTransfer(); const ev = new ClipboardEvent('copy', { clipboardData: dt, bubbles: true, cancelable: true });
+        par.dispatchEvent(ev); return { texto: dt.getData('text/plain'), html: dt.getData('text/html'), prevenido: ev.defaultPrevented, esperado: antes.nodeValue.slice(-3) + despues.nodeValue.slice(0, 3) }; }""")
+    check("copiar a través de un guion: la palabra entera, sin guion ni salto", copiado["prevenido"] and copiado["texto"] == copiado["esperado"].replace("\u00ad", ""), copiado)
+    # escribir junto al guion (al principio del renglón de abajo)
+    xy = p.evaluate("""() => { const g = document.querySelector('.wd-cuerpo .wd-guionv'); let d = g.nextSibling.nextSibling; while (d && d.nodeType !== 3) d = d.firstChild || d.nextSibling;
+        const r = document.createRange(); r.setStart(d, 0); r.setEnd(d, 1); const q = r.getClientRects()[0]; return [q.left + 0.5, q.top + q.height / 2]; }""")
+    p.mouse.click(xy[0], xy[1]); p.wait_for_timeout(200)
+    p.keyboard.type("Q"); p.wait_for_timeout(1200)
+    t1 = p.evaluate(f"() => ({TEXTO_DOM})(document.querySelector('.wd-cuerpo > p'))")
+    todos = p.evaluate(f"() => [...document.querySelectorAll('.wd-cuerpo > p')].slice(0, 3).map({TEXTO_DOM})")
+    k = t1.find("Q")
+    check("escribir junto al guion: la letra queda en la palabra", k >= 0 and t1.replace("Q", "") == TEXTO, [t1[max(0, k - 20):k + 20] if k >= 0 else None, [x.find("Q") for x in todos], len(t1), len(TEXTO)])
+    n = p.evaluate("() => document.querySelector('.wd-cuerpo > p').querySelectorAll('.wd-guionv').length")
+    check("…y el párrafo se vuelve a partir con guiones", n >= 1, n)
+    b64 = p.evaluate("""async () => { let u = NOM.ooxml.docx(NOM.editorActual.doc); if (u && u.then) u = await u;
+        let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }""")
+    z = zipfile.ZipFile(io.BytesIO(base64.b64decode(b64)))
+    xml = z.read("word/document.xml").decode("utf-8")
+    import re
+    txt = "".join(re.findall(r"<w:t(?: [^>]*)?>([^<]*)</w:t>", xml))
+    check("lo descargado: sin guiones de pantalla en el texto", TEXTO in txt.replace("Q", "") and EN in txt and txt.replace("Q", "").count("-") == (TEXTO + TEXTO + EN).count("-"), txt[:60])
+    check("…y sigue con «Guiones automáticos»", "<w:autoHyphenation" in z.read("word/settings.xml").decode("utf-8"))
+    # en la vista sin páginas los parte el navegador (guiones suaves): el cursor dentro de uno no pierde lo escrito
+    p.evaluate("() => { const b = document.querySelector('[data-vista=\"continua\"]'); if (b) b.click(); }")
+    p.wait_for_function("() => !document.querySelector('.wd-cuerpo br.wd-rompe') && document.querySelector('.wd-cuerpo .wd-guion')", timeout=15000)
+    p.evaluate("""() => { const g = document.querySelectorAll('.wd-cuerpo > p')[1].querySelector('.wd-guion'); const t = g.firstChild;
+        g.closest('.wd-cuerpo').focus(); const r = document.createRange(); r.setStart(t, 1); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }""")
+    p.wait_for_timeout(150)
+    p.keyboard.type("W"); p.wait_for_timeout(1200)
+    t2 = p.evaluate(f"() => ({TEXTO_DOM})(document.querySelectorAll('.wd-cuerpo > p')[1])")
+    check("sin páginas: el cursor dentro de un guion suave no pierde lo escrito", "W" in t2 and t2.replace("W", "") == TEXTO, t2[:80])
+    p.evaluate("() => { const b = document.querySelector('[data-vista=\"paginas\"]'); if (b) b.click(); }")
 
 
 def main():
@@ -97,6 +183,9 @@ def main():
         p.evaluate("() => { const b = document.querySelector('[data-vista=\"continua\"]'); if (b) b.click(); }"); p.wait_for_timeout(1500)
         n3 = p.evaluate("() => document.querySelectorAll('.wd-cuerpo br.wd-rompe').length")
         check("en la vista sin páginas no hay cortes de pantalla", n3 == 0, n3)
+        # 6. guiones automáticos
+        p.evaluate("() => { const t = NOM.leer('nom.texto', {}); t.vista = 'paginas'; localStorage.setItem('nom.texto', JSON.stringify(t)); }")
+        guiones(P, esp)
         errores = P.errores if hasattr(P, "errores") else []
         check("sin errores de JavaScript", not errores, errores[:3])
     finally:
