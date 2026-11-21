@@ -1785,8 +1785,26 @@
             if (r.right > x0 + 1 && r.right < x1 - 1) o.classList.add("xl-sin-linea");
           }
         });
+        // ¿Cabe el número? Excel lo decide con los anchos ENTEROS con que Windows dibuja cada carácter (GetCharWidth32,
+        // js/anchos-excel.js) más 5 px de margen; los huecos «_)» y «_(» cuentan como un espacio y el relleno «*» no
+        // ocupa (medido en Excel 2024 de píxel en píxel: pruebas/office/windows/medir_gatos2.py). Si la fuente o un
+        // carácter no está medido, lo que mide el navegador.
+        const cabe = (td) => {
+          const c = +td.dataset.c, f = +td.dataset.f, ref = F().ref(c, f), X0 = xl();
+          const tabla = X0 && NOM.anchosExcel ? NOM.anchosExcel(t["tf:" + ref] || X0.fuente, +t["tl:" + ref] || +X0.tam || 11, td.hasAttribute("data-negrita")) : null;
+          if (tabla) {
+            let w = 0;
+            for (const ch of td.textContent) { const x = tabla.get(ch); if (x == null) { w = -1; break; } w += x; }
+            if (w >= 0) {
+              let col = 0;
+              for (let k = 0; k < (+td.colSpan || 1); k++) col += ancho(c + k);
+              return w + 5 <= col;
+            }
+          }
+          return td.scrollWidth <= td.clientWidth + 1;
+        };
         rej.querySelectorAll("td.num").forEach((td) => {
-          if (td.scrollWidth <= td.clientWidth + 1) return;
+          if (cabe(td)) return;
           const c = +td.dataset.c, f = +td.dataset.f, ref = F().ref(c, f), fmt = t["f:" + ref];
           const v = evaluar().valor(c, f);
           if ((!fmt || /^general$/i.test(fmt)) && F().esNum(v)) {
@@ -1794,7 +1812,7 @@
             const intentos = [];
             for (let d = 9; d >= 0; d--) intentos.push(String(Math.round(n * Math.pow(10, d)) / Math.pow(10, d)));
             for (let d = 5; d >= 0; d--) { let [m, e] = n.toExponential(d).split("e"); intentos.push(m + "E" + (+e < 0 ? "-" : "+") + String(Math.abs(+e)).padStart(2, "0")); }
-            for (const x of intentos) { if (a >= 1 && x.replace(/[-.]/g, "").length < String(Math.trunc(a)).length && !/E/.test(x)) continue; td.textContent = x; if (td.scrollWidth <= td.clientWidth + 1) return; }
+            for (const x of intentos) { if (a >= 1 && x.replace(/[-.]/g, "").length < String(Math.trunc(a)).length && !/E/.test(x)) continue; td.textContent = x; if (cabe(td)) return; }
           }
           const g = document.createElement("span");
           g.textContent = "#".repeat(20); td.textContent = ""; td.append(g);

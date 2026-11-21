@@ -145,8 +145,13 @@ del valor exacto en ~5e-7 y no se encontró su método; NOM da el exacto). Las f
 No existen en Excel 2024 (son de Microsoft 365; dan `#NAME?` en la PC de prueba, así que no hay contra qué compararlas):
 `REGEXTEST`, `REGEXEXTRACT`, `REGEXREPLACE`, `GROUPBY`, `PIVOTBY`, `TRIMRANGE`, `PERCENTOF`, `TRANSLATE`, `DETECTLANGUAGE`.
 
-Medido contra Excel 2024 real: texto de las celdas 100 % en los nueve libros; altos de fila 100 % salvo una fila de
-x01 (99.4 %); cada gráfica 92-98 % de parecido.
+Medido contra Excel 2024 real: **texto de las celdas 100 % en los once libros** (x01 a x10 y t02, 21-nov: también x10, que
+tenía tres «####» de más con la moneda «_)»); altos de fila 100 % salvo una fila de x01 (99.4 %); cada gráfica 92-98 % de
+parecido. **Cuándo sale «####»** (21-nov, `windows/medir_gatos2.py`: 88 números con y sin «_)», la columna de píxel en
+píxel, en libros con Calibri y con Aptos Narrow): Excel suma los anchos enteros de Windows de cada carácter —a 11 puntos,
+los mismos con las dos fuentes: dígito 7, «.» y «,» 4, «-» 5, «$» 7, paréntesis 5, espacio 3—, el hueco «_)» cuenta como
+un espacio, el relleno «*» no ocupa, y el número cabe si esa suma más 5 px no pasa del ancho de la columna; la fuente de
+la celda no cambia nada (`js/anchos-excel.js`; con otros caracteres o tamaños, lo que mide el navegador).
 
 ## 5. PowerPoint
 
