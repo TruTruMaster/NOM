@@ -127,6 +127,36 @@ def guiones(P, esp):
     p.evaluate("() => { const b = document.querySelector('[data-vista=\"paginas\"]'); if (b) b.click(); }")
 
 
+def elegir(p, texto):
+    """Toca la opción del menú abierto que empieza con ese texto (desplazándolo si hace falta, como una persona)."""
+    xy = p.evaluate("""(t) => { const b = [...document.querySelectorAll('.menu:not(.saliendo) [role=menuitem]')].find((x) => x.textContent.trim().startsWith(t));
+        if (!b) return null; b.scrollIntoView({ block: 'nearest' }); const r = b.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }""", texto)
+    if not xy: raise AssertionError("no está en el menú: " + texto)
+    p.mouse.click(xy[0], xy[1]); p.wait_for_timeout(350)
+
+
+def numeros_linea(P):
+    """Números de línea desde «Más» → «Números de línea» (un menú aparte, como el de Word)."""
+    p = P.p
+    p.click('.ed-herramientas [aria-label="Más"]'); p.wait_for_timeout(300)
+    caja = p.evaluate("() => { const m = document.querySelector('.menu:not(.saliendo)'); const r = m.getBoundingClientRect(); return { arriba: r.top, abajo: r.bottom, alto: innerHeight, desplaza: m.scrollHeight > m.clientHeight }; }")
+    check("el menú «Más» cabe en la pantalla (si es largo, se desplaza)", caja["arriba"] >= 0 and caja["abajo"] <= caja["alto"], caja)
+    elegir(p, "Números de línea")
+    titulo = p.evaluate("() => (document.querySelector('.menu:not(.saliendo) .menu-titulo') || {}).textContent || ''")
+    check("«Números de línea» abre su propio menú", titulo == "Números de línea", titulo)
+    elegir(p, "Continuos")
+    p.wait_for_function("() => document.querySelectorAll('.wd-numlin').length >= 5", timeout=15000)
+    nums = p.evaluate("() => [...document.querySelectorAll('.wd-numlin')].map((x) => +x.textContent)")
+    check(f"continuos: se ven los números ({len(nums)}) y siguen 1, 2, 3…", nums[:5] == [1, 2, 3, 4, 5] and all(b == a + 1 for a, b in zip(nums, nums[1:])), nums[:12])
+    p.click('.ed-herramientas [aria-label="Más"]'); p.wait_for_timeout(300)
+    elegir(p, "Números de línea")
+    marcado = p.evaluate("""() => { const b = [...document.querySelectorAll('.menu:not(.saliendo) [role=menuitem]')].find((x) => x.textContent.trim().startsWith('Continuos')); return !!(b && b.querySelector('svg.ico-s')); }""")
+    check("…y en el menú «Continuos» queda marcado", marcado)
+    elegir(p, "Ninguno")
+    p.wait_for_function("() => !document.querySelector('.wd-numlin')", timeout=15000)
+    check("«Ninguno» los quita", p.evaluate("() => document.querySelectorAll('.wd-numlin').length") == 0)
+
+
 def main():
     N.esperar_servidor()
     a = N.cuenta(); esp = N.espacio(a["token"], "Acomodo")
@@ -186,6 +216,7 @@ def main():
         # 6. guiones automáticos
         p.evaluate("() => { const t = NOM.leer('nom.texto', {}); t.vista = 'paginas'; localStorage.setItem('nom.texto', JSON.stringify(t)); }")
         guiones(P, esp)
+        numeros_linea(P)
         errores = P.errores if hasattr(P, "errores") else []
         check("sin errores de JavaScript", not errores, errores[:3])
     finally:

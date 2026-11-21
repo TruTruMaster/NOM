@@ -548,6 +548,8 @@ kbd {
 /* menú contextual */
 .menu {
   position: fixed; z-index: 150; min-width: 220px; padding: 4px;
+  /* Un menú largo (el «Más» del texto en un celular) nunca se sale de la pantalla: se desplaza. */
+  max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); overflow-y: auto; overscroll-behavior: contain;
   background: var(--sup-flota); border: 1px solid var(--borde); border-radius: var(--r-m); box-shadow: var(--sombra-flotante);
   animation: menu-in var(--t-micro) linear;
   transform-origin: top left;

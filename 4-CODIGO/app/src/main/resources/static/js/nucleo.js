@@ -248,7 +248,9 @@
     const r = ancla.getBoundingClientRect ? ancla.getBoundingClientRect() : { left: ancla.x, right: ancla.x, top: ancla.y, bottom: ancla.y };
     const w = m.offsetWidth, h = m.offsetHeight;
     let x = Math.min(r.left, innerWidth - w - 8), y = r.bottom + 6;
+    // Abajo si cabe; si no, arriba; si tampoco, pegado al borde de arriba (el menú se desplaza: ver .menu).
     if (y + h > innerHeight - 8) y = Math.max(8, r.top - h - 6);
+    if (y + h > innerHeight - 8) y = Math.max(8, innerHeight - 8 - h);
     m.style.left = Math.max(8, x) + "px";
     m.style.top = y + "px";
     m.style.transformOrigin = `${Math.max(0, Math.min(w, (r.left + r.right) / 2 - Math.max(8, x))).toFixed(0)}px ${y >= r.bottom ? 0 : h}px`;

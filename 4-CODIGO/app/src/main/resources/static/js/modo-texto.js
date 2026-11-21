@@ -5382,17 +5382,26 @@
           h.cerrar();
         };
       }
-      function menuMas(b) {
+      /** Lo de Disposición → Números de línea de Word, en un menú aparte (en el «Más» ocupaban siete renglones). */
+      function menuNumerosLinea(b) {
         const nl = numerosLineaActuales(), snl = parrafosDeSel().every((p) => S().attrs(p.mark).sinNumLin);
+        NOM.menu(b, [
+          { titulo: "Números de línea" },
+          { texto: "Ninguno", icono: "list-ordered", marcado: !nl, fn: () => numerosDeLinea("no") },
+          { texto: "Continuos", icono: "list-ordered", marcado: !!nl && nl[3] === "c", fn: () => numerosDeLinea("c") },
+          { texto: "Reiniciar en cada página", icono: "list-ordered", marcado: !!nl && nl[3] === "p", fn: () => numerosDeLinea("p") },
+          { texto: "Reiniciar en cada sección", icono: "list-ordered", marcado: !!nl && nl[3] === "s", fn: () => numerosDeLinea("s") },
+          "-",
+          { texto: "Suprimir en este párrafo", icono: "list-x", marcado: snl, fn: suprimirNumerosLinea },
+          { texto: "Opciones de números de línea…", icono: "settings", fn: dialogoNumerosLinea },
+        ]);
+      }
+      function menuMas(b) {
+        const nl = numerosLineaActuales();
         NOM.menu(b, [
           { titulo: "Formato" },
           { texto: "Guiones automáticos (dividir palabras)", icono: "minus", marcado: !!doc().valor("_doc", "guiones"), fn: alternarGuiones },
-          { texto: "Números de línea: ninguno", icono: "list-ordered", marcado: !nl, fn: () => numerosDeLinea("no") },
-          { texto: "Números de línea: continuos", icono: "list-ordered", marcado: !!nl && nl[3] === "c", fn: () => numerosDeLinea("c") },
-          { texto: "Números de línea: reiniciar en cada página", icono: "list-ordered", marcado: !!nl && nl[3] === "p", fn: () => numerosDeLinea("p") },
-          { texto: "Números de línea: reiniciar en cada sección", icono: "list-ordered", marcado: !!nl && nl[3] === "s", fn: () => numerosDeLinea("s") },
-          { texto: "Suprimir números de línea en este párrafo", icono: "list-x", marcado: snl, fn: suprimirNumerosLinea },
-          { texto: "Opciones de números de línea…", icono: "settings", fn: dialogoNumerosLinea },
+          { texto: "Números de línea", icono: "list-ordered", marcado: !!nl, fn: () => menuNumerosLinea(b) },
           { texto: "Tachado", icono: "strikethrough", atajo: "Ctrl+Mayús+X", fn: () => alternar("s") },
           { texto: "Superíndice", icono: "superscript", atajo: "Ctrl+Mayús++", fn: () => formato({ va: attrsEnCursor().a.va === "sup" ? null : "sup" }) },
           { texto: "Subíndice", icono: "subscript", atajo: "Ctrl+=", fn: () => formato({ va: attrsEnCursor().a.va === "sub" ? null : "sub" }) },

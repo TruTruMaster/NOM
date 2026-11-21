@@ -94,7 +94,7 @@ class Pagina:
     def menu(self, texto):
         """Elige una opción del menú abierto (por el principio del texto)."""
         c = self.ev("""(t) => { const b = [...document.querySelectorAll('.menu:not(.saliendo) [role=menuitem], .menu:not(.saliendo) button')].find(x => x.textContent.trim().replace(/\\s+/g, ' ').startsWith(t));
-            if (!b) return null; const r = b.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }""", texto)
+            if (!b) return null; b.scrollIntoView({block: 'nearest'}); const r = b.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }""", texto)
         if not c: raise AssertionError("no está en el menú: " + texto + " — hay: " + str(self.ev("() => [...document.querySelectorAll('.menu:not(.saliendo) [role=menuitem]')].map(x => x.textContent.trim())")))
         self.p.mouse.click(*c); self.t(350)
 
