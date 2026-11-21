@@ -2262,6 +2262,56 @@
         doc().cambiar("_doc", { paginas: q });
         aviso("Diapositivas revueltas. Ctrl+Z para volver", { ms: 2400 });
       }
+      /**
+       * Vista → Clasificador de diapositivas (como PowerPoint): todas en una cuadrícula, con sus secciones y las ocultas
+       * atenuadas; arrastrar para cambiarlas de lugar, doble clic o Entrar para abrir una, Supr para eliminarla, Ctrl+D para
+       * duplicarla y las flechas para moverse.
+       */
+      function clasificador() {
+        const cuerpo = html(`<div class="clasificador" data-grid tabindex="0" aria-label="Diapositivas"></div>`);
+        const h = NOM.hoja({ titulo: "Clasificador de diapositivas", icono: "layout-grid", cuerpo, ancha: true });
+        let elegida = ed.pagina, arrastrada = null;
+        const T = tamDoc(doc()), ancho = 200, k = ancho / T.w;
+        const abrir = (p) => { ed.pagina = p; h.cerrar(); lienzo.render(); pintarNotas(); };
+        const moverA = (p, destino, despues) => {
+          const q = doc().paginas().filter((x) => x !== p);
+          let j = q.indexOf(destino);
+          if (j < 0) return;
+          if (despues) j++;
+          q.splice(j, 0, p);
+          doc().cambiar("_doc", { paginas: q });
+          elegida = p; pintar();
+        };
+        const pintar = () => {
+          const pags = doc().paginas();
+          const secs = NOM.ooxml && NOM.ooxml.seccionesPptx ? NOM.ooxml.seccionesPptx(doc()) : null;
+          const grupos = secs ? secs.map((sc) => ({ sc, d: sc.d })) : [{ sc: null, d: pags }];
+          cuerpo.innerHTML = grupos.map(({ sc, d }) => (sc ? `<div class="clas-seccion">${esc(sc.nombre || "Sección")} <span class="suave chico">(${d.length})</span></div>` : "")
+            + `<div class="clas-fila">${d.map((p) => { const i = pags.indexOf(p), oc = oculta(p);
+              return `<div class="clas-item${p === elegida ? " elegida" : ""}${oc ? " oculta" : ""}" draggable="${ed.soloLectura ? "false" : "true"}" data-p="${esc(p)}" role="button" aria-label="Diapositiva ${i + 1}${oc ? " (oculta)" : ""}">`
+                + `<div class="clas-mini" style="width:${ancho}px;height:${Math.round(T.h * k)}px"><div class="mini-cont diapo-mini" style="position:absolute;left:0;top:0;width:${T.w}px;height:${T.h}px;transform-origin:0 0;transform:scale(${k});${NOM.diapo ? NOM.diapo.estiloDiapo(doc(), p) : ""}">${htmlDiapositiva(doc(), p)}</div></div>`
+                + `<span class="chico">${i + 1}${oc ? " · oculta" : ""}</span></div>`; }).join("")}</div>`).join("");
+          $$(".clas-item", cuerpo).forEach((it) => {
+            it.onclick = () => { elegida = it.dataset.p; $$(".clas-item", cuerpo).forEach((x) => x.classList.toggle("elegida", x === it)); cuerpo.focus({ preventScroll: true }); };
+            it.ondblclick = () => abrir(it.dataset.p);
+            it.ondragstart = (e) => { arrastrada = it.dataset.p; e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", arrastrada); } catch (x) { /* (algunos navegadores) */ } };
+            it.ondragover = (e) => { if (arrastrada) e.preventDefault(); };
+            it.ondrop = (e) => { e.preventDefault(); if (arrastrada && arrastrada !== it.dataset.p) moverA(arrastrada, it.dataset.p, e.offsetX > it.offsetWidth / 2); arrastrada = null; };
+          });
+          if (NOM.diapo && NOM.diapo.ajustarRenglones) requestAnimationFrame(() => { if (cuerpo.isConnected) NOM.diapo.ajustarRenglones(cuerpo); });
+        };
+        cuerpo.onkeydown = (e) => {
+          const pags = doc().paginas(), i = pags.indexOf(elegida);
+          if (e.key === "ArrowRight" || e.key === "ArrowLeft") { e.preventDefault(); elegida = pags[Math.max(0, Math.min(pags.length - 1, i + (e.key === "ArrowRight" ? 1 : -1)))]; pintar(); return; }
+          if (e.key === "Enter") { e.preventDefault(); abrir(elegida); return; }
+          if (ed.soloLectura) return;
+          if (e.key === "Delete" && pags.length > 1 && !lienzo.paginaAjena()) { e.preventDefault(); eliminarDiapo(elegida); const q = doc().paginas(); elegida = q[Math.min(i, q.length - 1)]; pintar(); return; }
+          if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") { e.preventDefault(); duplicarDiapo(elegida); pintar(); }
+        };
+        pintar();
+        cuerpo.focus({ preventScroll: true });
+        return { mover: moverA, abrir, cerrar: () => h.cerrar() };
+      }
       function eliminarDiapo(p) {
         const pags = doc().paginas(), i = pags.indexOf(p);
         if (pags.length <= 1) return;
@@ -2490,6 +2540,8 @@
           { texto: "Presentaciones personalizadas…", icono: "list-video", fn: () => dialogoPersonalizadas() },
           { texto: "Ensayar intervalos", icono: "timer", fn: () => presentar(ed, { desde: "principio", ensayar: true }) },
           { texto: "Configurar presentación…", icono: "settings", fn: () => dialogoConfigurar() },
+          "-",
+          { texto: "Clasificador de diapositivas", icono: "layout-grid", fn: () => clasificador() },
         ]);
       }
       /** El título de una diapositiva para las listas (lo primero que dice, de arriba abajo). */
@@ -2585,7 +2637,7 @@
           h.cerrar();
         };
       }
-      this._pres = { alternarOculta, agregarSeccion, dialogoPersonalizadas, dialogoConfigurar, presentar: (o) => presentar(ed, o) };
+      this._pres = { alternarOculta, agregarSeccion, dialogoPersonalizadas, dialogoConfigurar, presentar: (o) => presentar(ed, o), clasificador };
       this._notas = { pintar: pintarNotas };
 
       // En el orden en que se arma una presentación: diapositiva nueva, qué se le pone, cómo se ve y se mueve,

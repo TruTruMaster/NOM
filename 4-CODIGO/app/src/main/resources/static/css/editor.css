@@ -155,6 +155,14 @@
 .rejilla-hoja td[data-otro] { position: relative; overflow: visible; }
 .rejilla-hoja td[data-otro]::before { top: -18px; }
 .rejilla-hoja td.sel { outline: 2px solid var(--m-hoja); outline-offset: -2px; background-image: linear-gradient(color-mix(in srgb, var(--m-hoja-tenue) 45%, transparent), color-mix(in srgb, var(--m-hoja-tenue) 45%, transparent)); }
+/* Clasificador de diapositivas (Vista, como PowerPoint) */
+.clasificador { display: flex; flex-direction: column; gap: 10px; outline: none; max-height: 70vh; overflow: auto; padding: 4px; }
+.clas-seccion { font-weight: 700; padding: 4px 2px; border-bottom: 1px solid var(--borde, #ddd); }
+.clas-fila { display: flex; flex-wrap: wrap; gap: 14px; }
+.clas-item { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: grab; border-radius: 6px; padding: 4px; }
+.clas-item.elegida { outline: 3px solid var(--acento, #1D7A4C); }
+.clas-item.oculta .clas-mini { opacity: .45; }
+.clas-mini { position: relative; overflow: hidden; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); pointer-events: none; }
 /* Comprobar accesibilidad: el párrafo al que se fue, un momento resaltado */
 .acc-marca { outline: 2px solid var(--acento, #1D7A4C); outline-offset: 3px; border-radius: 2px; transition: outline-color .6s; }
 /* Celda de enfoque (Vista, como Excel 2024): la fila y la columna de la celda elegida */
