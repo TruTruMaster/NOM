@@ -88,7 +88,11 @@ nombre al abrirlo; `estilos_real.py` 12 de 12 contra Word 2024: Word ve los mism
 NOM pinta el documento con el 100 % de los renglones como Word, y los Word medidos siguen igual) |
 | Inicio · Edición | Buscar, reemplazar, seleccionar | Sí |
 | Insertar · Páginas | Portada, página en blanco, salto | Salto sí; portada de la galería no («Armar reporte» hace la suya) |
-| Insertar · Tablas | Insertar, dibujar, convertir, Excel incrustado | Insertar, combinar, bordes, rellenos, encabezado, anchos: sí; estilos de tabla de Word se ven; dibujar, convertir texto↔tabla y Excel incrustado: no |
+| Insertar · Tablas | Insertar, dibujar, convertir, Excel incrustado | Insertar, combinar, bordes, rellenos, encabezado, anchos: sí; estilos de tabla de Word se ven; **convertir texto↔tabla: sí** (21-nov: Más → Insertar → Convertir texto en tabla… y
+tabla en texto…: tabulaciones, comas, párrafos con n columnas, otro carácter, o como venga —tabulaciones, si no comas, si
+no un párrafo por fila, como Word—; de tabla a texto las comas salen «, » como en Word; `tabla_texto_real.py` 15 de 15:
+los 12 casos iguales a `ConvertToTable`/`ConvertToText` de Word 2024, Word lee la tabla descargada y Ctrl+Z la regresa);
+dibujar y Excel incrustado: no |
 | Insertar · Ilustraciones | Imágenes, formas, iconos, 3D, SmartArt, gráfico, captura | Imágenes sí (recortar, girar, texto alrededor, pie, texto alternativo). Formas, SmartArt y gráficos **se ven**; insertarlos en un texto: no. Iconos, modelos 3D y captura: no. **EMF/WMF: sí** (18-nov: `js/emf.js`; 535 metarchivos del corpus contra cómo los muestra Word real, `metarchivos_real.py`: parecido 96.2 %, 88.5 % en lo dibujado; las ecuaciones viejas y los objetos incrustados se ven con su vista previa; falta: las letras dentro del dibujo usan las del equipo) |
 | Insertar · Vínculos y comentarios | Vínculo, marcador, referencia cruzada, comentario | Vínculo y comentario sí; marcador y referencia cruzada no |
 | Insertar · Encabezado y pie | Encabezado, pie, número de página | Sí (primera página distinta, «1 de 5», por sección al importar) |

@@ -2617,6 +2617,7 @@
       this.sugerencias = { lista: sugerencias, resolver: resolverSugerencia, activo: () => modoSug, alternar: alternarSugerencias, marcas: () => marcas, fijarMarcas };
       this.ordenar = { parrafos: ordenarParrafos, dialogo: dialogoOrdenar, orden: ordenDeParrafos, estilo: (e) => formatoParrafo({ estilo: e }) };
       this.marcasFormato = { alternar: alternarMarcasFormato, activo: () => verMarcas };
+      this.tablas = { textoEnTabla, tablaEnTexto, dialogo: dialogoTextoTabla };
       this.estilos = { lista: listaEstilos, guardar: guardarEstilo, eliminar: eliminarEstilo, dialogo: dialogoEstilos, aplicar: (k) => formatoParrafo({ estilo: k || null }) };
       this.tabulaciones = { dialogo: dialogoTabulaciones, poner: (lista) => formatoParrafo({ tabs: lista && lista.length ? lista : null }) };
 
@@ -2803,6 +2804,85 @@
         doc().cambiar(ref, { tipo: "tabla", enTexto: true, filasTexto: 1, colsTexto: n, bordes: "ninguno" }, { origen: "comando" });
         insertarBloque({ tipo: "tabla", ref });
         setTimeout(() => { const c = cuerpo.querySelector(`[data-ref="${ref}"] [data-celda="A1"]`); if (c) c.focus(); }, 30);
+      }
+      // ------------------------------------------------------------ convertir texto en tabla y tabla en texto (como Word)
+      /**
+       * Los párrafos elegidos, en una tabla (Insertar → Tabla → Convertir texto en tabla). sep: "tab", "coma", "parrafo" (con
+       * cols columnas, fila por fila), un carácter, o null: como Word, tabulaciones si las hay, si no comas, si no un párrafo
+       * por fila. Devuelve { filas, cols } o el motivo.
+       */
+      function textoEnTabla(sep, cols) {
+        if (ed.soloLectura) return "Solo puedes ver este documento";
+        const ps = parrafosDeSel();
+        if (ps.some((p) => visPintado.slice(p.ini, p.fin).some((it) => it.e))) return "Para convertir en tabla elige solo párrafos de texto";
+        const textos = ps.map((p) => visPintado.slice(p.ini, p.fin).map((it) => it.c).join(""));
+        if (sep == null || sep === "") sep = textos.some((t) => t.includes("\t")) ? "tab" : textos.some((t) => t.includes(",")) ? "coma" : "parrafo";
+        let filas = [];
+        if (sep === "parrafo") { const n = Math.max(1, +cols || 1); for (let i = 0; i < textos.length; i += n) filas.push(textos.slice(i, i + n)); }
+        else { const ch = sep === "tab" ? "\t" : sep === "coma" ? "," : String(sep)[0]; filas = textos.map((t) => t.split(ch)); }
+        const nc = Math.max(1, ...filas.map((f) => f.length)), nf = filas.length;
+        const ref = NOM.DocCRDT.nuevoId(), campos = { tipo: "tabla", enTexto: true, filasTexto: nf, colsTexto: nc };
+        filas.forEach((f, i) => f.forEach((v, j) => { if (v) campos["c:" + NOM.formulas.ref(j, i)] = v; }));
+        comando(() => {
+          const grupo = "tabla-" + Date.now();
+          doc().cambiar(ref, campos, { origen: "comando" });
+          const ini = ps[0].ini, ult = ps[ps.length - 1];
+          const quitar = visPintado.slice(ini, ult.fin);   // (el texto y las marcas de en medio; la última se queda con la tabla)
+          if (quitar.length) doc().seq(B, { k: "v", v: false, r: S().rangos(quitar) }, { origen: "comando", grupo });
+          insertarTokens(ini > 0 ? visPintado[ini - 1].id : null, [{ c: OBJ, obj: { tipo: "tabla", ref } }], "comando", grupo);
+          const pa = S().attrs(ult.mark), limpia = {};
+          ["lista", "nivel", "estilo", "numid", "hecho"].forEach((k) => { if (pa[k] != null) limpia[k] = null; });
+          if (Object.keys(limpia).length) doc().seq(B, { k: "f", a: limpia, r: S().rangos([ult.mark]) }, { origen: "comando", grupo });
+          return null;
+        });
+        return { filas: nf, cols: nc };
+      }
+      /**
+       * La tabla donde está el cursor, en texto (Convertir tabla en texto). sep: "tab", "coma" (como Word, «, »), "parrafo"
+       * (cada celda en su párrafo) o un carácter. Devuelve el número de párrafos o el motivo.
+       */
+      function tablaEnTexto(sep) {
+        if (ed.soloLectura) return "Solo puedes ver este documento";
+        const s = leerSel();
+        const it = (celdaActiva && visPintado.find((x) => x.e && x.e.ref === celdaActiva.ref)) || visPintado.slice(s.ini, Math.max(s.fin, s.ini + 1)).find((x) => x.e && x.e.tipo === "tabla")
+          || (() => { const p = parrafosDeSel(s)[0]; return p ? visPintado.slice(p.ini, p.fin).find((x) => x.e && x.e.tipo === "tabla") : null; })();
+        if (!it || !it.e.ref) return "Pon el cursor en una tabla";
+        const b = doc().bloque(it.e.ref) || {}, nf = +b.filasTexto || +b.filas || 0, nc = +b.colsTexto || +b.cols || 0;
+        const celda = (j, i) => String(b["c:" + NOM.formulas.ref(j, i)] || "");
+        const junta = sep === "coma" ? ", " : sep === "tab" || !sep ? "\t" : String(sep)[0];
+        const renglones = [];
+        for (let i = 0; i < nf; i++) {
+          if (sep === "parrafo") { for (let j = 0; j < nc; j++) renglones.push(celda(j, i)); }
+          else { const fila = []; for (let j = 0; j < nc; j++) fila.push(celda(j, i)); renglones.push(fila.join(junta)); }
+        }
+        const k = visPintado.indexOf(it), p = psPintado[parrafoEn(k)], pa = p ? S().attrs(p.mark) : {};
+        comando(() => {
+          const grupo = "texto-" + Date.now();
+          doc().seq(B, { k: "v", v: false, r: S().rangos([it]) }, { origen: "comando", grupo });
+          insertarTokens(k > 0 ? visPintado[k - 1].id : null, textoTokens(renglones.join("\n"), {}, pa), "comando", grupo);
+          return null;
+        });
+        celdaActiva = null;
+        return renglones.length;
+      }
+      function dialogoTextoTabla(aTexto) {
+        const cuerpo = html(`<form class="col" style="gap:8px"><b>Separar ${aTexto ? "las celdas con" : "el texto en"}</b>
+          ${aTexto ? "" : `<label class="fila" style="gap:6px"><input type="radio" name="sep" value="" checked> Como venga (tabulaciones, si no comas, si no un párrafo por fila)</label>`}
+          <label class="fila" style="gap:6px"><input type="radio" name="sep" value="tab" ${aTexto ? "checked" : ""}> Tabulaciones</label>
+          <label class="fila" style="gap:6px"><input type="radio" name="sep" value="coma"> Comas</label>
+          <label class="fila" style="gap:6px"><input type="radio" name="sep" value="parrafo"> Párrafos${aTexto ? "" : ` <input data-cols inputmode="numeric" style="width:4em" value="1"> columnas`}</label>
+          <label class="fila" style="gap:6px"><input type="radio" name="sep" value="otro"> Otro: <input data-otro maxlength="1" style="width:3em" value="-"></label></form>`);
+        const pie = html(`<div style="display:contents"><button class="btn" data-no type="button">Cancelar</button><button class="btn primario" data-si>Convertir</button></div>`);
+        const h = NOM.hoja({ titulo: aTexto ? "Convertir tabla en texto" : "Convertir texto en tabla", icono: "table", cuerpo, pie });
+        $("[data-no]", pie).onclick = () => h.cerrar();
+        $("[data-si]", pie).onclick = (ev) => {
+          ev.preventDefault();
+          let sep = $("input[name=sep]:checked", cuerpo).value;
+          if (sep === "otro") sep = $("[data-otro]", cuerpo).value || "-";
+          const r = aTexto ? tablaEnTexto(sep) : textoEnTabla(sep || null, $("[data-cols]", cuerpo) ? +$("[data-cols]", cuerpo).value : 1);
+          if (typeof r === "string") return aviso(r, { tipo: "aviso", ms: 5000 });
+          h.cerrar();
+        };
       }
       function insertarTabla(filas, cols) {
         const ref = NOM.DocCRDT.nuevoId();
@@ -5530,6 +5610,8 @@
           { titulo: "Insertar" },
           { texto: "Imagen…", icono: "image", fn: insertarImagen },
           { texto: "Tabla…", icono: "table", fn: () => selectorTabla(b) },
+          { texto: "Convertir texto en tabla…", icono: "table", fn: () => dialogoTextoTabla(false) },
+          { texto: "Convertir tabla en texto…", icono: "table", fn: () => dialogoTextoTabla(true) },
           { texto: "Enlace", icono: "link", atajo: "Ctrl+K", fn: enlace },
           { texto: "Salto de página", icono: "file-plus", atajo: "Ctrl+Enter", fn: () => insertarBloque({ tipo: "salto" }) },
           { texto: "Línea horizontal", icono: "minus", fn: () => insertarBloque({ tipo: "linea" }) },
