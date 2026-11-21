@@ -68,6 +68,18 @@ def main():
         anota("Vista de lectura: en la ventana, sin pantalla completa, y su barra avanza", rep.count() == 1 and p.evaluate("() => !document.fullscreenElement") and c0 != c1, [c0, c1])
         p.keyboard.press("Escape"); p.wait_for_timeout(600)
         anota("…y Esc la cierra", p.locator(".reproductor").count() == 0)
+        # Página de notas: una hoja por diapositiva, con sus notas, que se escriben ahí mismo
+        p.evaluate("() => { window.__notas = NOM.editorActual.modoApi._pres.paginaNotas(); }"); p.wait_for_timeout(1000)
+        dlg = p.locator("section.hoja[role=dialog]").last
+        n_hojas = dlg.locator(".nota-pagina").count()
+        dlg.locator(".nota-texto").nth(1).fill("Recordar los números del trimestre"); p.wait_for_timeout(400)
+        guardada = p.evaluate("() => { const d = NOM.editorActual.doc; return d.valor('_doc', 'nota:' + d.paginas()[1]); }")
+        anota("Página de notas: una hoja por diapositiva y las notas se escriben ahí", n_hojas == len(p.evaluate(paginas)) and guardada == "Recordar los números del trimestre", [n_hojas, guardada])
+        p.evaluate("() => document.body.classList.add('imprime-notas')"); p.emulate_media(media="print"); p.wait_for_timeout(300)
+        visibles = p.evaluate("() => [document.querySelector('.wd, .lienzo, [data-escena]') ? getComputedStyle(document.querySelector('[data-escena]') || document.body).display : 'x', getComputedStyle(document.querySelector('.nota-pagina')).display]")
+        p.emulate_media(media="screen"); p.evaluate("() => document.body.classList.remove('imprime-notas')")
+        anota("…y al imprimir solo salen las hojas de notas", visibles[1] != "none", visibles)
+        p.evaluate("() => window.__notas.cerrar()")
         anota("sin errores de JavaScript", not nav.errores, nav.errores[:3])
     finally:
         nav.cerrar()

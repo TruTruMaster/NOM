@@ -2263,6 +2263,31 @@
         aviso("Diapositivas revueltas. Ctrl+Z para volver", { ms: 2400 });
       }
       /**
+       * Vista → Página de notas (como PowerPoint): cada diapositiva arriba y sus notas del orador abajo, en una hoja carta
+       * vertical; las notas se escriben ahí mismo y «Imprimir» saca una hoja por diapositiva.
+       */
+      function paginaNotas() {
+        const T = tamDoc(doc()), anchoHoja = 520, k = (anchoHoja * 0.8) / T.w;
+        const cuerpo = html(`<div class="notas-paginas" data-pags></div>`);
+        const pie = html(`<div style="display:contents"><button class="btn" data-imp type="button">${ico("printer", "ico-s")} Imprimir</button><span class="crece"></span><button class="btn primario" data-no type="button">Cerrar</button></div>`);
+        const h = NOM.hoja({ titulo: "Página de notas", icono: "sticky-note", cuerpo, pie, ancha: true, alCerrar: () => pintarNotas() });
+        const pags = doc().paginas();
+        cuerpo.innerHTML = pags.map((p, i) => `<div class="nota-pagina" data-p="${esc(p)}" style="width:${anchoHoja}px;aspect-ratio:8.5 / 11">
+          <div class="nota-diapo" style="width:${Math.round(T.w * k)}px;height:${Math.round(T.h * k)}px"><div class="mini-cont diapo-mini" style="position:absolute;left:0;top:0;width:${T.w}px;height:${T.h}px;transform-origin:0 0;transform:scale(${k});${NOM.diapo ? NOM.diapo.estiloDiapo(doc(), p) : ""}">${htmlDiapositiva(doc(), p)}</div></div>
+          <textarea class="nota-texto" data-nota="${esc(p)}" aria-label="Notas de la diapositiva ${i + 1}" ${ed.soloLectura ? "readonly" : ""} placeholder="Haz clic para agregar notas">${esc(doc().valor("_doc", "nota:" + p) || "")}</textarea>
+          <span class="nota-num chico suave">${i + 1}</span></div>`).join("");
+        $$("[data-nota]", cuerpo).forEach((ta) => (ta.oninput = () => { if (!ed.soloLectura) doc().cambiar("_doc", { ["nota:" + ta.dataset.nota]: ta.value || null }); }));
+        if (NOM.diapo && NOM.diapo.ajustarRenglones) requestAnimationFrame(() => { if (cuerpo.isConnected) NOM.diapo.ajustarRenglones(cuerpo); });
+        $("[data-no]", pie).onclick = () => h.cerrar();
+        $("[data-imp]", pie).onclick = () => {
+          document.body.classList.add("imprime-notas");
+          const fin = () => { document.body.classList.remove("imprime-notas"); window.removeEventListener("afterprint", fin); };
+          window.addEventListener("afterprint", fin);
+          if (window.NomAndroid && window.NomAndroid.imprimir) window.NomAndroid.imprimir("Páginas de notas"); else setTimeout(() => window.print(), 60);
+        };
+        return { cerrar: () => h.cerrar() };
+      }
+      /**
        * Vista → Clasificador de diapositivas (como PowerPoint): todas en una cuadrícula, con sus secciones y las ocultas
        * atenuadas; arrastrar para cambiarlas de lugar, doble clic o Entrar para abrir una, Supr para eliminarla, Ctrl+D para
        * duplicarla y las flechas para moverse.
@@ -2543,6 +2568,7 @@
           "-",
           { texto: "Clasificador de diapositivas", icono: "layout-grid", fn: () => clasificador() },
           { texto: "Vista de lectura", icono: "book-open", fn: () => presentar(ed, { lectura: true }) },
+          { texto: "Página de notas", icono: "sticky-note", fn: () => paginaNotas() },
         ]);
       }
       /** El título de una diapositiva para las listas (lo primero que dice, de arriba abajo). */
@@ -2638,7 +2664,7 @@
           h.cerrar();
         };
       }
-      this._pres = { alternarOculta, agregarSeccion, dialogoPersonalizadas, dialogoConfigurar, presentar: (o) => presentar(ed, o), clasificador };
+      this._pres = { alternarOculta, agregarSeccion, dialogoPersonalizadas, dialogoConfigurar, presentar: (o) => presentar(ed, o), clasificador, paginaNotas };
       this._notas = { pintar: pintarNotas };
 
       // En el orden en que se arma una presentación: diapositiva nueva, qué se le pone, cómo se ve y se mueve,
