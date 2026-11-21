@@ -768,7 +768,7 @@ ${formas.join("\n")}
         if (t.e.tipo === "imagen") {
           // (con cómo flota en Word: libre en su lugar, a un lado del texto o en su propio renglón)
           const fl = {}; ["ajuste", "libre", "x", "y", "detras", "alin", "dx", "z", "fl"].forEach((k) => { if (t.e[k] != null) fl[k] = t.e[k]; });
-          ops.push({ id: "imp:b" + ref, bloque: ref, campos: Object.assign({ tipo: "imagen", enTexto: true, src: t.e.src, w: Math.min(t.e.w || 320, 624), h: t.e.h || 0, oe: t.e.oe || undefined }, fl), t: 1, n: "importar" });
+          ops.push({ id: "imp:b" + ref, bloque: ref, campos: Object.assign({ tipo: "imagen", enTexto: true, src: t.e.src, w: Math.min(t.e.w || 320, 624), h: t.e.h || 0, oe: t.e.oe || undefined, alt: t.e.alt || undefined }, fl), t: 1, n: "importar" });
           return { e: { tipo: "imagen", ref } };
         }
         if (t.e.tipo === "tabla") { ops.push({ id: "imp:b" + ref, bloque: ref, campos: Object.assign({ tipo: "tabla", enTexto: true, filasTexto: t.e.filas, colsTexto: t.e.cols }, t.e.celdas), t: 1, n: "importar" }); return { e: { tipo: "tabla", ref } }; }

@@ -2436,7 +2436,9 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
               const src = rid ? await imagenDe(rid) : null;
               const ext = c.getElementsByTagNameNS("*", "extent")[0];
               const w = ext ? Math.round(+ext.getAttribute("cx") / EMU) : 320, h = ext ? Math.round(+ext.getAttribute("cy") / EMU) : 0;
-              if (src) tramos.push({ e: Object.assign({ tipo: "imagen", src, w, h, oe: ordinal(c) }, comoFlota(c, w, h)), a: {} });
+              // (con su texto alternativo: «descr» —o «title»— del docPr, como lo pone Word)
+              const dp = c.getElementsByTagNameNS("*", "docPr")[0], alt = dp ? (dp.getAttribute("descr") || dp.getAttribute("title") || "").trim() : "";
+              if (src) tramos.push({ e: Object.assign({ tipo: "imagen", src, w, h, oe: ordinal(c) }, alt ? { alt } : {}, comoFlota(c, w, h)), a: {} });
               else {
                 // Forma, cuadro de texto, gráfico o SmartArt: aquí se ve como una marca y al exportar sale el original.
                 const g = c.getElementsByTagNameNS("*", "graphicData")[0], uri = (g && g.getAttribute("uri")) || "";
@@ -4432,7 +4434,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
             if (!src) return;
             const sr = todos(hijo(el, "blipFill"), "srcRect")[0];
             const lnP = lineaDml(hijo(el, "spPr"));
-            out.push(Object.assign({ tipo: "imagen", src, recorte: sr ? ["l", "t", "r", "b"].map((k) => +(at(sr, k) || 0) / 100000) : undefined, linea: lnP && !lnP.no ? lnP : undefined }, base));
+            out.push(Object.assign({ tipo: "imagen", src, alt: (at(todos(el, "cNvPr")[0], "descr") || "").trim() || undefined, recorte: sr ? ["l", "t", "r", "b"].map((k) => +(at(sr, k) || 0) / 100000) : undefined, linea: lnP && !lnP.no ? lnP : undefined }, base));
             return;
           }
           if (nm === "graphicFrame") {

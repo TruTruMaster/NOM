@@ -50,7 +50,14 @@ archivo de Office se muestra (y se conserva al descargar), pero no se crea ni se
 | Proteger (restringir edición, final, contraseña) | Sí | Como en Office (`a9e388a`, `1b0d8ea`). |
 | Ortografía | A medias | El corrector del navegador. Sin el «Editor» de Word (gramática, estilo), sinónimos ni traductor. |
 | Comentarios | Sí | Con respuestas, resueltos y @menciones, en los cuatro editores. Los de Excel con hilo (365) no se ven. |
-| Accesibilidad | A medias | Teclado, lector de pantalla, alto contraste, reducir movimiento, texto alternativo. Sin «Comprobar accesibilidad». |
+| Accesibilidad | Sí | Teclado, lector de pantalla, alto contraste, reducir movimiento, texto alternativo. **Comprobar
+accesibilidad** (21-nov: Archivo y la paleta, en texto, hoja y presentación) con las reglas del comprobador de Office:
+errores (falta texto alternativo, tabla sin encabezado —en Word, «repetir como fila de encabezado»—, diapositiva sin
+título), advertencias (contraste menor a 4.5 a 1 —3 a 1 en letra grande—, vínculos «haz clic aquí», celdas combinadas,
+objetos que no van en línea con el texto, renglones o espacios en blanco para acomodar) y consejos (nivel de título
+saltado, diapositivas con el mismo título, «Hoja1»/«Sheet1»), con «Ir» a cada uno; `prueba_accesibilidad.py` 7 de 7 con
+un Word, un Excel y un PowerPoint hechos a propósito. Office no deja leer su comprobador desde fuera (no hay API): se
+comparó con sus reglas publicadas. De paso: el texto alternativo de las imágenes de Word y Excel ya se lee al abrirlos. |
 | Imprimir y PDF | Sí | Desde el navegador. |
 
 ## 3. Word
@@ -206,7 +213,7 @@ la celda no cambia nada (`js/anchos-excel.js`; con otros caracteres o tamaños, 
 | Transiciones | Galería, opciones, duración, sonido, avanzar | Sí: panel con **51 transiciones y 151 variantes** de PowerPoint, duración, avanzar al hacer clic o después de, sonido del archivo. **Transformar (Morph): a medias** (sin medir contra el video) |
 | Animaciones | Galería, opciones, intervalos, panel, desencadenadores, copiar animación | Sí: **262 efectos** (entrada, énfasis, salida, trayectorias), opciones, intervalos, panel con línea de tiempo, trayectorias dibujadas, copiar animación, por párrafo/letra/palabra, gráficas por serie o categoría; medido 97 % contra el video de PowerPoint. Desencadenador por marcador de un medio: no |
 | Presentación | Desde el principio, desde la actual, presentar en línea, personalizada, configurar, ocultar diapositiva, ensayar, grabar, subtítulos, Speaker Coach | Modo presentador (notas, siguiente, tiempo), **presentar en otra pantalla con un código** (también desde el teléfono), puntero láser y pluma: sí. **Desde el principio (F5) y desde la diapositiva actual (Mayús+F5), ocultar diapositiva, presentaciones personalizadas, ensayar intervalos y configurar presentación: sí** (21-nov: la oculta se ve atenuada y con su número tachado, no sale al presentar salvo si se empieza en ella o un vínculo lleva ahí; las personalizadas se hacen, copian, editan —qué diapositivas y en qué orden— y se presentan; ensayar mide cuánto se queda cada diapositiva, con pausa, y si se conserva queda como avance automático; configurar: repetir hasta Esc, usar los intervalos, sin animación y qué muestra «desde el principio» —todas, desde-hasta o una personalizada—; el tipo «examinada en exposición» o «en ventana» del archivo se conserva. Se leen y se escriben como PowerPoint: `show="0"`, `p:custShowLst`, `advTm` y `presProps.xml`. `presentacion_real.py` contra PowerPoint 2024 real: **31 de 31** —p13 hecho en PowerPoint (6 diapositivas, una oculta, 3 secciones, 2 personalizadas, 2 intervalos, repetir) leído igual; descargado sin tocar, PowerPoint dice lo mismo; cambiado en NOM y hecho en NOM desde cero, lo esperado; los tres abren sin avisos y el validador de Microsoft no da errores—; `prueba_presentacion.py` 10/10 por la interfaz). Presentar en línea, grabar, subtítulos en vivo y Speaker Coach: no |
-| Revisar | Ortografía, accesibilidad, comentarios, comparar | Comentarios: sí; lo demás: no |
+| Revisar | Ortografía, accesibilidad, comentarios, comparar | Comentarios y **comprobar accesibilidad** (21-nov, ver la fila común): sí; ortografía: la del navegador; comparar: no |
 | Vista | Normal, clasificador, página de notas, lectura, patrón, guías, regla, zoom | Normal, notas del orador, zoom, cuadrícula con ajuste: sí. **Patrón de diapositivas: se ve** (formas del patrón y del diseño); editarlo: no |
 | Formato de forma (contextual) | Relleno, contorno, efectos, estilos, WordArt, tamaño, efectos 3D | Relleno (también degradado, trama, imagen), contorno, puntas, tamaño, giro: sí. Efectos 3D y estilos de forma de Office: no |
 | Cameo, Teams, Presentaciones en vivo | | No (NOM tiene su proyector por código y la coautoría en vivo) |
