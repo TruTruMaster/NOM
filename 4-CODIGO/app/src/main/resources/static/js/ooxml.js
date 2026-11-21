@@ -4935,6 +4935,72 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
   }
   const LIBRES = new Set(["clase", "entidad", "entidad-debil", "relacion-debil", "atributo-multi", "actor", "paquete", "componente", "nodo", "final"]);
 
+  // ------------------------------------------------------------ Presentación de PowerPoint: secciones, personalizadas y configuración
+  /**
+   * Las secciones (Inicio → Sección) en el orden de las diapositivas de ahora, como las guarda PowerPoint: cada diapositiva
+   * en una sola y las de una sección juntas. Una diapositiva que quedó sin sección, o separada de las demás de la suya,
+   * va con la sección de la diapositiva de antes; una sección que se quedó sin diapositivas se conserva vacía en su lugar.
+   * null si no hay secciones.
+   */
+  function seccionesPptx(doc) {
+    const ss = doc.valor("_doc", "secciones");
+    if (!Array.isArray(ss) || !ss.length) return null;
+    const pags = doc.paginas(), de = new Map();
+    ss.forEach((sc, k) => (Array.isArray(sc.d) ? sc.d : []).forEach((pg) => { if (!de.has(pg)) de.set(pg, k); }));
+    const sal = ss.map((sc) => ({ id: sc.id, nombre: String(sc.nombre == null ? "" : sc.nombre), d: [] }));
+    const orden = [], cerradas = new Set();
+    let k = null;
+    for (const pg of pags) {
+      let kp = de.has(pg) ? de.get(pg) : null;
+      if (kp == null || (cerradas.has(kp) && kp !== k)) kp = k == null ? (kp == null ? 0 : kp) : k;
+      if (kp !== k) { if (k != null) cerradas.add(k); if (!orden.includes(kp)) orden.push(kp); k = kp; }
+      sal[kp].d.push(pg);
+    }
+    ss.forEach((_, i) => { if (!orden.includes(i)) { const j = orden.indexOf(i - 1); orden.splice(j < 0 ? orden.length : j + 1, 0, i); } });
+    return orden.map((i) => sal[i]);
+  }
+  /** Las presentaciones personalizadas con las diapositivas que siguen en el documento (y un id numérico para cada una). */
+  function personalizadasPptx(doc) {
+    const l = doc.valor("_doc", "personalizadas");
+    if (!Array.isArray(l) || !l.length) return [];
+    const hay = new Set(doc.paginas()), usados = new Set();
+    let sig = 0;
+    l.forEach((c) => { if (/^\d+$/.test(String(c.id))) sig = Math.max(sig, +c.id + 1); });
+    return l.map((c) => {
+      let id = /^\d+$/.test(String(c.id)) && !usados.has(String(c.id)) ? String(c.id) : String(sig++);
+      usados.add(id);
+      return { id, idNom: c.id, nombre: String(c.nombre == null ? "" : c.nombre), d: (Array.isArray(c.d) ? c.d : []).filter((pg) => hay.has(pg)) };
+    });
+  }
+  const guid = () => {
+    const u = new Uint8Array(16); crypto.getRandomValues(u);
+    const h = [...u].map((b) => b.toString(16).padStart(2, "0")).join("").toUpperCase();
+    return `{${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}}`;
+  };
+  const URI_SECCIONES = "{521415D9-36F7-43E2-AB2F-B90AF26B5E84}";
+  /** <p:custShowLst> (ridDe(página) = r:id de la diapositiva) o "" si no hay. */
+  function custShowXml(pers, ridDe) {
+    if (!pers.length) return "";
+    return `<p:custShowLst>${pers.map((c) => `<p:custShow name="${x(c.nombre)}" id="${c.id}"><p:sldLst>${c.d.map((pg) => ridDe(pg)).filter(Boolean).map((r) => `<p:sld r:id="${r}"/>`).join("")}</p:sldLst></p:custShow>`).join("")}</p:custShowLst>`;
+  }
+  /** El <p:ext> de las secciones (numDe(página) = id de la diapositiva en sldIdLst) o "" si no hay. */
+  function seccionesExtXml(secs, numDe) {
+    if (!secs || !secs.length) return "";
+    return `<p:ext uri="${URI_SECCIONES}"><p14:sectionLst xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main">${secs.map((sc) => `<p14:section name="${x(sc.nombre)}" id="${/^\{[0-9A-Fa-f-]{36}\}$/.test(String(sc.id)) ? sc.id : guid()}"><p14:sldIdLst>${sc.d.map((pg) => numDe(pg)).filter(Boolean).map((n) => `<p14:sldId id="${n}"/>`).join("")}</p14:sldIdLst></p14:section>`).join("")}</p14:sectionLst></p:ext>`;
+  }
+  /** Configurar presentación (presProps.xml → <p:showPr>): repetir hasta Esc, usar intervalos, animaciones, tipo y qué
+      diapositivas. null si es la de siempre. */
+  function showPrXml(doc, pers) {
+    const c = doc.valor("_doc", "presentacion");
+    if (!c || typeof c !== "object" || !Object.keys(c).length) return null;
+    const p2 = c.personalizada != null ? pers.find((q) => String(q.idNom) === String(c.personalizada)) : null;
+    const rg = Array.isArray(c.rango) && c.rango.length === 2 ? c.rango : null;
+    return `<p:showPr${c.repetir ? ' loop="1"' : ""} showNarration="1"${c.sinAnimacion ? ' showAnimation="0"' : ""}${c.sinIntervalos ? ' useTimings="0"' : ""}>`
+      + (c.tipo === "kiosco" ? '<p:kiosk/>' : c.tipo === "ventana" ? '<p:browse/>' : '<p:present/>')
+      + (p2 ? `<p:custShow id="${p2.id}"/>` : rg ? `<p:sldRg st="${Math.max(1, +rg[0] || 1)}" end="${Math.max(1, +rg[1] || 1)}"/>` : '<p:sldAll/>')
+      + '</p:showPr>';
+  }
+
   function pptx(doc, esDiagrama) {
     const og = !esDiagrama && NOM.ooxml.usarOrigen !== false && NOM.origen ? NOM.origen.leer(doc) : null;
     if (og && og.fmt === "pptx" && og.h && og.h.pp) {
@@ -5347,7 +5413,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       const timing = !esDiagrama ? timingDe(doc, p, (bid) => { const i = bs.findIndex((b) => b.id === bid); const m = i >= 0 && /<p:cNvPr id="(\d+)"/.exec(figurasL[i] || ""); return m ? m[1] : null; }, (bid) => { const b = bs.find((q) => q.id === bid); return !!(b && (b.tipo === "texto" || b.html || b.texto)); }, true) : "";
       const nota = !esDiagrama ? doc.valor("_doc", "nota:" + p) || "" : "";
       if (nota && !O) { notas.push({ diapo: n + 1, texto: nota }); rels.push({ id: "rIdNota", tipo: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide", destino: `../notesSlides/notesSlide${notas.length}.xml` }); }
-      return { rels, bs, figurasL, fondo, transicion, nota: nota && !O ? notas.length : 0, xml: XML + `<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+      return { rels, bs, figurasL, fondo, transicion, nota: nota && !O ? notas.length : 0, xml: XML + `<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"${!esDiagrama && doc.valor("_doc", "oculta:" + p) ? ' show="0"' : ""}>
 <p:cSld>${fondo}<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>${figuras}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>${transicion}${timing}</p:sld>`, timing };
     };
     const diapos = og ? [{}] : paginas.map((p, n) => armar(p, n, null));
@@ -5355,8 +5421,11 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     const NS = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
     const arbolVacio = '<p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/></p:spTree></p:cSld>';
     const conNotas = notas.length > 0;
+    const persP = !esDiagrama && !og ? personalizadasPptx(doc) : null, secsP = !esDiagrama && !og ? seccionesPptx(doc) : null;
     const presentacion = XML + `<p:presentation ${NS}><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rIdM"/></p:sldMasterIdLst>${conNotas ? '<p:notesMasterIdLst><p:notesMasterId r:id="rIdNM"/></p:notesMasterIdLst>' : ""}
-<p:sldIdLst>${diapos.map((_, i) => `<p:sldId id="${256 + i}" r:id="rId${i + 1}"/>`).join("")}</p:sldIdLst><p:sldSz cx="${TD.w * EMU}" cy="${TD.h * EMU}"/><p:notesSz cx="6858000" cy="9144000"/></p:presentation>`;
+<p:sldIdLst>${diapos.map((_, i) => `<p:sldId id="${256 + i}" r:id="rId${i + 1}"/>`).join("")}</p:sldIdLst><p:sldSz cx="${TD.w * EMU}" cy="${TD.h * EMU}"/><p:notesSz cx="6858000" cy="9144000"/>${persP ? custShowXml(persP, (pg) => { const i = paginas.indexOf(pg); return i < 0 ? null : "rId" + (i + 1); }) : ""}${secsP ? `<p:extLst>${seccionesExtXml(secsP, (pg) => { const i = paginas.indexOf(pg); return i < 0 ? null : String(256 + i); })}</p:extLst>` : ""}</p:presentation>`;
+    const showPr = !esDiagrama ? showPrXml(doc, persP || []) : null;
+    const presProps = showPr ? XML + `<p:presentationPr ${NS}>${showPr}</p:presentationPr>` : null;
     const maestro = XML + `<p:sldMaster ${NS}>${arbolVacio}<p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>
 <p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst><p:txStyles><p:titleStyle/><p:bodyStyle/><p:otherStyle/></p:txStyles></p:sldMaster>`;
     const diseno = XML + `<p:sldLayout ${NS} type="blank" preserve="1">${arbolVacio}<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>`;
@@ -5457,13 +5526,16 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         planes.push({ ruta: ruta0 });
         const orden = doc.deLaPagina(p).slice().sort((a, b) => (a.z || 0) - (b.z || 0)), ids = orden.map((b) => b.id);
         const cF = cambio("fondo:" + p), cT = cambio("trans:" + p) || cambio("transOffice:" + p), cN = cambio("nota:" + p), cA = cambio("anim:" + p);
+        const cO = cambio("oculta:" + p);
         const mismas = ids.length === hp.ids.length && ids.every((id, i) => id === hp.ids[i]) && ids.every(igualB);
-        if (mismas && !cF && !cT && !cN && !cA) return;   // intacta: ni se toca
+        if (mismas && !cF && !cT && !cN && !cA && !cO) return;   // intacta: ni se toca
         const xs = pq.texto(ruta0), raiz = O.hijosXml(xs).find((h) => O.local(h.n) === "sld");
         if (!raiz || raiz.n !== "p:sld") throw new Error("diapositiva con otro prefijo");
         const cSld = O.hijoXml(xs, "cSld", raiz.ci, raiz.cf), arbol = cSld && O.hijoXml(xs, "spTree", cSld.ci, cSld.cf);
         if (!arbol) throw new Error("diapositiva sin figuras");
         const us = O.hijosXml(xs, arbol.ci, arbol.cf), ps2 = [];
+        // Ocultar diapositiva: solo el atributo show de <p:sld>
+        if (cO) { const tag = xs.slice(raiz.i, raiz.ci).replace(/\sshow="[^"]*"/, ""); ps2.push([raiz.i, raiz.ci, doc.valor("_doc", "oculta:" + p) ? tag.replace(/\s*>$/, ' show="0">') : tag]); }
         const vivos = {};
         orden.forEach((b) => { if (b.ox != null) (vivos[b.ox] = vivos[b.ox] || []).push(b.id); });
         const intacto = (k) => { const a = hp.e[k] || [], v = vivos[k] || []; return a.length > 0 && a.length === v.length && a.every((id) => v.includes(id)) && a.every(igualB); };
@@ -5656,14 +5728,17 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         return { txt, rid, id: +O.attr(xp, h, "id") || 0, ruta: rel ? pq.resolver(PRES, rel.destino) : null };
       });
       const mismaLista = ents.length === planes.length && ents.every((e, i) => e.ruta === planes[i].ruta);
+      // el id y el r:id de cada página en la lista (las de antes conservan los suyos)
+      const sldDe = planes.map((pl, i) => (mismaLista ? ents[i] : ents.find((q) => q.ruta === pl.ruta)) || null).map((e) => (e ? { id: e.id, rid: e.rid } : null));
       if (!mismaLista) {
         let maxId = ents.reduce((m, e) => Math.max(m, e.id), 255), k = 0;
-        const lista = planes.map((pl) => {
+        const lista = planes.map((pl, i) => {
           const e = ents.find((q) => q.ruta === pl.ruta);
           if (e) return e.txt;
           const rid = "rId" + PRE + "S" + ++k;
           pq.agregaRel(PRES, rid, T.diapo, "/" + pl.ruta);
-          return `<p:sldId id="${++maxId}" r:id="${rid}"/>`;
+          sldDe[i] = { id: ++maxId, rid };
+          return `<p:sldId id="${maxId}" r:id="${rid}"/>`;
         });
         piezasP.push([lst.ci, lst.cf, lista.join("")]);
         const borradas = ents.filter((e) => e.ruta && !usadas.has(e.ruta));
@@ -5672,12 +5747,46 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
           if (nt) { const np = pq.resolver(e.ruta, nt.destino); pq.quita(np); pq.quita(pq.relsDe(np)); pq.quitaTipo(np); }
           pq.quita(e.ruta); pq.quita(pq.relsDe(e.ruta)); pq.quitaTipo(e.ruta); pq.quitaRel(PRES, e.rid);
         });
-        if (borradas.length) {
-          // secciones y presentaciones personalizadas nombran diapositivas por número: se quitan para que no apunten a nada
-          const cs = una("custShowLst");
-          if (cs) piezasP.push([cs.i, cs.f, ""]);
-          const ext = una("extLst");
-          if (ext) piezasP.push([ext.i, ext.f, xp.slice(ext.i, ext.f).replace(/<p:ext\b[^>]*uri="\{521415D9-36F7-43E2-AB2F-B90AF26B5E84\}"[^>]*>[\s\S]*?<\/p:ext>/, "")]);
+      }
+      // Presentaciones personalizadas y secciones: nombran diapositivas por relación y por número, así que con otra lista
+      // (o si la persona las cambió) se escriben otra vez desde el documento, con las diapositivas de ahora.
+      const pers = personalizadasPptx(doc);
+      if (!mismaLista || cambio("secciones") || cambio("personalizadas")) {
+        const porPag = new Map(paginas.map((pg, i) => [pg, sldDe[i]]));
+        const ridDe = (pg) => (porPag.get(pg) || {}).rid || null, numDe = (pg) => { const q = porPag.get(pg); return q && q.id ? String(q.id) : null; };
+        const cs = una("custShowLst"), nuevoCs = custShowXml(pers, ridDe);
+        if (cs) piezasP.push([cs.i, cs.f, nuevoCs]);
+        else if (nuevoCs) {
+          const tras = ["photoAlbum", "custDataLst", "kinsoku", "defaultTextStyle", "modifyVerifier", "extLst"].map(una).find(Boolean);
+          piezasP.push(tras ? [tras.i, tras.i, nuevoCs] : [raizP.cf, raizP.cf, nuevoCs]);
+        }
+        const ext = una("extLst"), nuevaSec = seccionesExtXml(seccionesPptx(doc), numDe);
+        if (ext) {
+          const xe = xp.slice(ext.i, ext.f), re = /<p:ext\b[^>]*uri="\{521415D9-36F7-43E2-AB2F-B90AF26B5E84\}"[^>]*>[\s\S]*?<\/p:ext>/;
+          const nx = re.test(xe) ? xe.replace(re, () => nuevaSec) : nuevaSec ? xe.replace(/<\/p:extLst>$/, () => nuevaSec + "</p:extLst>") : xe;
+          if (nx !== xe) piezasP.push([ext.i, ext.f, /^<p:extLst>\s*<\/p:extLst>$/.test(nx) ? "" : nx]);
+        } else if (nuevaSec) piezasP.push([raizP.cf, raizP.cf, `<p:extLst>${nuevaSec}</p:extLst>`]);
+      }
+      // Configurar presentación (presProps.xml): solo lo que se cambió; el color de la pluma y lo demás se quedan
+      if (cambio("presentacion")) {
+        const nuevo = showPrXml(doc, pers) || '<p:showPr showNarration="1"><p:present/><p:sldAll/></p:showPr>';
+        const relPP = relsP.find((q) => /\/presProps$/.test(q.tipo || "")), rutaPP = relPP ? pq.resolver(PRES, relPP.destino) : null, xpp = rutaPP ? pq.texto(rutaPP) : null;
+        if (xpp) {
+          const raizPP = O.hijosXml(xpp).find((h) => O.local(h.n) === "presentationPr");
+          const sp = raizPP && O.hijosXml(xpp, raizPP.ci, raizPP.cf).find((h) => O.local(h.n) === "showPr");
+          const pre0 = (raizPP && raizPP.n.includes(":")) ? raizPP.n.slice(0, raizPP.n.indexOf(":") + 1) : "p:";
+          const nuevoP = pre0 === "p:" ? nuevo : nuevo.replace(/<(\/?)p:/g, "<$1" + pre0);
+          if (sp) {
+            // los hijos que no son de qué se muestra ni de cómo (penClr, extLst…) se quedan
+            const resto = sp.ci === sp.cf ? "" : O.hijosXml(xpp, sp.ci, sp.cf).filter((h) => !/^(present|browse|kiosk|sldAll|sldRg|custShow)$/.test(O.local(h.n))).map((h) => xpp.slice(h.i, h.f)).join("");
+            const abre = nuevoP.slice(0, nuevoP.indexOf(">") + 1), dentro = nuevoP.slice(abre.length, nuevoP.lastIndexOf("</"));
+            pq.pon(rutaPP, aplicarPiezas(xpp, [[sp.i, sp.f, abre + dentro + resto + `</${pre0}showPr>`]]));
+          } else if (raizPP) pq.pon(rutaPP, aplicarPiezas(xpp, [[raizPP.ci, raizPP.ci, nuevoP]]));
+        } else {
+          const nr = "ppt/" + pre + "presProps.xml";
+          pq.pon(nr, XML + `<p:presentationPr xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">${nuevo}</p:presentationPr>`);
+          pq.tipo(nr, "application/vnd.openxmlformats-officedocument.presentationml.presProps+xml");
+          pq.agregaRel(PRES, "rId" + PRE + "PP", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/presProps", "/" + nr);
         }
       }
       if (piezasP.length) pq.pon(PRES, aplicarPiezas(xp, piezasP));
@@ -5687,7 +5796,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     }
     if (og) return conOrigen({ maestroNotas, paginaNotas });
     return zip([
-      { nombre: "[Content_Types].xml", datos: CT(`<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
+      { nombre: "[Content_Types].xml", datos: CT(`<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>${presProps ? '<Override PartName="/ppt/presProps.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presProps+xml"/>' : ""}
 <Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>
 <Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>
 <Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>
@@ -5699,7 +5808,9 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       { nombre: "ppt/presentation.xml", datos: presentacion },
       { nombre: "ppt/_rels/presentation.xml.rels", datos: RELS([...diapos.map((_, i) => ({ id: "rId" + (i + 1), tipo: T.diapo, destino: `slides/slide${i + 1}.xml` })),
         { id: "rIdM", tipo: T.maestro, destino: "slideMasters/slideMaster1.xml" }, { id: "rIdT", tipo: T.tema, destino: "theme/theme1.xml" },
-        ...(conNotas ? [{ id: "rIdNM", tipo: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster", destino: "notesMasters/notesMaster1.xml" }] : [])]) },
+        ...(conNotas ? [{ id: "rIdNM", tipo: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster", destino: "notesMasters/notesMaster1.xml" }] : []),
+        ...(presProps ? [{ id: "rIdPP", tipo: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/presProps", destino: "presProps.xml" }] : [])]) },
+      ...(presProps ? [{ nombre: "ppt/presProps.xml", datos: presProps }] : []),
       { nombre: "ppt/slideMasters/slideMaster1.xml", datos: maestro },
       { nombre: "ppt/slideMasters/_rels/slideMaster1.xml.rels", datos: RELS([{ tipo: T.diseno, destino: "../slideLayouts/slideLayout1.xml" }, { tipo: T.tema, destino: "../theme/theme1.xml" }]) },
       { nombre: "ppt/slideLayouts/slideLayout1.xml", datos: diseno },
@@ -6362,6 +6473,8 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       paginas.push(pg);
       let rels = await relsDe(ruta);
       const sld = P(xml);
+      // Presentación → Ocultar diapositiva (<p:sld show="0">): no sale al presentar
+      if (/^(0|false)$/.test(sld.documentElement.getAttribute("show") || "")) docCampos["oculta:" + pg] = true;
       // Marcadores del diseño y del patrón (para lo que no trae posición propia).
       const relDiseno = Object.values(rels).find((r) => /slideLayout$/.test(r.tipo));
       let heredados = {}, mDis = {}, mMae = {};
@@ -6873,6 +6986,36 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
     // los vínculos a otra diapositiva apuntan a su página de NOM
     const paginaDeRuta = new Map(paginas.map((pg) => [docCampos["os:" + pg], pg]));
     bloques.forEach((b) => { if (b.accion && b.accion.ruta) { const pg = paginaDeRuta.get(b.accion.ruta); if (pg) b.accion = { tipo: "diapo", pagina: pg }; else delete b.accion; } });
+    // Las secciones (Inicio → Sección: p14:sectionLst, por número de diapositiva), las presentaciones personalizadas
+    // (p:custShowLst, por relación) y Configurar presentación (presProps.xml: repetir hasta Esc, usar intervalos…).
+    {
+      const porNum = new Map(), porRid = new Map();
+      todos(todos(docP, "sldIdLst")[0], "sldId").forEach((x) => {
+        const r = relsPres[rid(x, "id")], pg = r && paginaDeRuta.get(r.destino);
+        if (pg) { porNum.set(at(x, "id"), pg); porRid.set(rid(x, "id"), pg); }
+      });
+      const secs = todos(docP, "section").filter((x) => /powerpoint\/20\d\d\/main/.test(x.namespaceURI || ""))
+        .map((x) => ({ id: at(x, "id") || "", nombre: at(x, "name") || "", d: todos(x, "sldId").map((y) => porNum.get(at(y, "id"))).filter(Boolean) }));
+      if (secs.length) docCampos.secciones = secs;
+      const pers = todos(todos(docP, "custShowLst")[0], "custShow")
+        .map((c) => ({ id: at(c, "id") || "", nombre: at(c, "name") || "", d: todos(c, "sld").map((y) => porRid.get(rid(y, "id"))).filter(Boolean) }));
+      if (pers.length) docCampos.personalizadas = pers;
+      const relPP = Object.values(relsPres).find((r) => /\/presProps$/.test(r.tipo));
+      const tpp = relPP ? await z.texto(relPP.destino) : null, sp = tpp ? todos(P(tpp), "showPr")[0] : null;
+      if (sp) {
+        const si = (a) => /^(1|true)$/.test(at(sp, a) || ""), no = (a) => /^(0|false)$/.test(at(sp, a) || "");
+        const cfg = {};
+        if (si("loop")) cfg.repetir = true;
+        if (no("useTimings")) cfg.sinIntervalos = true;
+        if (no("showAnimation")) cfg.sinAnimacion = true;
+        if (todos(sp, "kiosk")[0]) cfg.tipo = "kiosco"; else if (todos(sp, "browse")[0]) cfg.tipo = "ventana";
+        const rg = todos(sp, "sldRg")[0];
+        if (rg) cfg.rango = [+at(rg, "st") || 1, +at(rg, "end") || 1];
+        const cs = todos(sp, "custShow")[0], p2 = cs && pers.find((x) => x.id === at(cs, "id"));
+        if (p2) cfg.personalizada = p2.id;
+        if (Object.keys(cfg).length) docCampos.presentacion = cfg;
+      }
+    }
     if (!paginas.length) throw new Error("La presentación no tiene diapositivas que se puedan leer");
     // (lo que no se ve se conserva porque va dentro el archivo original; uno muy grande no se guarda: formatos.js lo avisa)
     const conserva = !(NOM.origen && NOM.origen.MAX_ORIGEN) || u8.length <= NOM.origen.MAX_ORIGEN;
@@ -6969,5 +7112,5 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
     return zip(sale);
   }
 
-  NOM.ooxml = { zip, docx, xlsx, pptx, formulaExcel, crc32, leerDocx, leerXlsx, leerPptx, modeloXlsx, huellasDocx, huellasPptx, parcialesPptx, abrirZip, conProteccion, usarOrigen: true };
+  NOM.ooxml = { zip, docx, xlsx, pptx, formulaExcel, crc32, leerDocx, leerXlsx, leerPptx, modeloXlsx, huellasDocx, huellasPptx, parcialesPptx, abrirZip, conProteccion, seccionesPptx, usarOrigen: true };
 })();

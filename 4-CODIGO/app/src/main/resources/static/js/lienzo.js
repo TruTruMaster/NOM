@@ -2093,11 +2093,22 @@
       pintarMinis = NOM.throttle(() => {
         const minis = $("[data-minis]", raiz);
         const pags = doc().paginas();
-        minis.innerHTML = pags.map((p, i) => {
+        // Con secciones (Inicio → Sección de PowerPoint), cada una lleva su cabeza y se puede contraer.
+        const secs = NOM.ooxml && NOM.ooxml.seccionesPptx ? NOM.ooxml.seccionesPptx(doc()) : null;
+        const grupos = secs ? secs.map((sc) => ({ sc, d: sc.d })) : [{ sc: null, d: pags }];
+        const colapsadas = ed._colapsadas || (ed._colapsadas = new Set());
+        const miniHtml = (p) => {
+          const i = pags.indexOf(p);
           const du = lienzo.duenoPagina(p), cambios = ed.resaltando && ed.cambiosVisita && (ed.cambiosVisita.bloques || []).some((id) => doc().valor(id, "pagina") === p);
-          const T = tamDoc(doc());
-          return `<button class="mini" data-p="${esc(p)}" aria-current="${p === ed.pagina}" aria-label="Diapositiva ${i + 1}" style="aspect-ratio:${T.w} / ${T.h}"><span class="num">${i + 1}</span>
+          const T = tamDoc(doc()), oc = oculta(p);
+          return `<button class="mini${oc ? " oculta" : ""}" data-p="${esc(p)}" aria-current="${p === ed.pagina}" aria-label="Diapositiva ${i + 1}${oc ? " (oculta)" : ""}" style="aspect-ratio:${T.w} / ${T.h}"><span class="num">${i + 1}${oc ? ico("eye-off", "ico-s") : ""}</span>
             <div class="mini-cont diapo-mini" style="${NOM.diapo ? NOM.diapo.estiloDiapo(doc(), p) : ""}">${htmlDiapositiva(doc(), p)}</div>${du ? `<span class="mini-dueno" style="--c:${esc(ed.colorDe(du))}">${esc(ed.nombreDe(du))}</span>` : ""}${cambios ? `<span class="mini-cambio" title="Cambió desde tu última visita"></span>` : ""}${tieneTransicion(doc(), p) ? `<span class="mini-trans" title="Con transición">${ico("sparkles", "ico-s")}</span>` : ""}</button>`;
+        };
+        minis.innerHTML = grupos.map(({ sc, d }) => {
+          if (!sc) return d.map(miniHtml).join("");
+          const col = colapsadas.has(sc.id);
+          return `<button class="mini-seccion" data-sec="${esc(sc.id)}" aria-expanded="${!col}" data-micro="Sección|Toca para contraerla o abrirla; mantén presionado (o clic derecho) para cambiarle el nombre, moverla o quitarla.">${ico(col ? "chevron-right" : "chevron-down", "ico-s")}<span class="crece recorta">${esc(sc.nombre || "Sección sin título")}</span><span class="suave">${d.length}</span></button>`
+            + (col ? "" : d.map(miniHtml).join(""));
         }).join("") + (ed.soloLectura ? "" : `<button class="btn plano" data-nueva data-micro="Nueva diapositiva|Agrega una diapositiva después de la actual.">${ico("plus")}</button>`);
         // (los renglones de las miniaturas donde los pone PowerPoint, como en la diapositiva grande)
         if (NOM.diapo && NOM.diapo.ajustarRenglones) requestAnimationFrame(() => { if (minis.isConnected) NOM.diapo.ajustarRenglones(minis); });
@@ -2108,10 +2119,16 @@
           m.onclick = () => { ed.pagina = m.dataset.p; lienzo.render(); pintarNotas(); };
           m.oncontextmenu = (e) => { e.preventDefault(); if (!ed.soloLectura) menuDiapo(m, m.dataset.p); };
         });
+        $$(".mini-seccion", minis).forEach((c) => {
+          c.onclick = () => { const id = c.dataset.sec; if (colapsadas.has(id)) colapsadas.delete(id); else colapsadas.add(id); pintarMinis(); };
+          c.oncontextmenu = (e) => { e.preventDefault(); if (!ed.soloLectura) menuSeccion(c, c.dataset.sec); };
+        });
         // Con el dedo: mantener presionada una miniatura abre sus opciones (no hay clic derecho).
         if (!minis._rueda) {
           minis._rueda = true;
           NOM.rueda.enlazar(minis, (e) => {
+            const cs = e.target.closest && e.target.closest(".mini-seccion");
+            if (cs && !ed.soloLectura) { const l = accionesSeccion(cs.dataset.sec); l.titulo = "Sección"; return l; }
             const m = e.target.closest && e.target.closest(".mini");
             if (!m || ed.soloLectura) return null;
             const l = accionesDiapo(m.dataset.p);
@@ -2125,6 +2142,90 @@
       // El lienzo ya se pintó antes de que existiera esta función: sin esto la tira de miniaturas
       // quedaba vacía hasta el primer cambio.
       pintarMinis();
+      // ---- Presentación → Ocultar diapositiva y las secciones de PowerPoint (Inicio → Sección)
+      const SIN_TITULO = "Sección sin título";
+      function oculta(p) { return !!doc().valor("_doc", "oculta:" + p); }
+      function alternarOculta(p) {
+        const v = !oculta(p);
+        doc().cambiar("_doc", { ["oculta:" + p]: v || null });
+        aviso(v ? "Diapositiva oculta: no sale al presentar (se ve aquí, atenuada)" : "La diapositiva vuelve a salir al presentar", { ms: 2400 });
+      }
+      const guidNuevo = () => {
+        const u = new Uint8Array(16); crypto.getRandomValues(u);
+        const h = [...u].map((b) => b.toString(16).padStart(2, "0")).join("").toUpperCase();
+        return `{${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}}`;
+      };
+      /** Las secciones como quedan con el orden de ahora (cada diapositiva en una, juntas): ver NOM.ooxml.seccionesPptx. */
+      const seccionesYa = () => ((NOM.ooxml && NOM.ooxml.seccionesPptx ? NOM.ooxml.seccionesPptx(doc()) : null) || []).map((x) => ({ id: x.id, nombre: x.nombre, d: x.d.slice() }));
+      const guardarSecciones = (l) => doc().cambiar("_doc", { secciones: l && l.length ? l : null });
+      /** Agregar sección (empieza en la diapositiva p), como PowerPoint: sin secciones, lo de antes queda en «Sección predeterminada». */
+      async function agregarSeccion(p) {
+        const nombre = await NOM.pedirTexto("Agregar sección", { etiqueta: "Nombre de la sección", valor: SIN_TITULO, si: "Agregar" });
+        if (nombre == null) return;
+        const pags = doc().paginas(), i = Math.max(0, pags.indexOf(p)), l = seccionesYa();
+        if (!l.length) {
+          if (i > 0) l.push({ id: guidNuevo(), nombre: "Sección predeterminada", d: pags.slice(0, i) });
+          l.push({ id: guidNuevo(), nombre: nombre || SIN_TITULO, d: pags.slice(i) });
+        } else {
+          const k = l.findIndex((x) => x.d.includes(p)), j = k < 0 ? -1 : l[k].d.indexOf(p);
+          if (k < 0) l.push({ id: guidNuevo(), nombre: nombre || SIN_TITULO, d: [p] });
+          else l.splice(k + 1, 0, { id: guidNuevo(), nombre: nombre || SIN_TITULO, d: l[k].d.splice(j) });
+        }
+        guardarSecciones(l);
+      }
+      async function renombrarSeccion(id) {
+        const l = seccionesYa(), sc = l.find((x) => x.id === id);
+        if (!sc) return;
+        const n = await NOM.pedirTexto("Cambiar nombre de sección", { etiqueta: "Nombre de la sección", valor: sc.nombre, si: "Cambiar nombre" });
+        if (n == null) return;
+        sc.nombre = n || SIN_TITULO;
+        guardarSecciones(l);
+      }
+      /** Quitar sección: sus diapositivas pasan a la sección de antes (o a la de después, si es la primera). */
+      function quitarSeccion(id) {
+        const l = seccionesYa(), k = l.findIndex((x) => x.id === id);
+        if (k < 0) return;
+        const [sc] = l.splice(k, 1);
+        if (l.length) { if (k > 0) l[k - 1].d.push(...sc.d); else l[0].d.unshift(...sc.d); }
+        guardarSecciones(l);
+      }
+      async function quitarSeccionYDiapos(id) {
+        const l = seccionesYa(), sc = l.find((x) => x.id === id);
+        if (!sc) return;
+        const pags = doc().paginas();
+        if (sc.d.length >= pags.length) return aviso("La presentación se quedaría sin diapositivas: quita solo la sección", { tipo: "aviso" });
+        if (sc.d.length && !(await NOM.confirmar("Quitar sección y diapositivas", `Se quitan la sección «${sc.nombre || SIN_TITULO}» y sus ${sc.d.length} diapositiva(s). Se puede deshacer con Ctrl+Z.`, { si: "Quitar", peligro: true }))) return;
+        const quedan = pags.filter((p) => !sc.d.includes(p));
+        doc().lote(() => {
+          sc.d.forEach((p) => doc().deLaPagina(p).forEach((b) => doc().cambiar(b.id, { eliminado: true })));
+          doc().cambiar("_doc", { paginas: quedan, secciones: l.filter((x) => x.id !== id).length ? l.filter((x) => x.id !== id) : null });
+        });
+        if (!quedan.includes(ed.pagina)) { ed.pagina = quedan[0]; lienzo.render(); }
+      }
+      /** Mover sección arriba o abajo: sus diapositivas cambian de lugar con las de la sección de al lado. */
+      function moverSeccion(id, d) {
+        const l = seccionesYa(), k = l.findIndex((x) => x.id === id), j = k + d;
+        if (k < 0 || j < 0 || j >= l.length) return;
+        [l[k], l[j]] = [l[j], l[k]];
+        doc().lote(() => doc().cambiar("_doc", { paginas: l.flatMap((x) => x.d), secciones: l }));
+      }
+      function accionesSeccion(id) {
+        const l = seccionesYa(), k = l.findIndex((x) => x.id === id), col = (ed._colapsadas || new Set()).has(id);
+        return [
+          { texto: "Cambiar nombre", icono: "pencil", fn: () => renombrarSeccion(id) },
+          { texto: col ? "Abrir" : "Contraer", icono: col ? "chevron-down" : "chevron-right", fn: () => { const c = ed._colapsadas || (ed._colapsadas = new Set()); if (col) c.delete(id); else c.add(id); pintarMinis(); } },
+          { texto: "Mover arriba", icono: "chevron-up", off: k <= 0, fn: () => moverSeccion(id, -1) },
+          { texto: "Mover abajo", icono: "chevron-down", off: k < 0 || k >= l.length - 1, fn: () => moverSeccion(id, 1) },
+          { texto: "Quitar sección", icono: "trash-2", fn: () => quitarSeccion(id) },
+          { texto: "Quitar sección y diapositivas", icono: "trash", fn: () => quitarSeccionYDiapos(id) },
+          { texto: "Contraer todas", icono: "chevrons-down-up", fn: () => { ed._colapsadas = new Set(l.map((x) => x.id)); pintarMinis(); } },
+          { texto: "Abrir todas", icono: "chevrons-up-down", fn: () => { ed._colapsadas = new Set(); pintarMinis(); } },
+        ];
+      }
+      function menuSeccion(anc, id) {
+        const a = accionesSeccion(id);
+        NOM.menu(anc, [{ titulo: "Sección" }, a[0], a[1], a[6], a[7], "-", ...(a[2].off ? [] : [a[2]]), ...(a[3].off ? [] : [a[3]]), "-", a[4], Object.assign({}, a[5], { peligro: true })]);
+      }
       function duplicarDiapo(p) {
         const np = ed.nuevaPagina(p);
         doc().lote(() => doc().deLaPagina(p).forEach((b) => { const { id, ...c } = b; delete c.dueno; delete c.maestro; doc().cambiar(NOM.DocCRDT.nuevoId(), Object.assign(c, { pagina: np })); }));
@@ -2147,7 +2248,11 @@
           { texto: "Eliminar", icono: "trash-2", off: pags.length <= 1 || !!lienzo.paginaAjena(), fn: () => eliminarDiapo(p) },
           { texto: "Duplicar", icono: "copy", fn: () => duplicarDiapo(p) },
           ed.esPropietario ? { texto: "Asignar a…", icono: "user-check", fn: () => lienzo.asignarPagina(p) } : { texto: "Presentar", icono: "play", fn: () => { ed.pagina = p; presentar(ed); } },
-          { texto: "Revolver", icono: "shuffle", off: pags.length < 3, fn: revolver },
+          { texto: "Más", icono: "more-horizontal", sub: [
+            { texto: oculta(p) ? "Mostrar" : "Ocultar", corto: oculta(p) ? "Mostrar" : "Ocultar", icono: oculta(p) ? "eye" : "eye-off", fn: () => alternarOculta(p) },
+            { texto: "Agregar sección aquí", corto: "Sección", icono: "list-plus", fn: () => agregarSeccion(p) },
+            { texto: "Revolver", icono: "shuffle", off: pags.length < 3, fn: revolver },
+          ] },
         ];
       }
       /** "Revolver o reordenar páginas": las diapositivas en otro orden al azar (se puede deshacer). */
@@ -2172,6 +2277,8 @@
         NOM.menu(anc, [
           { texto: "Duplicar", icono: "copy", fn: () => duplicarDiapo(p) },
           { texto: "Transición…", icono: "blend", fn: () => menuTransicion(anc, p) },
+          { texto: oculta(p) ? "Mostrar diapositiva" : "Ocultar diapositiva", icono: oculta(p) ? "eye" : "eye-off", marcado: oculta(p), fn: () => alternarOculta(p) },
+          { texto: "Agregar sección aquí", icono: "list-plus", fn: () => agregarSeccion(p) },
           ...(ed.esPropietario ? [{ texto: lienzo.duenoPagina(p) ? "Cambiar a quién se asignó…" : "Asignar a una persona…", icono: "user-check", fn: () => lienzo.asignarPagina(p) }] : []),
           { texto: "Revolver el orden", icono: "shuffle", fn: revolver },
           ...(i > 0 ? [{ texto: "Mover antes", icono: "chevron-left", fn: () => { const q = pags.slice(); q.splice(i, 1); q.splice(i - 1, 0, p); doc().cambiar("_doc", { paginas: q }); } }] : []),
@@ -2371,13 +2478,114 @@
         } catch (e) { aviso(e.message, { tipo: "error" }); }
       }
       function menuPresentar(b) {
+        const pers = doc().valor("_doc", "personalizadas") || [];
         NOM.menu(b, [
           { titulo: "Presentar" },
-          { texto: "Aquí, en pantalla completa", icono: "play", atajo: "F5", fn: () => presentar(ed) },
+          { texto: "Desde el principio", icono: "play", atajo: "F5", fn: () => presentar(ed, { desde: "principio" }) },
+          { texto: "Desde la diapositiva actual", icono: "play", atajo: "Mayús+F5", fn: () => presentar(ed) },
           { texto: "Modo presentador (notas, siguiente y tiempo)", icono: "sticky-note", fn: () => presentar(ed, { presentador: true }) },
           ...(ed.local ? [] : [{ texto: "En otra pantalla (proyector)…", icono: "cast", fn: () => presentar(ed, { presentador: true, proyectar: true }) }]),
+          "-",
+          ...pers.map((c) => ({ texto: "Personalizada: " + (c.nombre || "sin nombre"), icono: "list-video", fn: () => presentar(ed, { lista: c.d || [] }) })),
+          { texto: "Presentaciones personalizadas…", icono: "list-video", fn: () => dialogoPersonalizadas() },
+          { texto: "Ensayar intervalos", icono: "timer", fn: () => presentar(ed, { desde: "principio", ensayar: true }) },
+          { texto: "Configurar presentación…", icono: "settings", fn: () => dialogoConfigurar() },
         ]);
       }
+      /** El título de una diapositiva para las listas (lo primero que dice, de arriba abajo). */
+      function tituloDiapo(p) {
+        const b = doc().deLaPagina(p).filter((x) => x.texto || x.html).sort((a, c) => (a.y || 0) - (c.y || 0))[0];
+        const t = b ? String(b.texto || String(b.html).replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim() : "";
+        return t.slice(0, 70) || "Diapositiva " + (doc().paginas().indexOf(p) + 1);
+      }
+      /** Presentación personalizada (como PowerPoint): una lista con nombre de diapositivas de esta presentación. */
+      function dialogoPersonalizadas() {
+        const cuerpo = html(`<div class="col" style="gap:8px" data-lista></div>`);
+        const pie = html(`<div style="display:contents"><button class="btn" data-no type="button">Cerrar</button><button class="btn primario" data-nueva type="button">${ico("plus", "ico-s")} Nueva</button></div>`);
+        const h = NOM.hoja({ titulo: "Presentaciones personalizadas", icono: "list-video", cuerpo, pie });
+        const pintarL = () => {
+          const l = doc().valor("_doc", "personalizadas") || [];
+          const caja = cuerpo;
+          caja.innerHTML = l.length ? l.map((c, k) => `<div class="fila" style="gap:6px;align-items:center"><span class="crece recorta"><b>${esc(c.nombre || "sin nombre")}</b> <span class="suave chico">${(c.d || []).filter((p) => doc().paginas().includes(p)).length} diapositiva(s)</span></span>
+              <button class="btn chico" type="button" data-pres="${k}">${ico("play", "ico-s")} Presentar</button><button class="icono-btn chico" type="button" data-ed="${k}" aria-label="Editar">${ico("pencil", "ico-s")}</button><button class="icono-btn chico" type="button" data-cp="${k}" aria-label="Copiar">${ico("copy", "ico-s")}</button><button class="icono-btn chico" type="button" data-qt="${k}" aria-label="Quitar">${ico("trash-2", "ico-s")}</button></div>`).join("")
+            : `<p class="suave">Todavía no hay. Una presentación personalizada es una lista de diapositivas de esta presentación en el orden que quieras (por ejemplo, una versión corta para otro público).</p>`;
+          $$("[data-pres]", caja).forEach((b) => (b.onclick = () => { const c = l[+b.dataset.pres]; h.cerrar(); presentar(ed, { lista: c.d || [] }); }));
+          $$("[data-ed]", caja).forEach((b) => (b.onclick = () => editarPersonalizada(+b.dataset.ed, pintarL)));
+          $$("[data-cp]", caja).forEach((b) => (b.onclick = () => { const c = l[+b.dataset.cp], m = l.slice(); m.push({ id: idPersonalizada(l), nombre: "Copia de " + (c.nombre || ""), d: (c.d || []).slice() }); doc().cambiar("_doc", { personalizadas: m }); pintarL(); }));
+          $$("[data-qt]", caja).forEach((b) => (b.onclick = () => { const m = l.filter((_, k) => k !== +b.dataset.qt); doc().cambiar("_doc", { personalizadas: m.length ? m : null }); pintarL(); }));
+        };
+        $("[data-no]", pie).onclick = () => h.cerrar();
+        $("[data-nueva]", pie).onclick = () => editarPersonalizada(null, pintarL);
+        pintarL();
+      }
+      const idPersonalizada = (l) => String(l.reduce((m, c) => (/^\d+$/.test(String(c.id)) ? Math.max(m, +c.id + 1) : m), 0));
+      function editarPersonalizada(k, alTerminar) {
+        const l = (doc().valor("_doc", "personalizadas") || []).map((c) => Object.assign({}, c, { d: (c.d || []).slice() }));
+        const c = k == null ? { id: idPersonalizada(l), nombre: "Presentación personalizada " + (l.length + 1), d: [] } : l[k];
+        const pags = doc().paginas();
+        let sel = c.d.filter((p) => pags.includes(p));
+        const cuerpo = html(`<form class="col" style="gap:10px"><label class="col">Nombre <input class="input" data-nombre maxlength="120"></label>
+          <span class="suave chico">Marca las diapositivas que lleva; las marcadas se presentan en este orden (súbelas o bájalas con las flechas).</span>
+          <div class="col" data-filas style="gap:2px;max-height:52vh;overflow:auto"></div></form>`);
+        $("[data-nombre]", cuerpo).value = c.nombre || "";
+        const pintarF = () => {
+          const resto = pags.filter((p) => !sel.includes(p));
+          const fila = (p, en) => `<div class="fila" style="gap:4px;align-items:center"><label class="fila crece" style="gap:8px;min-height:36px"><input type="checkbox" data-p="${esc(p)}" ${en ? "checked" : ""}><span class="crece recorta">${pags.indexOf(p) + 1}. ${esc(tituloDiapo(p))}${oculta(p) ? ` <span class="suave chico">(oculta)</span>` : ""}</span></label>${en ? `<button class="icono-btn chico" type="button" data-sube="${esc(p)}" aria-label="Subir">${ico("chevron-up", "ico-s")}</button><button class="icono-btn chico" type="button" data-baja="${esc(p)}" aria-label="Bajar">${ico("chevron-down", "ico-s")}</button>` : ""}</div>`;
+          const f = $("[data-filas]", cuerpo);
+          f.innerHTML = sel.map((p) => fila(p, true)).join("") + (sel.length && resto.length ? "<hr>" : "") + resto.map((p) => fila(p, false)).join("");
+          $$("input[type=checkbox]", f).forEach((x) => (x.onchange = () => { const p = x.dataset.p; sel = x.checked ? sel.concat(p) : sel.filter((q) => q !== p); pintarF(); }));
+          const mover = (p, d) => { const i = sel.indexOf(p), j = i + d; if (i < 0 || j < 0 || j >= sel.length) return; [sel[i], sel[j]] = [sel[j], sel[i]]; pintarF(); };
+          $$("[data-sube]", f).forEach((b) => (b.onclick = () => mover(b.dataset.sube, -1)));
+          $$("[data-baja]", f).forEach((b) => (b.onclick = () => mover(b.dataset.baja, 1)));
+        };
+        pintarF();
+        const pie = html(`<div style="display:contents"><button class="btn" data-no type="button">Cancelar</button><button class="btn primario" data-si>Guardar</button></div>`);
+        const h = NOM.hoja({ titulo: k == null ? "Nueva presentación personalizada" : "Editar presentación personalizada", icono: "list-video", cuerpo, pie });
+        $("[data-no]", pie).onclick = () => { h.cerrar(); dialogoPersonalizadas(); };
+        $("[data-si]", pie).onclick = (e) => {
+          e.preventDefault();
+          if (!sel.length) return aviso("Marca al menos una diapositiva", { tipo: "aviso" });
+          const nuevo = Object.assign({}, c, { nombre: $("[data-nombre]", cuerpo).value.trim() || "Presentación personalizada", d: sel });
+          if (k == null) l.push(nuevo); else l[k] = nuevo;
+          doc().cambiar("_doc", { personalizadas: l });
+          h.cerrar(); dialogoPersonalizadas(); void alTerminar;
+        };
+      }
+      /** Configurar presentación (lo que PowerPoint guarda en presProps.xml). */
+      function dialogoConfigurar() {
+        const c = Object.assign({}, doc().valor("_doc", "presentacion") || {});
+        const pers = doc().valor("_doc", "personalizadas") || [], n = doc().paginas().length;
+        const cuerpo = html(`<form class="col" style="gap:10px">
+          <label class="fila" style="gap:8px"><input type="checkbox" data-rep ${c.repetir ? "checked" : ""}> Repetir el ciclo hasta presionar Esc</label>
+          <label class="fila" style="gap:8px"><input type="checkbox" data-int ${c.sinIntervalos ? "" : "checked"}> Usar los intervalos guardados (avance automático)</label>
+          <label class="fila" style="gap:8px"><input type="checkbox" data-anim ${c.sinAnimacion ? "checked" : ""}> Presentar sin animaciones</label>
+          <fieldset class="col" style="border:0;padding:0;gap:6px"><legend>«Desde el principio» muestra</legend>
+            <label class="fila" style="gap:8px"><input type="radio" name="cf-r" value="todas" ${!c.rango && c.personalizada == null ? "checked" : ""}> Todas las diapositivas</label>
+            <label class="fila" style="gap:8px;align-items:center;flex-wrap:wrap"><input type="radio" name="cf-r" value="rango" ${c.rango ? "checked" : ""}> Desde <input class="input" type="number" min="1" max="${n}" data-desde value="${c.rango ? c.rango[0] : 1}" style="width:5.5em"> hasta <input class="input" type="number" min="1" max="${n}" data-hasta value="${c.rango ? c.rango[1] : n}" style="width:5.5em"></label>
+            ${pers.length ? `<label class="fila" style="gap:8px;align-items:center;flex-wrap:wrap"><input type="radio" name="cf-r" value="pers" ${c.personalizada != null ? "checked" : ""}> La personalizada <select class="input" data-pers>${pers.map((q) => `<option value="${esc(String(q.id))}" ${String(q.id) === String(c.personalizada) ? "selected" : ""}>${esc(q.nombre || "sin nombre")}</option>`).join("")}</select></label>` : ""}
+          </fieldset></form>`);
+        const pie = html(`<div style="display:contents"><button class="btn" data-no type="button">Cancelar</button><button class="btn primario" data-si>Aceptar</button></div>`);
+        const h = NOM.hoja({ titulo: "Configurar presentación", icono: "settings", cuerpo, pie });
+        $("[data-no]", pie).onclick = () => h.cerrar();
+        $("[data-si]", pie).onclick = (e) => {
+          e.preventDefault();
+          const r = ($("input[name=cf-r]:checked", cuerpo) || {}).value || "todas";
+          const cfg2 = {};
+          if (c.tipo) cfg2.tipo = c.tipo;
+          if ($("[data-rep]", cuerpo).checked) cfg2.repetir = true;
+          if (!$("[data-int]", cuerpo).checked) cfg2.sinIntervalos = true;
+          if ($("[data-anim]", cuerpo).checked) cfg2.sinAnimacion = true;
+          if (r === "rango") {
+            const a = Math.round(+$("[data-desde]", cuerpo).value), z = Math.round(+$("[data-hasta]", cuerpo).value);
+            if (!(a >= 1 && z >= a && z <= n)) return aviso(`Las diapositivas van de 1 a ${n} (y «hasta» no puede ser menor que «desde»)`, { tipo: "aviso" });
+            cfg2.rango = [a, z];
+          }
+          if (r === "pers" && $("[data-pers]", cuerpo)) cfg2.personalizada = $("[data-pers]", cuerpo).value;
+          doc().cambiar("_doc", { presentacion: Object.keys(cfg2).length ? cfg2 : null });
+          h.cerrar();
+        };
+      }
+      this._pres = { alternarOculta, agregarSeccion, dialogoPersonalizadas, dialogoConfigurar, presentar: (o) => presentar(ed, o) };
       this._notas = { pintar: pintarNotas };
 
       // En el orden en que se arma una presentación: diapositiva nueva, qué se le pone, cómo se ve y se mueve,
@@ -2405,9 +2613,10 @@
         { id: "comentar", icono: "message-square", micro: "Comentar|Comenta lo elegido (o la diapositiva). Funciona sin Internet.", fn: () => NOM.comentarios && NOM.comentarios.nuevo(ed), clase: "solo-escritorio" },
         { id: "imagen-png", icono: "download", micro: "Guardar como imagen|Esta diapositiva o todas (PNG), para mandarlas por mensaje.", clase: "solo-escritorio", fn: (e, b) => NOM.menu(b, [{ titulo: "Guardar como imagen (PNG)" }, { texto: "Esta diapositiva", icono: "image", fn: () => exportarImagen(false) }, { texto: "Todas (en un .zip)", icono: "archive", fn: () => exportarImagen(true) }]) },
         "|",
-        { clase: "destacado", etq: true, id: "presentar", icono: "play", micro: "Presentar|Aquí, en modo presentador o en otra pantalla (proyector).|F5", fn: (e, b) => menuPresentar(b) },
+        { clase: "destacado", etq: true, id: "presentar", icono: "play", micro: "Presentar|Desde el principio (F5) o desde la diapositiva actual (Mayús+F5), en modo presentador o en otra pantalla; presentaciones personalizadas, ensayar intervalos y configurar.|F5", fn: (e, b) => menuPresentar(b) },
       ];
-      this._teclaF5 = (e) => { if (e.key === "F5") { e.preventDefault(); presentar(ed); } };
+      // como PowerPoint: F5 desde el principio, Mayús+F5 desde la diapositiva actual
+      this._teclaF5 = (e) => { if (e.key === "F5") { e.preventDefault(); presentar(ed, e.shiftKey ? {} : { desde: "principio" }); } };
       document.addEventListener("keydown", this._teclaF5);
       this.cambios = (l) => { lienzo.cambios(l); if (l.some((c) => c.bloque === "_doc")) pintarNotas(); };
       this.desmontar = () => { lienzo.destruir(); document.removeEventListener("keydown", this._teclaF5); ed.lienzo.style.overflow = ""; };
@@ -2421,6 +2630,13 @@
     herramientas() { return this._herr || []; },
     acciones() {
       return [
+        { texto: "Presentar desde el principio", icono: "play", fn: () => this._pres.presentar({ desde: "principio" }), claves: "presentar diapositivas f5 inicio principio" },
+        { texto: "Presentar desde la diapositiva actual", icono: "play", fn: () => this._pres.presentar({}), claves: "presentar diapositivas mayus f5 actual" },
+        { texto: "Ocultar o mostrar esta diapositiva", icono: "eye-off", fn: () => this._pres.alternarOculta(NOM.editorActual.pagina), claves: "ocultar diapositiva mostrar esconder presentacion" },
+        { texto: "Agregar sección aquí", icono: "list-plus", fn: () => this._pres.agregarSeccion(NOM.editorActual.pagina), claves: "seccion secciones agrupar diapositivas" },
+        { texto: "Presentaciones personalizadas", icono: "list-video", fn: () => this._pres.dialogoPersonalizadas(), claves: "presentacion personalizada lista diapositivas version corta" },
+        { texto: "Ensayar intervalos", icono: "timer", fn: () => this._pres.presentar({ desde: "principio", ensayar: true }), claves: "ensayar intervalos tiempos cronometrar avance automatico" },
+        { texto: "Configurar presentación", icono: "settings", fn: () => this._pres.dialogoConfigurar(), claves: "configurar presentacion repetir ciclo esc kiosco intervalos" },
         { texto: "Modo presentador", icono: "sticky-note", fn: () => presentar(NOM.editorActual, { presentador: true }), claves: "presentar notas orador" },
         { texto: "Presentar en otra pantalla (proyector)", icono: "cast", fn: () => presentar(NOM.editorActual, { presentador: true, proyectar: true }), claves: "proyector pantalla telefono" },
         { texto: "Capas", icono: "layers", fn: () => this._lienzo.capas.abrir(), claves: "ocultar bloquear orden" },
@@ -2582,8 +2798,30 @@
   function presentar(ed, opc) {
     opc = opc || {};
     const doc = ed.doc;
-    const pags = () => doc.paginas();
-    let i = Math.max(0, pags().indexOf(ed.pagina)), paso = 0, total = 0, codigo = null;
+    // Lo que se presenta (Presentación de PowerPoint): una presentación personalizada en su orden, o todas las
+    // diapositivas menos las ocultas (una oculta sí sale si se empieza en ella o si un vínculo lleva ahí). «Desde el
+    // principio» respeta Configurar presentación (desde-hasta o una personalizada).
+    const cfg = doc.valor("_doc", "presentacion") || {};
+    let lista = Array.isArray(opc.lista) ? opc.lista.slice() : null;
+    if (!lista && opc.desde === "principio") {
+      const pc = cfg.personalizada != null ? (doc.valor("_doc", "personalizadas") || []).find((c) => String(c.id) === String(cfg.personalizada)) : null;
+      if (pc) lista = (pc.d || []).slice();
+      else if (Array.isArray(cfg.rango)) lista = doc.paginas().slice(Math.max(0, (+cfg.rango[0] || 1) - 1), Math.max(1, +cfg.rango[1] || 1)).filter((p) => !doc.valor("_doc", "oculta:" + p));
+    }
+    const extra = new Set();
+    const pags = () => { const t = doc.paginas(); return lista ? lista.filter((p) => t.includes(p)) : t.filter((p) => extra.has(p) || !doc.valor("_doc", "oculta:" + p)); };
+    if (!lista && opc.desde !== "principio" && doc.valor("_doc", "oculta:" + ed.pagina)) extra.add(ed.pagina);
+    if (!pags().length) { aviso("No hay diapositivas que presentar: todas están ocultas", { tipo: "aviso" }); return; }
+    let i = opc.desde === "principio" || lista ? 0 : Math.max(0, pags().indexOf(ed.pagina)), paso = 0, total = 0, codigo = null;
+    // Ensayar intervalos: cuánto se queda cada diapositiva; al terminar se pueden conservar como avance automático
+    const ensayo = opc.ensayar ? { tiempos: new Map(), pag: null, t0: 0, pausa: false, inicio: performance.now() } : null;
+    function marcarEnsayo(fin) {
+      if (!ensayo) return;
+      const p = fin ? null : pags()[i], ya = performance.now();
+      if (ensayo.pag === p) return;
+      if (ensayo.pag != null && !ensayo.pausa) ensayo.tiempos.set(ensayo.pag, (ensayo.tiempos.get(ensayo.pag) || 0) + (ya - ensayo.t0));
+      ensayo.pag = p; ensayo.t0 = ya;
+    }
     const presentador = !!opc.presentador;
     const rep = html(`<div class="reproductor${presentador ? " presentador" : ""}" tabindex="0">
       ${presentador ? `<div class="pv-actual"><div class="diapo" data-d></div></div>
@@ -2625,13 +2863,15 @@
     function programarAvance(p) {
       clearTimeout(avanceAuto);
       const tr = transicionDe(p);
-      if (!tr || tr.advTm == null) return;
+      if (!tr || tr.advTm == null || cfg.sinIntervalos || ensayo) return;
       // «Después de: n s» empieza a contar al terminar la transición; con animaciones al hacer clic espera a que se hagan
       const intentar = () => { if (motor && (motor.corriendo() || motor.quedan())) { avanceAuto = setTimeout(intentar, 250); return; } avanzar(); };
       avanceAuto = setTimeout(intentar, Math.max(0, +tr.advTm || 0));
     }
     function pintar(revelarTodo, conTransicion) {
       const p = pags()[i];
+      marcarEnsayo();
+      if (cfg.sinAnimacion) revelarTodo = true;   // Configurar presentación → sin animación
       const conTr = conTransicion !== false && !revelarTodo && NOM.transOffice && transicionDe(p);
       const viejo = conTr && d.firstChild ? { html: d.innerHTML, fondo: d.style.background } : null;
       if (trActual) { trActual.saltar(); trActual = null; }
@@ -2675,7 +2915,9 @@
         avisarProyector();
         return;
       }
-      if (i < pags().length - 1) { i++; pintar(); } else salir();
+      if (i < pags().length - 1) { i++; pintar(); }
+      else if (cfg.repetir && !ensayo) { i = 0; pintar(); }   // Repetir el ciclo hasta presionar Esc
+      else salir();
     }
     function retroceder() { if (i > 0) { i--; pintar(true, false); } }
     let vistaAntes = null;
@@ -2702,7 +2944,7 @@
         case "ultima": return ir(pags().length - 1);
         case "volver": return vistaAntes != null ? ir(vistaAntes) : ir(i - 1);
         case "fin": salir(); return true;
-        case "diapo": return ir(pags().indexOf(a.pagina));
+        case "diapo": if (!lista && !pags().includes(a.pagina) && doc.paginas().includes(a.pagina)) extra.add(a.pagina); return ir(pags().indexOf(a.pagina));
         case "url": if (/^(https?:|mailto:)/i.test(a.url || "")) { window.open(a.url, "_blank", "noopener"); return true; } return false;
         default: return false;
       }
@@ -2753,6 +2995,7 @@
     $("[data-herr]", rep).addEventListener("click", (e) => { const b = e.target.closest("[data-h]"); if (b) { e.stopPropagation(); usar(b.dataset.h); } });
 
     function salir() {
+      if (ensayo) terminarEnsayo();
       callarSonidos();
       if (motor) motor.detener();
       if (medios) medios.cerrar();
@@ -2765,6 +3008,42 @@
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
       if (codigo) NOM.api.delete(`/api/documentos/${ed.id}/proyeccion`).catch(() => {});
       if (wake) wake.release().catch(() => {});
+    }
+    if (ensayo) {
+      const caja = html(`<div class="pv-ensayo" role="status"><b>${ico("timer", "ico-s")} Ensayo</b><span data-ens-d>0:00</span><button class="btn chico" data-ens-p type="button">Pausa</button><span class="suave">Total <span data-ens-t>0:00</span></span></div>`);
+      rep.append(caja);
+      const mmss = (ms) => { const s2 = Math.floor(ms / 1000); return `${Math.floor(s2 / 60)}:${String(s2 % 60).padStart(2, "0")}`; };
+      ensayo.reloj = setInterval(() => {
+        const ya = performance.now(), aqui = (ensayo.tiempos.get(ensayo.pag) || 0) + (ensayo.pausa ? 0 : ya - ensayo.t0);
+        let todo = aqui; ensayo.tiempos.forEach((v, k) => { if (k !== ensayo.pag) todo += v; });
+        $("[data-ens-d]", caja).textContent = mmss(aqui); $("[data-ens-t]", caja).textContent = mmss(todo);
+      }, 250);
+      $("[data-ens-p]", caja).onclick = (e) => {
+        e.stopPropagation();
+        const ya = performance.now();
+        if (!ensayo.pausa) { ensayo.tiempos.set(ensayo.pag, (ensayo.tiempos.get(ensayo.pag) || 0) + (ya - ensayo.t0)); ensayo.pausa = true; e.currentTarget.textContent = "Seguir"; }
+        else { ensayo.pausa = false; ensayo.t0 = ya; e.currentTarget.textContent = "Pausa"; }
+      };
+    }
+    function terminarEnsayo() {
+      clearInterval(ensayo.reloj);
+      marcarEnsayo(true);
+      const tiempos = ensayo.tiempos;
+      if (!tiempos.size) return;
+      let todo = 0; tiempos.forEach((v) => (todo += v));
+      const s2 = Math.round(todo / 1000);
+      NOM.confirmar("Ensayar intervalos", `La presentación duró ${Math.floor(s2 / 60)}:${String(s2 % 60).padStart(2, "0")}. ¿Conservar los nuevos intervalos? Cada diapositiva avanzará sola después del tiempo que se quedó (como en PowerPoint).`, { si: "Conservar" }).then((si) => {
+        if (!si) return;
+        doc.lote(() => {
+          tiempos.forEach((ms, p) => {
+            const base = doc.valor("_doc", "transOffice:" + p) || (NOM.transOffice && NOM.transOffice.deLegado(doc.valor("_doc", "trans:" + p))) || { t: "corte0", a: {}, dur: 0, spd: "fast" };
+            doc.cambiar("_doc", { ["transOffice:" + p]: Object.assign({}, base, { advTm: Math.max(0, Math.round(ms)) }) });
+          });
+          const c2 = Object.assign({}, doc.valor("_doc", "presentacion") || {}); delete c2.sinIntervalos;
+          doc.cambiar("_doc", { presentacion: Object.keys(c2).length ? c2 : null });
+        });
+        aviso("Intervalos guardados: al presentar, cada diapositiva avanza sola", { tipo: "ok" });
+      });
     }
     function tecla(e) {
       e.stopPropagation();
