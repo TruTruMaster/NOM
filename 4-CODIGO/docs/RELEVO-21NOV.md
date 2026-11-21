@@ -51,6 +51,13 @@ Pedido vigente del dueño (20-nov, noche): seguir con todo lo de `~/NOM/prompt.m
 - **A55** (por USB): instalada la 0.19.0 encima de la 0.16.0; el paso al origen propio dio «bien, 12 datos y 35
   registros» (`adb logcat -s NOM:I`) y la app abrió con la sesión, el espacio y los documentos del dueño.
 
+**Intentado y deshecho (contornos, 21-nov):** acomodar como Word junto a un contorno (estrecho, a través) con lo que el
+polígono de Word (`wrapPolygon`) le quita a cada renglón, recortado a la caja como `shape-outside` y comprobado renglón por
+renglón contra el navegador. w12 subía de 90.7 a 92.6 % pero w06 bajaba de 99.3 a 95.7 %: el párrafo del contorno de w06
+quedaba con un renglón menos que en Word (Word aparta más de lo que da el contorno más la distancia) y el de abajo subía
+junto a la imagen. Falta medir en Word la regla del contorno (un generador como `hacer_dos_lados.py` con formas de varias
+siluetas y «estrecho»/«a través») antes de volver a intentarlo.
+
 ## 4. Lo que falta (de `PARIDAD-OFFICE.md`)
 
 Igual que `RELEVO-20NOV-NOCHE.md` §3 y §4, menos lo de esta sesión: en PowerPoint las secciones y casi toda la pestaña
