@@ -359,13 +359,13 @@ final class ServidorHttp {
     public static final String ORIGEN_APP = "https://appassets.androidplatform.net";
 
     /**
-     * CORS (como FiltroCors en la computadora): la API solo se deja leer desde otro origen por la app: la de
-     * ahora (su propio origen, ORIGEN_APP) y las de antes de la 0.19 (cargaban la interfaz desde sus archivos:
-     * origen "null"). La página que sirve este teléfono es del mismo origen y no lo necesita; cualquier otra
+     * CORS (como FiltroCors en la computadora): la API solo se deja leer desde otro origen por la app (su propio
+     * origen, ORIGEN_APP). La página que sirve este teléfono es del mismo origen y no lo necesita; cualquier otra
      * página no puede leer las respuestas.
      */
     static String cors(String origen) {
-        return "Access-Control-Allow-Origin: " + (ORIGEN_APP.equals(origen) ? ORIGEN_APP : "null")
+        if (!ORIGEN_APP.equals(origen)) return "Vary: Origin\r\n";
+        return "Access-Control-Allow-Origin: " + ORIGEN_APP
                 + "\r\nVary: Origin\r\nAccess-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n"
                 + "Access-Control-Allow-Headers: Authorization, Content-Type, Accept\r\nAccess-Control-Max-Age: 3600\r\n";
     }

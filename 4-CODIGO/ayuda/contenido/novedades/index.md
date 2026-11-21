@@ -4,8 +4,27 @@ descripcion: Qué cambió en cada versión, en palabras sencillas.
 orden: 1
 aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-21
-version: 0.19.0
+version: 0.20.0
 ---
+## 0.20.0 — noviembre de 2026
+
+- **Control de cambios con Word:** los cambios marcados de un Word (lo que alguien agregó o borró) se abren como
+  sugerencias de NOM, con el nombre de quien los hizo, y se aceptan o rechazan igual que las de NOM. Al descargar el
+  Word, las sugerencias pendientes salen como cambios marcados de Word. Un Word con cambios se ve como en Word («marcas
+  simples»); en «Más» → «Mostrar para revisión» se eligen todas las marcas, sin marcas o el original.
+- **Relleno rápido de Excel (Ctrl+E):** escribe uno o dos ejemplos junto a tus datos (el primer nombre, las iniciales, el
+  correo armado con nombre y apellido…) y NOM llena el resto de la columna como lo haría Excel.
+- **Escenarios de Excel:** en «Más» → «Administrador de escenarios…» guarda juegos de valores para unas celdas, míralos
+  cuando quieras y saca el informe resumen en una hoja nueva, como en Excel. Los escenarios de un Excel se abren y se
+  guardan.
+- **Tablas de datos de Excel:** ahora también se crean desde NOM («Más» → «Tabla de datos…»), de una o de dos variables.
+- **PowerPoint, pestaña Presentación:** presentar desde el principio (F5) o desde la actual (Mayús+F5), ocultar
+  diapositivas, secciones, presentaciones personalizadas y ensayar los tiempos, como en PowerPoint.
+- **Más parecido a Office:** el texto rodea un dibujo por los dos lados como en Word, y Excel muestra «####» en los mismos
+  números que Excel cuando no caben.
+- **App de Android:** para conectarte a la nube, a otra computadora o a un teléfono que comparte, tu app necesita ser la
+  0.19 o una más nueva; si es más vieja, actualízala con «Descarga la app».
+
 ## 0.19.0 — noviembre de 2026
 
 - **Guiones automáticos como Word:** NOM parte las palabras donde las parte Word 2024 (con su diccionario de español y

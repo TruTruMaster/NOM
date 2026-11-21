@@ -831,7 +831,7 @@ try:
     prueba("13.3 Una página de Internet no puede iniciar sesión desde su sitio", [403, None], previo("/api/cuentas/sesion", "https://malo.example"))
     prueba("13.3 Un nombre que empieza como red local no engaña", [403, None], previo("/api/cuentas/sesion", "http://192.168.0.50.malo.example"))
     prueba("13.3 172.32.x no es red local", [403, None], previo("/api/cuentas/sesion", "http://172.32.0.1:8080"))
-    prueba("13.3 La app (desde sus archivos, origen null) sí puede", [204, "null"], previo("/api/espacios", "null", "GET"))
+    prueba("13.3 Una página cargada desde archivos (origen null) no puede", [403, None], previo("/api/espacios", "null", "GET"))
     prueba("13.3 La app desde su propio origen (0.19) sí puede", [204, "https://appassets.androidplatform.net"], previo("/api/espacios", "https://appassets.androidplatform.net", "GET"))
     prueba("13.3 …y lee las respuestas", "https://appassets.androidplatform.net", rq(B, "GET", "/api/red/info", cab={"Origin": "https://appassets.androidplatform.net"})[2].get("access-control-allow-origin"))
     prueba("13.3 Un nombre parecido al de la app no engaña", [403, None], previo("/api/espacios", "https://appassets.androidplatform.net.malo.example", "GET"))

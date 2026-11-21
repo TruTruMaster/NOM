@@ -12,7 +12,7 @@ package mx.wack.nom.core;
  */
 public final class Version {
     /** La misma que versionName del APK. */
-    public static final String APP = "0.19.0";
+    public static final String APP = "0.20.0";
     /** Nivel de la interfaz y del formato de documentos. 14 = espacios cifrados de extremo a extremo (letras con marca cx);
         15 = paginación nueva de Word (sin hojas en blanco de más) y Office con rutas irregulares (0.14.2);
         21 = campos nuevos de la 0.16.0 (transiciones y animaciones de PowerPoint: transOffice y sus árboles, sonidos,
@@ -22,8 +22,10 @@ public final class Version {
         23 = herramientas de Excel de la 0.18.0 (nombres definidos, esquema, cálculo manual, tablas de datos y mostrar
         fórmulas que guarda el importador de Excel v10: una página vieja no los conoce);
         24 = guiones y números de línea de Word de la 0.19.0 (el idioma de cada párrafo, «numLineas» del documento y
-        «suprimir números de línea» del párrafo: una página vieja no los conoce). */
-    public static final int INTERFAZ = 24;
+        «suprimir números de línea» del párrafo: una página vieja no los conoce);
+        25 = campos nuevos de la 0.20.0 (escenarios de Excel —importador v11—, cambios marcados de Word como sugerencias y
+        «controlCambios», secciones, diapositivas ocultas y presentaciones personalizadas de PowerPoint). */
+    public static final int INTERFAZ = 25;
     /** Fase 14 (F.5): version vigente de los Terminos y del Aviso de privacidad. Al cambiarla, la app
         pide a cada cuenta leerlos y aceptarlos otra vez. */
     public static final String LEGAL = "2026-11-13";

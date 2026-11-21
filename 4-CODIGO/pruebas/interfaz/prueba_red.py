@@ -4,9 +4,10 @@ Un solo servidor y cuatro "equipos" al mismo tiempo:
   A     página en una computadora (cuenta U1)
   B     página en otra computadora (cuenta U2, entra al espacio con el enlace de U1)
   C     página en el navegador de un celular (U2)
-  app   la interfaz que va dentro del APK, cargada desde archivos (file://) como la carga el
-        teléfono, con el servidor escrito a mano y la MISMA cuenta U1 (las cuentas viven en el
-        servidor: la app no tiene cuentas propias)
+  app   la interfaz que va dentro del APK, servida como la sirve la app desde la 0.19 (su propio origen,
+        https://appassets.androidplatform.net, con los archivos de la carpeta static), con el servidor
+        escrito a mano y la MISMA cuenta U1 (las cuentas viven en el servidor: la app no tiene cuentas
+        propias). Con NOM_APP_ARCHIVOS=1, desde file:// como los APK de antes.
 
 Revisa que lo escrito en cada uno aparezca en los demás sin recargar, que la app y la página vean
 la misma cuenta y los mismos espacios, que lo escrito sin conexión se junte al volver la red, que
@@ -26,7 +27,22 @@ from playwright.sync_api import sync_playwright
 B, CL = N.B, N.CL
 SALIDA = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.home() / ".cache" / "nom-pruebas" / "salida"
 ESTATICO = os.environ.get("NOM_ESTATICO") or str(Path(__file__).resolve().parents[2] / "app" / "src" / "main" / "resources" / "static")
-INDEX = "file://" + ESTATICO + "/index.html"
+ORIGEN_APP = "https://appassets.androidplatform.net"
+ARCHIVOS = os.environ.get("NOM_APP_ARCHIVOS") == "1"
+INDEX = "file://" + ESTATICO + "/index.html" if ARCHIVOS else ORIGEN_APP + "/index.html"
+TIPOS = {".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".json": "application/json",
+         ".woff2": "font/woff2", ".webmanifest": "application/manifest+json", ".ico": "image/x-icon", ".wasm": "application/wasm"}
+
+
+def servir_app(ctx):
+    """Como MainActivity: lo de ORIGEN_APP sale de los archivos de la interfaz (lo demás va a la red)."""
+    raiz = Path(ESTATICO).resolve()
+    def dar(route):
+        ruta = route.request.url[len(ORIGEN_APP):].split("?")[0].split("#")[0].lstrip("/") or "index.html"
+        f = (raiz / ruta).resolve()
+        if raiz not in f.parents or not f.is_file(): return route.fulfill(status=404, body="")
+        route.fulfill(status=200, body=f.read_bytes(), headers={"Content-Type": TIPOS.get(f.suffix, "application/octet-stream")})
+    ctx.route(ORIGEN_APP + "/**", dar)
 res, errs = [], {}
 
 
@@ -78,8 +94,11 @@ def ve(p, texto, ms=12000):
 MOVIL = dict(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, device_scale_factor=2)
 pw = sync_playwright().start()
 nav = pw.chromium.launch()
-# la app carga su interfaz desde archivos y habla con el servidor de otro origen, como el WebView
-app_nav = pw.chromium.launch(args=["--allow-file-access-from-files", "--disable-web-security"])
+# la app sirve su interfaz desde su propio origen y habla con el servidor de otro origen (CORS), como el WebView;
+# los APK de antes, desde archivos
+app_nav = pw.chromium.launch(args=["--allow-file-access-from-files", "--disable-web-security"]) if ARCHIVOS else pw.chromium.launch(
+    # (el WebView no aplica «Local Network Access» de Chrome: la app sí puede llamar a la red local o a localhost)
+    args=["--disable-features=LocalNetworkAccessChecks,PrivateNetworkAccessSendPreflights,PrivateNetworkAccessRespectPreflightResults,BlockInsecurePrivateNetworkRequests"])
 
 u1, u2 = N.cuenta(), N.cuenta()
 esp = N.espacio(u1["token"], "Equipo de red")
@@ -91,8 +110,9 @@ st, _ = N.api("POST", f"/api/enlaces/{codigo}/entrar", None, u2["token"]); anota
 print("== página A (computadora, U1)")
 cA, A = pagina(nav, "paginaA", viewport={"width": 1300, "height": 850}); entrar_web(A, u1["nombre"]); abrir_doc(A, doc, B + "/"); escribe(A, "HOLA-DESDE-PAGINA-A")
 
-print("== app (la interfaz del APK, desde archivos) con la cuenta U1 del servidor")
+print("== app (la interfaz del APK, desde su origen) con la cuenta U1 del servidor")
 cP, P = pagina(app_nav, "app", **MOVIL)
+if not ARCHIVOS: servir_app(cP)
 P.add_init_script("window.NomAndroid = window.NomAndroid || { guardarArchivo() {}, compartirTexto() {}, tamanoLetra() {} };")
 P.goto(INDEX); P.wait_for_function("() => window.NOM && NOM.api", timeout=20000)
 anota("la app se reconoce como app", P.evaluate("() => NOM.api.empaquetada === true && NOM.api.dispositivo") == "App Android")

@@ -18,8 +18,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * en la cabecera Authorization, asi que esto no protege la sesion, sino que una pagina ajena no lea
  * respuestas ni pruebe contrasenas desde el navegador de alguien.
  *
- *  - La app Android desde la 0.19 sirve la interfaz desde su propio origen (ORIGEN_APP); las de antes y las
- *    pruebas la cargan desde sus archivos: origen "null". Todo.
+ *  - La app Android sirve la interfaz desde su propio origen (ORIGEN_APP). Todo.
  *  - Fase 13, A.2: la pagina de un telefono que comparte (http://192.168.x.x:8080 y parecidos, red
  *    privada) puede iniciar sesion aqui, pedir un pase y cerrar esa sesion: nada mas.
  *  - Cualquier otro origen: nada (el navegador no le deja leer la respuesta).
@@ -46,7 +45,7 @@ public class FiltroCors extends OncePerRequestFilter {
         boolean mismo = origen.equalsIgnoreCase(Origen.publico(req));
         boolean permitido;
         String metodos;
-        if ("null".equals(origen) || ORIGEN_APP.equals(origen)) {
+        if (ORIGEN_APP.equals(origen)) {
             permitido = true;
             metodos = "GET, POST, PUT, DELETE, OPTIONS";
         } else if (Origen.deRedPrivada(origen) && PARA_RED_PRIVADA.contains(metodo + " " + ruta)) {
