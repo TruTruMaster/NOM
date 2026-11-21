@@ -81,6 +81,7 @@ def pruebas(modo, out):
         ("e2e", [PY, i("prueba_e2e.py"), cap], True, 50, None),
         ("ayuda", [PY, i("prueba_ayuda.py"), cap], True, 15, None),
         ("red", [PY, i("prueba_red.py"), cap], True, 35, None),
+        ("zip_espacio", [PY, i("prueba_zip_espacio.py"), cap], True, 40, None),
         ("funciones", [PY, i("prueba_funciones.py"), cap], True, 225, None),
         ("rastreo", [PY, i("rastreo.py"), cap], True, 1230, None),
     ] + [(t, [PY, i(t + ".py"), cap], True, 30, None) for t in

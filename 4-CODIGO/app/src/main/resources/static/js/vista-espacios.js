@@ -1207,6 +1207,14 @@
       for (const d of lista) {
         const r = await api.get(`/api/documentos/${d.id}`, undefined, { ms: 20000 });
         const doc = new NOM.DocCRDT("zip-" + d.id, r.estado, { local: true, soloMemoria: true, soloLectura: true });
+        // Lo que vive en el almacén de binarios (el Office original y las imágenes) se trae antes, como al descargar un
+        // documento (exportarListo): si no, ese documento saldría armado desde cero y sin sus imágenes.
+        if (NOM.binarios && NOM.binarios.refsDoc(doc).size) {
+          let llave = null;
+          if (NOM.e2e && NOM.e2e.espacioCifrado && NOM.e2e.espacioCifrado(esp.id)) { try { llave = await NOM.e2e.llaveDoc(d.id); } catch (e) { llave = null; } }
+          try { await NOM.binarios.precargar(doc, { espacio: esp.id, llave, doc: d.id }); }
+          catch (e) { throw new Error(`No se pudieron traer las imágenes o el original de «${d.nombre}» (¿sin Internet?): el .zip no se armó para no dejarlo incompleto. Intenta de nuevo con conexión.`); }
+        }
         const modo = (r.documento || d).modo;
         const ext = modo === "HOJA" ? "xlsx" : modo === "TEXTO" ? "docx" : "pptx";
         const datos = ext === "docx" ? NOM.ooxml.docx(doc) : ext === "xlsx" ? NOM.ooxml.xlsx(doc) : NOM.ooxml.pptx(doc, modo === "DIAGRAMA");
