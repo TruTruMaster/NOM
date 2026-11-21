@@ -594,6 +594,79 @@
   const plantilla = document.createElement("template");
   function crearEl(h) { plantilla.innerHTML = h; return plantilla.content.firstChild; }
 
+  // ------------------------------------------------------------ ordenar párrafos como Word (Inicio → Párrafo → Ordenar)
+  /**
+   * Comparar dos párrafos como Word (Range.Sort por texto; medido con Word 2024, pruebas/office/ordenar_real.py): 1) letras
+   * y números sin acentos ni mayúsculas, carácter por carácter: signos antes que números y números antes que letras (los
+   * signos por su código, «+» y «« »» al final; el guion y el apóstrofo no cuentan: «coop» antes que «co-op»); 2) los
+   * acentos; 3) con «distinguir mayúsculas», primero la minúscula (sin eso, se quedan en su orden). El espacio del final no
+   * cuenta.
+   */
+  function comparadorWord(idioma, mayus) {
+    const base = new Intl.Collator(idioma, { sensitivity: "base" });
+    const TARDE = "+<=>±×÷«»";
+    const ignora = (c) => c === "-" || c === "'" || c === "’" || c === "‐" || c === "‑";
+    const clase = (c) => (/\p{L}/u.test(c) ? 2 : /\p{Nd}/u.test(c) ? 1 : 0);
+    const signo = (c) => (TARDE.includes(c) ? 0x110000 + TARDE.indexOf(c) : c.codePointAt(0));
+    const acento = (c) => { const d = c.normalize("NFD"); return d.length > 1 && !(idioma.startsWith("es") && /^[nN]̃$/.test(d)) ? d.codePointAt(1) : 0; };
+    const caso = (c) => (c !== c.toLowerCase() ? 1 : 0);
+    return (a, b) => {
+      a = a.replace(/\s+$/u, ""); b = b.replace(/\s+$/u, "");
+      const pa = [...a].filter((c) => !ignora(c)), pb = [...b].filter((c) => !ignora(c));
+      for (let i = 0; i < Math.min(pa.length, pb.length); i++) {
+        const x = pa[i], y = pb[i], cx = clase(x), cy = clase(y);
+        if (cx !== cy) return cx - cy;
+        const d = cx === 0 ? signo(x) - signo(y) : base.compare(x, y);
+        if (d) return d;
+      }
+      if (pa.length !== pb.length) return pa.length - pb.length;
+      const sa = [...a], sb = [...b];
+      for (let i = 0; i < Math.min(sa.length, sb.length); i++) { const d = acento(sa[i]) - acento(sb[i]); if (d) return d; }
+      if (sa.length !== sb.length) return sa.length - sb.length;
+      if (mayus) for (let i = 0; i < sa.length; i++) { const d = caso(sa[i]) - caso(sb[i]); if (d) return d; }
+      return 0;
+    };
+  }
+  /** El número con que Word ordena un párrafo (el del principio: «1,000 pesos» es 1000), o null si no empieza con uno. */
+  function numeroParaOrdenar(t) {
+    const m = /^\s*\$?(-)?(\d{1,3}(?:,\d{3})+|\d+)?(\.\d+)?(?![\deE%\d])/.exec(t);
+    if (!m || (!m[2] && !m[3])) return null;
+    if (/^\s*\$?-?[\d,.]*[eE]\d/.test(t)) return null;
+    return (m[1] ? -1 : 1) * parseFloat((m[2] || "0").replace(/,/g, "") + (m[3] || ""));
+  }
+  /** La fecha con que Word ordena un párrafo (día/mes/año en español, mes/día/año en inglés, o año-mes-día), o null. */
+  function fechaParaOrdenar(t, idioma) {
+    t = t.trim();
+    let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t);
+    if (m) return Date.UTC(+m[1], +m[2] - 1, +m[3]);
+    m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(t);
+    if (m) {
+      const [d, mes] = idioma.startsWith("en") ? [+m[2], +m[1]] : [+m[1], +m[2]], a = +m[3] < 100 ? 2000 + +m[3] : +m[3];
+      return d >= 1 && d <= 31 && mes >= 1 && mes <= 12 ? Date.UTC(a, mes - 1, d) : null;
+    }
+    m = /^([A-Za-z]{3,9})\.? (\d{1,2}), (\d{4})$/.exec(t);
+    const MESES = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+    if (m && idioma.startsWith("en")) { const k = MESES.indexOf(m[1].slice(0, 3).toLowerCase()); return k >= 0 ? Date.UTC(+m[3], k, +m[2]) : null; }
+    return null;
+  }
+  /**
+   * El nuevo orden de unos párrafos (sus textos), como Word: opc { tipo: "texto"|"numero"|"fecha", desc, encabezado,
+   * mayus, idioma }. Los que no tienen número o fecha van primero (al revés, al final), en su orden.
+   */
+  function ordenDeParrafos(textos, opc) {
+    opc = opc || {};
+    const idioma = opc.idioma || "es", ini = opc.encabezado ? 1 : 0;
+    const cmp = comparadorWord(idioma, !!opc.mayus);
+    const clave = (t) => (opc.tipo === "numero" ? numeroParaOrdenar(t) : opc.tipo === "fecha" ? fechaParaOrdenar(t, idioma) : t);
+    const ix = textos.map((t, i) => ({ i, k: clave(t) })).slice(ini);
+    ix.sort((a, b) => {
+      if (opc.tipo === "numero" || opc.tipo === "fecha") { if (a.k == null || b.k == null) return (a.k == null ? 0 : 1) - (b.k == null ? 0 : 1) || a.i - b.i; return a.k - b.k || a.i - b.i; }
+      return cmp(a.k, b.k) || a.i - b.i;
+    });
+    if (opc.desc) ix.reverse();
+    return (ini ? [0] : []).concat(ix.map((x) => x.i));
+  }
+
   // ------------------------------------------------------------ texto enriquecido para exportar
   /**
    * Párrafos del documento: [{ pa, tramos: [{ x, a } | { e, a }] }]. Lo usan Word, HTML, Markdown y PDF. Con opc.cambios
@@ -2257,6 +2330,54 @@
         const { a } = attrsEnCursor();
         formato({ [k]: a[k] ? null : true });
       }
+      /**
+       * Ordenar (Inicio → Párrafo → Ordenar, como Word): los párrafos elegidos cambian de lugar con su formato (estilo,
+       * lista, sangrías…); las marcas de párrafo y las secciones se quedan donde están. Devuelve el motivo si no se puede.
+       */
+      function ordenarParrafos(opc) {
+        if (ed.soloLectura) return "Solo puedes ver este documento";
+        const s = leerSel(), ps = parrafosDeSel(s);
+        if (ps.length < 2) return "Elige dos o más párrafos para ordenarlos";
+        if (ps.some((p) => visPintado.slice(p.ini, p.fin).some((it) => it.e))) return "Ordenar mueve párrafos de texto: deja fuera las tablas, imágenes y otros objetos";
+        const textos = ps.map((p) => visPintado.slice(p.ini, p.fin).map((it) => it.c).join(""));
+        const orden = ordenDeParrafos(textos, Object.assign({ idioma: String(doc().valor("_doc", "idioma") || "es") }, opc));
+        if (orden.every((k, j) => k === j)) return { cambio: false };
+        const SE_QUEDAN = ["sec", "sx"];
+        comando(() => {
+          const grupo = "ordenar-" + Date.now();
+          const toks = ps.map((p) => visPintado.slice(p.ini, p.fin).map((it) => ({ c: it.c, a: Object.assign({}, S().attrs(it)) })));
+          const pas = ps.map((p) => S().attrs(p.mark));
+          const todos = [].concat(...ps.map((p) => visPintado.slice(p.ini, p.fin)));
+          if (todos.length) doc().seq(B, { k: "v", v: false, r: S().rangos(todos) }, { origen: "comando", grupo });
+          const antes = ps[0].ini > 0 ? visPintado[ps[0].ini - 1].id : null;
+          ps.forEach((p, j) => {
+            const de = orden[j], iz = j === 0 ? antes : ps[j - 1].mark.id;
+            if (toks[de].length) insertarTokens(iz, toks[de], "comando", grupo);
+            const a = {}, viejo = pas[j], nuevo = pas[de];
+            new Set(Object.keys(viejo).concat(Object.keys(nuevo))).forEach((k) => { if (PAR.includes(k) && !SE_QUEDAN.includes(k) && JSON.stringify(viejo[k]) !== JSON.stringify(nuevo[k])) a[k] = nuevo[k] == null ? null : nuevo[k]; });
+            if (Object.keys(a).length) doc().seq(B, { k: "f", a, r: S().rangos([p.mark]) }, { origen: "comando", grupo });
+          });
+          return null;
+        });
+        return { cambio: true, parrafos: ps.length };
+      }
+      function dialogoOrdenar() {
+        const cuerpo = html(`<form class="col" style="gap:10px">
+          <label>Ordenar por <select data-tipo><option value="texto">Texto</option><option value="numero">Número</option><option value="fecha">Fecha</option></select></label>
+          <div class="fila" style="gap:16px"><label class="fila" style="gap:6px"><input type="radio" name="ord" value="asc" checked> Ascendente</label><label class="fila" style="gap:6px"><input type="radio" name="ord" value="desc"> Descendente</label></div>
+          <label class="fila" style="gap:6px"><input type="checkbox" data-enc> La lista tiene encabezado (el primer párrafo se queda arriba)</label>
+          <label class="fila" style="gap:6px"><input type="checkbox" data-mayus> Distinguir mayúsculas y minúsculas</label></form>`);
+        const pie = html(`<div style="display:contents"><button class="btn" data-no type="button">Cancelar</button><button class="btn primario" data-si>Ordenar</button></div>`);
+        const h = NOM.hoja({ titulo: "Ordenar texto", icono: "arrow-up-down", cuerpo, pie });
+        $("[data-no]", pie).onclick = () => h.cerrar();
+        $("[data-si]", pie).onclick = (ev) => {
+          ev.preventDefault();
+          const r = ordenarParrafos({ tipo: $("[data-tipo]", cuerpo).value, desc: $("input[name=ord]:checked", cuerpo).value === "desc", encabezado: $("[data-enc]", cuerpo).checked, mayus: $("[data-mayus]", cuerpo).checked });
+          if (typeof r === "string") return aviso(r, { tipo: "aviso", ms: 5000 });
+          h.cerrar();
+          aviso(r.cambio ? `Ordenados ${r.parrafos} párrafos. Ctrl+Z para deshacer` : "Ya estaban en ese orden", { tipo: r.cambio ? "ok" : "info" });
+        };
+      }
       function formatoParrafo(cambios, ps) {
         if (ed.soloLectura) return;
         const s = leerSel();
@@ -2478,6 +2599,7 @@
         bajo(i) { return marcasComentario.find((c) => { const a = sec().posicion(c.ancla.a), f = sec().posicion(c.ancla.f); return a >= 0 && i >= Math.min(a, f) && i <= Math.max(a, f); }) || null; },
       };
       this.sugerencias = { lista: sugerencias, resolver: resolverSugerencia, activo: () => modoSug, alternar: alternarSugerencias, marcas: () => marcas, fijarMarcas };
+      this.ordenar = { parrafos: ordenarParrafos, dialogo: dialogoOrdenar, orden: ordenDeParrafos, estilo: (e) => formatoParrafo({ estilo: e }) };
 
       // ------------------------------------------------------------ Fase 9: lo que usan las citas, las fichas y "Armar reporte"
       /** Tokens de un párrafo: { tramos: [{ x, a } | { e }], a: atributos del párrafo }. */
@@ -5523,6 +5645,7 @@
           { texto: "MAYÚSCULAS / minúsculas", icono: "case-sensitive", atajo: "Mayús+F3", fn: cambiarMayusculas },
           { texto: "Borrar formato", icono: "remove-formatting", atajo: "Ctrl+\\", fn: borrarFormato },
           { texto: "Párrafo (sangrías, espacio)…", icono: "pilcrow", fn: dialogoParrafo },
+          { texto: "Ordenar párrafos…", icono: "arrow-up-down", fn: dialogoOrdenar },
           { texto: "Opciones de la lista…", icono: "list-ordered", fn: dialogoLista },
           { titulo: "Documento" },
           { texto: "Buscar y reemplazar", icono: "search", atajo: "Ctrl+H", fn: () => buscar(true) },
