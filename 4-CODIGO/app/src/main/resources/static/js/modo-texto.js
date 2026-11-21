@@ -595,8 +595,12 @@
   function crearEl(h) { plantilla.innerHTML = h; return plantilla.content.firstChild; }
 
   // ------------------------------------------------------------ texto enriquecido para exportar
-  /** Párrafos del documento: [{ pa, tramos: [{ x, a } | { e, a }] }]. Lo usan Word, HTML, Markdown y PDF. */
-  function parrafosDe(doc) {
+  /**
+   * Párrafos del documento: [{ pa, tramos: [{ x, a } | { e, a }] }]. Lo usan Word, HTML, Markdown y PDF. Con opc.cambios
+   * (Word), las sugerencias llegan como son (sug / sugBorrar) para salir como cambios marcados.
+   */
+  function parrafosDe(doc, opc) {
+    const crudas = !!(opc && opc.cambios);
     asegurarSecuencia(doc, true);
     const sec = doc.secuencia(B), vis = sec.visibles(), r = [];
     calcularParrafos(sec).forEach((p) => {
@@ -605,7 +609,7 @@
         const it = vis[i];
         let a = S().attrs(it);
         // Sugerencias sin resolver: se exportan como en "control de cambios" (subrayado o tachado).
-        if (a.sug || a.sugBorrar) { a = Object.assign({}, a); if (a.sug) { a.u = true; a.color = "#1D7A4C"; } if (a.sugBorrar) { a.s = true; a.color = "#C2372B"; } delete a.sug; delete a.sugBorrar; }
+        if (!crudas && (a.sug || a.sugBorrar)) { a = Object.assign({}, a); if (a.sug) { a.u = true; a.color = "#1D7A4C"; } if (a.sugBorrar) { a.s = true; a.color = "#C2372B"; } delete a.sug; delete a.sugBorrar; }
         if (it.e) { tramos.push({ e: Object.assign({}, it.e, it.e.ref ? doc.bloque(it.e.ref) || {} : {}, { tipo: it.e.tipo }), a }); continue; }
         const u = tramos[tramos.length - 1];
         if (u && u.x != null && claveA(u.a) === claveA(a)) u.x += it.c; else tramos.push({ x: it.c, a });
@@ -680,12 +684,19 @@
       ctx.yo = (NOM.api.usuario() || {}).id || null;
       ctx.propietario = !!ed.esPropietario;
       /** 7: con el modo sugerencia, lo que se escribe o se borra queda propuesto, no aplicado. */
-      let modoSug = !!ed.forzarSugerencias;   // (protección de Word «solo cambios marcados»)
+      // (protección de Word «solo cambios marcados»; o un Word con «Control de cambios»: se empieza sugiriendo, como en Word)
+      let modoSug = !!ed.forzarSugerencias || (!ed.soloLectura && !!(ed.doc && ed.doc.valor("_doc", "controlCambios")));
       const yoSug = () => { const u = NOM.api.usuario() || {}; return { u: u.id || "", n: u.nombre || "", c: u.color || "#1D7A4C" }; };
       let vista = pref.vista || (movil ? "continua" : "paginas");
       let zoom = pref.zoom || 1;
+      // Revisar → Mostrar para revisión, como Word: «simples» (lo borrado no se ve y lo agregado se ve normal, con una raya
+      // al margen: lo de siempre en Word), «todas» (lo agregado subrayado y lo borrado tachado), «sin» (como quedaría con
+      // todo aceptado) y «original» (como estaba). Un Word abre como lo abre Word; un documento de NOM, con todas las marcas.
+      const deWord = () => { const b = ed.doc && ed.doc.estado && ed.doc.estado.bloques && NOM.origen && ed.doc.estado.bloques[NOM.origen.BLOQUE]; return !!(b && b.fmt && b.fmt.v === "docx"); };
+      const MARCAS = { simples: "Marcas simples", todas: "Todas las marcas", sin: "Sin marcas", original: "Original" };
+      let marcas = (deWord() ? pref.marcasWord : pref.marcas) || (deWord() ? "simples" : "todas");
 
-      const raiz = html(`<div class="wd" data-vista="${vista}">
+      const raiz = html(`<div class="wd" data-vista="${vista}" data-marcas="${marcas}">
         <nav class="wd-esquema" data-esquema hidden aria-label="Esquema del documento"><div class="wd-esquema-cab"><b>Esquema</b><button class="icono-btn" data-cerrar-esquema aria-label="Cerrar esquema">${ico("x")}</button></div><div data-esquema-lista></div></nav>
         <div class="wd-zona" data-zona>
           <div class="wd-hoja" data-hoja>
@@ -2466,7 +2477,7 @@
         /** Comentario bajo un punto del texto (para abrirlo al tocarlo). */
         bajo(i) { return marcasComentario.find((c) => { const a = sec().posicion(c.ancla.a), f = sec().posicion(c.ancla.f); return a >= 0 && i >= Math.min(a, f) && i <= Math.max(a, f); }) || null; },
       };
-      this.sugerencias = { lista: sugerencias, resolver: resolverSugerencia, activo: () => modoSug, alternar: alternarSugerencias };
+      this.sugerencias = { lista: sugerencias, resolver: resolverSugerencia, activo: () => modoSug, alternar: alternarSugerencias, marcas: () => marcas, fijarMarcas };
 
       // ------------------------------------------------------------ Fase 9: lo que usan las citas, las fichas y "Armar reporte"
       /** Tokens de un párrafo: { tramos: [{ x, a } | { e }], a: atributos del párrafo }. */
@@ -5476,6 +5487,17 @@
         };
       }
       /** Lo de Disposición → Números de línea de Word, en un menú aparte (en el «Más» ocupaban siete renglones). */
+      function fijarMarcas(m) {
+        marcas = MARCAS[m] ? m : "todas";
+        raiz.dataset.marcas = marcas;
+        NOM.guardar("nom.texto", Object.assign(NOM.leer("nom.texto", {}), deWord() ? { marcasWord: marcas } : { marcas }));
+        const els = [...cuerpo.children];
+        acomodarComoWord(els.concat(celdasDe(els)));
+        programarPaginar();
+      }
+      function menuMarcas(b) {
+        NOM.menu(b, [{ titulo: "Mostrar para revisión" }].concat(Object.keys(MARCAS).map((k) => ({ texto: MARCAS[k], icono: "pen-line", marcado: marcas === k, fn: () => fijarMarcas(k) }))));
+      }
       function menuNumerosLinea(b) {
         const nl = numerosLineaActuales(), snl = parrafosDeSel().every((p) => S().attrs(p.mark).sinNumLin);
         NOM.menu(b, [
@@ -5509,6 +5531,7 @@
           { texto: "Configurar página…", icono: "file-cog", fn: dialogoPagina },
           { texto: "Formato del documento…", icono: "type", fn: dialogoFormato },
           { texto: modoSug ? "Apagar el modo sugerencia" : "Modo sugerencia", icono: "pen-line", fn: () => alternarSugerencias() },
+          { texto: "Mostrar para revisión: " + MARCAS[marcas], icono: "pen-line", fn: () => menuMarcas(b) },
           ...(ctx.propietario ? [{ texto: "Asignar párrafos a una persona…", icono: "user-check", fn: () => asignarParrafos() }] : []),
           { texto: "Encabezado y pie de página…", icono: "panel-top", fn: dialogoEncabezado },
           { texto: vista === "paginas" ? "Ver sin páginas" : "Ver como páginas", icono: vista === "paginas" ? "scroll-text" : "file-text", fn: () => fijarVista(vista === "paginas" ? "continua" : "paginas") },

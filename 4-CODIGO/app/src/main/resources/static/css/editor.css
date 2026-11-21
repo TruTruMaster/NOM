@@ -769,6 +769,12 @@
 ::highlight(wd-comentario) { background-color: rgba(255, 210, 63, .45); text-decoration: underline 2px rgba(214, 160, 0, .9); }
 .wd-sug { color: var(--c, #1D7A4C); text-decoration: underline 2px; text-decoration-color: var(--c, #1D7A4C); }
 .wd-sugb { color: var(--c, #C2372B); text-decoration: line-through 2px; opacity: .8; }
+/* Mostrar para revisión, como Word: marcas simples (lo borrado no se ve, lo agregado normal y una raya al margen del
+   párrafo), sin marcas (como con todo aceptado) y original (como con todo rechazado) */
+.wd[data-marcas="simples"] .wd-sugb, .wd[data-marcas="sin"] .wd-sugb, .wd[data-marcas="original"] .wd-sug { display: none; }
+.wd[data-marcas="simples"] .wd-sug, .wd[data-marcas="sin"] .wd-sug, .wd[data-marcas="original"] .wd-sugb { color: inherit; text-decoration: inherit; opacity: 1; }
+.wd[data-marcas="simples"] .wd-cuerpo > :has(.wd-sug, .wd-sugb) { box-shadow: -14px 0 0 -13px #C2372B; }
+@media print { .wd .wd-cuerpo > :has(.wd-sug, .wd-sugb) { box-shadow: none; } }
 .wd.sugiriendo .wd-cuerpo { outline: 3px solid rgba(29, 122, 76, .35); outline-offset: -3px; }
 @media print { .wd-cuerpo > [data-dueno]::after { display: none; } .wd-cuerpo > [data-dueno] { box-shadow: none; background: none; } }
 

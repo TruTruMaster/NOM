@@ -19,6 +19,8 @@
   const x = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]))
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
   const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+  // (el color de cada persona que hizo cambios marcados en un Word: uno por nombre, como Word)
+  const COLORES_CAMBIO = ["#B5179E", "#0077B6", "#2A9D8F", "#E76F51", "#6A4C93", "#C1121F", "#3A86FF", "#8338EC"];
 
   // ------------------------------------------------------------ zip (comprimido)
   const crc32 = (b) => NOM.compresion.crc32(b);
@@ -432,10 +434,13 @@
   // Un objeto dentro del texto (ecuación, imagen…) lleva los campos de su bloque: un campo vacío (null) no cuenta, porque
   // al guardar como .nom (y en cualquier copia) un campo vacío simplemente no está, y el párrafo parecía cambiado.
   const sinNulosE = (e) => { const r = {}; for (const k in e) if (e[k] != null) r[k] = e[k]; return r; };
-  const huellaGrupo = (g) => NOM.origen.huella(g.map((p) => [sinOx(p.pa), p.tramos.map((t) => (t.e ? { e: sinNulosE(t.e), a: t.a } : [t.x, t.a]))]));
+  // (la huella de un párrafo no distingue una sugerencia de su marca visible —subrayado o tachado—: así es la misma al
+  // importar, con las sugerencias pintadas, que al descargar el Word, con las sugerencias como cambios marcados)
+  const pintada = (a) => { if (!a || (!a.sug && !a.sugBorrar)) return a; const b = Object.assign({}, a); if (b.sug) { b.u = true; b.color = "#1D7A4C"; } if (b.sugBorrar) { b.s = true; b.color = "#C2372B"; } delete b.sug; delete b.sugBorrar; return b; };
+  const huellaGrupo = (g) => NOM.origen.huella(g.map((p) => [sinOx(p.pa), p.tramos.map((t) => (t.e ? { e: sinNulosE(t.e), a: pintada(t.a) } : [t.x, pintada(t.a)]))]));
   // (las huellas guardadas hasta la 0.16.0 sí contaban los campos vacíos: también valen)
   const conNulos = (g) => g.some((p) => p.tramos.some((t) => t.e && Object.keys(t.e).some((k) => t.e[k] === null)));
-  const huellaGrupoVieja = (g) => NOM.origen.huella(g.map((p) => [sinOx(p.pa), p.tramos.map((t) => (t.e ? { e: t.e, a: t.a } : [t.x, t.a]))]));
+  const huellaGrupoVieja = (g) => NOM.origen.huella(g.map((p) => [sinOx(p.pa), p.tramos.map((t) => (t.e ? { e: t.e, a: pintada(t.a) } : [t.x, pintada(t.a)]))]));
   const mismoGrupo = (g, h) => huellaGrupo(g) === h || (conNulos(g) && huellaGrupoVieja(g) === h);
   function huellasDocx(doc) {
     const ps = NOM.textoRico.parrafosDe(doc), u = {};
@@ -451,8 +456,9 @@
     // Con archivo de origen, lo nuevo se numera después de lo que ya trae (ver "a partir del original").
     let PRE = "", baseAbs = 10, baseNum = 20, baseNota = 0, baseDib = 0;
     const medios = [], rels = [{ id: "rIdEst", tipo: T.estilos, destino: "styles.xml" }, { id: "rIdNum", tipo: T.num, destino: "numbering.xml" }, { id: "rIdConf", tipo: T.conf, destino: "settings.xml" }];
-    const ps = NOM.textoRico.parrafosDe(doc);
-    let nImg = 0, nLink = 0;
+    const ps = NOM.textoRico.parrafosDe(doc, { cambios: true });
+    let nImg = 0, nLink = 0, nCambio = 800000;
+    const fechaCambio = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
     // 8.2 Listas: una definición (abstractNum) por formato de número o viñeta, y una instancia (num)
     // por cada lista que empieza (o que empieza en otro número). "continuar" reusa la anterior.
     const abstractos = new Map(), instancias = [];
@@ -774,6 +780,9 @@
         return r;
       };
       const ENVOLTURAS = ["hyperlink", "ins", "smartTag", "fldSimple", "customXml", "sdt", "sdtContent", "bdo", "dir"];
+      // (un párrafo con cambios marcados de Word que se tocó aquí se vuelve a escribir desde NOM: así aceptar o rechazar en NOM
+      // quita sus marcas y lo que quede pendiente sale como cambios marcados)
+      const CAMBIOS_W = ["ins", "del", "moveFrom", "moveTo"];
       const OBJ = "\uFFFC";
       /** Lo que hay dentro de un párrafo del original, en el orden y con el mismo criterio con que lo lee el importador. */
       const desarmar = (xp, ini, fin) => {
@@ -800,6 +809,9 @@
                 run.items.push(it);
               }
               R.runs.push(run); lista.push(run);
+            } else if (CAMBIOS_W.includes(ln)) {
+              R.raro = true;
+              lista.push({ tipo: "x", xml: xp.slice(h.i, h.f) });
             } else if (ENVOLTURAS.includes(ln)) {
               let en = enlace;
               if (ln === "hyperlink") { const rid = O.attr(xp, h, "r:id"), rel = rid ? relsD.find((q) => q.id === rid) : null; if (rel && /^(https?:|mailto:)/i.test(rel.destino || "")) en = rel.destino; }
@@ -1397,8 +1409,22 @@
       if (ALIN_WORD[pa.alin]) ppr += `<w:jc w:val="${ALIN_WORD[pa.alin]}"/>`;
       let runs = pa.lista === "tareas" ? texto(pa.hecho ? "☑\t" : "☐\t", {}) : "";
       let despues = "";
+      // las sugerencias salen como cambios marcados de Word: lo propuesto para agregar en <w:ins> y lo propuesto para borrar en
+      // <w:del> (con w:delText), con su autor y su fecha; seguidas del mismo autor, en uno solo
+      let rev = null;
+      const cambio = (a) => {
+        const sg = a && a.sug ? ["ins", a.sug] : a && a.sugBorrar ? ["del", a.sugBorrar] : null;
+        const k = sg ? sg[0] + "|" + (sg[1].n || "") + "|" + (sg[1].t || "") : "";
+        if ((rev ? rev.k : "") === k) return "";
+        let out = rev ? `</w:${rev.tipo}>` : "";
+        rev = sg ? { k, tipo: sg[0] } : null;
+        if (sg) out += `<w:${sg[0]} w:id="${++nCambio}" w:author="${x(sg[1].n || "NOM")}" w:date="${x(sg[1].t || fechaCambio)}">`;
+        return out;
+      };
+      const borrado = (xml) => (rev && rev.tipo === "del" ? xml.replace(/<w:t(\s[^>]*)?>/g, "<w:delText$1>").replace(/<\/w:t>/g, "</w:delText>") : xml);
       p.tramos.forEach((t) => {
         if (t.e) {
+          runs += cambio(null);
           // un objeto que no cambió desde que se importó sale tal cual estaba en el archivo original
           const tal = U && U.objeto && t.e.oe ? U.objeto(t.e) : null;
           if (tal) { runs += tal; return; }
@@ -1425,10 +1451,18 @@
         if (a.enlace && /^(https?:|mailto:)/i.test(a.enlace)) {
           const id = "rId" + PRE + "Link" + ++nLink;
           rels.push({ id, tipo: T.enlace, destino: a.enlace, externo: true });
-          runs += `<w:hyperlink r:id="${id}" w:history="1">${texto(t.x, Object.assign({}, a)).replace(/<w:rPr>/g, '<w:rPr><w:rStyle w:val="Hyperlink"/>').replace(/<w:r>(?!<w:rPr>)/g, '<w:r><w:rPr><w:rStyle w:val="Hyperlink"/></w:rPr>')}</w:hyperlink>`;
-        } else runs += texto(t.x, a);
+          // (un cambio marcado va dentro del vínculo, no al revés)
+          runs += cambio(null);
+          const dentro = cambio(a) + borrado(texto(t.x, Object.assign({}, a)).replace(/<w:rPr>/g, '<w:rPr><w:rStyle w:val="Hyperlink"/>').replace(/<w:r>(?!<w:rPr>)/g, '<w:r><w:rPr><w:rStyle w:val="Hyperlink"/></w:rPr>')) + cambio(null);
+          runs += `<w:hyperlink r:id="${id}" w:history="1">${dentro}</w:hyperlink>`;
+        } else runs += cambio(a) + borrado(texto(t.x, a));
       });
-      const pprXml = U && U.ppr != null ? U.ppr : ppr || (U && U.sect) ? `<w:pPr>${ppr}${(U && U.sect) || ""}</w:pPr>` : "";
+      runs += cambio(null);
+      let pprXml = U && U.ppr != null ? U.ppr : ppr || (U && U.sect) ? `<w:pPr>${ppr}${(U && U.sect) || ""}</w:pPr>` : "";
+      // (la marca de párrafo de un Word con cambios marcados: si al párrafo ya no le queda ninguna sugerencia, se quedó
+      // aceptado o rechazado aquí y su marca va sin el cambio)
+      if (U && U.ppr && /<w:(ins|del|moveFrom|moveTo)\b/.test(pprXml) && !p.tramos.some((t) => t.a && (t.a.sug || t.a.sugBorrar)))
+        pprXml = pprXml.replace(/<w:(ins|del|moveFrom|moveTo)\b[^>]*\/>/g, "");
       return `<w:p>${pprXml}${runs}</w:p>${despues}`;
     };
     const OGR = og ? cuerpoConOrigen() : null;
@@ -2386,7 +2420,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
           const a = relativa(attrsRun(rpr, rs != null && defEstilo[rs] ? Object.assign({}, base, letraDe(rs)) : base));
           for (const c of hijos(r)) {
             const cn = c.localName;
-            if (cn === "t") tramos.push({ x: c.textContent, a });
+            if (cn === "t" || cn === "delText") tramos.push({ x: c.textContent, a });   // (delText: lo borrado con cambios marcados)
             else if (cn === "tab") tramos.push({ x: "\t", a });
             else if (cn === "br" || cn === "cr") {
               const tipo = c.getAttributeNS(W, "type") || c.getAttribute("w:type");
@@ -2480,8 +2514,20 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         } else if (ln === "bookmarkEnd") {
           const nm = nombreMarcador[r.getAttributeNS(W, "id") || r.getAttribute("w:id")];
           if (nm) tramos.push({ e: { tipo: "marcador", nombre: nm, lado: "fin" }, a: {} });
-        } else if (["ins", "smartTag", "fldSimple", "customXml", "sdt", "sdtContent", "bdo", "dir"].includes(ln)) await runs(r, base, tramos, parrafo);
+        } else if (ln === "ins" || ln === "moveTo") await runs(r, Object.assign({}, base, { sug: autorCambio(r) }), tramos, parrafo);
+        else if (ln === "del" || ln === "moveFrom") await runs(r, Object.assign({}, base, { sugBorrar: autorCambio(r) }), tramos, parrafo);
+        else if (["smartTag", "fldSimple", "customXml", "sdt", "sdtContent", "bdo", "dir"].includes(ln)) await runs(r, base, tramos, parrafo);
       }
+    }
+    /**
+     * Quién hizo un cambio marcado de Word (w:ins, w:del…): como el autor de una sugerencia de NOM ({ u, n, c }) y su fecha
+     * (t), para que salga igual al descargar. El color sale del nombre (siempre el mismo para la misma persona).
+     */
+    function autorCambio(el) {
+      const n = el.getAttributeNS(W, "author") || el.getAttribute("w:author") || "Autor", t = el.getAttributeNS(W, "date") || el.getAttribute("w:date") || "";
+      let k = 0;
+      for (const ch of n) k = (k * 31 + ch.codePointAt(0)) >>> 0;
+      return Object.assign({ u: "word:" + n, n, c: COLORES_CAMBIO[k % COLORES_CAMBIO.length] }, t ? { t } : {});
     }
     /** Los campos que NOM sabe calcular (los demás —índice, vínculos, XE…— se quedan como su texto). */
     const CAMPOS_VIVOS = new Set(["DATE", "TIME", "CREATEDATE", "SAVEDATE", "PRINTDATE", "PAGE", "NUMPAGES", "SECTIONPAGES", "SECTION", "SEQ", "REF", "PAGEREF", "NOTEREF",
@@ -3012,6 +3058,9 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         const ed = dp && (dp.getAttributeNS(W, "edit") || dp.getAttribute("w:edit"));
         const tipo = { readOnly: "lectura", comments: "comentarios", trackedChanges: "cambios", forms: "formularios" }[ed];
         if (enf && tipo) docCampos.proteccion = { tipo, p: proteccionDe(dp, true) };
+        // «Control de cambios» de Word (Revisar): quien edite el documento lo hace como sugerencias
+        const tr = x.getElementsByTagNameNS(W, "trackRevisions")[0];
+        if (tr && !/^(0|false|off)$/.test(tr.getAttributeNS(W, "val") || tr.getAttribute("w:val") || "")) docCampos.controlCambios = true;
         if (wp) docCampos.modificar = { recomendada: /^(1|true|on)$/.test(wp.getAttributeNS(W, "recommended") || wp.getAttribute("w:recommended") || "") || undefined, p: proteccionDe(wp, false) };
         const dts = x.getElementsByTagNameNS(W, "defaultTabStop")[0];
         if (dts) { const v = +(dts.getAttributeNS(W, "val") || dts.getAttribute("w:val")) / 20; if (v > 0 && Math.abs(v - 36) > 0.01) docCampos.tabDef = v; }
@@ -7092,6 +7141,12 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
         if (tenia !== quiere) {
           s = quita(s, "w:autoHyphenation");
           if (quiere) s = /<w:defaultTabStop\b[^>]*\/>/.test(s) ? s.replace(/(<w:defaultTabStop\b[^>]*\/>)/, "$1<w:autoHyphenation/>") : s.replace(/(<w:settings\b[^>]*>)/, "$1<w:autoHyphenation/>");
+        }
+        // «Control de cambios» (va antes de la protección y de las tabulaciones, como pide Word)
+        const teniaCC = /<w:trackRevisions\b(?![^>]*w:val="(?:0|false|off)")[^>]*\/?>/.test(s), quiereCC = !!v("controlCambios");
+        if (teniaCC !== quiereCC) {
+          s = quita(s, "w:trackRevisions");
+          if (quiereCC) s = /<w:documentProtection\b/.test(s) ? s.replace(/<w:documentProtection\b/, "<w:trackRevisions/><w:documentProtection") : /<w:defaultTabStop\b/.test(s) ? s.replace(/<w:defaultTabStop\b/, "<w:trackRevisions/><w:defaultTabStop") : s.replace(/(<w:settings\b[^>]*>)/, "$1<w:trackRevisions/>");
         }
         if (s !== st) cambios.set("word/settings.xml", s);
       }
