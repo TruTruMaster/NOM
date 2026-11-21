@@ -128,7 +128,14 @@ Falta: párrafos justificados o centrados con tabuladores, contornos (estrecho, 
 valores iguales—; 21-nov: se crean desde NOM con Datos → Tabla de datos… en Más, la ruedita y la paleta, como Excel —el rango
 completo y la celda de entrada de fila, de columna o las dos—; `datos_excel.py`: 3 de 3 iguales a `Range.Table` de Excel 2024
 —una variable en columna, una en fila y dos variables—; `libro_excel.py`: Excel abre lo que descarga NOM con `=TABLE(B1,B2)` en
-cada celda del interior y los mismos valores). Relleno rápido, escenarios y previsión: no |
+cada celda del interior y los mismos valores). **Escenarios: sí** (21-nov: el Administrador de escenarios en Más, la ruedita y
+la paleta —agregar, modificar, eliminar, mostrar y resumen—, como Excel: hasta 32 celdas cambiantes sin fórmula, el comentario
+«Creado por … el …», se leen y se guardan en el `<scenarios>` de la hoja; el informe resumen en una hoja nueva antes de la de
+los escenarios, con los valores de cada uno, el nombre definido en vez de $B$1 y el formato de Excel —morado, gris, rayas,
+grupos y sin cuadrícula—; `escenarios_real.py`: 19 de 19 contra Excel 2024 —x11-escenarios.xlsx hecho en Excel: los 4
+escenarios, «Mostrar», los 30 números del resumen y sus 259 propiedades de formato iguales; cambiados o hechos en NOM, Excel
+lee los mismos y su resumen da lo mismo—; `comparar_real.py`: x11 con el 100 % del texto y los fondos). Relleno rápido y
+previsión: no |
 | Revisar | Ortografía, notas, comentarios, proteger hoja y libro | Notas del archivo se ven; comentarios de NOM y proteger: sí |
 | Vista | Saltos de página, diseño de página, cuadrícula, encabezados, zoom, inmovilizar, macros, celda de enfoque, modo oscuro | Inmovilizar (fijar filas y columnas): sí; cuadrícula como la del archivo. Vista de saltos, de diseño, celda de enfoque y macros: no |
 | VBA, Python en Excel, Power Query (M), Power Pivot y DAX, cubos | | No |

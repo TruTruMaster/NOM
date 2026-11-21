@@ -805,6 +805,222 @@
           aviso(`Tabla de datos en ${textoRango(r)}: ${res.celdas} celdas. Ctrl+Z para deshacer`, { tipo: "ok" });
         };
       }
+      // ------------------------------------------------------------ escenarios (Datos → Análisis de hipótesis → Administrador de escenarios)
+      /** Los escenarios de esta hoja, como los guarda Excel (ooxml.js, escenariosDe): { lista: [{ n, c: [[celda, valor]], com }], … }. */
+      const escenariosHoja = () => { const e = t && t.esc; return e && Array.isArray(e.lista) ? JSON.parse(JSON.stringify(e)) : { lista: [] }; };
+      /** «B1:B3», «B1;C5» o «B1, C5» → ["B1", "B2", "B3"]; null si algo no es una celda. Como Excel: hasta 32 celdas. */
+      function celdasDeTexto(txt) {
+        const out = [];
+        for (const parte of String(txt || "").toUpperCase().replace(/\$/g, "").split(/[;,]/).map((x) => x.trim()).filter(Boolean)) {
+          const [a, b] = parte.split(":"), p1 = F().parseRef(a), p2 = b ? F().parseRef(b) : p1;
+          if (!p1 || !p2) return null;
+          for (let f = Math.min(p1.f, p2.f); f <= Math.max(p1.f, p2.f); f++) for (let c = Math.min(p1.c, p2.c); c <= Math.max(p1.c, p2.c); c++) { const r = F().ref(c, f); if (!out.includes(r)) out.push(r); }
+        }
+        return out;
+      }
+      /**
+       * Agrega (o con k, cambia) un escenario: nombre, celdas cambiantes y sus valores (si faltan, los de ahora). Como Excel:
+       * nombre único, de 1 a 32 celdas, ninguna con fórmula. Devuelve el motivo si no se puede.
+       */
+      function guardarEscenario(nombre, celdas, valores, comentario, k) {
+        if (ed.soloLectura || !t) return "Solo puedes ver esta hoja";
+        nombre = String(nombre || "").trim();
+        if (!nombre) return "Escribe el nombre del escenario";
+        if (nombre.length > 255) return "El nombre puede tener hasta 255 letras";
+        const cs = Array.isArray(celdas) ? celdas : celdasDeTexto(celdas);
+        if (!cs || !cs.length) return "Escribe las celdas cambiantes como en Excel (por ejemplo B1:B3)";
+        if (cs.length > 32) return "Un escenario puede cambiar hasta 32 celdas";
+        const conFormula = cs.find((r) => { const p = F().parseRef(r); return String(crudo(p.c, p.f)).startsWith("="); });
+        if (conFormula) return `La celda ${conFormula} tiene una fórmula: las celdas cambiantes llevan valores`;
+        const e = escenariosHoja();
+        if (e.lista.some((x, i) => i !== k && String(x.n).toLowerCase() === nombre.toLowerCase())) return "Ya hay un escenario con ese nombre";
+        const vals = cs.map((r, i) => { const p = F().parseRef(r); const v = valores && valores[i] != null && valores[i] !== "" ? valores[i] : crudo(p.c, p.f); return String(v == null ? "" : v); });
+        const nuevo = { n: nombre, c: cs.map((r, i) => [r, vals[i]]), b: 1 };
+        if (comentario) nuevo.com = String(comentario);
+        const quien = (NOM.api.usuario() || {}).nombre;
+        if (k != null && e.lista[k]) { if (e.lista[k].u) nuevo.u = e.lista[k].u; e.lista[k] = nuevo; } else { if (quien) nuevo.u = String(quien); e.lista.push(nuevo); }
+        cambiarT({ esc: e });
+        return { escenario: nuevo, i: k != null ? k : e.lista.length - 1 };
+      }
+      function quitarEscenario(k) {
+        const e = escenariosHoja();
+        if (!e.lista[k]) return "No existe ese escenario";
+        e.lista.splice(k, 1);
+        if (e.actual != null && e.actual >= e.lista.length) delete e.actual;
+        if (e.mostrado != null && e.mostrado >= e.lista.length) delete e.mostrado;
+        cambiarT({ esc: e.lista.length ? e : null });
+        return true;
+      }
+      /** Mostrar: las celdas cambiantes toman los valores del escenario (y queda como el actual, como en Excel). */
+      function mostrarEscenario(k) {
+        if (ed.soloLectura || !t) return "Solo puedes ver esta hoja";
+        const e = escenariosHoja(), sc = e.lista[k];
+        if (!sc) return "No existe ese escenario";
+        const cambios = {};
+        sc.c.forEach(([r, v]) => (cambios["c:" + r] = v === "" ? null : v));
+        e.actual = k; e.mostrado = k;
+        cambios.esc = e;
+        cambiarT(cambios);
+        return true;
+      }
+      /**
+       * Informe resumen de escenario, como Excel (Scenarios.CreateSummary): una hoja nueva antes de esta con los valores
+       * actuales y los de cada escenario de las celdas cambiantes y de las de resultado (calculadas con los valores de cada
+       * escenario), sus nombres y comentarios, y las celdas que cambia cada uno en gris. Con el formato que le pone Excel 2024
+       * (medido: x11-escenarios.xlsx): título en morado con letra blanca, rótulos en gris, rayas, grupos y sin cuadrícula.
+       */
+      function resumenEscenarios(resultado) {
+        if (ed.soloLectura || !t) return "Solo puedes ver esta hoja";
+        const e = escenariosHoja();
+        if (!e.lista.length) return "Esta hoja no tiene escenarios";
+        const res = resultado ? celdasDeTexto(resultado) : [];
+        if (res == null) return "Escribe las celdas de resultado como en Excel (por ejemplo B5:B7)";
+        const cambiantes = [];
+        e.lista.forEach((sc) => sc.c.forEach(([r]) => { if (!cambiantes.includes(r)) cambiantes.push(r); }));
+        const valor = (tabla, r) => { const p = F().parseRef(r); return F().evaluadorDeTabla(doc(), tabla).valor(p.c, p.f); };
+        const numero = (v) => (v && typeof v === "object" && typeof v.valueOf() === "number" ? +v : v);
+        const conEscenario = (sc) => { const o = Object.assign({}, t); sc.c.forEach(([r, v]) => (o["c:" + r] = v === "" ? null : v)); return o; };
+        // una celda con nombre definido se ve con su nombre, como en Excel; las demás, como $B$1
+        const hojaN = F().nombreDeHoja(doc(), t).toLowerCase(), conNombre = {}, nm = doc().valor("_doc", "nombres") || {};
+        for (const k in nm) {
+          const d = nm[k] && nm[k].d != null ? String(nm[k].d).replace(/^=/, "").replace(/\$/g, "") : "";
+          const m = d.match(/^(?:'((?:[^']|'')+)'|([^!']+))!([A-Za-z]{1,3}\d+)$/);
+          if (m && (m[1] != null ? m[1].replace(/''/g, "'") : m[2]).toLowerCase() === hojaN && !conNombre[m[3].toUpperCase()]) conNombre[m[3].toUpperCase()] = nm[k].n || k;
+        }
+        const etiqueta = (r) => conNombre[r] || "$" + r.replace(/(\d+)$/, "$$$1");
+        const X = xl(), n = e.lista.length, ult = 3 + n, celdas = {};   // B y C los rótulos, D los valores actuales, E… cada escenario
+        const MORADO = "#800080", GRIS = "#C0C0C0", BLANCO = "#FFFFFF", AZUL = "#000080";
+        const BX = { a: "a:medium:#000000", b: "b:thin:#000000", ab: "a:thin:#000000;b:thin:#000000", fin: "b:medium:#000000" };
+        const tam = (pt) => { const o = { tl: Math.round((pt / 1.0476) * 2) / 2 }; if (X && Math.abs(pt - (+X.tam || 11)) > 0.01) o.tp = pt; return o; };
+        const pon = (c, f, o) => { const r = F().colLetra(c) + f; for (const k in o) celdas[k + ":" + r] = o[k]; };
+        const tramo = (f, de, a, o) => { for (let c = de; c <= a; c++) pon(c, f, o); };
+        // fila 2, el título; fila 3, «Valores actuales:» y el nombre de cada escenario; fila 4 (oculta, en un grupo), sus comentarios
+        const izqT = Object.assign({ n: true, k: BLANCO, r: MORADO, al: "izq" }, tam(12)), derT = Object.assign({ k: BLANCO, r: MORADO, al: "der" }, tam(10));
+        tramo(2, 1, 2, Object.assign({ bd: "a", bx: BX.a }, izqT)); tramo(2, 3, ult, Object.assign({ bd: "a", bx: BX.a }, derT));
+        tramo(3, 1, 2, Object.assign({ bd: "b", bx: BX.b }, izqT)); tramo(3, 3, ult, Object.assign({ bd: "b", bx: BX.b }, derT));
+        celdas["c:B2"] = "Resumen del escenario"; celdas["c:D3"] = "Valores actuales:";
+        tramo(4, 1, 2, { n: true, r: GRIS, al: "izq" });
+        e.lista.forEach((sc, i) => {
+          const L = F().colLetra(4 + i);
+          celdas["c:" + L + "3"] = String(sc.n);
+          if (sc.com) celdas["c:" + L + "4"] = String(sc.com);
+          pon(4 + i, 4, Object.assign({ aj: true, ax: { v: "top" } }, tam(8)));
+        });
+        celdas["oh:4"] = true; celdas["ol:4"] = 1;
+        let f = 5;
+        const titulo = (txt) => { tramo(f, 1, 2, { n: true, k: AZUL, r: GRIS, al: "izq", bd: "ab", bx: BX.ab }); tramo(f, 3, ult, { bd: "ab", bx: BX.ab }); celdas["c:B" + f] = txt; f++; };
+        const valores = (r, deEsc, gris) => {
+          tramo(f, 1, 2, { n: true, r: GRIS, al: "izq" });
+          celdas["c:C" + f] = etiqueta(r); celdas["ol:" + f] = 1;
+          const v0 = (L, v) => { v = numero(v); celdas["c:" + L + f] = v == null || v === "" ? null : String(v); };
+          v0("D", deEsc(null));
+          e.lista.forEach((sc, i) => { const L = F().colLetra(4 + i); v0(L, deEsc(sc)); if (gris && sc.c.some(([q]) => q === r)) celdas["r:" + L + f] = GRIS; });
+          f++;
+        };
+        // (en un escenario que no cambia esa celda, su valor de ahora, como Excel)
+        titulo("Celdas cambiantes:");
+        cambiantes.forEach((r) => valores(r, (sc) => valor(sc && sc.c.some(([q]) => q === r) ? conEscenario(sc) : t, r), true));
+        if (res.length) { titulo("Celdas de resultado:"); res.forEach((r) => valores(r, (sc) => valor(sc ? conEscenario(sc) : t, r), false)); }
+        tramo(f - 1, 1, ult, { bd: "b", bx: BX.fin });   // la raya gruesa debajo de la tabla
+        ["Notas: La columna de valores actuales representa los valores de las celdas cambiantes en", "el momento en que se creó el Informe resumen de escenario. Las celdas cambiantes de", "cada escenario se muestran en gris."].forEach((x) => (celdas["c:B" + f++] = x));
+        // anchos: los de Excel (C, 36 px; de D en adelante, 87 px; todos agrupados), o lo que pida el texto más largo
+        const medir = (txt, pt, negrita) => {
+          const cx = (medir.cx = medir.cx || document.createElement("canvas").getContext("2d"));
+          cx.font = `${negrita ? "bold " : ""}${pt}pt ${NOM.textoRico ? NOM.textoRico.cssFuente(X ? X.fuente : "Aptos Narrow") : "sans-serif"}`;
+          return Math.ceil(cx.measureText(String(txt)).width);
+        };
+        // (como lo mide Excel con su letra: «$B$1» en negrita de 11 pt, 29 px; «Current Values:» en 10 pt, 80 px; y 7 px de margen)
+        const kC = 29 / Math.max(1, medir("$B$1", 11, true)), kD = 80 / Math.max(1, medir("Current Values:", 10));
+        let apC = 36, apD = 87;
+        for (let g = 6; g < f; g++) if (celdas["c:C" + g]) apC = Math.max(apC, Math.ceil(medir(celdas["c:C" + g], 11, true) * kC) + 7);
+        ["Valores actuales:"].concat(e.lista.map((sc) => sc.n)).forEach((x) => (apD = Math.max(apD, Math.ceil(medir(x, 10) * kD) + 7)));
+        const anchoCol = (L, ap) => { celdas["aw:" + L] = ap + 5; if (X) celdas["ap:" + L] = ap; };
+        anchoCol("C", apC);
+        for (let c = 3; c <= ult; c++) { anchoCol(F().colLetra(c), apD); celdas["olc:" + F().colLetra(c)] = 1; }
+        // los altos que le da Excel (con la letra de 12 pt y las rayas gruesas; la de comentarios, dos renglones de 8 pt)
+        if (X) [[1, 21], [2, 21], [3, 21], [4, 30], [f - 4, 21]].forEach(([g, px]) => (celdas["ahx:" + g] = px));
+        if (res.length) {
+          const ps = res.map((r) => F().parseRef(r)), c1 = Math.min(...ps.map((q) => q.c)), c2 = Math.max(...ps.map((q) => q.c)), f1 = Math.min(...ps.map((q) => q.f)), f2 = Math.max(...ps.map((q) => q.f));
+          e.sqref = res.length === 1 ? res[0] : (c2 - c1 + 1) * (f2 - f1 + 1) === res.length ? F().ref(c1, f1) + ":" + F().ref(c2, f2) : res.join(" ");
+        }
+        fijarNombres();
+        const usados = new Set(F().hojasDe(doc()).map((h) => F().nombreDeHoja(doc(), h).toLowerCase()));
+        let nombre = "Resumen del escenario", k = 2;
+        while (usados.has(nombre.toLowerCase())) nombre = "Resumen del escenario " + k++;
+        const pags = doc().paginas(), aqui = ed.pagina, i0 = pags.indexOf(aqui);
+        const np = ed.nuevaPagina(aqui);
+        const campos = Object.assign({ tipo: "tabla", pagina: np, orden: 0, filas: Math.max(30, f + 2), cols: Math.max(10, ult + 3), x: 40, y: 40, w: 880, h: 300, nombre }, celdas);
+        if (X) campos.xl = Object.assign({}, X, { rejilla: false, oculta: false });
+        doc().lote(() => {
+          NOM.DocCRDT.trozos(campos).forEach((x) => doc().cambiar("hoja-" + np, x));
+          const q = doc().paginas().filter((x) => x !== np); q.splice(Math.max(0, i0), 0, np);
+          doc().cambiar("_doc", { paginas: q });
+          if (e.sqref) cambiarT({ esc: e });
+        });
+        ed.pagina = np; sel = { c: 0, f: 0 }; ancla = null; render();
+        return { hoja: nombre, filas: f };
+      }
+      function administradorEscenarios() {
+        if (!t) return;
+        const cuerpo = html(`<div class="col" style="gap:8px"><div class="lista" data-lista></div><p class="suave chico" data-det style="font-weight:400"></p></div>`);
+        const pie = html(`<div style="display:contents"><button class="btn" data-quitar type="button">Eliminar</button><button class="btn" data-mod type="button">Modificar…</button><button class="btn" data-res type="button">Resumen…</button><span class="crece"></span><button class="btn" data-agr type="button">Agregar…</button><button class="btn primario" data-ver type="button">Mostrar</button></div>`);
+        const h = NOM.hoja({ titulo: "Administrador de escenarios", icono: "list-checks", cuerpo, pie, ancha: true });
+        let k = 0;
+        const pintar = () => {
+          const e = escenariosHoja();
+          k = Math.min(k, Math.max(0, e.lista.length - 1));
+          $("[data-lista]", cuerpo).innerHTML = e.lista.length ? e.lista.map((sc, i) => `<label class="lista-item"><input type="radio" name="esc" value="${i}" ${i === k ? "checked" : ""}><span class="crece"><b>${esc(sc.n)}</b> <span class="suave chico">${esc(sc.c.map((x) => x[0]).join(", "))}</span></span></label>`).join("")
+            : `<p class="suave">No hay escenarios en esta hoja. Un escenario es un juego de valores para unas celdas (las cambiantes) que se puede mostrar cuando quieras, como en Excel.</p>`;
+          $$("input[name=esc]", cuerpo).forEach((x) => (x.onchange = () => { k = +x.value; detalle(); }));
+          const detalle = () => { const sc = e.lista[k]; $("[data-det]", cuerpo).textContent = sc ? `Celdas cambiantes: ${sc.c.map((x) => x[0] + " = " + x[1]).join(", ")}${sc.com ? " · " + sc.com : ""}` : ""; };
+          detalle();
+          ["data-quitar", "data-mod", "data-ver", "data-res"].forEach((a) => ($(`[${a}]`, pie).disabled = !e.lista.length || (ed.soloLectura && a !== "data-res")));
+          $("[data-agr]", pie).disabled = !!ed.soloLectura;
+        };
+        $("[data-ver]", pie).onclick = () => { const r = mostrarEscenario(k); if (typeof r === "string") aviso(r, { tipo: "aviso" }); else aviso("Escenario mostrado. Ctrl+Z para volver a lo de antes", { tipo: "ok" }); };
+        $("[data-quitar]", pie).onclick = () => { quitarEscenario(k); pintar(); };
+        $("[data-agr]", pie).onclick = () => editarEscenario(null, () => { h.cerrar(); administradorEscenarios(); });
+        $("[data-mod]", pie).onclick = () => editarEscenario(k, () => { h.cerrar(); administradorEscenarios(); });
+        $("[data-res]", pie).onclick = async () => {
+          const r0 = escenariosHoja().sqref || F().ref(sel.c, sel.f);
+          const v = await NOM.pedirTexto("Resumen del escenario", { etiqueta: "Celdas de resultado (las fórmulas que quieres comparar, por ejemplo B5:B7)", valor: r0, si: "Crear resumen" });
+          if (v == null) return;
+          const r = resumenEscenarios(v);
+          if (typeof r === "string") return aviso(r, { tipo: "aviso", ms: 5000 });
+          aviso(`Resumen en la hoja «${r.hoja}»`, { tipo: "ok" });
+        };
+        pintar();
+      }
+      function editarEscenario(k, listo) {
+        const e = escenariosHoja(), sc = k != null ? e.lista[k] : null;
+        const r = rango(), def = sc ? sc.c.map((x) => x[0]).join(",") : (r.c1 === r.c2 && r.f1 === r.f2 ? F().ref(sel.c, sel.f) : `${F().ref(r.c1, r.f1)}:${F().ref(r.c2, r.f2)}`);
+        const cuerpo = html(`<form class="col" style="gap:8px">
+          <label>Nombre del escenario <input data-nombre maxlength="255" autocomplete="off"></label>
+          <label>Celdas cambiantes <input data-celdas autocomplete="off"></label>
+          <label>Comentario <input data-com autocomplete="off"></label>
+          <div class="col" data-vals style="gap:6px"></div></form>`);
+        $("[data-nombre]", cuerpo).value = sc ? sc.n : "";
+        $("[data-celdas]", cuerpo).value = def;
+        const quien = (NOM.api.usuario() || {}).nombre || "";
+        $("[data-com]", cuerpo).value = sc ? sc.com || "" : `Creado por ${quien || "NOM"} el ${new Date().toLocaleDateString("es-MX")}`;
+        const pintarVals = () => {
+          const cs = celdasDeTexto($("[data-celdas]", cuerpo).value) || [];
+          $("[data-vals]", cuerpo).innerHTML = cs.slice(0, 32).map((c) => { const p = F().parseRef(c), ya = sc && sc.c.find((x) => x[0] === c); return `<label class="fila" style="gap:8px;align-items:center"><span style="min-width:4em">${esc(c)}</span><input class="crece" data-v="${esc(c)}" value="${esc(ya ? ya[1] : String(crudo(p.c, p.f) ?? ""))}" autocomplete="off"></label>`; }).join("");
+        };
+        $("[data-celdas]", cuerpo).oninput = pintarVals;
+        pintarVals();
+        const pie = html(`<div style="display:contents"><button class="btn" data-no type="button">Cancelar</button><button class="btn primario" data-si>Aceptar</button></div>`);
+        const h = NOM.hoja({ titulo: sc ? "Modificar escenario" : "Agregar escenario", icono: "list-checks", cuerpo, pie });
+        $("[data-no]", pie).onclick = () => { h.cerrar(); listo && listo(); };
+        $("[data-si]", pie).onclick = (ev) => {
+          ev.preventDefault();
+          const cs = celdasDeTexto($("[data-celdas]", cuerpo).value) || [];
+          const vals = cs.map((c) => { const i = $(`[data-v="${c}"]`, cuerpo); return i ? i.value : null; });
+          const res = guardarEscenario($("[data-nombre]", cuerpo).value, cs, vals, $("[data-com]", cuerpo).value.trim(), k);
+          if (typeof res === "string") return aviso(res, { tipo: "aviso", ms: 5000 });
+          h.cerrar(); listo && listo();
+        };
+      }
       // ------------------------------------------------------------ nombres definidos (Fórmulas → Administrador de nombres)
       /** Los nombres del libro: { minúsculas: { n, d } } (d: la definición en NOM, «=Hoja1!$A$1:$A$9»). */
       const nombresLibro = () => Object.assign({}, doc().valor("_doc", "nombres") || {});
@@ -3169,6 +3385,7 @@
               { texto: "Buscar", icono: "search", fn: () => buscar(false) },
               { texto: "Buscar objetivo", corto: "Objetivo", icono: "target", off: lect, fn: () => dialogoObjetivo() },
               { texto: "Tabla de datos", corto: "Tabla datos", icono: "table", off: lect, fn: () => dialogoTablaDatos() },
+              { texto: "Escenarios", icono: "list-checks", fn: () => administradorEscenarios() },
               { texto: "Consolidar", icono: "layers", off: lect, fn: dialogoConsolidar },
               { texto: "Nombres", icono: "tags", fn: () => administradorNombres() },
               { texto: t && t.vf ? "Ver resultados" : "Mostrar fórmulas", corto: t && t.vf ? "Resultados" : "Fórmulas", icono: "square-function", off: lect, fn: alternarFormulas },
@@ -3302,6 +3519,7 @@
           { texto: "Texto en columnas…", icono: "columns-3", fn: () => dialogoTextoColumnas() },
           { texto: "Buscar objetivo…", icono: "target", fn: () => dialogoObjetivo() },
           { texto: "Tabla de datos…", icono: "table", fn: () => dialogoTablaDatos() },
+          { texto: "Administrador de escenarios…", icono: "list-checks", fn: () => administradorEscenarios() },
           { texto: "Consolidar…", icono: "layers", fn: dialogoConsolidar },
           { texto: "Agrupar filas", icono: "list-tree", atajo: "Mayús+Alt+→", fn: () => agrupar("f", 1) },
           { texto: "Agrupar columnas", icono: "list-tree", fn: () => agrupar("c", 1) },
@@ -3407,7 +3625,8 @@
       this.api = { rango, tabla: () => t, evaluar, seleccion: () => ({ ...sel }),
         // herramientas de datos como las de Excel (también para las pruebas contra Excel real)
         herramientas: { quitarDuplicados, regionActual, textoEnColumnas, partirTexto, buscarObjetivo, consolidar, tablaDatos: crearTablaDatos },
-        dialogos: { duplicados: dialogoDuplicados, textoColumnas: dialogoTextoColumnas, objetivo: dialogoObjetivo, nombres: administradorNombres, consolidar: dialogoConsolidar, tablaDatos: dialogoTablaDatos },
+        escenarios: { lista: escenariosHoja, guardar: guardarEscenario, quitar: quitarEscenario, mostrar: mostrarEscenario, resumen: resumenEscenarios },
+        dialogos: { duplicados: dialogoDuplicados, textoColumnas: dialogoTextoColumnas, objetivo: dialogoObjetivo, nombres: administradorNombres, consolidar: dialogoConsolidar, tablaDatos: dialogoTablaDatos, escenarios: administradorEscenarios },
         calculo: { modo: modoCalculo, fijar: fijarModoCalculo, ahora: calcularAhora },
         esquema: { agrupar, alternar: alternarGrupo, nivel: mostrarNivel, detalle, borrar: borrarEsquema },
         formulasVisibles: alternarFormulas,
@@ -3424,6 +3643,7 @@
       return [
         { texto: "Buscar objetivo", icono: "target", fn: dlg("objetivo"), claves: "hipotesis analisis meta valor buscar objetivo goal seek" },
         { texto: "Tabla de datos", icono: "table", fn: dlg("tablaDatos"), claves: "tabla de datos hipotesis analisis y si what if data table una dos variables" },
+        { texto: "Administrador de escenarios", icono: "list-checks", fn: dlg("escenarios"), claves: "escenarios hipotesis analisis y si what if scenario manager resumen" },
         { texto: "Administrador de nombres", icono: "tags", fn: dlg("nombres"), claves: "nombres definidos rango nombrado definir nombre" },
         { texto: "Agrupar filas o columnas (esquema)", icono: "list-tree", fn: () => { const a = NOM.editorActual.modoApi.api.esquema; if (a) a.agrupar("f", 1); }, claves: "agrupar esquema contraer expandir subtotal grupo" },
         { texto: "Borrar esquema", icono: "eraser", fn: () => { const a = NOM.editorActual.modoApi.api.esquema; if (a) a.borrar(); }, claves: "desagrupar esquema quitar grupos" },

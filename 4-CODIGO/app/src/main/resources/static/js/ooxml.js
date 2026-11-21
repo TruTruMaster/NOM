@@ -261,6 +261,40 @@
   }
   // Lo que una hoja protegida de Excel puede dejar hacer (en el archivo, «0» = permitido; sin el atributo: no se puede).
   const PERMISOS_HOJA = ["formatCells", "formatColumns", "formatRows", "insertColumns", "insertRows", "insertHyperlinks", "deleteColumns", "deleteRows", "sort", "autoFilter", "pivotTables"];
+  /**
+   * Los escenarios de una hoja de Excel (<scenarios>, Administrador de escenarios): { lista: [{ n (nombre), c: [[celda,
+   * valor]], com (comentario), b (bloqueado), o (oculto), u (usuario) }], actual, mostrado, sqref } —sqref: las celdas de
+   * resultado del último resumen—. null si no hay.
+   */
+  function escenariosDe(se) {
+    const si = (n, a) => /^(1|true)$/.test(n.getAttribute(a) || "");
+    const lista = [...se.children].filter((q) => q.localName === "scenario").map((sc) => {
+      const e = { n: sc.getAttribute("name") || "", c: [...sc.children].filter((q) => q.localName === "inputCells" && !si(q, "deleted")).map((q) => [String(q.getAttribute("r") || "").replace(/\$/g, "").toUpperCase(), q.getAttribute("val") || ""]) };
+      const com = sc.getAttribute("comment"), u = sc.getAttribute("user");
+      if (com) e.com = com;
+      if (si(sc, "locked")) e.b = 1;
+      if (si(sc, "hidden")) e.o = 1;
+      if (u) e.u = u;
+      return e;
+    });
+    if (!lista.length) return null;
+    const r = { lista }, ac = se.getAttribute("current"), mo = se.getAttribute("show"), sq = se.getAttribute("sqref");
+    if (ac != null && ac !== "") r.actual = +ac;
+    if (mo != null && mo !== "") r.mostrado = +mo;
+    if (sq) r.sqref = sq;
+    return r;
+  }
+  /** <scenarios> de una hoja (lo contrario de escenariosDe); "" si no hay escenarios. */
+  function xmlEscenarios(e) {
+    if (!e || !Array.isArray(e.lista) || !e.lista.length) return "";
+    const n = e.lista.length, a = [];
+    if (e.actual != null && +e.actual >= 0 && +e.actual < n) a.push(`current="${+e.actual}"`);
+    if (e.mostrado != null && +e.mostrado >= 0 && +e.mostrado < n) a.push(`show="${+e.mostrado}"`);
+    if (e.sqref) a.push(`sqref="${x(e.sqref)}"`);
+    return `<scenarios${a.length ? " " + a.join(" ") : ""}>` + e.lista.map((sc) => { const cs = Array.isArray(sc.c) ? sc.c : [];
+      return `<scenario name="${x(sc.n)}"${sc.b ? ' locked="1"' : ""}${sc.o ? ' hidden="1"' : ""} count="${cs.length}"${sc.u ? ` user="${x(sc.u)}"` : ""}${sc.com ? ` comment="${x(sc.com)}"` : ""}>`
+        + cs.map(([r, v]) => `<inputCells r="${x(r)}" val="${x(v == null ? "" : String(v))}"/>`).join("") + "</scenario>"; }).join("") + "</scenarios>";
+  }
   /** La protección de una hoja de Excel (sheetProtection): { p (contraseña), permite: [...], sinSelBloq, sinSelLibre, objetos, escenarios }. */
   function protHojaDe(sp) {
     const si = (k) => /^(1|true)$/.test(sp.getAttribute(k) || ""), no = (k) => /^(0|false)$/.test(sp.getAttribute(k) || "");
@@ -3586,7 +3620,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
   function parcharHoja(xml, base, t, fab, ev) {
     const O = NOM.origen;
     const celdas = new Map(), filasAlto = new Set(), colsCamb = new Set(), filasEsq = new Set(), colsAncho = new Set();
-    let cM = false, cPane = false, cCf = false, cDv = false, cProt = false, cVf = false;
+    let cM = false, cPane = false, cCf = false, cDv = false, cProt = false, cVf = false, cEsc = false;
     const llaves = new Set(Object.keys(base));
     Object.keys(t).forEach((k) => llaves.add(k));
     llaves.forEach((k) => {
@@ -3605,8 +3639,9 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       } else if (k === "fijasF" || k === "fijasC") cPane = true;
       else if (k === "vf") cVf = true;
       else if (k === "prot") cProt = true;
+      else if (k === "esc") cEsc = true;
     });
-    if (!celdas.size && !filasAlto.size && !filasEsq.size && !colsCamb.size && !cM && !cPane && !cCf && !cDv && !cProt && !cVf) return null;
+    if (!celdas.size && !filasAlto.size && !filasEsq.size && !colsCamb.size && !cM && !cPane && !cCf && !cDv && !cProt && !cVf && !cEsc) return null;
     // Matrices dinámicas: si la hoja cambió, lo que derrama cada fórmula se vuelve a escribir con sus valores de hoy
     // (y se borra lo que ya no alcanza); la fórmula, si cambió el tamaño de lo que derrama (su «ref»).
     if (celdas.size && ev.derrame) {
@@ -3773,6 +3808,8 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     }
     // la protección de la hoja (se puso, se cambió o se quitó aquí)
     if (cProt) S.pon("sheetProtection", t.prot && typeof t.prot === "object" ? pf(xmlProtHoja(t.prot)) : "");
+    // los escenarios (se agregaron, se cambiaron o se quitaron aquí)
+    if (cEsc) S.pon("scenarios", pf(xmlEscenarios(t.esc)));
     return S.aplicar();
   }
 
@@ -3816,12 +3853,12 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     }
     const nvE = nivelesEsq(t), esqFmt = (nvE.f ? ` outlineLevelRow="${nvE.f}"` : "") + (nvE.c ? ` outlineLevelCol="${nvE.c}"` : "");
     const pane = fab.panel(t);
-    const vf = t.vf ? ' showFormulas="1"' : "";
+    const vf = (t.vf ? ' showFormulas="1"' : "") + (t.xl && t.xl.rejilla === false ? ' showGridLines="0"' : "");   // (sin cuadrícula: el resumen de escenarios)
     const vista = pane ? `<sheetView${vf} workbookViewId="0"${primera ? ' tabSelected="1"' : ""}>${pane}</sheetView>` : `<sheetView${vf} workbookViewId="0"${primera ? ' tabSelected="1"' : ""}/>`;
     const combinadas = fab.combinadas(t);
     const reglas = Object.keys(t).filter((k) => k.startsWith("cf:")).map((k) => fab.regla(t[k])).join("");
     const validaciones = Object.keys(t).filter((k) => k.startsWith("dv:")).map((k) => fab.validacion(t[k])).filter(Boolean);
-    return XML + `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetViews>${vista}</sheetViews><sheetFormatPr defaultColWidth="16.43" defaultRowHeight="15"${esqFmt}/>${cols ? `<cols>${cols}</cols>` : ""}<sheetData>${filas}</sheetData>${t.prot && typeof t.prot === "object" ? xmlProtHoja(t.prot) : ""}${combinadas.length ? `<mergeCells count="${combinadas.length}">${combinadas.join("")}</mergeCells>` : ""}${reglas}${validaciones.length ? `<dataValidations count="${validaciones.length}">${validaciones.join("")}</dataValidations>` : ""}<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>${dibujo || ""}</worksheet>`;
+    return XML + `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetViews>${vista}</sheetViews><sheetFormatPr defaultColWidth="16.43" defaultRowHeight="15"${esqFmt}/>${cols ? `<cols>${cols}</cols>` : ""}<sheetData>${filas}</sheetData>${t.prot && typeof t.prot === "object" ? xmlProtHoja(t.prot) : ""}${xmlEscenarios(t.esc)}${combinadas.length ? `<mergeCells count="${combinadas.length}">${combinadas.join("")}</mergeCells>` : ""}${reglas}${validaciones.length ? `<dataValidations count="${validaciones.length}">${validaciones.join("")}</dataValidations>` : ""}<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>${dibujo || ""}</worksheet>`;
   }
   const CT_HOJA = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
   const CT_DIBUJO = "application/vnd.openxmlformats-officedocument.drawing+xml", CT_GRAFICA = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
@@ -4092,7 +4129,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
   // libro los guarda en «_doc» (nombres), para el Administrador de nombres · 8 esquema: el nivel de cada fila (ol:) y de
   // cada columna (olc:) agrupada · 9 «mostrar fórmulas» de la hoja (vf) · 10 tablas de datos (t="dataTable": cada celda
   // de su lugar lleva =TABLA(fila;columna), como la muestra Excel).
-  const VERSION_XL = 10;
+  const VERSION_XL = 11;
   function modeloXlsx(z, version) {
     const V = version || VERSION_XL;
     const P = (t) => new DOMParser().parseFromString(t, "application/xml");
@@ -4845,6 +4882,8 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       tablasDatos.forEach((td) => { for (let f2 = td.a.f; f2 <= td.b.f; f2++) for (let c2 = td.a.c; c2 <= td.b.c; c2++) campos["c:" + F().ref(c2, f2)] = td.fx; });
       // (versión 6) la protección de la hoja: el hash de su contraseña y lo que deja hacer
       if (V >= 6) { const sp = todos(doc, "sheetProtection")[0]; if (sp && /^(1|true)$/.test(at(sp, "sheet") || "")) campos.prot = protHojaDe(sp); }
+      // (versión 11) los escenarios (Datos → Análisis de hipótesis → Administrador de escenarios)
+      if (V >= 11) { const se = todos(doc, "scenarios")[0], e = se ? escenariosDe(se) : null; if (e) campos.esc = e; }
       const pane = todos(doc, "pane")[0];
       if (pane && at(pane, "state") === "frozen") { if (+at(pane, "ySplit")) campos.fijasF = +at(pane, "ySplit"); if (+at(pane, "xSplit")) campos.fijasC = +at(pane, "xSplit"); }
       todos(doc, "dataValidation").forEach((dv, k) => {
