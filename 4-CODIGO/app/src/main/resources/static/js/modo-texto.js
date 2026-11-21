@@ -2362,7 +2362,7 @@
             const de = orden[j], iz = j === 0 ? antes : ps[j - 1].mark.id;
             if (toks[de].length) insertarTokens(iz, toks[de], "comando", grupo);
             const a = {}, viejo = pas[j], nuevo = pas[de];
-            new Set(Object.keys(viejo).concat(Object.keys(nuevo))).forEach((k) => { if (PAR.includes(k) && !SE_QUEDAN.includes(k) && JSON.stringify(viejo[k]) !== JSON.stringify(nuevo[k])) a[k] = nuevo[k] == null ? null : nuevo[k]; });
+            new Set(Object.keys(viejo).concat(Object.keys(nuevo))).forEach((k) => { if (!SE_QUEDAN.includes(k) && JSON.stringify(viejo[k]) !== JSON.stringify(nuevo[k])) a[k] = nuevo[k] == null ? null : nuevo[k]; });
             if (Object.keys(a).length) doc().seq(B, { k: "f", a, r: S().rangos([p.mark]) }, { origen: "comando", grupo });
           });
           return null;
@@ -2609,6 +2609,7 @@
       this.sugerencias = { lista: sugerencias, resolver: resolverSugerencia, activo: () => modoSug, alternar: alternarSugerencias, marcas: () => marcas, fijarMarcas };
       this.ordenar = { parrafos: ordenarParrafos, dialogo: dialogoOrdenar, orden: ordenDeParrafos, estilo: (e) => formatoParrafo({ estilo: e }) };
       this.marcasFormato = { alternar: alternarMarcasFormato, activo: () => verMarcas };
+      this.tabulaciones = { dialogo: dialogoTabulaciones, poner: (lista) => formatoParrafo({ tabs: lista && lista.length ? lista : null }) };
 
       // ------------------------------------------------------------ Fase 9: lo que usan las citas, las fichas y "Armar reporte"
       /** Tokens de un párrafo: { tramos: [{ x, a } | { e }], a: atributos del párrafo }. */
@@ -5663,6 +5664,7 @@
           { texto: "MAYÚSCULAS / minúsculas", icono: "case-sensitive", atajo: "Mayús+F3", fn: cambiarMayusculas },
           { texto: "Borrar formato", icono: "remove-formatting", atajo: "Ctrl+\\", fn: borrarFormato },
           { texto: "Párrafo (sangrías, espacio)…", icono: "pilcrow", fn: dialogoParrafo },
+          { texto: "Tabulaciones…", icono: "indent-increase", fn: dialogoTabulaciones },
           { texto: "Ordenar párrafos…", icono: "arrow-up-down", fn: dialogoOrdenar },
           { texto: verMarcas ? "Ocultar marcas de formato (¶)" : "Mostrar marcas de formato (¶)", icono: "pilcrow", marcado: verMarcas, fn: () => alternarMarcasFormato() },
           { texto: "Opciones de la lista…", icono: "list-ordered", fn: dialogoLista },
@@ -5713,6 +5715,56 @@
         };
       }
       /** 8.2 Párrafo: alineación, sangrías (cm), primera línea o francesa, espacio e interlineado. */
+      /**
+       * Tabulaciones (Inicio → Párrafo → Tabulaciones, como Word): las paradas de los párrafos elegidos —posición en cm,
+       * alineación y relleno— y las predeterminadas del documento. Se guardan como las de un Word (pa.tabs, en puntos).
+       */
+      function dialogoTabulaciones() {
+        if (ed.soloLectura) return;
+        const ps = parrafosDeSel(), PT = 28.3465;
+        let lista = (Array.isArray(S().attrs(ps[0].mark).tabs) ? S().attrs(ps[0].mark).tabs : []).map((t) => t.slice());
+        const ALIN = [["i", "Izquierda"], ["c", "Centro"], ["d", "Derecha"], ["p", "Decimal"], ["b", "Barra"]];
+        const REL = [["", "Ninguno"], ["dot", "Puntos ……"], ["hyphen", "Guiones ----"], ["underscore", "Subrayado ____"], ["middleDot", "Punto medio ····"]];
+        const cm = (pt) => (Math.round((pt / PT) * 100) / 100).toString();
+        const cuerpo = html(`<form class="col" style="gap:10px">
+          <div class="fila" style="gap:8px;align-items:flex-end;flex-wrap:wrap">
+            <label class="col">Posición (cm) <input data-pos inputmode="decimal" style="width:6em" autocomplete="off"></label>
+            <label class="col">Alineación <select data-al>${ALIN.map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}</select></label>
+            <label class="col">Relleno <select data-rel>${REL.map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}</select></label>
+            <button class="btn" type="button" data-fijar>Fijar</button></div>
+          <div class="lista" data-lista></div>
+          <label class="fila" style="gap:8px;align-items:center">Predeterminadas cada (cm) <input data-def inputmode="decimal" style="width:6em" value="${cm(+doc().valor("_doc", "tabDef") || 36)}"></label></form>`);
+        const pie = html(`<div style="display:contents"><button class="btn" data-todas type="button">Eliminar todas</button><span class="crece"></span><button class="btn" data-no type="button">Cancelar</button><button class="btn primario" data-si>Aceptar</button></div>`);
+        const h = NOM.hoja({ titulo: "Tabulaciones", icono: "indent-increase", cuerpo, pie });
+        const pintar = () => {
+          $("[data-lista]", cuerpo).innerHTML = lista.length ? lista.map((t, i) => `<div class="lista-item fila" style="gap:8px;align-items:center"><span class="crece">${esc(cm(t[0]))} cm · ${esc((ALIN.find((a) => a[0] === t[1]) || ALIN[0])[1])}${t[2] ? " · " + esc((REL.find((r) => r[0] === t[2]) || ["", t[2]])[1]) : ""}</span><button class="icono-btn" type="button" data-quitar="${i}" aria-label="Eliminar">${ico("x")}</button></div>`).join("")
+            : `<p class="suave chico">Sin paradas propias: el texto usa las predeterminadas.</p>`;
+          $$("[data-quitar]", cuerpo).forEach((b) => (b.onclick = () => { lista.splice(+b.dataset.quitar, 1); pintar(); }));
+        };
+        const num = (x) => parseFloat(String(x).replace(",", "."));
+        $("[data-fijar]", cuerpo).onclick = () => {
+          const v = num($("[data-pos]", cuerpo).value);
+          if (!(v >= 0 && v <= 55.8)) return aviso("Escribe la posición en centímetros (de 0 a 55.8)", { tipo: "aviso" });
+          const pos = Math.round(v * PT * 20) / 20;
+          lista = lista.filter((t) => Math.abs(t[0] - pos) > 0.05);
+          const rel = $("[data-rel]", cuerpo).value;
+          lista.push(rel ? [pos, $("[data-al]", cuerpo).value, rel] : [pos, $("[data-al]", cuerpo).value]);
+          lista.sort((a, b) => a[0] - b[0]);
+          $("[data-pos]", cuerpo).value = "";
+          pintar();
+        };
+        $("[data-todas]", pie).onclick = () => { lista = []; pintar(); };
+        $("[data-no]", pie).onclick = () => h.cerrar();
+        $("[data-si]", pie).onclick = (ev) => {
+          ev.preventDefault();
+          if ($("[data-pos]", cuerpo).value.trim()) $("[data-fijar]", cuerpo).click();
+          const d = num($("[data-def]", cuerpo).value);
+          if (d > 0 && d <= 55.8 && Math.abs(d * PT - (+doc().valor("_doc", "tabDef") || 36)) > 0.05) doc().cambiar("_doc", { tabDef: Math.abs(d * PT - 36) < 0.05 ? null : Math.round(d * PT * 20) / 20 });
+          h.cerrar();
+          formatoParrafo({ tabs: lista.length ? lista : null }, ps);
+        };
+        pintar();
+      }
       function dialogoParrafo() {
         if (ed.soloLectura) return;
         const ps = parrafosDeSel(), pa = S().attrs(ps[0].mark);

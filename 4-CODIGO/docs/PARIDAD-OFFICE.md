@@ -67,7 +67,11 @@ en inglés y fechas día/mes/año—, Word lee lo descargado en el mismo orden y
 «%» o entre paréntesis); **mostrar marcas ¶: sí** (21-nov: Más → Formato → Mostrar marcas de formato: ¶ al final de
 cada párrafo, · en cada espacio, → en cada tabulación, ° en el espacio de no separación, ↵ en el salto de renglón y el
 texto oculto con subrayado punteado, como Word; no ocupan lugar —con w09, sus 262 renglones en el mismo lugar— y no se
-imprimen; `prueba_marcas.py` 8 de 8). **Tabulaciones del archivo: sí** (18-nov: izquierda, derecha, centro y decimal con relleno de puntos, guiones o raya, las del estilo y las propias, «quitar» y la distancia de siempre; medido en w07 y w09: índices y tablas de contenido con sus puntos y el número en la parada; w09 98.2 % de renglones idénticos); ponerlas desde NOM (regla): no |
+imprimen; `prueba_marcas.py` 8 de 8). **Tabulaciones del archivo: sí** (18-nov: izquierda, derecha, centro y decimal con relleno de puntos, guiones o raya, las del estilo y las propias, «quitar» y la distancia de siempre; medido en w07 y w09: índices y tablas de contenido con sus puntos y el número en la parada; w09 98.2 % de renglones idénticos); **ponerlas desde NOM: sí** (21-nov: Más → Formato → Tabulaciones…, como el cuadro
+de Word: posición en cm, izquierda, centro, derecha, decimal o barra, relleno de puntos, guiones, subrayado o punto medio,
+eliminar y eliminar todas, y las predeterminadas del documento; `tabulaciones_real.py` 5 de 5: Word lee las mismas
+paradas en los 9 párrafos y las mismas predeterminadas, y NOM pinta el documento con el 100 % de los renglones como Word;
+la regla para arrastrarlas: no) |
 | Inicio · Estilos | Galería de estilos, crear y modificar | A medias: Normal, Título 1-3 y los del archivo se ven; crear o cambiar estilos: no |
 | Inicio · Edición | Buscar, reemplazar, seleccionar | Sí |
 | Insertar · Páginas | Portada, página en blanco, salto | Salto sí; portada de la galería no («Armar reporte» hace la suya) |

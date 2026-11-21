@@ -1582,7 +1582,7 @@ ${ep("Footer", "footer", "", '<w:tabs><w:tab w:val="center" w:pos="4680"/><w:tab
 ${[...abstractos.entries()].map(([k, id]) => definicion(k, id)).join("")}
 <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num><w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>
 ${instancias.map((n) => `<w:num w:numId="${n.id}"><w:abstractNumId w:val="${n.abs}"/>${n.inicio != null ? `<w:lvlOverride w:ilvl="0"><w:startOverride w:val="${n.inicio}"/></w:lvlOverride>` : ""}</w:num>`).join("")}</w:numbering>`;
-    const ajustes = XML + `<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:defaultTabStop w:val="720"/>${doc.valor("_doc", "guiones") ? `<w:autoHyphenation/><w:hyphenationZone w:val="${Math.round((+(doc.valor("_doc", "guiones") || {}).zona || 18) * 20)}"/>` : ""}<w:characterSpacingControl w:val="doNotCompress"/>${notas.length ? '<w:footnotePr><w:footnote w:id="-1"/><w:footnote w:id="0"/></w:footnotePr>' : ""}<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`;
+    const ajustes = XML + `<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:defaultTabStop w:val="${Math.round((+doc.valor("_doc", "tabDef") || 36) * 20)}"/>${doc.valor("_doc", "guiones") ? `<w:autoHyphenation/><w:hyphenationZone w:val="${Math.round((+(doc.valor("_doc", "guiones") || {}).zona || 18) * 20)}"/>` : ""}<w:characterSpacingControl w:val="doNotCompress"/>${notas.length ? '<w:footnotePr><w:footnote w:id="-1"/><w:footnote w:id="0"/></w:footnotePr>' : ""}<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`;
     if (OGR) return OGR.ensamblar({ estilos, numeracion, notasXml, extras, refs, relsEnc, primera: ep2.primera && (hayEnc || hayPie), pgSz: `<w:pgSz w:w="${(hor ? TAM[1] : TAM[0]) * TWIP}" w:h="${(hor ? TAM[0] : TAM[1]) * TWIP}"${hor ? ' w:orient="landscape"' : ""}/>`, mv, m });
     const titulo = doc.valor("_doc", "nombre") || "Documento";
     // Sin fecha: el mismo documento da siempre exactamente el mismo archivo.
@@ -7142,6 +7142,9 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
           s = quita(s, "w:autoHyphenation");
           if (quiere) s = /<w:defaultTabStop\b[^>]*\/>/.test(s) ? s.replace(/(<w:defaultTabStop\b[^>]*\/>)/, "$1<w:autoHyphenation/>") : s.replace(/(<w:settings\b[^>]*>)/, "$1<w:autoHyphenation/>");
         }
+        // las tabulaciones predeterminadas (Tabulaciones…): solo si cambiaron
+        { const quiere = Math.round((+v("tabDef") || 36) * 20), m = /<w:defaultTabStop\b[^>]*w:val="(\d+)"[^>]*\/>/.exec(s);
+          if (m && +m[1] !== quiere) s = s.replace(m[0], `<w:defaultTabStop w:val="${quiere}"/>`); }
         // «Control de cambios» (va antes de la protección y de las tabulaciones, como pide Word)
         const teniaCC = /<w:trackRevisions\b(?![^>]*w:val="(?:0|false|off)")[^>]*\/?>/.test(s), quiereCC = !!v("controlCambios");
         if (teniaCC !== quiereCC) {
