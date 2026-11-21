@@ -17,7 +17,7 @@ versión.
   pruebas/interfaz/correr.sh ~/salida prueba_red
   NOM_ESTATICO=/ruta/a/otra/carpeta/static ...   # probar la interfaz de un APK viejo contra este servidor
 """
-import os, sys, time
+import json, os, sys, time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import nomprueba as N
@@ -42,9 +42,13 @@ def intenta(nombre, fn):
         anota(nombre, False, type(e).__name__ + ": " + str(e).split("\n")[0])
 
 
+consola = {}
+
+
 def pagina(navegador, nombre, **opc):
-    ctx = navegador.new_context(**opc); p = ctx.new_page(); errs[nombre] = []
+    ctx = navegador.new_context(**opc); p = ctx.new_page(); errs[nombre] = []; consola[nombre] = []
     p.on("pageerror", lambda e: errs[nombre].append(str(e)[:200]))
+    p.on("console", lambda m: consola[nombre].append(f"{m.type}: {m.text[:240]}") if m.type in ("error", "warning") else None)
     return ctx, p
 
 
@@ -61,8 +65,14 @@ def escribe(p, texto):
     p.click(".wd-cuerpo"); p.keyboard.press("Control+End"); p.keyboard.type(" " + texto, delay=15); p.wait_for_timeout(300)
 
 
+# El texto del documento como lo guarda NOM: sin lo que es solo de pantalla (los cortes de renglón como Word, br.wd-rompe,
+# y los guiones automáticos): con el acomodo de Word, «HOLA-DESDE-CELULAR» puede verse partido después de un guion.
+TEXTO_DOC = """() => { const c = document.querySelector('.wd-cuerpo'); if (!c) return null; const k = c.cloneNode(true);
+  k.querySelectorAll('.wd-pintado, .wd-guionv, br.wd-rompe').forEach((x) => x.remove()); return k.textContent; }"""
+
+
 def ve(p, texto, ms=12000):
-    p.wait_for_function("(t) => { const c = document.querySelector('.wd-cuerpo'); return !!c && c.innerText.includes(t); }", arg=texto, timeout=ms)
+    p.wait_for_function(f"(t) => {{ const s = ({TEXTO_DOC})(); return s != null && s.includes(t); }}", arg=texto, timeout=ms)
 
 
 MOVIL = dict(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, device_scale_factor=2)
@@ -130,8 +140,20 @@ cC, C = pagina(nav, "celular", **MOVIL); entrar_web(C, u2["nombre"])
 
 
 def celular():
-    abrir_doc(C, doc, B + "/"); ve(C, "HOLA-DESDE-PAGINA-B"); C.tap(".wd-cuerpo"); C.keyboard.press("Control+End"); C.keyboard.type(" HOLA-DESDE-CELULAR", delay=15)
-    ve(A, "HOLA-DESDE-CELULAR"); ve(P, "HOLA-DESDE-CELULAR"); return ""
+    paso = "abrir el documento"
+    try:
+        abrir_doc(C, doc, B + "/"); paso = "ver lo de la página B"; ve(C, "HOLA-DESDE-PAGINA-B")
+        C.tap(".wd-cuerpo"); C.keyboard.press("Control+End"); C.keyboard.type(" HOLA-DESDE-CELULAR", delay=15)
+        paso = "que la página A vea lo del celular"; ve(A, "HOLA-DESDE-CELULAR")
+        paso = "que la app vea lo del celular"; ve(P, "HOLA-DESDE-CELULAR"); return ""
+    except Exception as e:
+        try: C.screenshot(path=str(SALIDA / "red-celular.png"))
+        except Exception: pass
+        st, d = N.api("GET", f"/api/documentos/{doc}", None, u2["token"])
+        en_servidor = "HOLA-DESDE-CELULAR" in json.dumps(d, ensure_ascii=False)
+        pend = C.evaluate("() => { try { return NOM.boveda.claves(NOM.api.clave('cola.')).map((k) => (NOM.leer(k, []) || []).length); } catch (x) { return String(x); } }")
+        print("   página A:", repr((A.evaluate(TEXTO_DOC) or "")[-90:]), "· consola:", {k: v[-4:] for k, v in consola.items() if v}, flush=True)
+        raise AssertionError(f"{paso}: {type(e).__name__} · en el servidor: {en_servidor} · pendientes en el celular: {pend} · celular: {(C.evaluate(TEXTO_DOC) or '')[-60:]!r}")
 intenta("navegador del celular → página y → app en vivo", celular)
 
 print("== sin conexión y de regreso")
