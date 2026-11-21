@@ -151,6 +151,8 @@
     return subiendo;
   }
   window.addEventListener("online", () => { subirPendientes(); });
+  // (algunos WebView no mandan «online»: la API avisa cuando una petición vuelve a salir bien)
+  if (NOM.api && NOM.api.alCambiarRed) NOM.api.alCambiarRed((ok) => { if (ok) setTimeout(() => { subirPendientes(); }, 500); });
 
   /**
    * Guarda unos bytes en el almacén del espacio y devuelve su referencia. c: { espacio, llave }.

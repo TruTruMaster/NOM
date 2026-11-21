@@ -287,7 +287,22 @@
   function marcarRed(ok) {
     if (api.enLinea === ok) return;
     api.enLinea = ok;
+    sondear();
     oyentesRed.forEach((f) => f(ok));
+  }
+  // Algunos WebView no avisan cuando vuelve la red (en el A55, con WebView 157, navigator.onLine se queda en true con
+  // el modo avión y no llega «online»): lo que estaba pendiente no salía hasta que la persona hiciera algo. Mientras la
+  // última petición haya fallado por red, se le pregunta al servidor cada rato (4 s, y más espaciado hasta 15 s).
+  let sondeo = null, espera = 4000;
+  function sondear() {
+    clearTimeout(sondeo);
+    if (api.enLinea !== false) { espera = 4000; return; }
+    sondeo = setTimeout(async () => {
+      if (api.enLinea !== false) return;
+      try { await api.get("/api/red/info", undefined, { ms: 4000 }); } catch (e) { /* sigue sin red */ }
+      espera = Math.min(15000, Math.round(espera * 1.5));
+      sondear();
+    }, espera);
   }
   api.alCambiarRed = (f) => { oyentesRed.add(f); return () => oyentesRed.delete(f); };
   window.addEventListener("online", () => api.get("/api/red/info", undefined, { ms: 4000 }).catch(() => {}));
