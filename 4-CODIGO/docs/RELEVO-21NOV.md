@@ -64,6 +64,18 @@ quedaba con un renglón menos que en Word (Word aparta más de lo que da el cont
 junto a la imagen. Falta medir en Word la regla del contorno (un generador como `hacer_dos_lados.py` con formas de varias
 siluetas y «estrecho»/«a través») antes de volver a intentarlo.
 
+## 3b. Publicación de la 0.20.0 (21-nov, 13:48): hecha
+
+- Commit `357bd5a` (Version 0.20.0, interfaz 25, APK 37; novedades y `CAMBIOS.md`). Jar y APK guardados en
+  `~/NOM/trabajo/21nov/rel-0.20.0/` (los que se probaron y se publicaron).
+- Regresión de Windows (`--carriles 10`): **35 de 36**; `funciones_firefox` perdió el `=PROMEDIO(` de una fórmula al
+  teclear con todo lo demás corriendo (la falla que la prueba ya anota para Firefox); sola, en Firefox: **204/204**.
+- Pi: `nomcolab pi actualizar` (respaldo `datos-2026-11-21_134748`), `/api/red/info` 0.20.0 / 25, `humo.py` **34/34**.
+  GitHub al día; APK publicado (`publicar-apk.sh`, SHA-256 `0f1ef839…`); `avisar.py`: IndexNow 200 (76 direcciones).
+- **Falta el A55**: no estaba conectado por USB. Al conectarlo: instalar el APK 37 sobre la 0.19.0 del dueño, abrir y
+  ver que siga con su sesión y sus datos, y que llegue a la Pi (la app ya usa su propio origen desde la 0.19.0).
+- Lo de después de la 0.20.0 (en main, sin publicar): ordenar, marcas ¶, tabulaciones, celda de enfoque.
+
 ## 4. Lo que falta (de `PARIDAD-OFFICE.md`)
 
 Igual que `RELEVO-20NOV-NOCHE.md` §3 y §4, menos lo de esta sesión: en PowerPoint las secciones y casi toda la pestaña
