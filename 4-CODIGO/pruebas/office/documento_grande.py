@@ -88,6 +88,8 @@ def main():
     N.api("PUT", f"/api/espacios/{esp}/accesos", {"usuario": b["nombre"], "permiso": "EDICION"}, a["token"])
 
     A = N.Navegador(movil=movil)
+    consola = []   # avisos de la página (p. ej., si el Word no pudo partir del original y se armó desde cero)
+    A.p.on("console", lambda m: consola.append(f"{m.type}: {m.text[:400]}") if m.type in ("warning", "error") else None)
     A.p.set_default_timeout(180000)
     A.entrar(a)
     A.p.goto(N.B + "/#/espacio/" + esp)
@@ -175,7 +177,7 @@ def main():
     destino = salida / ("exportado-" + archivo.stem + ".docx")
     try:
         with A.p.expect_download(timeout=300000) as dl:
-            A.p.evaluate("() => NOM.formatos.exportar(NOM.editorActual.doc, 'docx', NOM.editorActual.doc.valor('_doc', 'nombre') || 'documento')")
+            A.p.evaluate("() => NOM.formatos.exportarListo(NOM.editorActual.doc, 'docx', NOM.editorActual.doc.valor('_doc', 'nombre') || 'documento')")
         dl.value.save_as(str(destino))
         anota("descargar Word", destino.stat().st_size > 0, f"{destino.stat().st_size} bytes")
     except Exception as e:
@@ -188,7 +190,8 @@ def main():
         for marca in ("INICIO-PRUEBA ", "MITAD-PRUEBA ", " FINAL-PRUEBA", "DESDE-B "):
             juntos_s = juntos_s.replace(marca, "", 1)
         anota("el Word descargado trae todo el texto (sin lo agregado, igual al original)", juntos_o == juntos_s,
-              f"{len(juntos_s)} de {len(juntos_o)} letras" + ("" if juntos_o == juntos_s else " · primera diferencia en " + str(next((i for i, (x, y) in enumerate(zip(juntos_o, juntos_s)) if x != y), min(len(juntos_o), len(juntos_s))))))
+              f"{len(juntos_s)} de {len(juntos_o)} letras" + ("" if juntos_o == juntos_s else " · primera diferencia en " + str(next((i for i, (x, y) in enumerate(zip(juntos_o, juntos_s)) if x != y), min(len(juntos_o), len(juntos_s))))
+                                                              + " · " + json.dumps(A.p.evaluate("() => NOM.ooxml.ultimoDocx || null")) + " · consola: " + " | ".join(consola[-4:])))
         # Word de verdad (en la computadora con Windows) abre lo descargado sin avisos ni «reparar»
         sys.path.insert(0, str(Path(__file__).resolve().parent)); import office_abre
         r_w = office_abre.abrir([destino], "documento-grande").get(destino.name)

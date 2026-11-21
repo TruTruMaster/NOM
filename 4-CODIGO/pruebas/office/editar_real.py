@@ -196,7 +196,7 @@ def probar(pw, archivo, salida):
         ext = EXT.get(modo, archivo.suffix[1:])
         destino = salida / f"exportado-{archivo.stem}.{ext}"
         with A.p.expect_download(timeout=180000) as dl:
-            A.p.evaluate("(x) => NOM.formatos.exportar(NOM.editorActual.doc, x, NOM.editorActual.doc.valor('_doc', 'nombre') || 'documento')", ext)
+            A.p.evaluate("(x) => NOM.formatos.exportarListo(NOM.editorActual.doc, x, NOM.editorActual.doc.valor('_doc', 'nombre') || 'documento')", ext)
         dl.value.save_as(str(destino))
         po, ps = partes(archivo), partes(destino)
         juntos = b"".join(ps.values())
