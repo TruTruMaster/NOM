@@ -2542,6 +2542,7 @@
           { texto: "Configurar presentación…", icono: "settings", fn: () => dialogoConfigurar() },
           "-",
           { texto: "Clasificador de diapositivas", icono: "layout-grid", fn: () => clasificador() },
+          { texto: "Vista de lectura", icono: "book-open", fn: () => presentar(ed, { lectura: true }) },
         ]);
       }
       /** El título de una diapositiva para las listas (lo primero que dice, de arriba abajo). */
@@ -2875,13 +2876,15 @@
       ensayo.pag = p; ensayo.t0 = ya;
     }
     const presentador = !!opc.presentador;
-    const rep = html(`<div class="reproductor${presentador ? " presentador" : ""}" tabindex="0">
+    // (Vista de lectura, como PowerPoint: en la ventana, sin pantalla completa, con su barra para ir atrás y adelante)
+    const lectura = !!opc.lectura && !presentador;
+    const rep = html(`<div class="reproductor${presentador ? " presentador" : ""}${lectura ? " lectura" : ""}" tabindex="0">
       ${presentador ? `<div class="pv-actual"><div class="diapo" data-d></div></div>
         <aside class="pv-lado"><div class="pv-sig"><span>Siguiente</span><div class="pv-sig-caja"><div class="diapo" data-sig></div></div></div>
           <div class="pv-notas" data-notas></div>
           <div class="pv-proy" data-proy hidden></div></aside>
         <div class="pv-ctl"><button class="btn" data-ant>${ico("chevron-left")} Anterior</button><span class="pv-tiempo" data-tiempo>0:00</span><span class="contador" data-c></span><button class="btn primario" data-sig-btn>Siguiente ${ico("chevron-right")}</button></div>`
-        : `<div class="diapo" data-d></div><span class="contador" data-c></span>`}
+        : `<div class="diapo" data-d></div><span class="contador" data-c></span>${lectura ? `<div class="pres-lectura"><button class="icono-btn" data-ant aria-label="Anterior">${ico("chevron-left")}</button><button class="icono-btn" data-sig-btn aria-label="Siguiente">${ico("chevron-right")}</button></div>` : ""}`}
       <div class="pres-herr" data-herr><button class="icono-btn" data-h="laser" aria-label="Puntero láser" data-micro="Puntero láser||L">${ico("circle-dot")}</button><button class="icono-btn" data-h="pluma" aria-label="Pluma" data-micro="Pluma (dibujar sobre la diapositiva)||P">${ico("pencil")}</button><button class="icono-btn" data-h="borrar" aria-label="Borrar lo dibujado" data-micro="Borrar lo dibujado||E">${ico("eraser")}</button></div>
       <button class="icono-btn salir" aria-label="Salir">${ico("x")}</button></div>`);
     document.body.append(rep);
@@ -3134,7 +3137,7 @@
     addEventListener("resize", escala);
     let wake = null;
     if (navigator.wakeLock && navigator.wakeLock.request) navigator.wakeLock.request("screen").then((w) => (wake = w)).catch(() => {});
-    if (rep.requestFullscreen && !presentador) rep.requestFullscreen().catch(() => {});
+    if (rep.requestFullscreen && !presentador && !lectura) rep.requestFullscreen().catch(() => {});
     pintar(); rep.focus();
     if (opc.proyectar) {
       const caja = $("[data-proy]", rep);

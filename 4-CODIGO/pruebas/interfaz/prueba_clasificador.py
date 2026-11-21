@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Clasificador de diapositivas (Presentar → Clasificador de diapositivas, como la vista de PowerPoint) con un
 PowerPoint real (p13-presentacion.pptx, con tres secciones): todas las diapositivas en la cuadrícula con sus secciones, arrastrar una
-cambia el orden, una oculta se ve atenuada, Ctrl+D duplica, Supr elimina, las flechas y Entrar abren la elegida.
+cambia el orden, una oculta se ve atenuada, Ctrl+D duplica, Supr elimina, las flechas y Entrar abren la elegida. Y la
+Vista de lectura: en la ventana, sin pantalla completa, con su barra para avanzar, y Esc la cierra.
 
   NOM_BASE=http://localhost:8096 ~/.cache/nom-pruebas/venv/bin/python pruebas/interfaz/prueba_clasificador.py [capturas]
 """
@@ -58,6 +59,15 @@ def main():
         # flechas y Entrar
         dlg.locator(".clas-item").nth(0).click(); p.keyboard.press("ArrowRight"); p.keyboard.press("ArrowRight"); p.keyboard.press("Enter"); p.wait_for_timeout(700)
         anota("las flechas y Entrar abren la elegida (la 3)", p.evaluate("() => NOM.editorActual.pagina") == p.evaluate(paginas)[2] and p.locator("section.hoja[role=dialog] .clasificador").count() == 0)
+        # Vista de lectura: en la ventana (sin pantalla completa), con su barra para ir adelante y atrás
+        p.evaluate("() => NOM.editorActual.modoApi._pres.presentar({ lectura: true, desde: 'principio' })"); p.wait_for_timeout(1200)
+        rep = p.locator(".reproductor.lectura")
+        c0 = rep.locator("[data-c]").inner_text()
+        rep.locator(".pres-lectura [data-sig-btn]").click(); p.wait_for_timeout(900)
+        c1 = rep.locator("[data-c]").inner_text()
+        anota("Vista de lectura: en la ventana, sin pantalla completa, y su barra avanza", rep.count() == 1 and p.evaluate("() => !document.fullscreenElement") and c0 != c1, [c0, c1])
+        p.keyboard.press("Escape"); p.wait_for_timeout(600)
+        anota("…y Esc la cierra", p.locator(".reproductor").count() == 0)
         anota("sin errores de JavaScript", not nav.errores, nav.errores[:3])
     finally:
         nav.cerrar()
