@@ -12,8 +12,8 @@
   const yo = document.currentScript && document.currentScript.src;
   const base = yo ? yo.replace(/ayuda\/ayuda\.js(\?.*)?$/, "") : "";
   // En el navegador las páginas se muestran sin index.html (/ayuda/empezar/que-es); dentro de la
-  // app, que abre sus propios archivos, el nombre del archivo hace falta.
-  const enArchivos = location.protocol === "file:";
+  // app, que abre sus propios archivos (desde la 0.19 con su propio origen), el nombre del archivo hace falta.
+  const enArchivos = location.protocol === "file:" || !!window.NomAndroid;
   const dir = (u) => base + (enArchivos ? u : u.replace(/\/?index\.html(?=$|[#?])/, ""));
   const sinAcentos = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);

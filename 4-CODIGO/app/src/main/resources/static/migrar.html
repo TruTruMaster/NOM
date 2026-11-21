@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <!-- Solo la usa la app de Android, una vez, al pasar a su propio origen (0.19): ver js/migrar-origen.js. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' file:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+  <title>NOM: actualizando</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #F4F5F7; color: #1D1B3A;
+      font: 16px/1.45 system-ui, sans-serif; }
+    @media (prefers-color-scheme: dark) { body { background: #16151F; color: #E9E8F2; } }
+    main { max-width: 22rem; padding: 24px; text-align: center; }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    p { margin: 0; opacity: .8; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Actualizando NOM</h1>
+    <p id="estado">Pasando lo guardado en este teléfono a la versión nueva. No cierres la app.</p>
+  </main>
+  <script src="js/migrar-origen.js"></script>
+</body>
+</html>

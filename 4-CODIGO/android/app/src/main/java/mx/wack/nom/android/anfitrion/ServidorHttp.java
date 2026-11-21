@@ -242,22 +242,23 @@ final class ServidorHttp {
     /** true si la conexión puede seguir para otra petición. */
     private boolean atender(Peticion p, InputStream in, OutputStream out, Socket sock) throws IOException {
         boolean mantener = p.mantener();
+        String cors = cors(p.cabecera("origin"));
         if ("OPTIONS".equals(p.metodo)) {
-            responder(out, 204, null, null, mantener, true);
+            responder(out, 204, null, null, mantener, cors);
             return mantener;
         }
         if (p.ruta.startsWith("/api/")) {
             Respuesta r = api.atender(p);
             if (r.binario != null) {
-                responder(out, r.codigo, r.tipo, r.binario, mantener, true);
+                responder(out, r.codigo, r.tipo, r.binario, mantener, cors);
                 return mantener;
             }
             if (r.canal == null) {
                 byte[] b = r.cuerpo == null ? new byte[0] : Json.YO.escribir(r.cuerpo);
-                responder(out, r.codigo, "application/json;charset=UTF-8", b, mantener, true);
+                responder(out, r.codigo, "application/json;charset=UTF-8", b, mantener, cors);
                 return mantener;
             }
-            canalEnVivo(r, in, out, sock);
+            canalEnVivo(r, in, out, sock, cors);
             return false;
         }
         estatico(p, out, mantener);
@@ -265,14 +266,14 @@ final class ServidorHttp {
     }
 
     /** Canal SSE: queda abierto hasta que el cliente se va (o se le cierra desde el servidor). */
-    private void canalEnVivo(Respuesta r, InputStream in, OutputStream out, Socket sock) throws IOException {
-        CanalSocket canal = new CanalSocket(out, sock);
+    private void canalEnVivo(Respuesta r, InputStream in, OutputStream out, Socket sock, String cors) throws IOException {
+        CanalSocket canal = new CanalSocket(out, sock, cors);
         try {
             r.canal.accept(canal);
         } catch (RuntimeException e) {
             if (!canal.empezo()) {
                 Respuesta err = api.error(e);
-                responder(out, err.codigo, "application/json;charset=UTF-8", Json.YO.escribir(err.cuerpo), false, true);
+                responder(out, err.codigo, "application/json;charset=UTF-8", Json.YO.escribir(err.cuerpo), false, cors);
             }
             return;
         }
@@ -315,7 +316,7 @@ final class ServidorHttp {
         String pagina = PaginasLimpias.esLimpia(ruta) ? ruta : null;
         if (pagina != null) ruta += "/index.html";
         if (ruta.contains("..") || ruta.startsWith("/") || !("GET".equals(p.metodo) || "HEAD".equals(p.metodo))) {
-            responder(out, 404, "application/json;charset=UTF-8", Json.YO.escribir(Map.of("error", "No existe")), mantener, false);
+            responder(out, 404, "application/json;charset=UTF-8", Json.YO.escribir(Map.of("error", "No existe")), mantener, null);
             return;
         }
         byte[] datos;
@@ -329,12 +330,12 @@ final class ServidorHttp {
             // (la política de contenido ya va en la cabecera: sin el <meta>, el navegador baja los programas a la vez)
             if (ruta.equals("index.html")) datos = PaginasLimpias.sinPoliticaEnMeta(new String(datos, StandardCharsets.UTF_8)).getBytes(StandardCharsets.UTF_8);
         } catch (IOException e) {
-            responder(out, 404, "application/json;charset=UTF-8", Json.YO.escribir(Map.of("error", "No existe")), mantener, false);
+            responder(out, 404, "application/json;charset=UTF-8", Json.YO.escribir(Map.of("error", "No existe")), mantener, null);
             return;
         }
         int punto = ruta.lastIndexOf('.');
         String tipo = TIPOS.getOrDefault(punto < 0 ? "" : ruta.substring(punto + 1).toLowerCase(Locale.ROOT), "application/octet-stream");
-        responder(out, 200, tipo, "HEAD".equals(p.metodo) ? new byte[0] : datos, mantener, false);
+        responder(out, 200, tipo, "HEAD".equals(p.metodo) ? new byte[0] : datos, mantener, null);
     }
 
     private static String razon(int c) {
@@ -354,13 +355,20 @@ final class ServidorHttp {
         }
     }
 
+    /** Origen de la interfaz de la app desde la 0.19 (la sirve ella misma: MainActivity). */
+    public static final String ORIGEN_APP = "https://appassets.androidplatform.net";
+
     /**
-     * CORS (como FiltroCors en la computadora): la API solo se deja leer desde otro origen por la app
-     * (que carga la interfaz desde sus archivos: origen "null"). La página que sirve este teléfono es
-     * del mismo origen y no lo necesita; cualquier otra página no puede leer las respuestas.
+     * CORS (como FiltroCors en la computadora): la API solo se deja leer desde otro origen por la app: la de
+     * ahora (su propio origen, ORIGEN_APP) y las de antes de la 0.19 (cargaban la interfaz desde sus archivos:
+     * origen "null"). La página que sirve este teléfono es del mismo origen y no lo necesita; cualquier otra
+     * página no puede leer las respuestas.
      */
-    static final String CORS = "Access-Control-Allow-Origin: null\r\nVary: Origin\r\nAccess-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n"
-            + "Access-Control-Allow-Headers: Authorization, Content-Type, Accept\r\nAccess-Control-Max-Age: 3600\r\n";
+    static String cors(String origen) {
+        return "Access-Control-Allow-Origin: " + (ORIGEN_APP.equals(origen) ? ORIGEN_APP : "null")
+                + "\r\nVary: Origin\r\nAccess-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n"
+                + "Access-Control-Allow-Headers: Authorization, Content-Type, Accept\r\nAccess-Control-Max-Age: 3600\r\n";
+    }
 
     /** Las mismas cabeceras de seguridad que pone la computadora (FiltroCabeceras). */
     static final String SEGURAS = "X-Content-Type-Options: nosniff\r\nX-Frame-Options: SAMEORIGIN\r\nReferrer-Policy: no-referrer\r\n"
@@ -371,15 +379,16 @@ final class ServidorHttp {
             + "connect-src 'self' https: http:; worker-src 'self'; manifest-src 'self'; object-src 'none'; "
             + "base-uri 'self'; form-action 'self'; frame-ancestors 'self'\r\n";
 
-    private static void responder(OutputStream out, int codigo, String tipo, byte[] cuerpo, boolean mantener, boolean cors) throws IOException {
+    /** cors: las cabeceras CORS de una respuesta de la API (cors(origen)), o null para la página. */
+    private static void responder(OutputStream out, int codigo, String tipo, byte[] cuerpo, boolean mantener, String cors) throws IOException {
         StringBuilder h = new StringBuilder("HTTP/1.1 ").append(codigo).append(' ').append(razon(codigo)).append("\r\n");
         if (tipo != null) h.append("Content-Type: ").append(tipo).append("\r\n");
         h.append("Content-Length: ").append(cuerpo == null ? 0 : cuerpo.length).append("\r\n");
         // La API nunca va a la caché del navegador (igual que FiltroCabeceras); la página sí puede, revalidando.
-        h.append(cors ? "Cache-Control: no-store\r\n" : "Cache-Control: no-cache\r\n");
+        h.append(cors != null ? "Cache-Control: no-store\r\n" : "Cache-Control: no-cache\r\n");
         h.append(SEGURAS);
         // "cors" marca las respuestas de la API; lo demás es la página y lleva la política de contenido.
-        if (cors) h.append(CORS); else h.append(CSP);
+        h.append(cors != null ? cors : CSP);
         h.append(mantener ? "Connection: keep-alive\r\n" : "Connection: close\r\n");
         h.append("\r\n");
         out.write(h.toString().getBytes(StandardCharsets.UTF_8));
@@ -394,11 +403,13 @@ final class ServidorHttp {
         private final OutputStream out;
         private final Socket sock;
         private final List<Runnable> alCerrar = new ArrayList<>();
+        private final String cors;
         private boolean empezo, cerrado;
 
-        CanalSocket(OutputStream out, Socket sock) {
+        CanalSocket(OutputStream out, Socket sock, String cors) {
             this.out = out;
             this.sock = sock;
+            this.cors = cors;
         }
 
         synchronized boolean empezo() { return empezo; }
@@ -408,7 +419,7 @@ final class ServidorHttp {
             try {
                 if (!empezo) {
                     out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream;charset=UTF-8\r\nCache-Control: no-cache\r\n"
-                            + SEGURAS + CORS + "Connection: keep-alive\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+                            + SEGURAS + cors + "Connection: keep-alive\r\n\r\n").getBytes(StandardCharsets.UTF_8));
                     empezo = true;
                 }
                 out.write(t.getBytes(StandardCharsets.UTF_8));

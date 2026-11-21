@@ -101,6 +101,26 @@
   }
   api.ErrorApi = ErrorApi;
 
+  /** Desde la 0.19 la app tiene su propio origen (https://appassets.androidplatform.net). Un equipo con una versión
+      anterior (otro teléfono o una computadora que comparte) no lo conoce y el navegador no deja leer sus respuestas:
+      se vería como «sin conexión». Se distingue pidiéndole algo sin leer la respuesta (no-cors): si contesta, está ahí
+      y es de antes. Se revisa una vez por minuto por equipo. */
+  const VIEJO = "El equipo que comparte tiene una versión anterior de NOM: actualícenla ahí para entrar desde la app (desde el navegador sí se puede).";
+  const revisados = new Map();
+  async function equipoViejo(base, e) {
+    if (!empaquetada || location.protocol !== "https:" || !base || (e && e.name === "AbortError")) return false;
+    const r = revisados.get(base);
+    if (r && Date.now() - r.t < 60000) return r.viejo;
+    let viejo = false;
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 3000);
+    try { await fetch(base + "/api/version", { mode: "no-cors", cache: "no-store", signal: ctl.signal }); viejo = true; }
+    catch (x) { viejo = false; }
+    finally { clearTimeout(t); }
+    revisados.set(base, { t: Date.now(), viejo });
+    return viejo;
+  }
+  api.equipoViejo = equipoViejo;
+
   /** Petición JSON con tiempo límite. Lanza ErrorApi (estado 0 = sin red). */
   api.pedir = async function (metodo, ruta, cuerpo, opc) {
     opc = opc || {};
@@ -129,7 +149,7 @@
       r = await fetch(base + ruta, { method: metodo, headers: cab, body: texto0, signal: ctl.signal });
     } catch (e) {
       marcarRed(false);
-      throw new ErrorApi(0, null);
+      throw new ErrorApi(0, (await equipoViejo(base, e)) ? { error: VIEJO } : null);
     } finally {
       clearTimeout(t);
     }
@@ -169,7 +189,7 @@
     if (tok) cab.Authorization = "Bearer " + tok;
     let r;
     try { r = await fetch(base + ruta, { method: metodo, headers: cab, body: bytes || undefined, signal: ctl.signal }); }
-    catch (e) { marcarRed(false); throw new ErrorApi(0, null); }
+    catch (e) { marcarRed(false); throw new ErrorApi(0, (await equipoViejo(base, e)) ? { error: VIEJO } : null); }
     finally { clearTimeout(t); }
     marcarRed(true);
     if (!r.ok) {

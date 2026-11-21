@@ -23,7 +23,10 @@ import android.view.WindowInsets;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
+import android.webkit.WebBackForwardList;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -36,17 +39,25 @@ import mx.wack.nom.android.anfitrion.ServicioAnfitrion;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -57,12 +68,28 @@ import java.util.Map;
  * dispositivo hasta volver a ver el servidor de la LAN. Lo único nativo es lo que
  * un navegador no puede hacer: escuchar el anuncio UDP de la red local, guardar
  * archivos en Descargas y abrir el selector de archivos.
+ *
+ * Desde la 0.19 la interfaz tiene su propio origen (ORIGEN): la app contesta esas direcciones con sus archivos de
+ * assets/ (nada sale a la red) y el WebView ya no abre archivos con file://. Lo guardado por las versiones de
+ * antes (en el origen file://) se pasa al nuevo la primera vez (migrar.html y js/migrar-origen.js).
  */
 public class MainActivity extends Activity {
 
     private static final int ELEGIR_ARCHIVO = 41;
     private static final int PERMISO_CAMARA = 42;
     private static final int PUERTO_DESCUBRIMIENTO = 47474;
+
+    /** Origen de la interfaz desde la 0.19 (dominio reservado para esto en Android: nunca sale a Internet). */
+    static final String ORIGEN = "https://appassets.androidplatform.net";
+    private static final String HOST = "appassets.androidplatform.net";
+    static final String INICIO = ORIGEN + "/index.html";
+    private static final String PREFS = "nom", MIGRADO = "origen-propio", INTENTOS = "origen-propio-intentos";
+    /** Paso al origen propio: 0 = no se está haciendo, 1 = leyendo en file://, 2 = escribiendo en ORIGEN. */
+    private volatile int fase;
+    private BufferedWriter escritura;
+    private BufferedReader lectura;
+    /** Al llegar a la interfaz después de pasar los datos, Atrás no debe regresar a la página de paso. */
+    private volatile boolean limpiarHistoria;
 
     private WebView web;
     private ValueCallback<Uri[]> alElegir;
@@ -84,9 +111,8 @@ public class MainActivity extends Activity {
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);            // cola sin conexión y copia local de documentos
-        s.setAllowFileAccess(true);
-        s.setAllowFileAccessFromFileURLs(true);
-        s.setAllowUniversalAccessFromFileURLs(true);   // la interfaz (file://) habla con el servidor de la LAN
+        // La red del salón (otro teléfono o una computadora que comparte) va por http y la interfaz es https.
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         s.setMediaPlaybackRequiresUserGesture(true);
         s.setTextZoom(100);                      // el tamaño de letra del sistema no deforma la interfaz
         // La interfaz tiene sus propios temas claro y oscuro: el sistema (modo oscuro forzado de
@@ -97,10 +123,26 @@ public class MainActivity extends Activity {
 
         web.setWebViewClient(new WebViewClient() {
             @Override
+            public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest pedido) {
+                return deLaApp(pedido.getUrl());
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest pedido) {
+                return afuera(pedido.getUrl().toString());
+            }
+
+            @Override
             public boolean shouldOverrideUrlLoading(WebView v, String url) {
-                if (url.startsWith("file:///android_asset/")) return false;
-                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));   // enlaces externos al navegador
-                return true;
+                return afuera(url);
+            }
+
+            @Override
+            public void onPageFinished(WebView v, String url) {
+                if (limpiarHistoria && url != null && url.startsWith(INICIO)) {
+                    limpiarHistoria = false;
+                    v.clearHistory();
+                }
             }
         });
         web.setWebChromeClient(new WebChromeClient() {
@@ -143,8 +185,114 @@ public class MainActivity extends Activity {
                 android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, () -> atras(true));
         }
 
-        if (guardado != null) web.restoreState(guardado);
-        else { tomarEnlace(getIntent(), false); web.loadUrl("file:///android_asset/index.html"); }
+        boolean migrado = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(MIGRADO, false);
+        if (guardado == null) tomarEnlace(getIntent(), false);
+        if (!migrado) { pasarAlOrigenPropio(); return; }
+        ajustesDelOrigenPropio();
+        WebBackForwardList h = guardado == null ? null : web.restoreState(guardado);
+        String actual = h == null || h.getCurrentItem() == null ? null : h.getCurrentItem().getUrl();
+        if (actual == null || !actual.startsWith(ORIGEN + "/")) web.loadUrl(INICIO);
+    }
+
+    // ------------------------------------------------------------ origen propio (0.19)
+
+    /** Lo de siempre: sin acceso a archivos con file:// (la interfaz se sirve desde ORIGEN). */
+    private void ajustesDelOrigenPropio() {
+        WebSettings s = web.getSettings();
+        s.setAllowFileAccess(false);
+        s.setAllowFileAccessFromFileURLs(false);
+        s.setAllowUniversalAccessFromFileURLs(false);
+    }
+
+    /** Solo para leer lo que guardaron las versiones de antes: la página de paso corre en file:// como ellas. */
+    private void pasarAlOrigenPropio() {
+        WebSettings s = web.getSettings();
+        s.setAllowFileAccess(true);
+        s.setAllowFileAccessFromFileURLs(true);
+        s.setAllowUniversalAccessFromFileURLs(true);
+        fase = 1;
+        web.loadUrl("file:///android_asset/migrar.html");
+    }
+
+    /** Termina el paso (bien o mal) y abre la interfaz. Si falló, lo de antes sigue en su lugar y se reintenta
+     *  al abrir la app, hasta 3 veces; después se sigue sin ello (sigue guardado en el origen de antes). */
+    private void terminarPaso(boolean ok, String info) {
+        fase = 0;
+        cerrarPaso();
+        android.content.SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
+        int intentos = p.getInt(INTENTOS, 0) + 1;
+        boolean listo = ok || intentos >= 3;
+        p.edit().putInt(INTENTOS, intentos).putBoolean(MIGRADO, listo).putString(MIGRADO + "-info", (ok ? "bien: " : "mal: ") + info).apply();
+        if (listo) archivoPaso().delete();
+        android.util.Log.i("NOM", "Paso al origen propio (" + intentos + "): " + (ok ? "bien, " : "mal, ") + info);
+        runOnUiThread(() -> {
+            ajustesDelOrigenPropio();
+            limpiarHistoria = true;
+            web.loadUrl(INICIO);
+        });
+    }
+
+    private File archivoPaso() { return new File(getFilesDir(), "paso-origen.jsonl"); }
+
+    private void cerrarPaso() {
+        try { if (escritura != null) escritura.close(); } catch (IOException ignorado) { }
+        try { if (lectura != null) lectura.close(); } catch (IOException ignorado) { }
+        escritura = null;
+        lectura = null;
+    }
+
+    /** Enlaces: lo de la interfaz se queda en la app; lo demás, al navegador. */
+    private boolean afuera(String url) {
+        if (url.startsWith(ORIGEN + "/") || url.equals(ORIGEN) || (fase != 0 && url.startsWith("file:///android_asset/"))) return false;
+        try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); } catch (Exception ignorado) { }
+        return true;
+    }
+
+    private static final Map<String, String> TIPOS = new HashMap<>();
+    static {
+        String[][] t = {
+            { "html", "text/html" }, { "js", "text/javascript" }, { "mjs", "text/javascript" }, { "css", "text/css" },
+            { "json", "application/json" }, { "webmanifest", "application/manifest+json" }, { "txt", "text/plain" },
+            { "xml", "application/xml" }, { "svg", "image/svg+xml" }, { "png", "image/png" }, { "jpg", "image/jpeg" },
+            { "jpeg", "image/jpeg" }, { "gif", "image/gif" }, { "webp", "image/webp" }, { "avif", "image/avif" },
+            { "ico", "image/x-icon" }, { "woff2", "font/woff2" }, { "woff", "font/woff" }, { "ttf", "font/ttf" },
+            { "otf", "font/otf" }, { "wasm", "application/wasm" }, { "pdf", "application/pdf" }, { "mp3", "audio/mpeg" },
+            { "ogg", "audio/ogg" }, { "opus", "audio/ogg" }, { "wav", "audio/wav" }, { "mp4", "video/mp4" },
+            { "webm", "video/webm" }, { "zip", "application/zip" },
+            { "docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+            { "xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+            { "pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation" },
+        };
+        for (String[] x : t) TIPOS.put(x[0], x[1]);
+    }
+    private static final java.util.Set<String> TEXTO = new java.util.HashSet<>(java.util.Arrays.asList(
+            "html", "js", "mjs", "css", "json", "webmanifest", "txt", "xml", "svg"));
+
+    /** Las direcciones de ORIGEN se contestan con los archivos de assets/ (una carpeta, con su index.html). */
+    private WebResourceResponse deLaApp(Uri u) {
+        if (u == null || !"https".equals(u.getScheme()) || !HOST.equals(u.getHost()) || u.getPort() != -1) return null;
+        Map<String, String> cab = new HashMap<>();
+        cab.put("Cache-Control", "no-cache");
+        cab.put("X-Content-Type-Options", "nosniff");
+        String ruta = u.getPath() == null ? "" : u.getPath();
+        while (ruta.startsWith("/")) ruta = ruta.substring(1);
+        if (ruta.isEmpty() || ruta.endsWith("/")) ruta += "index.html";
+        if (ruta.contains("..") || ruta.contains("\\") || ruta.indexOf('\0') >= 0) return noEsta(cab);
+        int punto = ruta.lastIndexOf('.'), barra = ruta.lastIndexOf('/');
+        String ext = punto > barra ? ruta.substring(punto + 1).toLowerCase(Locale.ROOT) : "";
+        InputStream in;
+        try {
+            in = getAssets().open(ruta);
+        } catch (IOException e) {
+            if (!ext.isEmpty()) return noEsta(cab);
+            try { in = getAssets().open(ruta + "/index.html"); ext = "html"; } catch (IOException e2) { return noEsta(cab); }
+        }
+        String tipo = TIPOS.containsKey(ext) ? TIPOS.get(ext) : "application/octet-stream";
+        return new WebResourceResponse(tipo, TEXTO.contains(ext) ? "utf-8" : null, 200, "OK", cab, in);
+    }
+
+    private static WebResourceResponse noEsta(Map<String, String> cab) {
+        return new WebResourceResponse("text/plain", "utf-8", 404, "Not Found", cab, new ByteArrayInputStream(new byte[0]));
     }
 
     /** DEF-49: el enlace de invitación con el que se abrió la app (la página lo pide al arrancar). */
@@ -200,6 +348,7 @@ public class MainActivity extends Activity {
     /** Botón o gesto Atrás: primero se cierra la ventana o el menú que esté abierto; si no hay, se
      *  regresa de pantalla; y solo en la primera pantalla se sale (la app queda en segundo plano). */
     private void atras(boolean nuevo) {
+        if (fase != 0) return;   // mientras se pasan los datos al origen propio (unos segundos), Atrás no hace nada
         // Primero se cierra lo que esté encima: un menú, la ruedita o una ventana (antes, con un menú
         // abierto, Atrás lo cerraba y además salía del documento).
         web.evaluateJavascript("(window.NOM && NOM.atras) ? (NOM.atras() ? 'cerrada' : 'no') : ((window.NOM && NOM.hayHoja && NOM.hayHoja()) ? (NOM.cerrarHoja(), 'cerrada') : 'no')", r -> {
@@ -257,6 +406,85 @@ public class MainActivity extends Activity {
 
     /** Lo que la interfaz web puede pedirle al teléfono (window.NomAndroid). */
     private class Puente {
+
+        // ---- paso al origen propio (0.19): solo responden mientras MainActivity lo está haciendo
+
+        /** 1. (en file://) empieza a recibir lo guardado. */
+        @JavascriptInterface
+        public boolean migracionInicio() {
+            if (fase != 1) return false;
+            synchronized (MainActivity.this) {
+                cerrarPaso();
+                try {
+                    escritura = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(archivoPaso(), false), StandardCharsets.UTF_8), 1 << 16);
+                    return true;
+                } catch (IOException e) {
+                    terminarPaso(false, "no se pudo escribir: " + e.getMessage());
+                    return false;
+                }
+            }
+        }
+
+        /** Un pedazo de un mensaje; con fin, el mensaje termina (un renglón del archivo). */
+        @JavascriptInterface
+        public boolean migracionParte(String texto, boolean fin) {
+            if (fase != 1) return false;
+            synchronized (MainActivity.this) {
+                if (escritura == null || texto == null || texto.indexOf('\n') >= 0) return false;
+                try {
+                    escritura.write(texto);
+                    if (fin) escritura.write('\n');
+                    return true;
+                } catch (IOException e) {
+                    return false;
+                }
+            }
+        }
+
+        /** 1. terminó de leer: si salió bien, se abre la misma página en el origen nuevo para escribir. */
+        @JavascriptInterface
+        public void migracionFin(boolean ok, String info) {
+            if (fase != 1) return;
+            synchronized (MainActivity.this) {
+                boolean bien = ok;
+                try { if (escritura != null) escritura.close(); } catch (IOException e) { bien = false; }
+                escritura = null;
+                if (!bien) { terminarPaso(false, "al leer: " + info); return; }
+                fase = 2;
+            }
+            runOnUiThread(() -> {
+                ajustesDelOrigenPropio();
+                web.loadUrl(ORIGEN + "/migrar.html");
+            });
+        }
+
+        /** 2. (en el origen nuevo) el siguiente pedazo: "1…" termina un mensaje, "0…" sigue; "" = ya no hay más. */
+        @JavascriptInterface
+        public String migracionSiguiente() {
+            if (fase != 2) return "";
+            synchronized (MainActivity.this) {
+                try {
+                    if (lectura == null) lectura = new BufferedReader(new InputStreamReader(new FileInputStream(archivoPaso()), StandardCharsets.UTF_8), 1 << 16);
+                    StringBuilder b = new StringBuilder();
+                    int c;
+                    while (b.length() < (1 << 20) && (c = lectura.read()) != -1) {
+                        if (c == '\n') return "1" + b;
+                        b.append((char) c);
+                    }
+                    if (b.length() == 0) return "";
+                    return "0" + b;
+                } catch (IOException e) {
+                    return "";
+                }
+            }
+        }
+
+        /** 2. terminó de escribir (bien o mal): se abre la interfaz. */
+        @JavascriptInterface
+        public void migracionHecha(boolean ok, String info) {
+            if (fase != 2) return;
+            terminarPaso(ok, (ok ? "" : "al escribir: ") + info);
+        }
 
         /** DEF-49: el enlace de invitación con el que se abrió la app ("" si no hubo). Se entrega una sola vez. */
         @JavascriptInterface

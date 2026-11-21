@@ -832,6 +832,10 @@ try:
     prueba("13.3 Un nombre que empieza como red local no engaña", [403, None], previo("/api/cuentas/sesion", "http://192.168.0.50.malo.example"))
     prueba("13.3 172.32.x no es red local", [403, None], previo("/api/cuentas/sesion", "http://172.32.0.1:8080"))
     prueba("13.3 La app (desde sus archivos, origen null) sí puede", [204, "null"], previo("/api/espacios", "null", "GET"))
+    prueba("13.3 La app desde su propio origen (0.19) sí puede", [204, "https://appassets.androidplatform.net"], previo("/api/espacios", "https://appassets.androidplatform.net", "GET"))
+    prueba("13.3 …y lee las respuestas", "https://appassets.androidplatform.net", rq(B, "GET", "/api/red/info", cab={"Origin": "https://appassets.androidplatform.net"})[2].get("access-control-allow-origin"))
+    prueba("13.3 Un nombre parecido al de la app no engaña", [403, None], previo("/api/espacios", "https://appassets.androidplatform.net.malo.example", "GET"))
+    prueba("13.3 …ni el de la app por http", [403, None], previo("/api/espacios", "http://appassets.androidplatform.net", "GET"))
     prueba("13.3 Otro sitio no puede leer las respuestas", None, rq(B, "GET", "/api/red/info", cab={"Origin": "https://malo.example"})[2].get("access-control-allow-origin"))
 
     if not EXTERNO:

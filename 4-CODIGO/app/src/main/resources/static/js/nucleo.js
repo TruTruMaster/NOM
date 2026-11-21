@@ -13,12 +13,13 @@
   /** Versión vigente de los Términos y del Aviso de privacidad (Version.LEGAL en el servidor). */
   NOM.LEGAL = "2026-11-13";
   /** Dirección de una página de la ayuda o de lo legal. En el navegador es la dirección limpia
-      (/legal/terminos); dentro de la app, que abre sus propios archivos, termina en index.html. */
+      (/legal/terminos); dentro de la app, que abre sus propios archivos (desde la 0.19 con su propio origen,
+      https://appassets.androidplatform.net, que los sirve tal cual), termina en index.html. */
   NOM.urlAyuda = (ruta) => {
     const r = String(ruta || "").replace(/^\/+|\/+$/g, "");
     const [camino, ancla] = r.split("#");
     const base = camino.startsWith("legal") ? camino : "ayuda" + (camino ? "/" + camino : "");
-    const enArchivos = location.protocol === "file:";
+    const enArchivos = location.protocol === "file:" || !!window.NomAndroid;
     return (enArchivos ? base + "/index.html" : "/" + base) + (ancla ? "#" + ancla : "");
   };
   /** Abre la ayuda: en la app, en la misma pantalla (Atrás regresa); en el navegador, en otra pestaña. */
