@@ -655,7 +655,8 @@
       const id = b.dataset.menuLocal, d = NOM.local.meta(id);
       NOM.menu(b, [
         { texto: "Abrir", icono: "folder-open", fn: () => (location.hash = "#/local/" + id) },
-        { texto: "Descargar copia (.nom)", icono: "download", fn: () => { const doc = NOM.local.abrirEnMemoria(id); if (doc) NOM.formatos.exportar(doc, "nom", d.nombre); } },
+        // (como al descargar desde el editor: primero se traen el original y las imágenes que no estén en la memoria)
+        { texto: "Descargar copia (.nom)", icono: "download", fn: async () => { const doc = NOM.local.abrirEnMemoria(id); if (!doc) return; try { await NOM.formatos.exportarListo(doc, "nom", d.nombre); } catch (e) { aviso(e.message, { tipo: "error" }); } } },
         ...(api.token() ? [{ texto: "Pasar a un espacio (para trabajarlo en equipo)", icono: "upload", fn: () => subirLocal(id, () => seccionLocal(cont, conCuenta)) }] : []),
         "-",
         { texto: "Eliminar", icono: "trash-2", peligro: true, fn: async () => {

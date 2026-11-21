@@ -66,6 +66,26 @@ def main():
             check(f"{nombre}: el mismo texto ({len(to)} letras)", to == ts, f"{len(ts)} de {len(to)}")
             check(f"{nombre}: los mismos símbolos de Word (w:sym: {len(so)})", so == ss, f"{len(ss)} de {len(so)}")
             check(f"{nombre}: las mismas imágenes, byte por byte ({len(mo)})", sorted(mo.values()) == sorted(ms.values()), f"{len(ms)} de {len(mo)}")
+        # Un documento de este equipo con una imagen del almacén local: «Descargar copia (.nom)» desde la lista de
+        # documentos, otra vez sin que la imagen esté en la memoria.
+        png = next(zipfile.ZipFile(CORPUS / ARCHIVOS[1]).read(n) for n in zipfile.ZipFile(CORPUS / ARCHIVOS[1]).namelist() if n.startswith("word/media/"))
+        idl = p.evaluate("""async (b64) => { const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+          const ref = await NOM.binarios.guardar(u, 'image/jpeg', { espacio: null });
+          const id = NOM.local.crear('Local con imagen', 'LIENZO', [{ id: 'local:i1', bloque: 'img1', campos: { tipo: 'imagen', src: ref, pagina: 'p1', x: 40, y: 40, w: 200, h: 150 }, t: 2, n: 'local' }]).id;
+          await NOM.boveda.vaciar();   // (con cuenta, la lista de este equipo vive en la bóveda, que guarda en segundo plano)
+          return id; }""",
+                         base64.b64encode(png).decode())
+        p.goto("about:blank"); p.goto(N.B + "/#/"); p.wait_for_selector(f'[data-menu-local="{idl}"]', timeout=20000); p.wait_for_timeout(600)
+        with p.expect_download(timeout=60000) as dl:
+            p.click(f'[data-menu-local="{idl}"]'); p.wait_for_timeout(300)
+            p.evaluate("""() => { const b = [...document.querySelectorAll('.menu:not(.saliendo) [role=menuitem]')].find((x) => x.textContent.includes('Descargar copia')); b.click(); }""")
+        nom = Path(dl.value.path()).read_bytes()
+        # se abre con el mismo importador de NOM: ¿trae los datos de la imagen o solo su referencia al almacén?
+        v = p.evaluate("""async ([b64, img]) => { const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+          const r = await NOM.formatos.importar(new File([u], 'copia.nom')); const t = JSON.stringify(r.ops);
+          return { datos: t.includes(img.slice(0, 400)), soloRef: t.includes('nom:bin/') && !t.includes(img.slice(0, 400)) }; }""",
+                       [base64.b64encode(nom).decode(), base64.b64encode(png).decode()])
+        check(f"documento de este equipo: la copia .nom lleva los datos de su imagen ({len(png)} bytes)", isinstance(v, dict) and v.get("datos"), v)
         check("sin errores de JavaScript", not P.errores, P.errores[:3])
     finally:
         P.cerrar()
