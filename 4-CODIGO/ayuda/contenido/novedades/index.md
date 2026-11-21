@@ -3,9 +3,27 @@ titulo: Novedades
 descripcion: Qué cambió en cada versión, en palabras sencillas.
 orden: 1
 aplica: Navegador, App Android, Teléfono que comparte
-actualizado: 2026-11-20
-version: 0.18.1
+actualizado: 2026-11-21
+version: 0.19.0
 ---
+## 0.19.0 — noviembre de 2026
+
+- **Guiones automáticos como Word:** NOM parte las palabras donde las parte Word 2024 (con su diccionario de español y
+  de inglés, cada párrafo con su idioma) y solo cuando Word las parte. Un documento de prueba hecho en Word quedó con el
+  100 % de sus renglones iguales.
+- **Números de línea de Word:** se ven como en Word (cada página, cada sección o continuos, cada cuántos renglones y a
+  qué distancia) y se ponen desde «Más» → «Números de línea». Se guardan al descargar el Word.
+- **App de Android con su propio lugar dentro del teléfono:** la primera vez que abras esta versión pasa sola todo lo
+  que tenías guardado (la sesión, los documentos y los cambios sin enviar), en unos segundos. Para conectarte a otro
+  teléfono o computadora que comparte, ese equipo también necesita la 0.19: si tiene una versión anterior, la app lo
+  dice.
+- **Sin red, más confiable:** al volver la conexión, lo que quedó pendiente (cambios y archivos) se manda solo, también
+  en los teléfonos que no avisan que la red volvió.
+- **Menús:** un menú largo cabe en la pantalla del celular y se desplaza (antes no se llegaba a lo de abajo, como
+  «Modo sugerencia»).
+- **Cuentas:** las contraseñas se guardan con un cálculo más fuerte; las de antes siguen sirviendo y se pasan solas al
+  formato nuevo al entrar.
+
 ## 0.18.1 — noviembre de 2026
 
 - **La página abre mucho más rápido la primera vez** (y después de cada actualización): el navegador ya baja sus
