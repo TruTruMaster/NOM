@@ -431,8 +431,12 @@
 
   /** División automática de palabras del documento que se está pintando ({ idioma, mayus } o null): js/guiones.js. */
   let guionesPintar = null;
+  /** Mostrar marcas de formato (¶, como Word): espacios, tabulaciones, espacios de no separación y saltos de renglón. */
+  let marcasPintar = false;
+  const MARCA_HTML = { " ": '<span class="wd-me"> </span>', "\t": '<span class="wd-mt">\t</span>', "\u00a0": '<span class="wd-mnb">\u00a0</span>' };
   function envolver(txt, a) {
     let h = (guionesPintar && NOM.guiones ? NOM.guiones.marcar(txt, esc, guionesPintar) : esc(txt)).replace(/\u2028/g, "<br>");
+    if (marcasPintar) h = h.replace(/(<[^>]*>)|([ \u00a0])/g, (m, tag, c) => (tag ? (tag === "<br>" ? '<span class="wd-mbr"></span><br>' : tag) : MARCA_HTML[c]));
     let st = "";
     if (a.color) st += `color:${a.color};`;
     if (a.fondo) st += `background-color:${a.fondo};`;
@@ -570,8 +574,10 @@
     // El <br> final solo da altura (no es contenido). También va tras una imagen al final del
     // renglón: sin él, el navegador no tiene dónde poner el cursor después de la imagen.
     const ult = p.fin > p.ini ? vis[p.fin - 1] : null;
-    if (!h) h = "<br>";
-    else if (ult && (ult.c === SALTO || (ult.e && !BLOQUE_OBJ.has(ult.e.tipo)))) h += "<br>";
+    // (con las marcas de formato, la ¶ va antes de ese <br>: después abriría otro renglón)
+    const mp = marcasPintar ? '<span class="wd-mp"></span>' : "";
+    if (!h) h = mp + "<br>";
+    else if (ult && (ult.c === SALTO || (ult.e && !BLOQUE_OBJ.has(ult.e.tipo)))) h += mp + "<br>";
     return `<${tag}${at}>${h}</${tag}>`;
   }
 
@@ -769,7 +775,8 @@
       const MARCAS = { simples: "Marcas simples", todas: "Todas las marcas", sin: "Sin marcas", original: "Original" };
       let marcas = (deWord() ? pref.marcasWord : pref.marcas) || (deWord() ? "simples" : "todas");
 
-      const raiz = html(`<div class="wd" data-vista="${vista}" data-marcas="${marcas}">
+      let verMarcas = !!pref.verMarcas;
+      const raiz = html(`<div class="wd" data-vista="${vista}" data-marcas="${marcas}" data-pmarcas="${verMarcas ? 1 : 0}">
         <nav class="wd-esquema" data-esquema hidden aria-label="Esquema del documento"><div class="wd-esquema-cab"><b>Esquema</b><button class="icono-btn" data-cerrar-esquema aria-label="Cerrar esquema">${ico("x")}</button></div><div data-esquema-lista></div></nav>
         <div class="wd-zona" data-zona>
           <div class="wd-hoja" data-hoja>
@@ -821,6 +828,7 @@
         pintando = true;
         const gConf = configGuiones();
         guionesDocActual = () => gConf;
+        marcasPintar = verMarcas;
         // Texto suelto fuera de los párrafos (lo deja el navegador al reemplazar todo con Ctrl+A):
         // ya se leyó al modelo, así que se quita y se vuelve a pintar dentro de su párrafo.
         for (const n of [...cuerpo.childNodes]) if (n.nodeType !== 1) n.remove();
@@ -2600,6 +2608,7 @@
       };
       this.sugerencias = { lista: sugerencias, resolver: resolverSugerencia, activo: () => modoSug, alternar: alternarSugerencias, marcas: () => marcas, fijarMarcas };
       this.ordenar = { parrafos: ordenarParrafos, dialogo: dialogoOrdenar, orden: ordenDeParrafos, estilo: (e) => formatoParrafo({ estilo: e }) };
+      this.marcasFormato = { alternar: alternarMarcasFormato, activo: () => verMarcas };
 
       // ------------------------------------------------------------ Fase 9: lo que usan las citas, las fichas y "Armar reporte"
       /** Tokens de un párrafo: { tramos: [{ x, a } | { e }], a: atributos del párrafo }. */
@@ -5609,6 +5618,15 @@
         };
       }
       /** Lo de Disposición → Números de línea de Word, en un menú aparte (en el «Más» ocupaban siete renglones). */
+      /** Inicio → Párrafo → Mostrar todo (¶), como Word: se ven las marcas de párrafo, los espacios, las tabulaciones y el texto oculto. */
+      function alternarMarcasFormato(si) {
+        verMarcas = si == null ? !verMarcas : !!si;
+        raiz.dataset.pmarcas = verMarcas ? "1" : "0";
+        NOM.guardar("nom.texto", Object.assign(NOM.leer("nom.texto", {}), { verMarcas }));
+        cache.clear();
+        reconciliar();
+        programarPaginar();
+      }
       function fijarMarcas(m) {
         marcas = MARCAS[m] ? m : "todas";
         raiz.dataset.marcas = marcas;
@@ -5646,6 +5664,7 @@
           { texto: "Borrar formato", icono: "remove-formatting", atajo: "Ctrl+\\", fn: borrarFormato },
           { texto: "Párrafo (sangrías, espacio)…", icono: "pilcrow", fn: dialogoParrafo },
           { texto: "Ordenar párrafos…", icono: "arrow-up-down", fn: dialogoOrdenar },
+          { texto: verMarcas ? "Ocultar marcas de formato (¶)" : "Mostrar marcas de formato (¶)", icono: "pilcrow", marcado: verMarcas, fn: () => alternarMarcasFormato() },
           { texto: "Opciones de la lista…", icono: "list-ordered", fn: dialogoLista },
           { titulo: "Documento" },
           { texto: "Buscar y reemplazar", icono: "search", atajo: "Ctrl+H", fn: () => buscar(true) },

@@ -775,6 +775,17 @@
 .wd[data-marcas="simples"] .wd-sug, .wd[data-marcas="sin"] .wd-sug, .wd[data-marcas="original"] .wd-sugb { color: inherit; text-decoration: inherit; opacity: 1; }
 .wd[data-marcas="simples"] .wd-cuerpo > :has(.wd-sug, .wd-sugb) { box-shadow: -14px 0 0 -13px #C2372B; }
 @media print { .wd .wd-cuerpo > :has(.wd-sug, .wd-sugb) { box-shadow: none; } }
+/* Mostrar marcas de formato (¶), como Word: no ocupan lugar (los renglones no se mueven) y no se imprimen */
+.wd { --c-marca: #5B7FCC; }
+.wd[data-pmarcas="1"] .wd-cuerpo > :is(p, h1, h2, h3):not([data-dueno], :has(> .wd-mp, > .wd-obj.bloque))::after, .wd-mp::after { content: "¶"; display: inline-block; width: 0; color: var(--c-marca); font-weight: 400; font-style: normal; text-decoration: none; }
+.wd-me, .wd-mt, .wd-mnb { position: relative; }
+.wd-me::after, .wd-mnb::after { content: "·"; position: absolute; left: 0; right: 0; text-align: center; color: var(--c-marca); font-weight: 700; pointer-events: none; }
+.wd-mnb::after { content: "°"; font-weight: 400; }
+.wd[data-pmarcas="1"] .wd-tabw { position: relative; }
+.wd[data-pmarcas="1"] .wd-tabw::before { content: "→"; position: absolute; left: 0; top: 0; color: var(--c-marca); pointer-events: none; }
+.wd-mbr::after { content: "↵"; display: inline-block; width: 0; color: var(--c-marca); }
+.wd[data-pmarcas="1"] .wd-oculto { display: inline !important; text-decoration: underline dotted var(--c-marca); }
+@media print { .wd-me::after, .wd-mnb::after, .wd-tabw::before, .wd-mbr::after, .wd-mp::after, .wd .wd-cuerpo > :is(p, h1, h2, h3)::after { content: none !important; } .wd .wd-oculto { display: none !important; } }
 .wd.sugiriendo .wd-cuerpo { outline: 3px solid rgba(29, 122, 76, .35); outline-offset: -3px; }
 @media print { .wd-cuerpo > [data-dueno]::after { display: none; } .wd-cuerpo > [data-dueno] { box-shadow: none; background: none; } }
 

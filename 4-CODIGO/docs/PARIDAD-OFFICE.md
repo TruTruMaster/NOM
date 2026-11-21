@@ -64,7 +64,10 @@ ascendente o descendente, con encabezado y distinguir mayúsculas; cada párrafo
 signos antes que números y números antes que letras, «ñ» después de «n», el guion y el apóstrofo no cuentan, el espacio
 del final tampoco, mayúsculas solo si se pide; `ordenar_real.py`: 15 de 15 casos iguales a `Range.Sort` de Word —también
 en inglés y fechas día/mes/año—, Word lee lo descargado en el mismo orden y Ctrl+Z lo regresa; fuera: números con «+»,
-«%» o entre paréntesis); **mostrar marcas ¶: no**. **Tabulaciones del archivo: sí** (18-nov: izquierda, derecha, centro y decimal con relleno de puntos, guiones o raya, las del estilo y las propias, «quitar» y la distancia de siempre; medido en w07 y w09: índices y tablas de contenido con sus puntos y el número en la parada; w09 98.2 % de renglones idénticos); ponerlas desde NOM (regla): no |
+«%» o entre paréntesis); **mostrar marcas ¶: sí** (21-nov: Más → Formato → Mostrar marcas de formato: ¶ al final de
+cada párrafo, · en cada espacio, → en cada tabulación, ° en el espacio de no separación, ↵ en el salto de renglón y el
+texto oculto con subrayado punteado, como Word; no ocupan lugar —con w09, sus 262 renglones en el mismo lugar— y no se
+imprimen; `prueba_marcas.py` 8 de 8). **Tabulaciones del archivo: sí** (18-nov: izquierda, derecha, centro y decimal con relleno de puntos, guiones o raya, las del estilo y las propias, «quitar» y la distancia de siempre; medido en w07 y w09: índices y tablas de contenido con sus puntos y el número en la parada; w09 98.2 % de renglones idénticos); ponerlas desde NOM (regla): no |
 | Inicio · Estilos | Galería de estilos, crear y modificar | A medias: Normal, Título 1-3 y los del archivo se ven; crear o cambiar estilos: no |
 | Inicio · Edición | Buscar, reemplazar, seleccionar | Sí |
 | Insertar · Páginas | Portada, página en blanco, salto | Salto sí; portada de la galería no («Armar reporte» hace la suya) |
