@@ -86,7 +86,7 @@ def pruebas(modo, out):
         ("funciones", [PY, i("prueba_funciones.py"), cap], True, 225, None),
         ("rastreo", [PY, i("rastreo.py"), cap], True, 1230, None),
     ] + [(t, [PY, i(t + ".py"), cap], True, 30, None) for t in
-         ("prueba_pres1", "prueba_pptx", "prueba_pptx2", "prueba_diag1", "prueba_85", "prueba_citas", "prueba_datos", "prueba_biblioteca", "prueba_fuentes_api", "prueba_acomodo", "prueba_marcas", "prueba_enfoque", "prueba_clasificador")]
+         ("prueba_pres1", "prueba_pptx", "prueba_pptx2", "prueba_diag1", "prueba_85", "prueba_citas", "prueba_datos", "prueba_biblioteca", "prueba_fuentes_api", "prueba_acomodo", "prueba_marcas", "prueba_enfoque", "prueba_clasificador", "prueba_vistas_texto")]
     if modo != "rapido":
         R = CACHE / "corpus-reales"
         corpus = [str(p) for d in ("corpus", "corpus-web", "corpus-reales") for p in sorted((CACHE / d).glob("*/*"))]

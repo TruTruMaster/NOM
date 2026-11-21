@@ -782,7 +782,7 @@
       let marcas = (deWord() ? pref.marcasWord : pref.marcas) || (deWord() ? "simples" : "todas");
 
       let verMarcas = !!pref.verMarcas;
-      const raiz = html(`<div class="wd" data-vista="${vista}" data-marcas="${marcas}" data-pmarcas="${verMarcas ? 1 : 0}">
+      const raiz = html(`<div class="wd" data-vista="${vista}" data-marcas="${marcas}" data-pmarcas="${verMarcas ? 1 : 0}" data-cuadricula="${pref.cuadricula ? 1 : 0}">
         <nav class="wd-esquema" data-esquema hidden aria-label="Esquema del documento"><div class="wd-esquema-cab"><b>Esquema</b><button class="icono-btn" data-cerrar-esquema aria-label="Cerrar esquema">${ico("x")}</button></div><div data-esquema-lista></div></nav>
         <div class="wd-zona" data-zona>
           <div class="wd-hoja" data-hoja>
@@ -2617,6 +2617,7 @@
       this.sugerencias = { lista: sugerencias, resolver: resolverSugerencia, activo: () => modoSug, alternar: alternarSugerencias, marcas: () => marcas, fijarMarcas };
       this.ordenar = { parrafos: ordenarParrafos, dialogo: dialogoOrdenar, orden: ordenDeParrafos, estilo: (e) => formatoParrafo({ estilo: e }) };
       this.marcasFormato = { alternar: alternarMarcasFormato, activo: () => verMarcas };
+      this.vistas = { lectura: modoLectura, cuadricula: alternarCuadricula, nuevaVentana };
       this.tablas = { textoEnTabla, tablaEnTexto, dialogo: dialogoTextoTabla };
       this.estilos = { lista: listaEstilos, guardar: guardarEstilo, eliminar: eliminarEstilo, dialogo: dialogoEstilos, aplicar: (k) => formatoParrafo({ estilo: k || null }) };
       this.tabulaciones = { dialogo: dialogoTabulaciones, poner: (lista) => formatoParrafo({ tabs: lista && lista.length ? lista : null }) };
@@ -5203,6 +5204,49 @@
         NOM.guardar("nom.texto", Object.assign(NOM.leer("nom.texto", {}), { zoom }));
         aplicarPagina();
       }
+      // ------------------------------------------------------------ Vista (como Word): cuadrícula, modo de lectura, nueva ventana
+      let verCuadricula = !!pref.cuadricula;
+      function alternarCuadricula(si) {
+        verCuadricula = si == null ? !verCuadricula : !!si;
+        raiz.dataset.cuadricula = verCuadricula ? "1" : "0";
+        NOM.guardar("nom.texto", Object.assign(NOM.leer("nom.texto", {}), { cuadricula: verCuadricula }));
+      }
+      /**
+       * Vista → Modo de lectura (como Word): el texto en columnas a lo ancho de la pantalla, sin herramientas, de pantalla en
+       * pantalla con las flechas o los botones; Esc sale.
+       */
+      function modoLectura() {
+        const capa = html(`<div class="wd-lectura" tabindex="0" role="dialog" aria-label="Modo de lectura">
+          <div class="wd-lectura-barra"><b>${esc(String(doc().valor("_doc", "nombre") || "Documento"))}</b><span class="crece"></span><span class="chico" data-pag></span><button class="icono-btn" data-salir aria-label="Salir del modo de lectura">${ico("x")}</button></div>
+          <div class="wd-lectura-vista" data-vista><div class="wd-lectura-texto" data-texto></div></div>
+          <button class="icono-btn wd-lectura-ant" data-ant aria-label="Pantalla anterior">${ico("chevron-left")}</button><button class="icono-btn wd-lectura-sig" data-sig aria-label="Pantalla siguiente">${ico("chevron-right")}</button></div>`);
+        const texto = $("[data-texto]", capa), vista = $("[data-vista]", capa);
+        const copia = cuerpo.cloneNode(true);
+        copia.removeAttribute("contenteditable");
+        copia.querySelectorAll(".wd-pintado, .wd-guionv, br.wd-rompe, .wd-cursor, .wd-tab-ctl, .wd-tab-redim, .wd-salto, .wd-saltocol").forEach((n) => n.remove());
+        copia.querySelectorAll("[contenteditable]").forEach((n) => n.removeAttribute("contenteditable"));
+        copia.querySelectorAll("[style]").forEach((n) => { n.style.marginTop = n.style.marginTop && parseFloat(n.style.marginTop) > 60 ? "" : n.style.marginTop; });
+        copia.className = "wd-cuerpo wd-lectura-cuerpo";
+        texto.append(copia);
+        document.body.append(capa);
+        let pag = 0;
+        const total = () => Math.max(1, Math.round(texto.scrollWidth / vista.clientWidth));
+        const ir = (n) => { pag = Math.max(0, Math.min(total() - 1, n)); texto.style.transform = `translateX(${-pag * vista.clientWidth}px)`; $("[data-pag]", capa).textContent = `Pantalla ${pag + 1} de ${total()}`; };
+        const salir = () => { capa.remove(); document.removeEventListener("keydown", tecla, true); cuerpo.focus({ preventScroll: true }); };
+        const tecla = (e) => {
+          if (e.key === "Escape") { e.preventDefault(); salir(); }
+          else if (["ArrowRight", "PageDown", " "].includes(e.key)) { e.preventDefault(); ir(pag + 1); }
+          else if (["ArrowLeft", "PageUp"].includes(e.key)) { e.preventDefault(); ir(pag - 1); }
+          else if (e.key === "Home") { e.preventDefault(); ir(0); } else if (e.key === "End") { e.preventDefault(); ir(total() - 1); }
+        };
+        document.addEventListener("keydown", tecla, true);
+        $("[data-salir]", capa).onclick = salir;
+        $("[data-ant]", capa).onclick = () => ir(pag - 1);
+        $("[data-sig]", capa).onclick = () => ir(pag + 1);
+        requestAnimationFrame(() => { ir(0); capa.focus(); });
+        return { ir, total, salir, pagina: () => pag };
+      }
+      function nuevaVentana() { window.open(location.href, "_blank", "noopener"); }
       function fijarVista(v) {
         vista = v;
         NOM.guardar("nom.texto", Object.assign(NOM.leer("nom.texto", {}), { vista: v }));
@@ -5772,7 +5816,10 @@
           { texto: "Mostrar para revisión: " + MARCAS[marcas], icono: "pen-line", fn: () => menuMarcas(b) },
           ...(ctx.propietario ? [{ texto: "Asignar párrafos a una persona…", icono: "user-check", fn: () => asignarParrafos() }] : []),
           { texto: "Encabezado y pie de página…", icono: "panel-top", fn: dialogoEncabezado },
-          { texto: vista === "paginas" ? "Ver sin páginas" : "Ver como páginas", icono: vista === "paginas" ? "scroll-text" : "file-text", fn: () => fijarVista(vista === "paginas" ? "continua" : "paginas") },
+          { texto: vista === "paginas" ? "Ver sin páginas (borrador)" : "Ver como páginas (diseño de impresión)", icono: vista === "paginas" ? "scroll-text" : "file-text", fn: () => fijarVista(vista === "paginas" ? "continua" : "paginas") },
+          { texto: "Modo de lectura", icono: "book-open", fn: () => modoLectura() },
+          { texto: "Cuadrícula", icono: "layout-grid", marcado: verCuadricula, fn: () => alternarCuadricula() },
+          { texto: "Nueva ventana", icono: "external-link", fn: nuevaVentana },
           { texto: "Atajos de teclado", icono: "keyboard", fn: dialogoAtajos },
         ]);
       }
