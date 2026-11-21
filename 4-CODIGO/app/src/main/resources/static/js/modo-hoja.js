@@ -805,6 +805,55 @@
           aviso(`Tabla de datos en ${textoRango(r)}: ${res.celdas} celdas. Ctrl+Z para deshacer`, { tipo: "ok" });
         };
       }
+      // ------------------------------------------------------------ imágenes sobre la hoja (Insertar → Imágenes, como Excel)
+      // Bloques { tipo: "imagen", hoja (la tabla), pagina, src, w, h (px), de: { c, f } (la celda donde empieza), alt }.
+      const imagenesHoja = () => (t ? doc().vivos().filter((b) => b.tipo === "imagen" && b.hoja === t.id && b.src) : []);
+      async function insertarImagenHoja(img) {
+        if (ed.soloLectura || !t) return null;
+        img = img || (await ed.pedirImagen());
+        if (!img || !img.src) return null;
+        const w = Math.min(+img.w || 320, 480), h = +img.h && +img.w ? Math.round(+img.h * (w / +img.w)) : 240;
+        const id = NOM.DocCRDT.nuevoId();
+        doc().cambiar(id, { tipo: "imagen", pagina: ed.pagina, hoja: t.id, src: img.src, w, h, de: { c: sel.c, f: sel.f } }, { origen: "comando" });
+        render();
+        return id;
+      }
+      function menuImagenHoja(anc, id) {
+        const b = doc().bloque(id);
+        if (!b) return;
+        NOM.menu(anc, [{ titulo: "Imagen" },
+          { texto: "Texto alternativo…", icono: "type", fn: async () => { const v = await NOM.pedirTexto("Texto alternativo", { etiqueta: "Qué muestra la imagen (lo leen los lectores de pantalla)", valor: b.alt || "", max: 250, si: "Guardar" }); if (v != null) doc().cambiar(id, { alt: v.trim() || null }); } },
+          { texto: "Más grande", icono: "plus", fn: () => doc().cambiar(id, { w: Math.round(b.w * 1.25), h: Math.round(b.h * 1.25) }) },
+          { texto: "Más chica", icono: "minus", fn: () => doc().cambiar(id, { w: Math.max(16, Math.round(b.w * 0.8)), h: Math.max(16, Math.round(b.h * 0.8)) }) },
+          { texto: "Eliminar", icono: "trash-2", peligro: true, fn: () => { doc().cambiar(id, { eliminado: true }); render(); } }]);
+      }
+      /** Arrastrar una imagen de la hoja la lleva a la celda donde se suelta (su esquina de arriba a la izquierda). */
+      function enlazarImagenesHoja(capa) {
+        if (ed.soloLectura) return;
+        $$(".nom-img", capa).forEach((el) => {
+          const id = el.dataset.img;
+          el.oncontextmenu = (e) => { e.preventDefault(); menuImagenHoja(el, id); };
+          el.onpointerdown = (e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            const x0 = e.clientX, y0 = e.clientY, r0 = el.getBoundingClientRect();
+            let movio = false;
+            el.setPointerCapture(e.pointerId);
+            el.onpointermove = (m) => { if (Math.abs(m.clientX - x0) + Math.abs(m.clientY - y0) > 3) movio = true; el.style.transform = `translate(${m.clientX - x0}px, ${m.clientY - y0}px)`; };
+            el.onpointerup = (u) => {
+              el.onpointermove = el.onpointerup = null;
+              el.style.transform = "";
+              if (!movio) { menuImagenHoja(el, id); return; }
+              el.style.visibility = "hidden";
+              const td = document.elementFromPoint(r0.left + (u.clientX - x0) + 2, r0.top + (u.clientY - y0) + 2);
+              el.style.visibility = "";
+              const c = td && td.closest && td.closest("td[data-c]");
+              if (c) doc().cambiar(id, { de: { c: +c.dataset.c, f: +c.dataset.f } });
+              render();
+            };
+          };
+        });
+      }
       // ------------------------------------------------------------ minigráficos (Insertar → Minigráficos, como Excel)
       // t.mg: [{ tipo: "line"|"column"|"stacked", s: [[celda, «Hoja!B2:G2»]], c: { serie, neg, marc, prim, ult, alto, bajo },
       // marcas, alto, bajo, prim, ult, neg (qué puntos se marcan), grosor (pt), vacias ("gap"|"zero"|"span") }]
@@ -1662,7 +1711,8 @@
       function pintarDibujos(ev) {
         const viejo = rej.querySelector(".xl-dibujos");
         if (viejo) viejo.remove();
-        const lista = Array.isArray(t.dib) ? t.dib : [];
+        // (lo que trae el archivo de Excel y las imágenes puestas aquí, en su celda)
+        const lista = (Array.isArray(t.dib) ? t.dib : []).concat(imagenesHoja().map((b) => ({ tipo: "imagen", nom: b.id, alt: b.alt, src: b.src, a: { de: { c: +(b.de && b.de.c) || 0, f: +(b.de && b.de.f) || 0, dc: +b.dx || 0, df: +b.dy || 0 }, w: b.w, h: b.h } })));
         const tabla = rej.querySelector("table");
         if (!lista.length || !tabla) return;
         // dónde empieza cada columna y cada fila, tal como se dibujaron (las ocultas miden 0)
@@ -1708,7 +1758,7 @@
           if (d.tipo === "imagen") {
             const rc = d.recorte || [0, 0, 0, 0], kw = 1 / Math.max(0.01, 1 - rc[0] - rc[2]), kh = 1 / Math.max(0.01, 1 - rc[1] - rc[3]);
             const bordeI = d.linea && d.linea.c ? `outline:${Math.max(0.5, (d.linea.w || 0.75) * (96 / 72))}px solid ${esc(d.linea.c)};outline-offset:-${Math.max(0.25, ((d.linea.w || 0.75) * (96 / 72)) / 2)}px;` : "";
-            return `<div class="xl-dib" style="${st}overflow:hidden;${bordeI}"><img src="${esc(NOM.srcBin ? NOM.srcBin(d.src) : d.src)}" alt="" style="position:absolute;left:${-rc[0] * kw * 100}%;top:${-rc[1] * kh * 100}%;width:${kw * 100}%;height:${kh * 100}%;max-width:none"></div>`;
+            return `<div class="xl-dib${d.nom ? " nom-img" : ""}"${d.nom ? ` data-img="${esc(d.nom)}" role="img" aria-label="${esc(d.alt || "Imagen")}"` : ""} style="${st}overflow:hidden;${bordeI}"><img src="${esc(NOM.srcBin ? NOM.srcBin(d.src) : d.src)}" alt="" style="position:absolute;left:${-rc[0] * kw * 100}%;top:${-rc[1] * kh * 100}%;width:${kw * 100}%;height:${kh * 100}%;max-width:none"></div>`;
           }
           if (d.tipo === "grafica" && NOM.graficaOffice) {
             let s2 = "";
@@ -1750,6 +1800,7 @@
           return "";
         }).join("");
         tabla.insertAdjacentHTML("afterend", `<div class="xl-dibujos" aria-hidden="true" style="left:${tabla.offsetLeft}px;top:${tabla.offsetTop}px">${piezas}</div>`);
+        enlazarImagenesHoja(tabla.nextElementSibling);
       }
 
       // ------------------------------------------------------------ pintar
@@ -2059,7 +2110,7 @@
         faseX = faseY = 0;
         rej.innerHTML = h + "</tbody></table>";
         if (X) ajustarComoExcel();
-        if (X) pintarDibujos(ev);
+        if (X || imagenesHoja().length) pintarDibujos(ev);
         rej.append(asa);
         pintarBanda();
         aplicarFijas();
@@ -2320,7 +2371,7 @@
       }
       function pintarBandeja() {
         const pags = doc().paginas();
-        const libres = doc().deLaPagina(ed.pagina).filter((b) => b.tipo !== "tabla" && b.tipo !== "conector" && b.tipo !== "grafica");
+        const libres = doc().deLaPagina(ed.pagina).filter((b) => b.tipo !== "tabla" && b.tipo !== "conector" && b.tipo !== "grafica" && !(b.tipo === "imagen" && b.hoja));
         const b = $("[data-bandeja]", raiz);
         const hojas = F().hojasDe(doc());
         const nombreDe = (p, i) => { const h = hojas.find((x) => x.pagina === p); return h ? F().nombreDeHoja(doc(), h) : "Hoja" + (i + 1); };
@@ -3623,6 +3674,7 @@
               { texto: "Formato condicional…", corto: "Condicional", icono: "paint-bucket", off: lect, fn: dialogoCondicional },
               { texto: "Estilos de celda…", corto: "Estilos", icono: "paint-bucket", off: lect, fn: galeriaEstilosCelda },
               { texto: "Minigráficos…", corto: "Minigráficos", icono: "bar-chart", off: lect, fn: dialogoMinigraficos },
+              { texto: "Imagen…", corto: "Imagen", icono: "image", off: lect, fn: () => insertarImagenHoja() },
               { texto: "Borrar formato", corto: "Sin formato", icono: "remove-formatting", off: lect, fn: borrarFormato },
               { texto: "Ancho de columna…", corto: "Ancho…", icono: "move-horizontal", off: lect, fn: anchoColumnas },
               { texto: "Alto de fila…", corto: "Alto…", icono: "move-vertical", off: lect, fn: altoFilas }] }] },
@@ -3730,6 +3782,7 @@
           { texto: "Formato condicional…", icono: "paint-bucket", fn: dialogoCondicional },
           { texto: "Estilos de celda…", icono: "paint-bucket", fn: galeriaEstilosCelda },
           { texto: "Minigráficos…", icono: "bar-chart", fn: dialogoMinigraficos },
+          { texto: "Imagen…", icono: "image", fn: () => insertarImagenHoja() },
           { texto: "Lista desplegable o validación…", icono: "list-checks", fn: dialogoValidacion },
           { texto: "Borrar formato", icono: "remove-formatting", fn: borrarFormato },
           { texto: "Rellenar hacia abajo", icono: "arrow-down", atajo: "Ctrl+D", fn: () => rellenarCopia("abajo") },
@@ -3851,7 +3904,7 @@
       this.api = { rango, tabla: () => t, evaluar, seleccion: () => ({ ...sel }),
         // herramientas de datos como las de Excel (también para las pruebas contra Excel real)
         herramientas: { quitarDuplicados, regionActual, textoEnColumnas, partirTexto, buscarObjetivo, consolidar, tablaDatos: crearTablaDatos, rellenoRapido },
-        enfoque: alternarEnfoque, enfoqueActivo: () => enfoque, estiloCelda: aplicarEstiloCelda, minigraficos: { crear: crearMinigraficos, quitar: quitarMinigraficos },
+        enfoque: alternarEnfoque, enfoqueActivo: () => enfoque, estiloCelda: aplicarEstiloCelda, minigraficos: { crear: crearMinigraficos, quitar: quitarMinigraficos }, imagen: insertarImagenHoja,
         escenarios: { lista: escenariosHoja, guardar: guardarEscenario, quitar: quitarEscenario, mostrar: mostrarEscenario, resumen: resumenEscenarios },
         dialogos: { duplicados: dialogoDuplicados, textoColumnas: dialogoTextoColumnas, objetivo: dialogoObjetivo, nombres: administradorNombres, consolidar: dialogoConsolidar, tablaDatos: dialogoTablaDatos, escenarios: administradorEscenarios, rellenoRapido: ejecutarRellenoRapido, estilosCelda: galeriaEstilosCelda },
         calculo: { modo: modoCalculo, fijar: fijarModoCalculo, ahora: calcularAhora },

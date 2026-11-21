@@ -297,6 +297,13 @@
       return `<scenario name="${x(sc.n)}"${sc.b ? ' locked="1"' : ""}${sc.o ? ' hidden="1"' : ""} count="${cs.length}"${sc.u ? ` user="${x(sc.u)}"` : ""}${sc.com ? ` comment="${x(sc.com)}"` : ""}>`
         + cs.map(([r, v]) => `<inputCells r="${x(r)}" val="${x(v == null ? "" : String(v))}"/>`).join("") + "</scenario>"; }).join("") + "</scenarios>";
   }
+  // (una imagen puesta en NOM sobre una hoja: en su celda, de su tamaño en píxeles, como Insertar → Imágenes de Excel)
+  const T_IMAGEN_XL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+  const ctImagen = (ext) => ({ png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp", svg: "image/svg+xml" }[String(ext).toLowerCase()] || "image/png");
+  const anclaImagenXl = (rid, n, b) => `<xdr:oneCellAnchor xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">`
+    + `<xdr:from><xdr:col>${Math.max(0, +(b.de && b.de.c) || 0)}</xdr:col><xdr:colOff>${Math.round((+b.dx || 0) * 9525)}</xdr:colOff><xdr:row>${Math.max(0, +(b.de && b.de.f) || 0)}</xdr:row><xdr:rowOff>${Math.round((+b.dy || 0) * 9525)}</xdr:rowOff></xdr:from>`
+    + `<xdr:ext cx="${Math.round((+b.w || 100) * 9525)}" cy="${Math.round((+b.h || 100) * 9525)}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${2000 + n}" name="Imagen ${n}" descr="${x(b.alt || "")}"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr>`
+    + `<xdr:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${Math.round((+b.w || 100) * 9525)}" cy="${Math.round((+b.h || 100) * 9525)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`;
   // ------------------------------------------------------------ minigráficos de Excel (x14:sparklineGroups)
   const URI_MG = "{05C60535-1F16-4fd2-B633-F4F36F0B64E0}";
   const COLORES_MG = [["serie", "colorSeries"], ["neg", "colorNegative"], ["eje", "colorAxis"], ["marc", "colorMarkers"], ["prim", "colorFirst"], ["ult", "colorLast"], ["alto", "colorHigh"], ["bajo", "colorLow"]];
@@ -3525,7 +3532,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     if (!tablas.length) throw new Error("Este documento no tiene ninguna tabla");
     const nombres = [];
     const fab = fabricaXlsx(doc, null);
-    const graficasArch = [], dibujos = [], relsHojas = [];
+    const graficasArch = [], dibujos = [], relsHojas = [], mediosXl = [];
     const hojas = tablas.map((t, i) => {
       let n = F().nombreDeHoja(doc, t).replace(/[\\/?*[\]:]/g, " ").slice(0, 31) || `Hoja${i + 1}`;
       while (nombres.includes(n)) n = n.slice(0, 28) + " " + (i + 1);
@@ -3534,8 +3541,9 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       const ncols = Math.max(t.cols || 10, 1);
       // Gráficas de esta hoja: un dibujo con una gráfica nativa por cada una.
       const gs = doc.vivos().filter((g) => g.tipo === "grafica" && g.hoja === t.id);
+      const ims = doc.vivos().filter((b) => b.tipo === "imagen" && b.hoja === t.id && b.src);
       let dibujo = "";
-      if (gs.length) {
+      if (gs.length || ims.length) {
         const nd = dibujos.length + 1, anclas = [], relsDibujo = [];
         let fila0 = 1;
         const colIni = Math.min(ncols + 1, 20);
@@ -3547,6 +3555,14 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
           relsDibujo.push({ id: rid, tipo: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart", destino: `../charts/chart${ng}.xml` });
           anclas.push(fab.anclaGrafica(rid, ng, colIni, fila0));
           fila0 += 18;
+        });
+        ims.forEach((b) => {
+          const im = imagen(b.src);
+          if (!im) return;
+          mediosXl.push({ nombre: `xl/media/imagen${mediosXl.length + 1}.${im.ext}`, datos: im.bytes, ct: ctImagen(im.ext) });
+          const nm = mediosXl.length, rid = "rIdI" + nm;
+          relsDibujo.push({ id: rid, tipo: T_IMAGEN_XL, destino: `../media/imagen${nm}.${im.ext}` });
+          anclas.push(anclaImagenXl(rid, nm, b));
         });
         if (anclas.length) {
           dibujos.push({ n: nd, xml: XML + `<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${anclas.join("")}</xdr:wsDr>`, rels: relsDibujo });
@@ -3569,7 +3585,8 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
 <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${fab.usaDA ? `<Override PartName="/xl/metadata.xml" ContentType="${CT_META}"/>` : ""}
 ${hojas.map((_, i) => `<Override PartName="/xl/worksheets/hoja${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}
 ${dibujos.map((d) => `<Override PartName="/xl/drawings/drawing${d.n}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>`).join("")}
-${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`).join("")}`) },
+${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`).join("")}
+${mediosXl.map((m) => `<Override PartName="/${m.nombre}" ContentType="${m.ct}"/>`).join("")}`) },
       { nombre: "_rels/.rels", datos: RELS([{ tipo: T.doc, destino: "xl/workbook.xml" }]) },
       { nombre: "xl/workbook.xml", datos: libro },
       { nombre: "xl/styles.xml", datos: estilos },
@@ -3579,6 +3596,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       ...relsHojas.map((r, i) => (r ? { nombre: `xl/worksheets/_rels/hoja${i + 1}.xml.rels`, datos: RELS(r) } : null)).filter(Boolean),
       ...dibujos.flatMap((d) => [{ nombre: `xl/drawings/drawing${d.n}.xml`, datos: d.xml }, { nombre: `xl/drawings/_rels/drawing${d.n}.xml.rels`, datos: RELS(d.rels) }]),
       ...graficasArch.map((g, i) => ({ nombre: `xl/charts/chart${i + 1}.xml`, datos: g })),
+      ...mediosXl.map((m) => ({ nombre: m.nombre, datos: m.datos })),
     ]);
   }
 
@@ -4053,7 +4071,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
     const metaRuta = relMeta ? pq.resolver(LIBRO, relMeta.destino) : null;
     fab.cmDA = metaRuta && pq.tiene(metaRuta) ? cmDeMetadatos(pq.texto(metaRuta) || "") : null;
     const usados = new Set(), nombres = [];
-    let cambio = false, nNueva = 0, nGraf = 0, nDib = 0;
+    let cambio = false, nNueva = 0, nGraf = 0, nDib = 0, nImgXl = 0;
     const tiene = (v) => v != null && v !== "" && v !== false;
     const planes = tablas.map((t, i) => {
       let n = F().nombreDeHoja(doc, t).replace(/[\\/?*[\]:]/g, " ").slice(0, 31) || `Hoja${i + 1}`;
@@ -4077,7 +4095,8 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
       }
       // gráficas hechas en NOM: se agregan al dibujo de la hoja (o se le crea uno)
       const gs = doc.vivos().filter((g) => g.tipo === "grafica" && g.hoja === t.id);
-      if (!gs.length) return;
+      const ims = doc.vivos().filter((b) => b.tipo === "imagen" && b.hoja === t.id && b.src);
+      if (!gs.length && !ims.length) return;
       const anclas = [], relsG = [];
       let fila0 = 1;
       const colIni = Math.min(Math.max(t.cols || 10, 1) + 1, 20);
@@ -4089,6 +4108,14 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         relsG.push([rid, ruta]);
         anclas.push(fab.anclaGrafica(rid, ng, colIni, fila0));
         fila0 += 18;
+      });
+      ims.forEach((b) => {
+        const im = imagen(b.src);
+        if (!im) return;
+        const ni = ++nImgXl, ruta = `xl/media/nomimagen${ni}.${im.ext}`, rid = "rIdNomI" + ni;
+        pq.pon(ruta, im.bytes); pq.tipo(ruta, ctImagen(im.ext));
+        relsG.push([rid, ruta, T_IMAGEN_XL]);
+        anclas.push(anclaImagenXl(rid, ni, b));
       });
       if (!anclas.length) return;
       cambio = true;
@@ -4109,7 +4136,7 @@ ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" 
         S.pon("drawing", `<${S.pref}drawing xmlns:r="${NS_R}" r:id="rIdNomD"/>`);
         pq.pon(p.ruta, S.aplicar());
       }
-      relsG.forEach(([rid, ruta]) => pq.agregaRel(dRuta, rid, T_GRAFICA, "/" + ruta));
+      relsG.forEach(([rid, ruta, tp]) => pq.agregaRel(dRuta, rid, tp || T_GRAFICA, "/" + ruta));
     });
 
     // ---- el libro: nombres, hojas nuevas o borradas y su orden

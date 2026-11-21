@@ -164,7 +164,10 @@ en su propio libro; el nombre del estilo no se guarda en el archivo —Excel ve 
 libro nuevo de NOM la letra base es Calibri, no la Aptos Narrow de Excel 2024). Dar formato como tabla: se ve; crearla: no |
 | Inicio · Celdas | Insertar, eliminar, formato (alto, ancho, ocultar, proteger) | Sí; proteger hoja con sus permisos: sí |
 | Inicio · Edición | Autosuma, rellenar, borrar, ordenar y filtrar, buscar y seleccionar | Sí (orden y filtro **solo para mí** o para todos: extra) |
-| Insertar | Tabla dinámica, gráficas, minigráficos, imágenes, formas, cuadro de texto, vínculo, casilla, símbolos | Gráficas: sí (las de NOM; las de Excel se ven en su lugar, también 3D, cascada, histograma, Pareto, embudo, rectángulos, solar, cajas). Imágenes, formas, SmartArt y WordArt del archivo **se ven**; insertarlos: no. **Minigráficos: sí** (21-nov: se ven —de línea con sus marcas, alto, bajo, primero, último y negativos; de columna y de
+| Insertar | Tabla dinámica, gráficas, minigráficos, imágenes, formas, cuadro de texto, vínculo, casilla, símbolos | Gráficas: sí (las de NOM; las de Excel se ven en su lugar, también 3D, cascada, histograma, Pareto, embudo, rectángulos, solar, cajas). Imágenes, formas, SmartArt y WordArt del archivo **se ven**. **Insertar imágenes: sí** (21-nov: Más → Imagen… en la celda
+elegida; se mueven arrastrándolas, se agrandan o achican y llevan su texto alternativo; salen en el dibujo de la hoja
+—también en un Excel que ya trae dibujos—; `imagenes_hoja_real.py` 7 de 7: Excel la ve en su celda, de su tamaño y con su
+texto, y en x06 los 23 dibujos de antes más la nueva). Insertar formas, SmartArt y WordArt: no. **Minigráficos: sí** (21-nov: se ven —de línea con sus marcas, alto, bajo, primero, último y negativos; de columna y de
 pérdidas y ganancias; las celdas vacías como hueco, cero o unidas— y se crean con Más → Minigráficos… —datos y ubicación
 como en Excel— y se quitan; se guardan en su `ext` del `extLst` sin tocar lo demás; medido contra Excel 2024 con
 x14-minigraficos.xlsx: 1/8 del alto de margen, cada punto o barra al centro de su espacio, barras del 70 %, base en el
