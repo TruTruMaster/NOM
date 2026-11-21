@@ -19,6 +19,9 @@ version: 0.19.0
   dice.
 - **Sin red, más confiable:** al volver la conexión, lo que quedó pendiente (cambios y archivos) se manda solo, también
   en los teléfonos que no avisan que la red volvió.
+- **Descargas completas:** «Descargar todo» de un espacio (el .zip con Word, Excel y PowerPoint) y la copia .nom de un
+  documento de este equipo traen antes sus imágenes y su archivo de Office original; antes, si no se habían abierto en
+  ese momento, podían salir sin ellos.
 - **Menús:** un menú largo cabe en la pantalla del celular y se desplaza (antes no se llegaba a lo de abajo, como
   «Modo sugerencia»).
 - **Cuentas:** las contraseñas se guardan con un cálculo más fuerte; las de antes siguen sirviendo y se pasan solas al
