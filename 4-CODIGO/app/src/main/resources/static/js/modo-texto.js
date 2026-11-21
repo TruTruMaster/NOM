@@ -956,6 +956,8 @@
         // le deja lo que flota a su altura (como Word: el renglón que toca la franja del dibujo se acorta). Con contorno
         // (estrecho, a través) lo sigue acomodando el navegador.
         const excl = [...el.querySelectorAll(":scope > .wd-excl")].filter((x) => parseFloat(x.style.width) > 0.5);
+        // (a los dos lados de un dibujo: dónde está, relativo al texto del párrafo, en px sin zoom: ver apartarTexto)
+        const medios = [...el.querySelectorAll(":scope > .wd-medio")].map((x) => ({ x0: +x.dataset.x0, x1: +x.dataset.x1, y0: +x.dataset.y0, y1: +x.dataset.y1 }));
         if (excl.some((x) => x.style.shapeOutside && x.style.shapeOutside !== "none")) return no("junto a un contorno");
         const alin = esCelda ? ({ center: "centro", right: "der", end: "der", justify: "just" }[getComputedStyle(el).textAlign] || "izq") : el.dataset.alin || "izq";
         if (!["izq", "just", "centro", "der"].includes(alin)) return no("alineación " + alin);
@@ -1131,9 +1133,10 @@
         }
         // lo que quita lo que flota a cada renglón (px sin zoom): renglón i = franja [arriba + i·alto, arriba + (i+1)·alto]
         let quita = null;
-        if (excl.length) {
+        if (excl.length || medios.length) {
           const lh = parseFloat(cs.lineHeight);
           if (!(lh > 0)) return no("junto a lo que flota (sin alto de renglón)");
+          if (medios.length && alin !== "izq" && alin !== "just") return no("a los dos lados con " + alin);
           const arriba = er.top + (parseFloat(cs.borderTopWidth) + parseFloat(cs.paddingTop)) * z;
           const cajas = excl.map((x) => ({ izq: getComputedStyle(x).float === "left", r: x.getBoundingClientRect() }));
           quita = (i) => {
@@ -1143,6 +1146,9 @@
               if (c.r.top >= y1 - 0.01 || c.r.bottom <= y0 + 0.01) continue;
               if (c.izq) a = Math.max(a, (c.r.right - izq) / z); else b = Math.max(b, (der - c.r.left) / z);
             }
+            // a los dos lados: el renglón que toca la franja del dibujo va en dos tramos (el hueco, de x0 a x1)
+            const yy0 = i * lh, yy1 = yy0 + lh;
+            for (const m of medios) if (m.y0 < yy1 - 0.01 && m.y1 > yy0 + 0.01) return [a, b, m.x0, m.x1];
             return [a, b];
           };
           if (hayTab) return no("tabulación junto a lo que flota");
@@ -1194,12 +1200,59 @@
         const F = L.fichas, n = F.length, cortes = [];
         L.cortesGuion = new Set();
         L.cortesLetra = new Set();
+        // a los dos lados de un dibujo: dónde va el hueco (después de qué ficha: −1 = antes de la primera) y cuánto mide, y
+        // en justificado lo que le sobra a cada renglón de dos tramos (para que el navegador no lo estire de un tramo al otro)
+        L.huecos = new Map(); L.rellenos2 = new Map(); L.relleno2Final = null;
+        let mxEsp = 0;
+        if (L.alin === "just") for (const f of F) if (f.esp) mxEsp = Math.max(mxEsp, f.w / [...f.t].length);
+        const wsJ = L.alin === "just" ? -0.3 * mxEsp : 0;   // (el mismo espacio de menos que pone escribirAcomodo)
+        const real = (f) => f.w + (f.esp ? wsJ * [...f.t].length : 0);
+        /** Llena un tramo de ancho `ancho` desde la ficha `desde`: la última palabra entera que cabe (−2 = no se puede). */
+        const llenar = (desde, ancho) => {
+          let w = 0, wr = 0, pend = 0, pendR = 0, ult = desde - 1, wUlt = 0, wrUlt = 0;
+          for (let j = desde; j < n; j++) {
+            const t = F[j];
+            if (t.tab || t.obj) return { ult: -2 };
+            if (t.esp) { pend += t.w; pendR += real(t); continue; }
+            const w2 = w + pend + t.w;
+            if (w2 > ancho + 1e-6) break;
+            w = w2; wr += pendR + t.w; pend = 0; pendR = 0;
+            if (t.rompe || j + 1 >= n || F[j + 1].esp) { ult = j; wUlt = w; wrUlt = wr; }
+          }
+          return { ult, w: wUlt, wr: wrUlt };
+        };
+        let ultPalabra = n - 1;
+        while (ultPalabra >= 0 && F[ultPalabra].esp) ultPalabra--;
         const G = L.guiones;
         let ini = 0, renglon = 0, seguidos = 0;
         while (ini < n) {
           while (ini < n && F[ini].esp) ini++;   // (los espacios de después de un corte se quedan en el renglón de arriba)
           if (ini >= n) break;
           const q = L.quita ? L.quita(renglon) : null;
+          if (q && q.length > 2) {
+            // Dos tramos (texto a los dos lados de un dibujo, como Word): primero el de la izquierda y luego el de la
+            // derecha; el tramo donde no cabe la palabra que sigue se queda vacío. Sin guiones ni encoger (lo de siempre).
+            const inicio = (renglon === 0 ? L.A - L.A1 : 0) + q[0], fin = L.A - q[1];
+            const s1 = inicio, e1 = Math.min(q[2], fin), s2 = Math.max(q[3], inicio), e2 = fin;
+            const r1 = llenar(ini, e1 - s1);
+            if (r1.ult === -2) return null;
+            if (r1.ult >= ultPalabra) break;   // (lo que queda cabe en el tramo de la izquierda: último renglón)
+            let k = r1.ult + 1, espR = 0;
+            while (k < n && F[k].esp) { espR += real(F[k]); k++; }
+            const r2 = llenar(k, e2 - s2);
+            if (r2.ult === -2 || (r1.ult < ini && r2.ult < k)) return null;   // (no cabe ni una palabra: lo hace el de un lado)
+            const vacio1 = r1.ult < ini;
+            L.huecos.set(vacio1 ? ini - 1 : k - 1, Math.max(0, s2 - s1 - (vacio1 ? 0 : r1.wr + espR)));
+            if (r2.ult >= ultPalabra) { L.relleno2Final = Math.max(0, e2 - s2 - r2.wr); break; }   // (cupo todo: último renglón)
+            cortes.push(r2.ult);
+            let kr = r2.ult, espF = 0;
+            while (kr + 1 < n && F[kr + 1].esp) { kr++; espF += real(F[kr]); }
+            L.rellenos2.set(kr, Math.max(0, e2 - s2 - r2.wr - espF - 0.5));
+            ini = r2.ult + 1;
+            renglon++;
+            seguidos = 0;
+            continue;
+          }
           // (el primer renglón ya empieza después de lo que flota a su izquierda: x0 se midió así)
           const A = (renglon === 0 ? L.A1 - (q ? q[1] : 0) : L.A - (q ? q[0] + q[1] : 0)) + 1e-6;
           // w: lo escrito sin los espacios del final; ult: el último lugar donde se puede cortar con lo de antes dentro
@@ -1316,9 +1369,31 @@
         // (un corte con guion va dentro de la palabra: sin los espacios de después, que no hay)
         const puntos = cortes.map((c) => { if (L.cortesGuion && L.cortesGuion.has(c)) return [c, "brg"]; if (L.cortesLetra && L.cortesLetra.has(c)) return [c, "br"]; while (c + 1 < F.length && F[c + 1].esp) c++; return [c, "br"]; });
         F.forEach((f, q) => { if (f.tab) puntos.push([q, "tab"]); });
-        // (en el mismo lugar, el corte primero: así el espacio de la tabulación queda antes del corte)
-        puntos.sort((a, b) => b[0] - a[0] || (a[1] !== "tab" ? -1 : 1));
-        for (const [q, tipo] of puntos) {
+        // a los dos lados de un dibujo: el hueco entre los dos tramos y, en justificado, lo que le sobra a cada renglón
+        if (L.huecos) L.huecos.forEach((w, q) => puntos.push([q, "hueco", w]));
+        if (L.rellenos2 && L.alin === "just") L.rellenos2.forEach((w, q) => puntos.push([q, "relleno2", w]));
+        // (en el mismo lugar se pone primero lo que queda más lejos de la ficha: el orden final es tabulación, relleno, corte
+        // y hueco —el hueco ya es del renglón de abajo—)
+        const ORDEN = { hueco: 0, br: 1, brg: 1, relleno2: 2, tab: 3 };
+        puntos.sort((a, b) => b[0] - a[0] || ORDEN[a[1]] - ORDEN[b[1]]);
+        for (const [q, tipo, w] of puntos) {
+          if (tipo === "hueco" || tipo === "relleno2") {
+            const h = document.createElement("span");
+            h.className = "wd-relleno wd-hueco wd-pintado";
+            h.contentEditable = "false";
+            h.setAttribute("aria-hidden", "true");
+            h.style.cssText = `display:inline-block;width:${Math.max(0, w).toFixed(2)}px`;
+            if (q < 0) {   // (antes de la primera ficha: el párrafo empieza en el tramo de la derecha)
+              const f0 = F[0];
+              if (f0.obj) f0.obj.before(h); else if (f0.caja) f0.caja.before(h); else f0.nodo.splitText(Math.max(0, f0.fin - f0.t.length)).before(h);
+              continue;
+            }
+            const f = F[q];
+            if (f.obj) { f.obj.after(h); continue; }
+            if (f.caja) { f.caja.after(h); continue; }
+            if (f.fin >= f.nodo.nodeValue.length) f.nodo.after(h); else f.nodo.splitText(f.fin).before(h);
+            continue;
+          }
           const f = F[q];
           let nuevo;
           if (tipo === "br" || tipo === "brg") {
@@ -1368,7 +1443,7 @@
           const r = document.createElement("span");
           r.className = "wd-relleno wd-pintado";
           r.contentEditable = "false";
-          r.style.width = Math.max(0, A - w - 1).toFixed(2) + "px";
+          r.style.width = Math.max(0, L.relleno2Final != null ? L.relleno2Final - 1 : A - w - 1).toFixed(2) + "px";
           const u2 = el.lastChild;
           if (u2 && u2.nodeName === "BR" && !u2.classList.contains("wd-pintado")) el.insertBefore(r, u2); else el.append(r);
         }
@@ -4291,6 +4366,11 @@
         if (texto === "izq" && izqL < 6 && derL >= 6) texto = "der";
         if (texto === "der" && derL < 6 && izqL >= 6) texto = "izq";
         ajuste.flota = texto === "der" ? "izq" : "der";   // (el flotante invisible va del otro lado del texto)
+        // «A ambos lados» (lo de siempre en Word con «Cuadrado»): si quedan los dos lados, cada renglón de la franja va en
+        // dos tramos —primero el de la izquierda y luego el de la derecha; un tramo donde no cabe la palabra que sigue se
+        // queda vacío— (los parte el acomodo: cortesWord, medido con windows/hacer_dos_lados.py). Si ese párrafo no se
+        // puede acomodar así, el texto va del lado más ancho, como antes (flota).
+        if (!fl.l && fl.a === "cuadrado" && izqL > 0.5 && derL > 0.5) ajuste.medio = true;
         // contorno (estrecho y a través): en px del cuerpo, ya con la distancia al texto de su lado
         if ((fl.a === "estrecho" || fl.a === "traves") && Array.isArray(fl.p) && fl.p.length >= 3) {
           const sx = ajuste.flota === "izq" ? dr + ee[2] : -(dl + ee[0]);
@@ -4351,8 +4431,9 @@
        * donde termina (o hasta el último renglón del párrafo: el resto de la franja lo apartan los párrafos de abajo).
        * Devuelve cuánto cambió el alto del párrafo.
        */
-      function apartarTexto(el, fs) {
+      function apartarTexto(el, fs, sinMedio) {
         const h0 = el.offsetHeight;
+        if (vista !== "paginas" || window.__sinAcomodo || window.__sinDosLados) sinMedio = true;
         const habia = !!el.querySelector(":scope > .wd-excl:not(.wd-cap)");
         if (!habia && (!fs || !fs.length)) return 0;   // (nada flota cerca, ni antes ni ahora: su acomodo se queda)
         // (los cortes de antes eran para otro ancho: el texto corre libre junto a los flotantes y luego se acomoda con ellos)
@@ -4371,7 +4452,7 @@
           const nuevos = [];
           for (const lado of ["izq", "der"]) {
             let y = top;
-            for (const f of usar.filter((q) => q.flota === lado).sort((a, b) => a.y0 - b.y0)) {
+            for (const f of usar.filter((q) => q.flota === lado && (sinMedio || !q.medio)).sort((a, b) => a.y0 - b.y0)) {
               const y0 = Math.max(f.y0, y), y1 = f.y1;
               if (y1 <= y0 + 0.01) continue;
               const ancho = Math.min(cd - ci, lado === "izq" ? f.x1 - ci : cd - f.x0);
@@ -4384,6 +4465,16 @@
               y = y1;
             }
           }
+          // a los dos lados: una marca sin tamaño con dónde está el dibujo (relativo al texto del párrafo); la lee el acomodo
+          if (!sinMedio) for (const f of usar.filter((q) => q.medio)) {
+            const m = document.createElement("span");
+            m.className = "wd-excl wd-medio";
+            m.contentEditable = "false";
+            m.setAttribute("aria-hidden", "true");
+            m.style.display = "none";
+            Object.assign(m.dataset, { x0: (f.x0 - ci).toFixed(2), x1: (f.x1 - ci).toFixed(2), y0: (f.y0 - top).toFixed(2), y1: (f.y1 - top).toFixed(2) });
+            nuevos.push(m);
+          }
           if (!nuevos.length) break;
           el.prepend(...nuevos);
           const b2 = bajoTexto(el);
@@ -4394,6 +4485,8 @@
         }
         // con los flotantes ya puestos, cada renglón cortado donde Word (con el ancho que le dejan)
         if (vista === "paginas" && !window.__sinAcomodo) acomodarComoWord([el]);
+        // (a los dos lados, pero este párrafo no se pudo acomodar —p. ej. con una tabulación—: del lado más ancho, como antes)
+        if (!sinMedio && el.querySelector(":scope > .wd-medio") && !el.classList.contains("wd-acomodo")) { apartarTexto(el, fs, true); return el.offsetHeight - h0; }
         // lo que sobra de cada franja abajo del último renglón no es de este párrafo (si no, lo haría más alto)
         const fin = bajoTexto(el);
         const cuerpoTop = (x) => x.offsetTop;

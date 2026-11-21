@@ -57,7 +57,7 @@ JS_RENGLONES = r"""
   // (la fila y la orilla izquierda de la celda: en la hoja, las celdas van en orden de lectura por fila y por columna)
   const filaDe = (t) => { const c = t && (t.nodeType === 1 ? t : t.parentElement); const td = c && c.closest('td, th'); if (!td) return null; const a = td.parentElement.getBoundingClientRect(), b = td.getBoundingClientRect(); return [a.top, b.left]; };
   const vertical = (t) => { const c = t.parentElement && t.parentElement.closest('.wd-celda'); return !!c && /^vertical/.test(getComputedStyle(c).writingMode); };
-  let forzar = false;
+  let forzar = false, hueco = false;
   for (const raiz of [cuerpo, ...document.querySelectorAll('.wd-continuaciones')]) {
     // Los objetos que van en el renglón (imagen, forma, gráfico, objeto incrustado) son en Word un solo carácter que la
     // verdad lee como «/»; una ecuación, «[ec]» (Word la escribe en texto lineal con letras matemáticas: ver
@@ -68,6 +68,8 @@ JS_RENGLONES = r"""
         // (un corte de renglón de NOM: lo que sigue empieza renglón aunque se encime con el de arriba —interlineado exacto
         // menor que la letra—)
         if (n.matches('br.wd-rompe')) { forzar = true; return NodeFilter.FILTER_REJECT; }
+        // (texto a los dos lados de un dibujo: Word da cada tramo como su renglón; en NOM los separa el hueco)
+        if (n.matches('.wd-hueco')) { hueco = true; return NodeFilter.FILTER_REJECT; }
         // (las marcas del editor de un salto de página o de columna no son texto del documento)
         // (el guion de pantalla de la división automática: en la verdad de Word no es una letra del renglón)
         if (n.matches(NO_TEXTO)) return NodeFilter.FILTER_REJECT;
@@ -108,8 +110,8 @@ JS_RENGLONES = r"""
         const b = q[q.length - 1];
         if (corte != null && pr && (b.top + b.bottom) / 2 - pr.top > corte * zz) { i = j - 1; continue; }
         if (s[i] === '\x01') { i = j - 1; continue; }   // (el resto del número de una nota: no cuenta)
-        letras.push({ c: ver(s.slice(i, j)), x: b.left, y: b.top, h: b.height, w: b.width, p: numPar, cel: celdaDe(n), vert: esVert, fila: filaDe(n), forz: forzar });
-        forzar = false;
+        letras.push({ c: ver(s.slice(i, j)), x: b.left, y: b.top, h: b.height, w: b.width, p: numPar, cel: celdaDe(n), vert: esVert, fila: filaDe(n), forz: forzar, hue: hueco });
+        forzar = false; hueco = false;
         i = j - 1;
       }
     }
@@ -121,7 +123,7 @@ JS_RENGLONES = r"""
   let cur = null;
   for (const L of letras) {
     const baja = cur && (L.y > cur.y + Math.max(4, cur.h * 0.5) || L.y + L.h < cur.y);
-    const nuevo = !cur || L.p !== cur.p || L.cel !== cur.cel || !!L.vert !== !!cur.vert || (L.forz && L.x < cur.ultX)
+    const nuevo = !cur || L.p !== cur.p || L.cel !== cur.cel || !!L.vert !== !!cur.vert || (L.forz && L.x < cur.ultX) || L.hue
       || (L.vert ? Math.abs(L.x - cur.ultX) > Math.max(3, Math.min(L.w, L.h) * 0.6)
                  : L.y >= cur.abajo - 1 || L.y + L.h <= cur.arriba + 1 || (baja && L.x < cur.ultX - 1));
     if (nuevo) { cur = { texto: '', x: L.x, y: L.y, h: L.h, p: L.p, cel: L.cel, vert: L.vert, fila: L.fila, fin: L.x + L.w, arriba: L.y, abajo: L.y + L.h, ultX: L.x }; renglones.push(cur); }

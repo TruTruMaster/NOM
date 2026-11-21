@@ -11,6 +11,7 @@ Arma un Word con párrafos justificados y a la izquierda, lo importa y comprueba
      pantalla (ni el texto, ni copiar, ni escribir, ni lo descargado lo llevan) y cada párrafo se parte con su idioma.
 """
 import base64, io, os, sys, zipfile
+from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import nomprueba as N
 from docx import Document
@@ -157,6 +158,50 @@ def numeros_linea(P):
     check("«Ninguno» los quita", p.evaluate("() => document.querySelectorAll('.wd-numlin').length") == 0)
 
 
+def dos_lados(P, esp):
+    """Texto a los dos lados de un dibujo (w17, hecho en Word): cada renglón de la franja en dos tramos con un hueco."""
+    p = P.p
+    arch = Path(os.environ.get("NOM_PRUEBAS_CACHE", Path.home() / ".cache/nom-pruebas")) / "office-real/archivos/w17-dos-lados.docx"
+    if not arch.exists():
+        print("  (sin w17-dos-lados.docx: se salta lo de los dos lados)"); return
+    r = p.evaluate("""async ([b64, esp]) => { const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      const r = await NOM.formatos.importar(new File([u], 'w17.docx')); const espacio = (await NOM.api.get('/api/espacios')).find((e) => e.id === esp);
+      const d = await NOM.binarios.crearEnEspacio(espacio, r.nombre, r.modo, r.ops); return { id: d.id }; }""", [base64.b64encode(arch.read_bytes()).decode(), esp])
+    p.goto(N.B + "/#/doc/" + r["id"])
+    p.wait_for_function("() => document.querySelectorAll('.wd-cuerpo .wd-hueco').length >= 8", timeout=40000)
+    p.wait_for_timeout(800)
+    i = p.evaluate("() => [...document.querySelectorAll('.wd-cuerpo > p')].findIndex((x) => x.querySelector('.wd-hueco') && x.textContent.startsWith('Para calcular'))")
+    check("a los dos lados: el párrafo junto al dibujo lleva sus tramos (con hueco)", i >= 0, i)
+    if i < 0: return
+    antes = p.evaluate(f"() => ({TEXTO_DOM})(document.querySelectorAll('.wd-cuerpo > p')[{i}])")
+    check("…y el texto del documento no cambia (el hueco es de pantalla)", "Para calcular el promedio" in antes and antes == antes.replace("  ", " "), antes[:60])
+    # escribir justo antes del primer hueco (al final del tramo de la izquierda)
+    p.evaluate(f"() => document.querySelectorAll('.wd-cuerpo > p')[{i}].scrollIntoView({{ block: 'center' }})"); p.wait_for_timeout(400)
+    xy = p.evaluate(f"""() => {{ const par = document.querySelectorAll('.wd-cuerpo > p')[{i}], h = par.querySelector('.wd-hueco'); let t = h.previousSibling;
+        while (t && t.nodeType !== 3) t = t.lastChild || t.previousSibling;
+        const k = t.nodeValue.replace(/\s+$/, '').length; const r = document.createRange(); r.setStart(t, k - 1); r.setEnd(t, k); const q = r.getClientRects()[0]; return [q.right - 0.5, q.top + q.height / 2]; }}""")
+    p.mouse.click(xy[0], xy[1]); p.wait_for_timeout(200)
+    p.keyboard.type("Q"); p.wait_for_timeout(1500)
+    despues = p.evaluate(f"() => ({TEXTO_DOM})(document.querySelectorAll('.wd-cuerpo > p')[{i}])")
+    check("escribir al final del tramo de la izquierda: la letra queda en su lugar", "ParaQ" in despues.replace(" ", "")[:12] and despues.replace("Q", "") == antes, despues[:40])
+    check("…y el párrafo se vuelve a partir en tramos", p.evaluate(f"() => document.querySelectorAll('.wd-cuerpo > p')[{i}].querySelectorAll('.wd-hueco').length") >= 2)
+    # copiar a través de un hueco: sin el hueco ni saltos
+    cp = p.evaluate(f"""() => {{ const par = document.querySelectorAll('.wd-cuerpo > p')[{i}], h = par.querySelectorAll('.wd-hueco')[1];
+        let a = h.previousSibling; while (a && a.nodeType !== 3) a = a.lastChild || a.previousSibling;
+        let b = h.nextSibling; while (b && b.nodeType !== 3) b = b.firstChild || b.nextSibling;
+        const r = document.createRange(); r.setStart(a, Math.max(0, a.nodeValue.length - 3)); r.setEnd(b, Math.min(4, b.nodeValue.length));
+        const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+        const dt = new DataTransfer(); const ev = new ClipboardEvent('copy', {{ clipboardData: dt, bubbles: true, cancelable: true }});
+        par.dispatchEvent(ev); return {{ texto: dt.getData('text/plain'), esperado: a.nodeValue.slice(-3) + b.nodeValue.slice(0, 4) }}; }}""")
+    check("copiar a través de un hueco: el texto seguido, sin el hueco", cp["texto"] == cp["esperado"], cp)
+    b64 = p.evaluate("""async () => { let u = NOM.ooxml.docx(NOM.editorActual.doc); if (u && u.then) u = await u;
+        let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }""")
+    xml = zipfile.ZipFile(io.BytesIO(base64.b64decode(b64))).read("word/document.xml").decode("utf-8")
+    import re
+    txt = "".join(re.findall(r"<w:t(?: [^>]*)?>([^<]*)</w:t>", xml))
+    check("lo descargado trae lo escrito y nada del hueco", "ParaQ" in txt.replace(" ", "") and "Para" in txt, txt[:40])
+
+
 def main():
     N.esperar_servidor()
     a = N.cuenta(); esp = N.espacio(a["token"], "Acomodo")
@@ -217,6 +262,7 @@ def main():
         p.evaluate("() => { const t = NOM.leer('nom.texto', {}); t.vista = 'paginas'; localStorage.setItem('nom.texto', JSON.stringify(t)); }")
         guiones(P, esp)
         numeros_linea(P)
+        dos_lados(P, esp)
         errores = P.errores if hasattr(P, "errores") else []
         check("sin errores de JavaScript", not errores, errores[:3])
     finally:

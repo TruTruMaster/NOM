@@ -85,8 +85,8 @@ Medido contra Word 2024 real (renglones idénticos, 20-nov noche; la verdad de W
 celda de tabla y `comparar_real.py` los compara: un objeto en el renglón cuenta como «/», como lo lee Word, y los
 renglones con una ecuación no cuentan): **w01 100 %** (137), **w02 100 %** (239), **w03 100 %** (176), **w04 100 %**
 (229), **w05 98.5 %** (744, con las celdas), **w06 99.3 %** (140), w07 98.4 % (121 de 123; uno de los dos es un campo DATE:
-la verdad de Word es del 19-nov y NOM, como Word al abrirlo, pone la fecha de hoy), **w08 100 %**, **w09 100 %** (282, con las celdas), w10 90.4 %, **w11 100 %**, w12 86.1 %,
-**w13 100 %**, **w14 99.6 %** (1064), t01 95.6 % (2642, con las celdas), w15-guiones-z18 97.1 % (971), **w15-guiones-lim2
+la verdad de Word es del 19-nov y NOM, como Word al abrirlo, pone la fecha de hoy), **w08 100 %**, **w09 100 %** (282, con las celdas), w10 90.4 %, **w11 100 %**, w12 90.7 % (21-nov; antes 86.1),
+**w13 100 %**, **w14 99.6 %** (1064), t01 96.0 % (2642, con las celdas; antes 95.6), w17-dos-lados 92.2 % (886; 67.6 con el texto de un solo lado), w15-guiones-z18 97.1 % (971), **w15-guiones-lim2
 99.1 %** (969). Al empezar el 19-nov: w01 94.9, w02 96.2, w03 96.6, w04 94.3, w05 85.7 (sin celdas), w06 83.8, w07 96.5,
 w09 98.2, w10 35.1, w13 58.9, t01 90.8 (sin celdas). Lo que falta está en `RELEVO-20NOV-NOCHE.md` §3 (w12: texto a los dos
 lados de un dibujo y contornos; w10: una palabra de 96 letras con su idioma inglés y la dirección web que sigue; t01: lo
@@ -103,8 +103,11 @@ Office) y lo fuerza con cortes de pantalla (`acomodarComoWord` en `modo-texto.js
 texto hasta un 0.1 % más angosto). Desde el 19-nov también: títulos, celdas de tabla (con el ancho de Word de su
 columna), versalitas, escala de caracteres, superíndices, sangrías negativas, recuadros (el borde sale al margen solo de
 su lado), columnas de distinto ancho, letra capital y junto a un objeto que flota (cada renglón con el ancho que le deja).
-Desde el 20-nov también los guiones automáticos (ver Disposición). Falta: párrafos justificados o centrados con
-tabuladores, texto a los dos lados de un dibujo y contornos (estrecho, a través), y los cuadros de texto.
+Desde el 20-nov también los guiones automáticos (ver Disposición). **Desde el 21-nov, texto a los dos lados de un dibujo**
+(«Cuadrado, a ambos lados», lo de siempre en Word; medido con `windows/hacer_dos_lados.py`: 41 dibujos de 1, 2 y 3
+pulgadas en varios lugares de la columna): cada renglón de la franja en dos tramos, primero el de la izquierda y luego
+el de la derecha, y un tramo donde no cabe la palabra que sigue se queda vacío (con un hueco de pantalla, `.wd-hueco`).
+Falta: párrafos justificados o centrados con tabuladores, contornos (estrecho, a través) y los cuadros de texto.
 
 ## 4. Excel
 
