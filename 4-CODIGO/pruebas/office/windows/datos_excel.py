@@ -12,6 +12,7 @@ Operaciones:
   texto_columnas      {"rango": "A1:A9", "sep": {"tab": false, "punto_coma": false, "coma": true, "espacio": false,
                        "otro": null}, "seguidos": false, "calificador": "\""}  ó  {"anchos": [0, 5, 12]}
   buscar_objetivo     {"celda": "B3", "valor": 100, "cambiando": "B1"}
+  tabla_datos         {"rango": "A4:C8", "fila": "B1", "col": "B2"} (una de las dos o las dos)
 """
 import json, sys
 from comun import excel
@@ -59,6 +60,11 @@ try:
                        "desvest": -4155, "desvestp": -4156, "var": -4164, "varp": -4165}
                 fuentes = tuple(f"'{h.Name}'!{r1c1(f)}" for f in c["fuentes"])
                 h.Range(c["destino"]).Consolidate(Sources=fuentes, Function=FUN[c["funcion"]], TopRow=bool(c.get("fila")), LeftColumn=bool(c.get("columna")), CreateLinks=False)
+            elif op == "tabla_datos":
+                kw = {}
+                if c.get("fila"): kw["RowInput"] = h.Range(c["fila"])
+                if c.get("col"): kw["ColumnInput"] = h.Range(c["col"])
+                h.Range(c["rango"]).Table(**kw)
             elif op == "buscar_objetivo":
                 ok = h.Range(c["celda"]).GoalSeek(Goal=c["valor"], ChangingCell=h.Range(c["cambiando"]))
                 res.setdefault(c["id"], {})["logrado"] = bool(ok)

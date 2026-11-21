@@ -765,6 +765,46 @@
           $("[data-no]", p2).onclick = () => { cambiarT({ ["c:" + res.cambiando]: res.antes }); h2.cerrar(); };
         };
       }
+      // ------------------------------------------------------------ tabla de datos (Datos → Análisis de hipótesis → Tabla de datos)
+      /**
+       * Crea una tabla de datos como Excel (Range.Table): en el rango elegido, la primera fila y la primera columna llevan
+       * los valores que se prueban y la fórmula —arriba de cada columna (con celda de entrada de columna), a la izquierda de
+       * cada fila (con la de fila) o en la esquina (con las dos)—; el interior se llena con =TABLA(fila; columna), que se
+       * calcula como Excel (formulas.js, tablaDatos) y se guarda como la guarda Excel (ooxml.js). Devuelve el motivo si no.
+       */
+      function crearTablaDatos(r, entradaFila, entradaCol) {
+        if (ed.soloLectura || !t) return "Solo puedes ver esta hoja";
+        if (!r || r.c2 - r.c1 < 1 || r.f2 - r.f1 < 1) return "Elige todo el rango de la tabla: la fila y la columna con los valores y la fórmula, y su interior";
+        const leer = (x) => { x = String(x || "").replace(/\$/g, "").trim().toUpperCase(); if (!x) return null; return F().parseRef(x) || undefined; };
+        const fi = leer(entradaFila), ci = leer(entradaCol);
+        if (fi === undefined || ci === undefined) return "Escribe las celdas de entrada como en Excel (por ejemplo B1)";
+        if (!fi && !ci) return "Escribe al menos una celda de entrada: de fila, de columna o las dos";
+        const dentro = (p) => p && p.c >= r.c1 && p.c <= r.c2 && p.f >= r.f1 && p.f <= r.f2;
+        if (dentro(fi) || dentro(ci)) return "La celda de entrada no puede estar dentro de la tabla";
+        const fx = `=TABLA(${fi ? F().ref(fi.c, fi.f) : ""};${ci ? F().ref(ci.c, ci.f) : ""})`;
+        const cambios = {};
+        for (let f = r.f1 + 1; f <= r.f2; f++) for (let c = r.c1 + 1; c <= r.c2; c++) cambios["c:" + F().ref(c, f)] = fx;
+        cambiarT(cambios);
+        return { celdas: Object.keys(cambios).length, fx };
+      }
+      function dialogoTablaDatos() {
+        if (ed.soloLectura || !t) return;
+        const r = rango();
+        const cuerpo = html(`<div class="col">
+          <p class="suave chico" style="font-weight:400">En ${esc(textoRango(r))}: la primera fila y la primera columna llevan los valores que se prueban y la fórmula; el interior se llena con la tabla.</p>
+          <label>Celda de entrada (fila) <input data-fila autocomplete="off" placeholder="por ejemplo B1"></label>
+          <label>Celda de entrada (columna) <input data-col autocomplete="off" placeholder="por ejemplo B2"></label>
+          <p class="suave chico" style="font-weight:400">Valores en una columna: la fórmula va arriba de la columna de al lado y se usa la celda de entrada de columna. Valores en una fila: la fórmula a su izquierda y la de fila. Con las dos, la fórmula en la esquina.</p></div>`);
+        const pie = html(`<div style="display:contents"><span class="crece"></span><button class="btn primario" data-si>Aceptar</button></div>`);
+        const h = NOM.hoja({ titulo: "Tabla de datos", icono: "table", cuerpo, pie });
+        setTimeout(() => $("[data-col]", cuerpo).focus(), 30);
+        $("[data-si]", pie).onclick = () => {
+          const res = crearTablaDatos(r, $("[data-fila]", cuerpo).value, $("[data-col]", cuerpo).value);
+          if (typeof res === "string") return aviso(res, { tipo: "aviso", ms: 5000 });
+          h.cerrar();
+          aviso(`Tabla de datos en ${textoRango(r)}: ${res.celdas} celdas. Ctrl+Z para deshacer`, { tipo: "ok" });
+        };
+      }
       // ------------------------------------------------------------ nombres definidos (Fórmulas → Administrador de nombres)
       /** Los nombres del libro: { minúsculas: { n, d } } (d: la definición en NOM, «=Hoja1!$A$1:$A$9»). */
       const nombresLibro = () => Object.assign({}, doc().valor("_doc", "nombres") || {});
@@ -3128,6 +3168,7 @@
             { texto: "Otras", icono: "more-vertical", sub: [
               { texto: "Buscar", icono: "search", fn: () => buscar(false) },
               { texto: "Buscar objetivo", corto: "Objetivo", icono: "target", off: lect, fn: () => dialogoObjetivo() },
+              { texto: "Tabla de datos", corto: "Tabla datos", icono: "table", off: lect, fn: () => dialogoTablaDatos() },
               { texto: "Consolidar", icono: "layers", off: lect, fn: dialogoConsolidar },
               { texto: "Nombres", icono: "tags", fn: () => administradorNombres() },
               { texto: t && t.vf ? "Ver resultados" : "Mostrar fórmulas", corto: t && t.vf ? "Resultados" : "Fórmulas", icono: "square-function", off: lect, fn: alternarFormulas },
@@ -3260,6 +3301,7 @@
           { texto: "Quitar duplicados…", icono: "copy-x", fn: () => dialogoDuplicados() },
           { texto: "Texto en columnas…", icono: "columns-3", fn: () => dialogoTextoColumnas() },
           { texto: "Buscar objetivo…", icono: "target", fn: () => dialogoObjetivo() },
+          { texto: "Tabla de datos…", icono: "table", fn: () => dialogoTablaDatos() },
           { texto: "Consolidar…", icono: "layers", fn: dialogoConsolidar },
           { texto: "Agrupar filas", icono: "list-tree", atajo: "Mayús+Alt+→", fn: () => agrupar("f", 1) },
           { texto: "Agrupar columnas", icono: "list-tree", fn: () => agrupar("c", 1) },
@@ -3364,8 +3406,8 @@
       // Lo que usan otros módulos (datos → reporte, combinar correspondencia).
       this.api = { rango, tabla: () => t, evaluar, seleccion: () => ({ ...sel }),
         // herramientas de datos como las de Excel (también para las pruebas contra Excel real)
-        herramientas: { quitarDuplicados, regionActual, textoEnColumnas, partirTexto, buscarObjetivo, consolidar },
-        dialogos: { duplicados: dialogoDuplicados, textoColumnas: dialogoTextoColumnas, objetivo: dialogoObjetivo, nombres: administradorNombres, consolidar: dialogoConsolidar },
+        herramientas: { quitarDuplicados, regionActual, textoEnColumnas, partirTexto, buscarObjetivo, consolidar, tablaDatos: crearTablaDatos },
+        dialogos: { duplicados: dialogoDuplicados, textoColumnas: dialogoTextoColumnas, objetivo: dialogoObjetivo, nombres: administradorNombres, consolidar: dialogoConsolidar, tablaDatos: dialogoTablaDatos },
         calculo: { modo: modoCalculo, fijar: fijarModoCalculo, ahora: calcularAhora },
         esquema: { agrupar, alternar: alternarGrupo, nivel: mostrarNivel, detalle, borrar: borrarEsquema },
         formulasVisibles: alternarFormulas,
@@ -3381,6 +3423,7 @@
       const dlg = (k) => () => { const d = NOM.editorActual && NOM.editorActual.modoApi && NOM.editorActual.modoApi.api && NOM.editorActual.modoApi.api.dialogos; if (d && d[k]) d[k](); };
       return [
         { texto: "Buscar objetivo", icono: "target", fn: dlg("objetivo"), claves: "hipotesis analisis meta valor buscar objetivo goal seek" },
+        { texto: "Tabla de datos", icono: "table", fn: dlg("tablaDatos"), claves: "tabla de datos hipotesis analisis y si what if data table una dos variables" },
         { texto: "Administrador de nombres", icono: "tags", fn: dlg("nombres"), claves: "nombres definidos rango nombrado definir nombre" },
         { texto: "Agrupar filas o columnas (esquema)", icono: "list-tree", fn: () => { const a = NOM.editorActual.modoApi.api.esquema; if (a) a.agrupar("f", 1); }, claves: "agrupar esquema contraer expandir subtotal grupo" },
         { texto: "Borrar esquema", icono: "eraser", fn: () => { const a = NOM.editorActual.modoApi.api.esquema; if (a) a.borrar(); }, claves: "desagrupar esquema quitar grupos" },

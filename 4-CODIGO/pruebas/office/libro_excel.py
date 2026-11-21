@@ -70,6 +70,14 @@ CASOS = {
           return mal; }""",
         "revisar": lambda x, r: [] if x["hojas"][0].get("formulas_visibles") is True else [f"Excel: fórmulas visibles = {x['hojas'][0].get('formulas_visibles')}"],
     },
+    # Tabla de datos de dos variables hecha en NOM (Datos → Análisis de hipótesis → Tabla de datos): Excel la abre como suya
+    # (cada celda del interior con =TABLE(B1,B2)) y calcula lo mismo
+    "tabla-datos": {
+        "celdas": {"A1": "x", "B1": "2", "A2": "y", "B2": "3", "A4": "=B1*B2+1", "B4": "1", "C4": "2", "D4": "3", "A5": "10", "A6": "20", "A7": "30"},
+        "js": """async (H, hoja) => { const r = H.herramientas.tablaDatos({ c1: 0, c2: 3, f1: 3, f2: 6 }, "B1", "B2"); await new Promise((q) => setTimeout(q, 300));
+          return typeof r === "string" ? [r] : []; }""",
+        "revisar": lambda x, r: [f"{k}: Excel dice {c.get('f')!r}" for k, c in celdas_de_hoja(x, "B5:D7").items() if c.get("f") != "=TABLE(B1,B2)"],
+    },
     # Esquema: filas 2-6 en un grupo y 3-4 adentro (nivel 2), contraído; columnas B-C agrupadas y contraídas
     "esquema": {
         "celdas": {"A1": "Mes", "A2": "1", "A3": "2", "A4": "3", "A5": "4", "A6": "5", "A7": "=SUMA(A2:A6)", "B1": "x", "C1": "y", "D1": "=B1&C1"},
@@ -122,6 +130,16 @@ async ([b64, nombre, espacio]) => {
   return { nombres: doc ? Object.values(doc.campos.nombres).map((o) => o.n).sort() : [], formulas, esquema };
 }
 """
+
+
+def celdas_de_hoja(x, rango):
+    """Las celdas de un rango («B5:D7») de la primera hoja de lo que leyó Excel: {«B5»: {f, v, t}}."""
+    import re
+    m = re.match(r"([A-Z]+)(\d+):([A-Z]+)(\d+)", rango)
+    col = lambda t: sum((ord(ch) - 64) * 26 ** i for i, ch in enumerate(reversed(t)))
+    letra = lambda n: (letra((n - 1) // 26) if n > 26 else "") + chr(65 + (n - 1) % 26)
+    cs = x["hojas"][0].get("celdas", {})
+    return {f"{letra(c)}{f}": (cs.get(f"{letra(c)}{f}") or {}) for f in range(int(m.group(2)), int(m.group(4)) + 1) for c in range(col(m.group(1)), col(m.group(3)) + 1)}
 
 
 def celdas_de(addr):

@@ -61,6 +61,13 @@ CASOS = [
     {"id": "obj-raiz", "op": "buscar_objetivo", "celda": "B2", "valor": 2, "cambiando": "B1", "datos": [["x", 1], ["x^2", "=B1^2"]]},
     {"id": "obj-pago", "op": "buscar_objetivo", "celda": "B2", "valor": 2000, "cambiando": "B1", "datos": [["tasa", 0.05], ["pago", "=PMT(B1/12,60,-100000)"]]},
     {"id": "obj-imposible", "op": "buscar_objetivo", "celda": "B2", "valor": -1, "cambiando": "B1", "datos": [["x", 3], ["x^2", "=B1^2"]]},
+    # Tabla de datos (Datos → Análisis de hipótesis → Tabla de datos), hecha en NOM y en Excel (Range.Table)
+    {"id": "td-columna", "op": "tabla_datos", "rango": "A4:C8", "col": "B1",
+     "datos": [["x", 2], [], [], ["", "=B1*10", "=B1^2+1"], [1], [2.5], [-3], [10]]},
+    {"id": "td-fila", "op": "tabla_datos", "rango": "A4:E6", "fila": "B1",
+     "datos": [["x", 2], [], [], ["", 1, 2, 3, 4], ["=B1*10"], ["=B1/4+0.5"]]},
+    {"id": "td-dos", "op": "tabla_datos", "rango": "A4:D7", "fila": "B1", "col": "B2",
+     "datos": [["x", 2], ["y", 3], [], ["=B1*B2+1", 1, 2, 3], [10], [20], [30]]},
 ]
 
 
@@ -90,6 +97,7 @@ async (c) => {
   if (c.op === "quitar_duplicados") res = H.herramientas.quitarDuplicados(r, c.columnas.map((k) => r.c1 + k - 1), !!c.encabezado);
   else if (c.op === "texto_columnas") res = H.herramientas.textoEnColumnas(r, c.anchos ? { anchos: c.anchos } : { sep: c.sep, seguidos: !!c.seguidos, calificador: c.calificador == null ? '"' : c.calificador });
   else if (c.op === "consolidar") res = H.herramientas.consolidar(c.destino, c.fuentes, c.funcion, !!c.fila, !!c.columna);
+  else if (c.op === "tabla_datos") res = H.herramientas.tablaDatos(r, c.fila || "", c.col || "");
   else if (c.op === "buscar_objetivo") {
     const o = H.herramientas.buscarObjetivo(c.celda, c.valor, c.cambiando);
     await new Promise((r) => setTimeout(r, 150));
