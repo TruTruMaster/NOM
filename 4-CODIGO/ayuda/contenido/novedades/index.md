@@ -13,7 +13,8 @@ version: 0.21.0
 - **Word, Vista:** modo de lectura (el texto en columnas, de pantalla en pantalla), cuadrícula y abrir el mismo documento
   en una ventana nueva.
 - **Excel:** minigráficos (de línea, columna y pérdidas y ganancias) que se ven como en Excel y se crean desde NOM, los
-  estilos de celda de Excel (Bueno, Entrada, Título, Énfasis…) y la celda de enfoque.
+  estilos de celda de Excel (Bueno, Entrada, Título, Énfasis…), la celda de enfoque e imágenes en las hojas (se
+  ponen en una celda y se mueven arrastrándolas).
 - **PowerPoint, Vista:** clasificador de diapositivas (arrastrar para ordenarlas), vista de lectura y página de notas para
   imprimir.
 - **Comprobar accesibilidad** (en Archivo): avisa de imágenes sin texto alternativo, tablas sin encabezado, diapositivas
