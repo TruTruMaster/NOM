@@ -163,7 +163,10 @@ sí, como Excel; `js/relleno-rapido.js`; `datos_excel.py`: 31 de 31 casos contra
 propósito distinto: de «aNA péREZ» → «Ana Pérez», Excel da «Aluis Pgómez» y NOM «Luis Gómez»— y Ctrl+E/Ctrl+Z con el
 teclado). Previsión: no |
 | Revisar | Ortografía, notas, comentarios, proteger hoja y libro | Notas del archivo se ven; comentarios de NOM y proteger: sí |
-| Vista | Saltos de página, diseño de página, cuadrícula, encabezados, zoom, inmovilizar, macros, celda de enfoque, modo oscuro | Inmovilizar (fijar filas y columnas): sí; cuadrícula como la del archivo. Vista de saltos, de diseño, celda de enfoque y macros: no |
+| Vista | Saltos de página, diseño de página, cuadrícula, encabezados, zoom, inmovilizar, macros, celda de enfoque, modo oscuro | Inmovilizar (fijar filas y columnas): sí; cuadrícula como la del archivo. **Celda de enfoque: sí** (21-nov: Más → Fórmulas →
+Celda de enfoque y la paleta: la fila y la columna de la celda elegida resaltadas, siguen a la selección, no cambian el
+libro ni se imprimen; `prueba_enfoque.py` 6 de 6). Vista de saltos y de diseño de página (falta medir la impresión de Excel:
+ver RELEVO-21NOV §4) y macros: no |
 | VBA, Python en Excel, Power Query (M), Power Pivot y DAX, cubos | | No |
 
 **Funciones.** NOM tiene **458** (con sus nombres en español y en inglés), con matrices dinámicas, `LET` y `LAMBDA`

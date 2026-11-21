@@ -155,6 +155,9 @@
 .rejilla-hoja td[data-otro] { position: relative; overflow: visible; }
 .rejilla-hoja td[data-otro]::before { top: -18px; }
 .rejilla-hoja td.sel { outline: 2px solid var(--m-hoja); outline-offset: -2px; background-image: linear-gradient(color-mix(in srgb, var(--m-hoja-tenue) 45%, transparent), color-mix(in srgb, var(--m-hoja-tenue) 45%, transparent)); }
+/* Celda de enfoque (Vista, como Excel 2024): la fila y la columna de la celda elegida */
+.rejilla-hoja td.enfoque { box-shadow: inset 0 0 0 9999px rgba(33, 115, 70, .14); }
+@media print { .rejilla-hoja td.enfoque { box-shadow: none; } }
 .rejilla-hoja td.rango { background-image: linear-gradient(color-mix(in srgb, var(--m-hoja-tenue) 75%, transparent), color-mix(in srgb, var(--m-hoja-tenue) 75%, transparent)); }
 .rejilla-hoja th.activa { background: var(--m-hoja-tenue); color: var(--m-hoja-tinta); }
 .rejilla-hoja .editor-celda { position: absolute; z-index: 4; border: 2px solid var(--m-hoja); background: var(--sup-2); font: inherit; font-size: 14px; padding: 0 6px; outline: none; box-shadow: var(--sombra-flotante); }

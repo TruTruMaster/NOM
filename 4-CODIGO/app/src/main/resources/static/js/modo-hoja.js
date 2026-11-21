@@ -2127,6 +2127,14 @@
         });
       }
 
+      // Vista → Celda de enfoque (Excel 2024): la fila y la columna de la celda elegida, resaltadas (de esta persona, en
+      // este equipo; no va en el libro)
+      let enfoque = !!NOM.leer("nom.hoja", {}).enfoque;
+      function alternarEnfoque(si) {
+        enfoque = si == null ? !enfoque : !!si;
+        NOM.guardar("nom.hoja", Object.assign(NOM.leer("nom.hoja", {}), { enfoque }));
+        pintarSeleccion();
+      }
       function pintarSeleccion() {
         if (!ancla) { const vis = visible(sel.c, sel.f); if (vis.c !== sel.c || vis.f !== sel.f) sel = vis; }
         const r = rango();
@@ -2134,6 +2142,8 @@
         if (document.activeElement !== fx) fx.value = textoBarra(sel.c, sel.f);
         $$("td.sel, td.rango", rej).forEach((x) => x.classList.remove("sel", "rango"));
         $$("th.activa", rej).forEach((x) => x.classList.remove("activa"));
+        $$("td.enfoque", rej).forEach((x) => x.classList.remove("enfoque"));
+        if (enfoque) $$(`td[data-f="${sel.f}"], td[data-c="${sel.c}"]`, rej).forEach((x) => { if (!(+x.dataset.c === sel.c && +x.dataset.f === sel.f)) x.classList.add("enfoque"); });
         for (let f = r.f1; f <= r.f2; f++) for (let c = r.c1; c <= r.c2; c++) {
           const td = celda(c, f); if (td) td.classList.add(c === sel.c && f === sel.f ? "sel" : "rango");
         }
@@ -3584,6 +3594,7 @@
         { texto: "Quitar flechas", icono: "x", fn: () => { const a = NOM.editorActual.modoApi.api.auditoria; if (a) a.quitar(); }, claves: "auditoria quitar flechas" },
         { texto: "Evaluar fórmula", icono: "square-function", fn: () => { const a = NOM.editorActual.modoApi.api.auditoria; if (a) a.evaluar(); }, claves: "auditoria evaluar formula paso a paso depurar" },
         { texto: "Mostrar fórmulas (Ctrl+`)", icono: "square-function", fn: () => { const a = NOM.editorActual.modoApi.api.formulasVisibles; if (a) a(); }, claves: "ver formulas mostrar formulas auditoria" },
+        { texto: "Celda de enfoque", icono: "target", fn: () => { const a = NOM.editorActual.modoApi.api.enfoque; if (a) a(); }, claves: "celda de enfoque focus cell resaltar fila columna vista" },
         { texto: "Borrar esquema", icono: "eraser", fn: borrarEsquema },
           { titulo: "Fórmulas" },
           { texto: "Cálculo automático", icono: "zap", marcado: modoCalculo() === "auto", fn: () => fijarModoCalculo("auto") },
@@ -3592,6 +3603,7 @@
           { texto: "Calcular ahora", icono: "calculator", atajo: "F9", fn: () => calcularAhora(false) },
           { texto: "Calcular esta hoja", icono: "calculator", atajo: "Mayús+F9", fn: () => calcularAhora(true) },
           { texto: "Mostrar fórmulas", icono: "square-function", atajo: "Ctrl+`", marcado: !!(t && t.vf), fn: alternarFormulas },
+          { texto: "Celda de enfoque", icono: "target", marcado: enfoque, fn: () => alternarEnfoque() },
           { texto: "Rastrear precedentes", icono: "arrow-down-right", fn: () => rastrear("p") },
           { texto: "Rastrear dependientes", icono: "arrow-up-right", fn: () => rastrear("d") },
           { texto: "Quitar flechas", icono: "x", fn: () => quitarFlechas() },
@@ -3677,6 +3689,7 @@
       this.api = { rango, tabla: () => t, evaluar, seleccion: () => ({ ...sel }),
         // herramientas de datos como las de Excel (también para las pruebas contra Excel real)
         herramientas: { quitarDuplicados, regionActual, textoEnColumnas, partirTexto, buscarObjetivo, consolidar, tablaDatos: crearTablaDatos, rellenoRapido },
+        enfoque: alternarEnfoque, enfoqueActivo: () => enfoque,
         escenarios: { lista: escenariosHoja, guardar: guardarEscenario, quitar: quitarEscenario, mostrar: mostrarEscenario, resumen: resumenEscenarios },
         dialogos: { duplicados: dialogoDuplicados, textoColumnas: dialogoTextoColumnas, objetivo: dialogoObjetivo, nombres: administradorNombres, consolidar: dialogoConsolidar, tablaDatos: dialogoTablaDatos, escenarios: administradorEscenarios, rellenoRapido: ejecutarRellenoRapido },
         calculo: { modo: modoCalculo, fijar: fijarModoCalculo, ahora: calcularAhora },
