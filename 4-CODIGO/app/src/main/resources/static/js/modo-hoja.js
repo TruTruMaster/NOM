@@ -3807,7 +3807,7 @@
         { texto: "Quitar flechas", icono: "x", fn: () => { const a = NOM.editorActual.modoApi.api.auditoria; if (a) a.quitar(); }, claves: "auditoria quitar flechas" },
         { texto: "Evaluar fórmula", icono: "square-function", fn: () => { const a = NOM.editorActual.modoApi.api.auditoria; if (a) a.evaluar(); }, claves: "auditoria evaluar formula paso a paso depurar" },
         { texto: "Mostrar fórmulas (Ctrl+`)", icono: "square-function", fn: () => { const a = NOM.editorActual.modoApi.api.formulasVisibles; if (a) a(); }, claves: "ver formulas mostrar formulas auditoria" },
-        { texto: "Estilos de celda", icono: "paint-bucket", fn: dlg("estilosCelda"), claves: "estilos de celda bueno malo neutral entrada salida titulo encabezado enfasis moneda millares porcentaje" },
+        { texto: "Estilos de celda", icono: "paint-bucket", fn: () => { const a = NOM.editorActual.modoApi.api.dialogos.estilosCelda; if (a) a(); }, claves: "estilos de celda bueno malo neutral entrada salida titulo encabezado enfasis moneda millares porcentaje" },
         { texto: "Celda de enfoque", icono: "target", fn: () => { const a = NOM.editorActual.modoApi.api.enfoque; if (a) a(); }, claves: "celda de enfoque focus cell resaltar fila columna vista" },
         { texto: "Borrar esquema", icono: "eraser", fn: borrarEsquema },
           { titulo: "Fórmulas" },
