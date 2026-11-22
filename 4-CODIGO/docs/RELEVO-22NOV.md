@@ -34,6 +34,25 @@ rechazos ni problemas, la accesibilidad, la compatibilidad, y su idea de logotip
   `2ef146f6…`). IndexNow 200 (76 direcciones). **Falta el A55** (no estaba conectado).
 - Presentación regenerada: dice 0.22.1 y M5 79 % (167 de 212 tareas en total).
 
+## 1c. Tarde: DNS de nom.qd.je por la API de DigitalPlat, correo y 0.22.2 (22-nov, 16:33)
+
+- **API de DigitalPlat** (`https://domain-api.digitalplat.org/api/v1`, llave en `~/.config/nomcolab/digitalplat`, fuera
+  del repositorio; Cloudflare bloquea el cliente de Python por su firma: mandar `User-Agent: nom-colab-dns/1.0`). La
+  documentación (70 rutas) la guardó el dueño; lo útil: `domains/{d}/dns/records` (GET/POST/PATCH/DELETE, con
+  `Idempotency-Key`), `dns/export`, `dns/import/preview`. **No hay ruta para la redirección**: está solo en el panel.
+- Zona de `nom.qd.je` (respaldo de antes en `~/NOM/trabajo/22nov/dns/zona-antes.txt`): se quitaron los 4 A y 4 AAAA de
+  GitHub Pages y se puso `@ A 23.238.4.245` (la entrada de la redirección de DigitalPlat); **`www` no se tocó** (el panel
+  sugiere `www CNAME pages-origin.digitalplat.org`: eso tumbaría la página principal). Correo: `@ MX 10/20
+  mx{1,2}.improvmx.com.` y `@ TXT "v=spf1 include:spf.improvmx.com ~all"` (falta que el dueño cree la cuenta de ImprovMX).
+- La redirección **sigue esperando** («Domain redirect is waiting for HTTPS setup», certificado de origen de Cloudflare en
+  la entrada): lo más probable es que «Include www» esté marcado. Al activarse: comprobar 301 con ruta y `?c=`, apagar
+  GitHub Pages del repositorio `nom-qd-je`, `SITIO = "nom.qd.je"` en `presentacion.py`, y actualizar `DOMINIO-Y-BUSCADORES.md`.
+- **0.22.2 publicada** (16:33): atajos `/app` (baja el APK) y `/codigo` (`Atajos.java` en el núcleo; el servidor y el
+  teléfono igual). Regresión de Windows **completa sin fallas** (1404 s), Pi `humo.py` 36/36, GitHub, APK 41
+  (`932bcddc…`, misma llave), IndexNow. Falta el A55.
+- Google Play: `docs/FICHA-GOOGLE-PLAY.md` y `marca/play/` (capturas de 1080 × 1920 y gráfico de 1024 × 500,
+  `herramientas/play/capturas_play.py`). Caché de Cloudflare: ya activa (no hace falta regla). Turnstile: después del 27-nov.
+
 ## 2. Lo que decide o hace el dueño (de `PUBLICACION-Y-CUMPLIMIENTO.md` §0)
 
 1. Crear el **correo del proyecto** (`contacto@nomcolab.dpdns.org` con Email Routing de Cloudflare, ver
