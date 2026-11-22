@@ -144,6 +144,12 @@ estaba conectado).
 - El Excel de la PC está en inglés («Row Labels»): la prueba traduce. `windows/dinamica_excel.py` (Excel las hace) y
   `windows/dinamicas_ver.py` (las lee y las actualiza). `dinamicas_real.py` 9/9.
 
+## 3h. Publicación de la 0.22.0 (21-nov, 22:15): hecha
+
+`0c33b4d` (interfaz 27, APK 39): lo de §3e, §3f y §3g. Regresión de Windows 39/41; las dos que fallaron (registro e
+inicio de sesión bajo carga, `ayuda` y `funciones_movil`) pasan 2/2 solas. Pi (humo 34/34), GitHub, APK, IndexNow.
+**Falta el A55** (no estaba conectado; tampoco con la 0.20.0 ni la 0.21.0).
+
 ## 4. Lo que falta (de `PARIDAD-OFFICE.md`)
 
 Igual que `RELEVO-20NOV-NOCHE.md` §3 y §4, menos lo de esta sesión: en PowerPoint las secciones y casi toda la pestaña
