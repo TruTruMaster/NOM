@@ -21,8 +21,10 @@ rechazos ni problemas, la accesibilidad, la compatibilidad, y su idea de logotip
 
 ## 2. Lo que decide o hace el dueño (de `PUBLICACION-Y-CUMPLIMIENTO.md` §0)
 
-1. Crear el **correo del proyecto** y ponerlo en `CONTACTO` (`ayuda/generar.py`); 2. **domicilio** para el aviso de
-privacidad; 3. **revisión de un abogado**; 4. **llave de firma propia** (opción a o b de §2.1) si se va a Google Play;
+1. Crear el **correo del proyecto** (`contacto@nomcolab.dpdns.org` con Email Routing de Cloudflare, ver
+`PUBLICACION-Y-CUMPLIMIENTO.md` §7) y ponerlo en `CONTACTO` (`ayuda/generar.py`); 2. ~~domicilio~~: hecho el 22-nov
+(Mar Mediterráneo 227, Popotla, Miguel Hidalgo, 11400; lo eligió el dueño, sin nombrar a la escuela); 3. **revisión
+de un abogado** (no tienen: los textos lo dicen); 4. **llave de firma propia** (opción a o b de §2.1) si se va a Google Play;
 5. cuenta de desarrollador y prueba cerrada de 12 personas por 14 días; 6. registrarse en la verificación de
 desarrolladores de Android antes de 2027; 7. el logotipo (§3); 8. probar con TalkBack/NVDA a mano.
 

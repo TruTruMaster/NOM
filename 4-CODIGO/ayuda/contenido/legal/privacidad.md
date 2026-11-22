@@ -3,7 +3,7 @@ titulo: Aviso de privacidad integral
 descripcion: Qué datos personales trata NOM, para qué, cómo los protege y cómo ejercer tus derechos.
 orden: 10
 aplica: Navegador, App Android, Teléfono que comparte
-actualizado: 2026-11-13
+actualizado: 2026-11-22
 version: 2026-11-13
 ---
 !> Este texto se redactó con base en la Ley Federal de Protección de Datos Personales en Posesión de los Particulares publicada en el Diario Oficial de la Federación el 20 de marzo de 2025 (en vigor desde el 21 de marzo de 2025). Todavía no lo ha revisado un abogado.
@@ -11,8 +11,9 @@ version: 2026-11-13
 ## 1. Quién es el responsable {#responsable}
 
 El responsable del tratamiento de tus datos personales es **WACK**, el equipo que desarrolla y
-opera NOM, en la Ciudad de México. Domicilio para oír y recibir notificaciones: el
-medio de contacto de la sección [Cómo ejercer tus derechos](#derechos).
+opera NOM. Domicilio para oír y recibir notificaciones: **Mar Mediterráneo 227, colonia Popotla, alcaldía Miguel Hidalgo, código postal 11400, Ciudad de México**. Para
+cualquier trámite sobre tus datos también puedes usar el medio de contacto de la sección
+[Cómo ejercer tus derechos](#derechos).
 
 Este aviso aplica a la nube de NOM ([www.nom.qd.je](https://www.nom.qd.je), también en [nomcolab.dpdns.org](https://nomcolab.dpdns.org)), a la versión en Azure y a
 la app de Android. Una computadora o un teléfono que comparte en un salón **lo opera quien lo
@@ -121,4 +122,5 @@ No usamos cookies. Lo que guardamos en tu navegador está en [Cookies y almacena
 ## 11. Cambios a este aviso {#cambios}
 
 Si cambiamos este aviso, se publica aquí con su nueva fecha y, la próxima vez que entres, la app te
-pide **leerlo y aceptarlo** antes de seguir. Versión vigente: 13 de noviembre de 2026.
+pide **leerlo y aceptarlo** antes de seguir. Versión vigente: 13 de noviembre de 2026. El 22 de
+noviembre de 2026 se agregó el domicilio del responsable; no cambia qué datos tratamos ni para qué.

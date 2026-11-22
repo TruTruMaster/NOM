@@ -727,8 +727,9 @@ pruebas; ver «Avance por módulo» abajo). Lo que aquí dice «Word», «Excel�
       contenido generado por usuarios: hay chat y @menciones).
 - [ ] **M4 · Medios:** almacén de video y audio (subir en partes y reanudar, entregar por partes, cifrado por bloques;
       `PLAN-MEDIOS.md` fase 2).
-- [ ] **M5 · Legal:** domicilio del responsable en el aviso de privacidad (artículo 15 de la LFPDPPP de 2025) y revisión
-      de un abogado de los textos legales.
+- [x] **M5 · Legal:** domicilio del responsable en el aviso de privacidad (artículo 15 de la LFPDPPP de 2025): Mar
+      Mediterráneo 227, Popotla, Miguel Hidalgo, 11400 (22-nov; integral y simplificado, sin pedir aceptarlo otra vez).
+- [ ] **M5 · Legal:** revisión de los textos legales por un abogado (el equipo no tiene uno: mientras, los textos lo dicen).
 - [ ] **M5 · Google Play:** ficha y declaraciones (seguridad de los datos, servicio en primer plano, público objetivo,
       clasificación), paquete `.aab` firmado con una llave de carga propia y la prueba cerrada de 12 personas durante
       14 días (cuentas personales nuevas). Lista completa en `docs/PUBLICACION-Y-CUMPLIMIENTO.md`.

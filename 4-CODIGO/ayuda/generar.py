@@ -34,7 +34,7 @@ REPO = "https://github.com/TruTruMaster/NOM-COLAB"
 # Datos del responsable y contacto (un solo lugar). G.2: el equipo todavía no crea el correo del
 # proyecto; mientras, el contacto es por GitHub (reportes y avisos privados de seguridad).
 CONTACTO = {
-    "responsable": "WACK, el equipo que desarrolla y opera NOM (Ciudad de México)",
+    "responsable": "WACK, el equipo que desarrolla y opera NOM (Mar Mediterráneo 227, colonia Popotla, alcaldía Miguel Hidalgo, código postal 11400, Ciudad de México)",
     "correo": None,
     "reportes": REPO + "/issues",
     "seguridad": REPO + "/security/advisories/new",

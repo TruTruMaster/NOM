@@ -8,9 +8,9 @@ antes de enviar la app, volver a leer las páginas de la sección 10.
 
 | # | Qué falta | Por qué | Quién | Tarea |
 |---|---|---|---|---|
-| 1 | **Correo del proyecto** (ponerlo en `CONTACTO` de `ayuda/generar.py` y volver a generar) | Google Play exige un correo de contacto en la ficha; la LFPDPPP pide un medio para ejercer los derechos ARCO (hoy es el aviso privado de GitHub, que obliga a tener cuenta de GitHub) | El equipo | Fase 14 |
-| 2 | **Domicilio del responsable** en el aviso de privacidad | Artículo 15 de la LFPDPPP de 2025: identidad **y domicilio** del responsable (hoy solo dice «Ciudad de México») | El equipo decide cuál | Fase 24 (M5) |
-| 3 | **Revisión de un abogado** del aviso, los términos y el uso aceptable | Los mismos textos dicen que nadie los ha revisado | El equipo | Fase 24 (M5) |
+| 1 | **Correo del proyecto** (ponerlo en `CONTACTO` de `ayuda/generar.py` y volver a generar) | Google Play exige un correo de contacto en la ficha; la LFPDPPP pide un medio para ejercer los derechos ARCO (hoy es el aviso privado de GitHub, que obliga a tener cuenta de GitHub). Cómo tener uno propio: §7 | El equipo (panel de Cloudflare) | Fase 14 |
+| 2 | ~~Domicilio del responsable~~ **hecho el 22-nov**: Mar Mediterráneo 227, Popotla, Miguel Hidalgo, 11400, CDMX | Artículo 15 de la LFPDPPP de 2025 | — | Fase 24 (M5) |
+| 3 | **Revisión de un abogado** del aviso, los términos y el uso aceptable | Los mismos textos dicen que nadie los ha revisado; el equipo no tiene abogado (ver §7) | El equipo | Fase 24 (M5) |
 | 4 | **Llave de firma propia y paquete `.aab`** | Google Play rechaza lo firmado con la llave de depuración y pide App Bundle para apps nuevas | Decisión del dueño (2.1) | Fase 24 (M5) |
 | 5 | **Bloquear y reportar** a una persona o un contenido desde la app | Política de contenido generado por usuarios de Google Play (hay chat y @menciones) | Código (M2) | Fase 24 (M2) |
 | 6 | **Cuenta de desarrollador y prueba cerrada** | Una cuenta personal nueva necesita 12 personas en prueba cerrada durante 14 días antes de pedir producción | El equipo | Fase 24 (M5) |
@@ -168,8 +168,19 @@ Los mínimos salen de lo que usa la interfaz: `color-mix()` en CSS (Chrome 111, 
 
 ## 7. Ley mexicana, marcas y el logotipo
 
-- **Datos personales (LFPDPPP, DOF 20-mar-2025):** el aviso cubre lo que pide la ley salvo el **domicilio** del
-  responsable (tarea 2) y un **medio de contacto** propio (tarea 1). Transferencias: no hay (si un día las hay, el
+- **Datos personales (LFPDPPP, DOF 20-mar-2025):** el aviso cubre lo que pide la ley, también el domicilio del
+  responsable (desde el 22-nov); falta un **medio de contacto** propio (tarea 1).
+- **Correo propio:** una dirección siempre lleva el dominio completo («@nom» solo no existe). Hoy se puede tener
+  **`contacto@nomcolab.dpdns.org`** gratis con *Email Routing* de Cloudflare, porque esa zona ya está en la cuenta de
+  Cloudflare del equipo: Cloudflare pone los registros y reenvía lo que llegue a un Gmail del equipo (hay que
+  confirmar ese Gmail con el correo que manda Cloudflare). Solo recibe: para contestar *como* esa dirección se usa
+  «Enviar como» de Gmail. **`contacto@nom.qd.je`** se vería mejor, pero `nom.qd.je` no puede ser zona de Cloudflare
+  (sección del dominio en `DOMINIO-Y-BUSCADORES.md`) y no está comprobado que el panel de DigitalPlat acepte registros
+  MX; si los acepta, haría falta otro servicio de reenvío. Con la dirección lista: `CONTACTO["correo"]` en
+  `ayuda/generar.py`, volver a generar y publicar.
+- **Sin abogado:** los textos ya lo dicen con franqueza («todavía no lo ha revisado un abogado»), y eso no incumple
+  la ley; lo que la ley pide está en el aviso. Si el proyecto sigue después de la escuela, conviene que un abogado o
+  una clínica jurídica universitaria los revise antes de abrirlo a más personas. Transferencias: no hay (si un día las hay, el
   artículo 35 pide una cláusula para aceptarlas o no). La autoridad ya es la Secretaría Anticorrupción y Buen
   Gobierno (el INAI desapareció en 2025).
 - **Marcas de otros:** los términos y las licencias dicen que Word, Excel, PowerPoint y Office son de Microsoft,

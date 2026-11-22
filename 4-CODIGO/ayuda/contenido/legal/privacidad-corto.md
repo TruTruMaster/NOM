@@ -3,10 +3,10 @@ titulo: Aviso de privacidad simplificado
 descripcion: El resumen del aviso: quién, qué datos, para qué y dónde leer el completo.
 orden: 20
 aplica: Navegador, App Android, Teléfono que comparte
-actualizado: 2026-11-13
+actualizado: 2026-11-22
 version: 2026-11-13
 ---
-**Responsable**: WACK (Ciudad de México), el equipo que desarrolla y opera NOM.
+**Responsable**: WACK, el equipo que desarrolla y opera NOM. Domicilio: Mar Mediterráneo 227, colonia Popotla, alcaldía Miguel Hidalgo, código postal 11400, Ciudad de México.
 
 **Datos que tratamos**: tu nombre de usuario (y, si la das, tu escuela, empresa o grupo), la huella de tu
 contraseña, tus preferencias, tus sesiones, los espacios y documentos que creas o compartes y quién
