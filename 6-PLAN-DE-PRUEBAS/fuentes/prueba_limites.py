@@ -22,6 +22,23 @@ def r(m, u, b=None, t=None):
         c = e.read()
         try: return e.code, json.loads(c)
         except Exception: return e.code, None
+def r_grande(m, u, b, t=None):
+    """Como r(), para cuerpos enormes: desde la 0.17.1 el servidor contesta 413 y cierra la conexión sin leer todo lo
+    que sobra del cuerpo (así nadie lo satura). urllib se queda con «Broken pipe» y no ve la respuesta; aquí se manda
+    por un socket y, si el servidor corta, se lee lo que contestó, como hace el navegador."""
+    cuerpo = json.dumps(b).encode()
+    s = socket.create_connection(("localhost", P), timeout=120)
+    s.sendall((f"{m} {u} HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\n"
+               + (f"Authorization: Bearer {t}\r\n" if t else "") + f"Content-Length: {len(cuerpo)}\r\nConnection: close\r\n\r\n").encode())
+    try:
+        for i in range(0, len(cuerpo), 1 << 16): s.sendall(cuerpo[i:i + (1 << 16)])
+    except (BrokenPipeError, ConnectionResetError):
+        pass
+    try: linea = s.recv(200).decode("latin-1").split("\r\n")[0]
+    except OSError: linea = ""
+    finally: s.close()
+    k = linea.split(" ")
+    return (int(k[1]) if len(k) > 1 and k[1].isdigit() else 0), None
 res = []
 def caso(id_, desc, esperado, obt):
     ok = str(esperado) == str(obt[0] if isinstance(obt, tuple) else obt)
@@ -84,7 +101,7 @@ try:
     time.sleep(12)
     caso("VL-17", "Después del rechazo, el documento sigue sano y acepta 10 bytes más", 200, r("POST", f"/api/documentos/{doc}/ops", op("3", 10), tk["duena"]))
     doc2 = r("POST", f"/api/espacios/{esp}/documentos", {"nombre": "Grande2", "modo": "TEXTO", "ops": []}, tk["duena"])[1]["id"]
-    caso("VL-18", "Agregar 60 MB de una vez a un documento nuevo", 413, r("POST", f"/api/documentos/{doc2}/ops", op("4", 60_000_000), tk["duena"]))
+    caso("VL-18", "Agregar 60 MB de una vez a un documento nuevo", 413, r_grande("POST", f"/api/documentos/{doc2}/ops", op("4", 60_000_000), tk["duena"]))
 finally:
     srv.terminate()
     _reg = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "registros"); os.makedirs(_reg, exist_ok=True)

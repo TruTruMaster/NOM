@@ -1,0 +1,114 @@
+[
+ {
+  "id": "INT-01",
+  "caso": "Registrar una cuenta nueva",
+  "esperado": 201,
+  "obtenido": 201,
+  "bien": true,
+  "nota": "1710 ms"
+ },
+ {
+  "id": "INT-02",
+  "caso": "Iniciar sesión con esa cuenta y recibir la sesión",
+  "esperado": 200,
+  "obtenido": 200,
+  "bien": true,
+  "nota": "804 ms"
+ },
+ {
+  "id": "INT-03",
+  "caso": "Con la sesión, crear un espacio: quien lo crea queda como Propietario",
+  "esperado": "201 PROPIETARIO",
+  "obtenido": "201 PROPIETARIO",
+  "bien": true,
+  "nota": ""
+ },
+ {
+  "id": "INT-04",
+  "caso": "Crear un documento de texto dentro del espacio",
+  "esperado": 201,
+  "obtenido": 201,
+  "bien": true,
+  "nota": ""
+ },
+ {
+  "id": "INT-05",
+  "caso": "Otra cuenta, sin invitación, intenta abrir el espacio",
+  "esperado": 403,
+  "obtenido": 403,
+  "bien": true,
+  "nota": ""
+ },
+ {
+  "id": "INT-06",
+  "caso": "El Propietario crea un código de invitación y la otra cuenta entra con él",
+  "esperado": "201 200",
+  "obtenido": "201 200",
+  "bien": true,
+  "nota": ""
+ },
+ {
+  "id": "INT-07",
+  "caso": "La invitada escribe en el documento y el Propietario ve el cambio",
+  "esperado": "200 y lo ve",
+  "obtenido": "200 y lo ve",
+  "bien": true,
+  "nota": ""
+ },
+ {
+  "id": "INT-08",
+  "caso": "El Propietario la cambia a solo lectura y su siguiente cambio se rechaza",
+  "esperado": "200 403",
+  "obtenido": "200 403",
+  "bien": true,
+  "nota": ""
+ },
+ {
+  "id": "INT-09",
+  "caso": "Con solo lectura todavía puede abrir el documento",
+  "esperado": 200,
+  "obtenido": 200,
+  "bien": true,
+  "nota": ""
+ },
+ {
+  "id": "INT-10",
+  "caso": "Guardar una versión con nombre y verla en el historial",
+  "esperado": "200 y 1 versión",
+  "obtenido": "200 y 1 versión",
+  "bien": true,
+  "nota": ""
+ },
+ {
+  "id": "INT-11",
+  "caso": "Solo lectura intenta restaurar una versión",
+  "esperado": 403,
+  "obtenido": 403,
+  "bien": true,
+  "nota": ""
+ },
+ {
+  "id": "INT-12",
+  "caso": "Mandar el documento a la papelera y restaurarlo",
+  "esperado": "200 200",
+  "obtenido": "200 200",
+  "bien": true,
+  "nota": ""
+ },
+ {
+  "id": "INT-13",
+  "caso": "El Propietario le quita el acceso y ya no puede abrir el espacio",
+  "esperado": "200 403",
+  "obtenido": "200 403",
+  "bien": true,
+  "nota": ""
+ },
+ {
+  "id": "INT-14",
+  "caso": "Al cerrar sesión, la sesión anterior deja de servir",
+  "esperado": 401,
+  "obtenido": 401,
+  "bien": true,
+  "nota": ""
+ }
+]

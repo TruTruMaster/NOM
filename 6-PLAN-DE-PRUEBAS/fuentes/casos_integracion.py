@@ -92,5 +92,7 @@ caso("INT-14", "Al cerrar sesión, la sesión anterior deja de servir", 401, r("
 
 bien = sum(1 for x in res if x["bien"])
 print(f"\n{bien} de {len(res)}  ·  registro {t_reg * 1000:.0f} ms  ·  inicio de sesión {t_ses * 1000:.0f} ms  ·  versión", (r("GET", "/api/red/info")[1] or {}).get("version"))
-json.dump(res, open(__file__.replace("fuentes/casos_integracion.py", "registros/15-nov/integracion.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+# (la carpeta de registros de esa vuelta: PP_REGISTROS=22-nov; sin ella, la de la revisión 2, como siempre)
+import os
+json.dump(res, open(__file__.replace("fuentes/casos_integracion.py", f"registros/{os.environ.get('PP_REGISTROS', '15-nov')}/integracion.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 sys.exit(0 if bien == len(res) else 1)

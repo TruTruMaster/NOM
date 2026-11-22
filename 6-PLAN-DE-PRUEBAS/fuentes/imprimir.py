@@ -26,7 +26,7 @@ PIE = f"""
     <div style="line-height:1.15;margin-left:3px;"><div style="font-size:8px;font-weight:700;color:#1F1B24;">WACK</div>
     <div style="font-size:7.5px;color:#5E5A66;">Aseguramiento de la calidad</div></div>
   </div>
-  <div style="font-size:8px;color:#5E5A66;">Plan de pruebas · NOM-COLAB · PP-NOMCOLAB-01 · Revisión 2</div>
+  <div style="font-size:8px;color:#5E5A66;">Plan de pruebas · NOM-COLAB · PP-NOMCOLAB-01 · Revisión 3</div>
   <div style="width:22px;height:22px;border-radius:50%;background:#F2B705;color:#1F1B24;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;"><span class="pageNumber"></span></div>
 </div>"""
 

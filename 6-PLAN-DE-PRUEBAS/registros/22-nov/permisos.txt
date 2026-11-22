@@ -1,0 +1,9 @@
+Acción                                     duena     editora     lectora       ajena  sin sesión
+Abrir el espacio y sus documentos             Sí          Sí          Sí         403         401
+Escribir en un documento                      Sí          Sí         403         403         401
+Dar o quitar accesos                          Sí         403         403         403         401
+Crear un código de invitación                 Sí         403         403         403         401
+Mandar un documento a la papelera             Sí          Sí         403         403         401
+Vaciar la papelera                            Sí         403         403         403         401
+
+30 de 30 combinaciones con el resultado esperado
