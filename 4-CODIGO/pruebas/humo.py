@@ -55,6 +55,14 @@ rb=texto("/robots.txt"); ok("robots.txt con Sitemap",rb[0]==200 and "Sitemap: ht
 sm=texto("/sitemap.xml"); ok("sitemap.xml con la portada y la ayuda",sm[0]==200 and "<loc>" in sm[2] and "/ayuda/" in sm[2] and sm[2].count("<loc>")>20)
 po=texto("/"); ok("portada con canonical, og:image y schema.org",po[0]==200 and 'rel="canonical"' in po[2] and 'og:image' in po[2] and '"WebSite"' in po[2])
 un=texto("/unirse?c=x"); ok("/unirse sin indexar",un[0]==200 and "noindex" in (un[1].get("X-Robots-Tag") or ""))
+# Atajos cortos (Atajos.java): /app baja la app y /codigo abre el repositorio, con una redirección temporal.
+class _SinSeguir(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self,*a,**k): return None
+def destino(u):
+    try: urllib.request.build_opener(_SinSeguir).open(urllib.request.Request(B+u,headers=dict(AG)),timeout=30); return 200,""
+    except urllib.error.HTTPError as e: return e.code,e.headers.get("Location") or ""
+at=destino("/app"); ok(f"atajo /app ({at[0]})",at[0]==302 and at[1].endswith("/releases/latest/download/NOM-COLAB.apk"))
+at=destino("/codigo"); ok(f"atajo /codigo ({at[0]})",at[0]==302 and at[1]=="https://github.com/TruTruMaster/NOM-COLAB")
 ok("borrar doc a papelera",r("DELETE",f"/api/documentos/{d}",t=tk["a"])[0]==200)
 for n in ("a","b","c"):
     ok(f"borrar cuenta {n}",r("POST","/api/cuentas/eliminar",{"contrasena":CL,"confirmacion":"BORRAR"},tk[n])[0]==200)

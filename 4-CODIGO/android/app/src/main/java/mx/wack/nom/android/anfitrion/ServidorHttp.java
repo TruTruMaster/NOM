@@ -302,6 +302,14 @@ final class ServidorHttp {
 
     /** La interfaz web, desde los mismos archivos que usa la app. */
     private void estatico(Peticion p, OutputStream out, boolean mantener) throws IOException {
+        // Atajos cortos (/app, /codigo), igual que en el servidor de la computadora (Atajos).
+        String atajo = mx.wack.nom.core.servicio.Atajos.destino(p.ruta);
+        if (atajo != null && ("GET".equals(p.metodo) || "HEAD".equals(p.metodo))) {
+            out.write(("HTTP/1.1 302 Found\r\nLocation: " + atajo + "\r\nCache-Control: no-store\r\nContent-Length: 0\r\n"
+                    + (mantener ? "Connection: keep-alive" : "Connection: close") + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+            out.flush();
+            return;
+        }
         // /unirse?c=… y /proyectar?c=… (desde un codigo QR) muestran la misma pagina; ella lee el codigo.
         String ruta = p.ruta.equals("/") || p.ruta.equals("/unirse") || p.ruta.equals("/proyectar") ? "index.html" : p.ruta.substring(1);
         // Fase 14: la ayuda y lo legal, en su dirección limpia (/legal/terminos). Las formas viejas

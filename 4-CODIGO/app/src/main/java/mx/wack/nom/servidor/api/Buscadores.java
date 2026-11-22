@@ -36,8 +36,8 @@ public final class Buscadores {
     static final String NOMBRE = "NOM";
     static final String RESUMEN_INICIO = "Escribe, calcula, presenta y dibuja en equipo, al mismo tiempo, con o sin Internet. "
             + "Abre y guarda Word, Excel y PowerPoint. Gratis y de código abierto, en el navegador y en Android.";
-    static final String APK = "https://github.com/TruTruMaster/NOM-COLAB/releases/latest/download/NOM-COLAB.apk";
-    static final String CODIGO = "https://github.com/TruTruMaster/NOM-COLAB";
+    static final String APK = mx.wack.nom.core.servicio.Atajos.APK;
+    static final String CODIGO = mx.wack.nom.core.servicio.Atajos.CODIGO;
 
     private Buscadores() { }
 

@@ -50,6 +50,15 @@ public class PaginasApi {
         return "forward:/index.html";
     }
 
+    /** Atajos cortos para compartir (nom.qd.je/app, nom.qd.je/codigo): ver Atajos. */
+    @GetMapping({ "/app", "/apk", "/codigo" })
+    public ResponseEntity<Void> atajo(HttpServletRequest req) {
+        String destino = mx.wack.nom.core.servicio.Atajos.destino(req.getRequestURI());
+        if (destino == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(destino))
+                .cacheControl(org.springframework.http.CacheControl.noStore()).build();
+    }
+
     /** La portada (y /index.html): la pagina de la app con lo que leen los buscadores y las redes. */
     @GetMapping({ "/", "/index.html" })
     public ResponseEntity<String> portada(HttpServletRequest req) throws IOException {
