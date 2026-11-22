@@ -116,6 +116,20 @@ estaba conectado).
   la usa (importación idéntica en t02, x02, x05, x09) y `evaluadorDeTabla` traduce las fórmulas de las tablas de NOM.
   `tablas_formato_real.py` 13/13. Falta: columnas calculadas (una fórmula en una columna se copia a toda la columna).
 
+## 3f. Word, Referencias (21-nov, noche; sin publicar)
+
+- `ac6879b`: la tabla de contenido lleva el número de página (`numerarIndices` al terminar `paginar`; `paginaPara` para la
+  exportación —es función, no `const`: una `const` usada antes rompía el editor entero—). Tabla de ilustraciones
+  (`modo: "ilus"`, `TOC \c "Figura"`); los pies salen con `SEQ Figura`. Ojo: el repintado de la línea 873 llamaba
+  `forEach(pintarIndice)` (le pasaba el número de posición como bloque).
+- `1396650`: índice alfabético (`modo: "alfa"`, marcas `XE` con «Marcar entrada…», `\t` leído aparte porque
+  `campos.leer` no lo toma). Con columnas va en su sección como la arma Word: el párrafo que abre el campo cierra la
+  sección de antes (`\u0001SECA\u0001` en su pPr), luego las entradas, un párrafo con la sección de columnas
+  (`SECB`) y otro con el fin del campo; si se juntan esos dos, Word deja todo en columnas. En el documento con original
+  las marcas se quitan (sin secciones nuevas).
+- `referencias_real.py` 13/13 (`windows/referencias_ver.py`, que también guarda la copia actualizada por Word).
+- Falta: tabla de autoridades (TA/TOA), citas y bibliografía de Word.
+
 ## 4. Lo que falta (de `PARIDAD-OFFICE.md`)
 
 Igual que `RELEVO-20NOV-NOCHE.md` §3 y §4, menos lo de esta sesión: en PowerPoint las secciones y casi toda la pestaña
