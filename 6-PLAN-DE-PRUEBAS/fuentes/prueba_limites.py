@@ -23,20 +23,30 @@ def r(m, u, b=None, t=None):
         try: return e.code, json.loads(c)
         except Exception: return e.code, None
 def r_grande(m, u, b, t=None):
-    """Como r(), para cuerpos enormes: desde la 0.17.1 el servidor contesta 413 y cierra la conexión sin leer todo lo
-    que sobra del cuerpo (así nadie lo satura). urllib se queda con «Broken pipe» y no ve la respuesta; aquí se manda
-    por un socket y, si el servidor corta, se lee lo que contestó, como hace el navegador."""
+    """Como r(), para cuerpos enormes: desde la 0.17.1 el servidor contesta 413 y cierra la conexión sin leer lo que
+    sobra del cuerpo (así nadie lo satura). urllib se queda con el error del envío («Broken pipe» en Linux, WinError
+    10053 en Windows) y no ve la respuesta, y Windows además tira lo recibido al cortarse la conexión. Aquí otro hilo
+    lee la respuesta mientras se manda el cuerpo, como hace el navegador."""
+    import threading
     cuerpo = json.dumps(b).encode()
     s = socket.create_connection(("localhost", P), timeout=120)
+    resp = []
+    def leer():
+        try: resp.append(s.recv(200))
+        except OSError: pass
     s.sendall((f"{m} {u} HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\n"
                + (f"Authorization: Bearer {t}\r\n" if t else "") + f"Content-Length: {len(cuerpo)}\r\nConnection: close\r\n\r\n").encode())
+    hilo = threading.Thread(target=leer, daemon=True); hilo.start()
     try:
-        for i in range(0, len(cuerpo), 1 << 16): s.sendall(cuerpo[i:i + (1 << 16)])
-    except (BrokenPipeError, ConnectionResetError):
-        pass
-    try: linea = s.recv(200).decode("latin-1").split("\r\n")[0]
-    except OSError: linea = ""
-    finally: s.close()
+        for i in range(0, len(cuerpo), 1 << 16):
+            if resp: break                      # el servidor ya contestó: no hace falta mandar el resto
+            s.sendall(cuerpo[i:i + (1 << 16)])
+    except OSError:
+        pass                                    # el servidor cortó el envío: su respuesta la tiene el hilo
+    hilo.join(30)
+    try: s.close()
+    except OSError: pass
+    linea = resp[0].decode("latin-1").split("\r\n")[0] if resp and resp[0] else ""
     k = linea.split(" ")
     return (int(k[1]) if len(k) > 1 and k[1].isdigit() else 0), None
 res = []

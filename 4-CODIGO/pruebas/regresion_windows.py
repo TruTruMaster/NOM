@@ -67,8 +67,9 @@ def main():
     p = subprocess.Popen(["ssh", "-o", "BatchMode=yes", WIN, cmd], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
     for linea in p.stdout: print(linea.rstrip(), flush=True)
     p.wait()
-    # el registro de esa corrida
-    ult = ssh('powershell -NoProfile -Command "(Get-ChildItem $env:USERPROFILE\\.cache\\nom-pruebas\\registros -Directory | Sort-Object Name | Select-Object -Last 1).Name"').stdout.strip()
+    # el registro de esa corrida (solo las carpetas con fecha: otras, como «numlineas», quedan después en el orden)
+    filtro = "Where-Object { $_.Name -match '^\\d{4}-\\d\\d-\\d\\d_\\d{4}$' }"
+    ult = ssh(f'powershell -NoProfile -Command "(Get-ChildItem $env:USERPROFILE\\.cache\\nom-pruebas\\registros -Directory | {filtro} | Sort-Object Name | Select-Object -Last 1).Name"').stdout.strip()
     if ult:
         dest = CACHE / "registros" / ("windows-" + ult); dest.mkdir(parents=True, exist_ok=True)
         ssh(f"cd .cache\\nom-pruebas\\registros\\{ult} && tar -cf ..\\{ult}.tar *.txt")
