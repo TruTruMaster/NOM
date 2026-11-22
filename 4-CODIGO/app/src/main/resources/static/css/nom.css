@@ -317,7 +317,7 @@ kbd {
   --c: #5A5D6B;
   width: 32px; height: 32px; border-radius: 50%; flex: none;
   display: inline-grid; place-items: center;
-  background: var(--c); color: #fff; font-weight: 700; font-size: 12.5px;
+  background: var(--c); color: var(--ct, #fff); font-weight: 700; font-size: 12.5px;
   box-shadow: 0 0 0 2px var(--sup);
   text-transform: uppercase;
 }

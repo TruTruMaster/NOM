@@ -12,7 +12,8 @@
 #    - corpus-web/    archivos de usuarios de las pruebas de LibreOffice y del paquete officer
 #    - corpus-reales/ plantillas oficiales de Microsoft (presupuesto, tablas dinámicas, fórmulas, Gantt,
 #                     registro escolar, presentación) y más archivos reales de LibreOffice
-# 4. El validador de Microsoft (Open XML SDK) compilado, si hay .NET 8 en ~/.dotnet.
+# 4. axe-core (npm), para la revisión automática de accesibilidad de la interfaz.
+# 5. El validador de Microsoft (Open XML SDK) compilado, si hay .NET 8 en ~/.dotnet.
 set -u
 AQUI="$(cd "$(dirname "$0")" && pwd)"
 CACHE="${NOM_PRUEBAS_CACHE:-$HOME/.cache/nom-pruebas}"
@@ -84,7 +85,15 @@ for f in accent-color tdf106638 tdf89927 tdf148478_transitionMusic tdf120573 sli
 for f in forum-mso-de-104083 forum-mso-en4-134670 tdf122471 cell-anchored-hidden-shapes tdf131575 functions-excel-2010 pivottable_tabular_mode tdf83671_SmartArt_import chart_hyperlink totalsRowFunction tdf111980_radioButtons; do
   baja "$R/xlsx/lo-$f.xlsx" "$LO/sc/qa/unit/data/xlsx/$f.xlsx"; done
 
-echo "== 4. Validador de Microsoft"
+echo "== 4. axe-core (revisión automática de accesibilidad, WCAG 2.2 AA: interfaz/prueba_axe.py)"
+if command -v npm >/dev/null; then
+  [ -f "$CACHE/axe/node_modules/axe-core/axe.min.js" ] || (mkdir -p "$CACHE/axe" && cd "$CACHE/axe" && npm install -q --no-audit --no-fund --ignore-scripts axe-core@4.10.3 >/dev/null)
+  ls "$CACHE/axe/node_modules/axe-core/axe.min.js" >/dev/null && echo "axe-core listo"
+else
+  echo "Falta npm (Node.js) para bajar axe-core"
+fi
+
+echo "== 5. Validador de Microsoft"
 if [ -x "$HOME/.dotnet/dotnet" ]; then
   DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 "$HOME/.dotnet/dotnet" build "$AQUI/office/openxml" -c Release -o "$CACHE/openxml-bin" 2>&1 | tail -2
 else

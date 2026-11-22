@@ -2643,7 +2643,7 @@
         const nombreDe = (p, i) => { const h = hojas.find((x) => x.pagina === p); return h ? F().nombreDeHoja(doc(), h) : "Hoja" + (i + 1); };
         const oculta = (p) => { const h = hojas.find((x) => x.pagina === p); return !!(h && h.xl && h.xl.oculta) && p !== ed.pagina; };
         b.innerHTML = `<div class="hojas-pestanas" role="tablist">${pags.map((p, i) => oculta(p) ? "" : `<button class="pestana-hoja ${p === ed.pagina ? "activa" : ""}" role="tab" aria-selected="${p === ed.pagina}" data-pag="${esc(p)}" data-micro="${esc(nombreDe(p, i))}|Toca para abrirla. Doble clic o mantener: nombre, duplicar, mover o eliminar.">${esc(nombreDe(p, i))}</button>`).join("")}</div>
-          ${ed.soloLectura ? "" : `<button class="icono-btn" data-nueva data-micro="Nueva hoja|Agrega otra hoja a este libro.">${ico("plus")}</button>`}
+          ${ed.soloLectura ? "" : `<button class="icono-btn" data-nueva aria-label="Nueva hoja" data-micro="Nueva hoja|Agrega otra hoja a este libro.">${ico("plus")}</button>`}
           <span class="crece"></span>
           ${libres.length ? `<span class="chip" data-micro="Bloques libres|Texto, figuras o imágenes de otros modos. Se conservan aunque aquí no se editen.">${ico("layers", "ico-s")} ${libres.length} bloque${libres.length > 1 ? "s" : ""} libre${libres.length > 1 ? "s" : ""}</span>` : ""}`;
         $$("[data-pag]", b).forEach((x) => {

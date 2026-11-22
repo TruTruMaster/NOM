@@ -87,7 +87,24 @@
     const p = String(nombre || "?").replace(/[._-]+/g, " ").trim().split(/\s+/);
     return (p[0][0] + (p[1] ? p[1][0] : (p[0][1] || ""))).toUpperCase();
   }
-  const avatar = (u, cls) => `<span class="avatar ${cls || ""}" style="--c:${esc(u.color || "#5A5D6B")}" title="${esc(u.nombre)}">${esc(iniciales(u.nombre))}</span>`;
+  /** Con qué escribir sobre el color de una persona (sus iniciales, la etiqueta de su cursor) para que se lea con al
+   *  menos 4.5 a 1 (WCAG 2.2 AA): letra blanca si alcanza; si no, la tinta de NOM sobre el mismo color; si ninguna de
+   *  las dos alcanza, el mismo tono un poco más oscuro, con letra blanca. Devuelve { fondo, tinta }. */
+  function sobreColor(color) {
+    const m = /^#([0-9a-f]{6})$/i.exec(String(color || "").trim());
+    if (!m) return { fondo: "#5A5D6B", tinta: "#fff" };
+    const lum = (c) => { const v = c.map((x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); }); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+    let c = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
+    const L = lum(c), TINTA = "#1B1C26", lt = lum([0x1B, 0x1C, 0x26]);
+    if (1.05 / (L + 0.05) >= 4.5) return { fondo: "#" + m[1], tinta: "#fff" };
+    if ((L + 0.05) / (lt + 0.05) >= 4.5) return { fondo: "#" + m[1], tinta: TINTA };
+    for (let i = 0; i < 40 && 1.05 / (lum(c) + 0.05) < 4.5; i++) c = c.map((x) => Math.floor(x * 0.94));
+    return { fondo: "#" + c.map((x) => x.toString(16).padStart(2, "0")).join(""), tinta: "#fff" };
+  }
+  const avatar = (u, cls) => {
+    const t = sobreColor(u.color || "#5A5D6B");
+    return `<span class="avatar ${cls || ""}" style="--c:${t.fondo};--ct:${t.tinta}" title="${esc(u.nombre)}">${esc(iniciales(u.nombre))}</span>`;
+  };
   const idCorto = () => Math.random().toString(36).slice(2, 10);
   const leer = (k, def) => { try { const v = localStorage.getItem(k); return v == null ? def : JSON.parse(v); } catch (e) { return def; } };
   const guardar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } };
@@ -453,7 +470,7 @@
   try { aplicarLetra(leer("nom.letra", "normal")); } catch (e) { /* sin almacenamiento */ }
   Object.assign(NOM, { aplicarLetra, copiarTexto, copiarConAviso, etiquetaEquipo, paleta, COLORES,
     enApp, aqui,
-    esc, $, $$, ico, html, debounce, throttle, haceCuanto, bytes, iniciales, avatar, idCorto,
+    esc, $, $$, ico, html, debounce, throttle, haceCuanto, bytes, iniciales, avatar, sobreColor, idCorto,
     avisoNuevo, leer, guardar, quitar, MODOS, miniatura, aviso, hoja, confirmar, cerrarHoja: () => hojaActual && hojaActual.cerrar(true), hayHoja: () => !!hojaActual,
     /** Tecla Atrás del teléfono: cierra lo que esté encima (menú, ruedita, ventana) y dice si cerró algo. */
     atras: () => {

@@ -2109,7 +2109,7 @@
           const col = colapsadas.has(sc.id);
           return `<button class="mini-seccion" data-sec="${esc(sc.id)}" aria-expanded="${!col}" data-micro="Sección|Toca para contraerla o abrirla; mantén presionado (o clic derecho) para cambiarle el nombre, moverla o quitarla.">${ico(col ? "chevron-right" : "chevron-down", "ico-s")}<span class="crece recorta">${esc(sc.nombre || "Sección sin título")}</span><span class="suave">${d.length}</span></button>`
             + (col ? "" : d.map(miniHtml).join(""));
-        }).join("") + (ed.soloLectura ? "" : `<button class="btn plano" data-nueva data-micro="Nueva diapositiva|Agrega una diapositiva después de la actual.">${ico("plus")}</button>`);
+        }).join("") + (ed.soloLectura ? "" : `<button class="btn plano" data-nueva aria-label="Nueva diapositiva" data-micro="Nueva diapositiva|Agrega una diapositiva después de la actual.">${ico("plus")}</button>`);
         // (los renglones de las miniaturas donde los pone PowerPoint, como en la diapositiva grande)
         if (NOM.diapo && NOM.diapo.ajustarRenglones) requestAnimationFrame(() => { if (minis.isConnected) NOM.diapo.ajustarRenglones(minis); });
         $$(".mini", minis).forEach((m) => {

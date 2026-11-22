@@ -210,9 +210,9 @@
           <span class="crece"></span>
           <span class="avatares solo-escritorio" data-presencia></span>
           <span class="estado-sync" data-sync role="status" aria-live="polite"></span>
-          <button class="icono-btn solo-escritorio" data-a="paleta" data-micro="Buscar o ir a|Documentos, espacios y acciones.|Ctrl K">${ico("search")}</button>
+          <button class="icono-btn solo-escritorio" data-a="paleta" aria-label="Buscar o ir a" data-micro="Buscar o ir a|Documentos, espacios y acciones.|Ctrl K">${ico("search")}</button>
           <button class="icono-btn" ${enLocal ? "hidden" : ""} data-a="comentarios" aria-label="Comentarios" data-micro="Comentarios|Comentarios y sugerencias del documento. Funcionan aunque no haya Internet.">${ico("message-square")}</button>
-          <button class="icono-btn solo-escritorio" ${enLocal ? "hidden" : ""} data-a="historial" data-micro="Historial de versiones|Consulta y restaura versiones anteriores.">${ico("history")}</button>
+          <button class="icono-btn solo-escritorio" ${enLocal ? "hidden" : ""} data-a="historial" aria-label="Historial de versiones" data-micro="Historial de versiones|Consulta y restaura versiones anteriores.">${ico("history")}</button>
           <button class="icono-btn" data-a="mas" aria-label="Más opciones" data-micro="Más opciones|Exportar, guardar versión, enfoque y más.">${ico("more-horizontal")}</button>
         </header>
         <div class="ed-herramientas" role="toolbar" aria-label="Herramientas" data-herr></div>

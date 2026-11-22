@@ -5407,7 +5407,7 @@
         const pg = paginasSec ? Math.max(1, paginasSec.filter((q) => q.top <= desp + 1).length) : Math.min(numPaginas, Math.max(1, Math.floor((zona.scrollTop || ed.lienzo.scrollTop) / ((pagina().h + GAP) * zoom)) + 1));
         barraEstado.innerHTML = `<button class="wd-e" data-contar>${vista === "paginas" ? `Página ${pg} de ${numPaginas} · ` : ""}${sel}${c.palabras.toLocaleString("es-MX")} ${c.palabras === 1 ? "palabra" : "palabras"}</button>
           <span class="crece"></span>
-          <div class="segmentado wd-vistas" role="group" aria-label="Vista"><button data-vista="paginas" aria-pressed="${vista === "paginas"}" data-micro="Diseño de impresión|Páginas como se imprimen.">${ico("file-text", "ico-s")}</button><button data-vista="continua" aria-pressed="${vista === "continua"}" data-micro="Sin páginas|Texto continuo, cómodo en celular.">${ico("scroll-text", "ico-s")}</button></div>
+          <div class="segmentado wd-vistas" role="group" aria-label="Vista"><button data-vista="paginas" aria-pressed="${vista === "paginas"}" aria-label="Diseño de impresión" data-micro="Diseño de impresión|Páginas como se imprimen.">${ico("file-text", "ico-s")}</button><button data-vista="continua" aria-pressed="${vista === "continua"}" aria-label="Sin páginas" data-micro="Sin páginas|Texto continuo, cómodo en celular.">${ico("scroll-text", "ico-s")}</button></div>
           <button class="icono-btn chico" data-zoom="-" aria-label="Alejar">${ico("minus", "ico-s")}</button><button class="wd-e" data-zoom="1">${Math.round(zoom * 100)}%</button><button class="icono-btn chico" data-zoom="+" aria-label="Acercar">${ico("plus", "ico-s")}</button>`;
       }, 250);
       barraEstado.addEventListener("click", (e) => {
@@ -5555,7 +5555,8 @@
           if (!rf) return;
           let c = rf.getClientRects()[0] || rf.getBoundingClientRect();
           if (!c || (!c.height && !c.top)) { const pt = puntoDom(f); const el = pt.node.nodeType === 1 ? pt.node : pt.node.parentElement; c = el.getBoundingClientRect(); }
-          h += `<div class="wd-otro" style="left:${c.left - base.left}px;top:${c.top - base.top}px;height:${Math.max(16, c.height)}px;--c:${color}"><span>${esc(p.nombre || "")}</span></div>`;
+          const et = NOM.sobreColor(p.color || "#5B5BD6");   // la etiqueta con el nombre se lee sobre cualquier color
+          h += `<div class="wd-otro" style="left:${c.left - base.left}px;top:${c.top - base.top}px;height:${Math.max(16, c.height)}px;--c:${color};--cf:${et.fondo};--ct:${et.tinta}"><span>${esc(p.nombre || "")}</span></div>`;
         });
         capaCursores.innerHTML = h;
       }

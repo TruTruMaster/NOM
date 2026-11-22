@@ -581,7 +581,7 @@
 /* cursores de las demás personas, como en Google Docs */
 .wd-cursores { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
 .wd-otro { position: absolute; width: 2px; margin-left: -1px; background: var(--c); border-radius: 1px; }
-.wd-otro span { position: absolute; bottom: 100%; left: -1px; background: var(--c); color: #fff; font: 700 11px/16px Nunito, sans-serif; padding: 0 6px; border-radius: 4px 4px 4px 0; white-space: nowrap; }
+.wd-otro span { position: absolute; bottom: 100%; left: -1px; background: var(--cf, var(--c)); color: var(--ct, #fff); font: 700 11px/16px Nunito, sans-serif; padding: 0 6px; border-radius: 4px 4px 4px 0; white-space: nowrap; }
 .wd-otro-sel { position: absolute; opacity: .2; border-radius: 2px; }
 
 /* esquema (títulos) */
