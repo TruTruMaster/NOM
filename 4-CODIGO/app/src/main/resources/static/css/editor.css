@@ -563,9 +563,13 @@
 .wd-linea hr { border: 0; border-top: 1px solid #8E8E8E; margin: 6pt 0; }
 .wd-indice { padding: 4pt 0; }
 .wd-indice-t { font: 16pt "Calibri Light", Carlito, Calibri, sans-serif; color: #2F5496; margin-bottom: 6pt; }
-.wd-indice a { display: block; color: #000; text-decoration: none; padding: 1pt 0; }
-.wd-indice a:hover { text-decoration: underline; }
-.wd-indice .n2 { padding-left: 14pt; } .wd-indice .n3 { padding-left: 28pt; }
+.wd-indice a { display: flex; align-items: baseline; color: #000; text-decoration: none; padding: 0 0 5pt; }
+.wd-indice a:hover .wd-ind-tx { text-decoration: underline; }
+.wd-indice .n2 { padding-left: 11pt; } .wd-indice .n3 { padding-left: 22pt; }
+/* como Word: la entrada, puntos hasta el margen derecho y el número de página */
+.wd-ind-tx { flex: 0 1 auto; min-width: 0; }
+.wd-ind-pg { flex: 1 0 2em; display: flex; justify-content: flex-end; white-space: nowrap; overflow: hidden; }
+.wd-ind-pg::before { content: " . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . "; flex: 1 1 0; min-width: 0; overflow: hidden; }
 .wd-falta { color: #999; font-style: italic; }
 .brocha .wd-cuerpo { cursor: copy; }
 

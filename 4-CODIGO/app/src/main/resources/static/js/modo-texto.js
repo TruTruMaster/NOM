@@ -695,11 +695,11 @@
         let a = S().attrs(it);
         // Sugerencias sin resolver: se exportan como en "control de cambios" (subrayado o tachado).
         if (!crudas && (a.sug || a.sugBorrar)) { a = Object.assign({}, a); if (a.sug) { a.u = true; a.color = "#1D7A4C"; } if (a.sugBorrar) { a.s = true; a.color = "#C2372B"; } delete a.sug; delete a.sugBorrar; }
-        if (it.e) { tramos.push({ e: Object.assign({}, it.e, it.e.ref ? doc.bloque(it.e.ref) || {} : {}, { tipo: it.e.tipo }), a }); continue; }
+        if (it.e) { tramos.push({ e: Object.assign({}, it.e, it.e.ref ? doc.bloque(it.e.ref) || {} : {}, { tipo: it.e.tipo }), a, id: it.id }); continue; }
         const u = tramos[tramos.length - 1];
         if (u && u.x != null && claveA(u.a) === claveA(a)) u.x += it.c; else tramos.push({ x: it.c, a });
       }
-      r.push({ pa: S().attrs(p.mark), tramos, num: p.num });
+      r.push({ pa: S().attrs(p.mark), tramos, num: p.num, k: p.k });
     });
     return r;
   }
@@ -870,7 +870,7 @@
         for (const k of [...elems.keys()]) if (!vivos.has(k)) { elems.delete(k); cache.delete(k); }
         ajustarEspacios();
         if (cuerpo.querySelector(":scope > [data-capital]")) pintarCapitales();
-        $$(".wd-indice[data-obj]", cuerpo).forEach(pintarIndice);
+        $$(".wd-indice[data-obj]", cuerpo).forEach((o) => { const it = sec().item(o.dataset.id); pintarIndice(o, it && it.e); });
         tomarRegistros();
         pintando = false;
         actualizarIndices();
@@ -1711,7 +1711,7 @@
           // (con «fl» la franja la aparta la paginación, como Word; esto queda para lo importado antes)
           if (e.tipo === "objeto" && (e.forma || e.grupo) && e.libre && e.franja && !e.fl && o.parentElement) franjas.add(o.parentElement);
           else if (e.tipo === "linea") o.innerHTML = `<hr>`;
-          else if (e.tipo === "indice") pintarIndice(o);
+          else if (e.tipo === "indice") pintarIndice(o, e);
         });
         franjas.forEach((p) => {
           const fs = [...p.querySelectorAll(":scope > .wd-objeto.con-forma.libre")];
@@ -2615,6 +2615,8 @@
         bajo(i) { return marcasComentario.find((c) => { const a = sec().posicion(c.ancla.a), f = sec().posicion(c.ancla.f); return a >= 0 && i >= Math.min(a, f) && i <= Math.max(a, f); }) || null; },
       };
       this.sugerencias = { lista: sugerencias, resolver: resolverSugerencia, activo: () => modoSug, alternar: alternarSugerencias, marcas: () => marcas, fijarMarcas };
+      // (para la exportación a Word: el número de página de cada entrada de las tablas de contenido e ilustraciones)
+      this.paginaPara = paginaPara;
       this.ordenar = { parrafos: ordenarParrafos, dialogo: dialogoOrdenar, orden: ordenDeParrafos, estilo: (e) => formatoParrafo({ estilo: e }) };
       this.marcasFormato = { alternar: alternarMarcasFormato, activo: () => verMarcas };
       this.vistas = { lectura: modoLectura, cuadricula: alternarCuadricula, nuevaVentana };
@@ -2643,6 +2645,9 @@
         return pos;
       }
       this.textoApi = {
+        /** Inserta donde está el cursor un bloque (índice, tabla de ilustraciones, salto…) o una imagen { src, w, h }. */
+        insertarBloque: (e) => insertarBloque(e),
+        insertarImagen: (img) => insertarImagenSrc(img),
         /** Campos de Word: actualizar (F9), ver códigos (Alt+F9), insertar uno. */
         actualizarCampos: () => actualizarCampos(),
         alternarGuiones: () => alternarGuiones(),
@@ -3242,11 +3247,47 @@
         if (!it) return;
         comando(() => { const i = sec().posicion(id); doc().seq(B, { k: "v", v: false, r: S().rangos([it]) }, { origen: "comando" }); return { sel: [i, i] }; });
       }
-      function pintarIndice(o) {
-        const tit = calcularParrafos(sec()).filter((p) => /^h[1-3]$/.test(S().attrs(p.mark).estilo || ""));
-        const vis = sec().visibles();
-        o.innerHTML = `<div class="wd-indice-t">Contenido</div>` + (tit.map((p) => `<a href="#" data-ir="${esc(p.k)}" class="n${S().attrs(p.mark).estilo.slice(1)}">${esc(vis.slice(p.ini, p.fin).map((x) => (x.e ? "" : x.c)).join("") || "(sin texto)")}</a>`).join("") || `<span class="suave">Usa estilos “Título 1/2/3” para que aparezcan aquí.</span>`);
+      /**
+       * Tabla de contenido (los títulos 1 a 3) o tabla de ilustraciones (modo «ilus»: las imágenes con pie, «Figura 1. …»),
+       * como Word: cada entrada con puntos hasta su número de página (lo pone numerarIndices al terminar de paginar).
+       */
+      function pintarIndice(o, e) {
+        const ilus = e && e.modo === "ilus";
+        const ent = ilus ? entradasIlustraciones() : entradasContenido();
+        const fila = (x) => `<a href="#" data-ir="${esc(x.ir)}" class="wd-ind-e n${x.n}"><span class="wd-ind-tx">${esc(x.t)}</span><span class="wd-ind-pg" ${x.pk ? `data-pg-k="${esc(x.pk)}"` : `data-pg-id="${esc(x.pid)}"`}></span></a>`;
+        o.classList.toggle("wd-indice-ilus", ilus);
+        o.innerHTML = (ilus ? "" : `<div class="wd-indice-t">Contenido</div>`) + (ent.map(fila).join("")
+          || `<span class="suave">${ilus ? "Ponle pie a las imágenes (clic en la imagen → Pie de imagen) para que aparezcan aquí." : "Usa estilos “Título 1/2/3” para que aparezcan aquí."}</span>`);
+        numerarIndices(o);
       }
+      function entradasContenido() {
+        const vis = sec().visibles();
+        return calcularParrafos(sec()).filter((p) => /^h[1-3]$/.test(S().attrs(p.mark).estilo || ""))
+          .map((p) => ({ ir: p.k, pk: p.k, n: +S().attrs(p.mark).estilo.slice(1), t: vis.slice(p.ini, p.fin).map((x) => (x.e ? "" : x.c)).join("").trim() || "(sin texto)" }));
+      }
+      function entradasIlustraciones() {
+        const out = [];
+        let n = 0;
+        for (const it of sec().visibles()) {
+          if (!it.e || it.e.tipo !== "imagen") continue;
+          const b = it.e.ref ? doc().bloque(it.e.ref) : null;
+          if (!b || !b.pie) continue;
+          out.push({ ir: it.id, pid: it.id, n: 1, t: `Figura ${++n}. ${b.pie}` });
+        }
+        return out;
+      }
+      /** El número de página de cada entrada de las tablas de contenido e ilustraciones, según la paginación de la vista. */
+      function numerarIndices(raiz0) {
+        const pags = $$(".wd-pagina", ed.vista);
+        $$(".wd-ind-pg", raiz0 || cuerpo).forEach((s) => {
+          const el = s.dataset.pgK ? elems.get(s.dataset.pgK) : $(`[data-id="${CSS.escape(s.dataset.pgId || "")}"]`, cuerpo);
+          let n = "";
+          if (el && pags.length) { const y = el.getBoundingClientRect().top + 1; n = 1; pags.forEach((pg, i) => { if (pg.getBoundingClientRect().top <= y) n = i + 1; }); }
+          if (s.textContent !== String(n)) s.textContent = String(n);
+        });
+      }
+      /** Para la exportación a Word: la página de un párrafo (por su clave) o de un elemento (por su id). */
+      function paginaPara(k, id) { const el = k ? elems.get(k) : $(`[data-id="${CSS.escape(id || "")}"]`, cuerpo), pags = $$(".wd-pagina", ed.vista); if (!el || !pags.length) return null; const y = el.getBoundingClientRect().top + 1; let n = 1; pags.forEach((pg, i) => { if (pg.getBoundingClientRect().top <= y) n = i + 1; }); return n; }
 
       // ------------------------------------------------------------ imágenes: seleccionar, mover y cambiar tamaño
       let imgSel = null;   // id del objeto imagen seleccionado (el elemento cambia al repintar)
@@ -4391,6 +4432,7 @@
       function paginar() {
         paginarBase();
         for (let k = 0; k < 4 && revisarAcomodos(); k++) paginarBase();
+        numerarIndices();
       }
       function paginarBase() {
         clearTimeout(tPag); tPag = null;
@@ -5660,6 +5702,7 @@
           { texto: "Salto de página", icono: "file-plus", atajo: "Ctrl+Enter", fn: () => insertarBloque({ tipo: "salto" }) },
           { texto: "Línea horizontal", icono: "minus", fn: () => insertarBloque({ tipo: "linea" }) },
           { texto: "Índice (tabla de contenido)", icono: "list-tree", fn: () => insertarBloque({ tipo: "indice" }) },
+          { texto: "Tabla de ilustraciones", icono: "image", fn: () => insertarBloque({ tipo: "indice", modo: "ilus" }) },
           { texto: "Ecuación…", icono: "sigma", fn: () => dialogoEcuacion(null) },
           { texto: "Nota al pie…", icono: "superscript", fn: () => dialogoNota(null) },
           { texto: "Columnas (dos lado a lado)", icono: "columns-3", fn: () => insertarColumnas(2) },

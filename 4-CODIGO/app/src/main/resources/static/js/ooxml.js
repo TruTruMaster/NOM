@@ -1445,6 +1445,14 @@
       return { cuerpo, ensamblar, textuales, regeneradas, parchados };
     }
     const titulos = ps.filter((p) => /^h[1-3]$/.test(p.pa.estilo || ""));
+    // Las páginas de la vista del editor abierto con este documento (para los números de las tablas de contenido e
+    // ilustraciones, como los deja Word); sin editor abierto, las entradas salen sin número (Word lo pone con F9).
+    const edA = NOM.editorActual, pagPara = edA && edA.doc === doc && edA.modoApi && edA.modoApi.paginaPara ? edA.modoApi.paginaPara : null;
+    const figuras = [];
+    { let nf = 0; ps.forEach((p) => p.tramos.forEach((t) => { if (t.e && t.e.tipo === "imagen" && t.e.pie) figuras.push({ n: ++nf, pie: t.e.pie, id: t.id }); })); }
+    /** Una entrada de tabla de contenido o de ilustraciones: el texto, un tabulador con puntos al margen derecho y la página. */
+    const entradaIndice = (estilo, txt, pag) => `<w:p><w:pPr><w:pStyle w:val="${estilo}"/><w:tabs><w:tab w:val="right" w:leader="dot" w:pos="${anchoTexto}"/></w:tabs></w:pPr>${texto(txt, {})}${pag != null ? `<w:r><w:tab/></w:r>${texto(String(pag), {})}` : ""}</w:p>`;
+    const campoIndice = (instr, cuerpoCampo) => `<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> ${x(instr)} </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r></w:p>${cuerpoCampo}<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>`;
     const xmlParrafo = (p, i, U) => {
       const pa = p.pa, unico = p.tramos.length === 1 && p.tramos[0].e;
       if (unico && unico.tipo === "tabla") return tabla(unico) + (i === ps.length - 1 ? "<w:p/>" : "");
@@ -1452,9 +1460,11 @@
       if (unico && unico.tipo === "saltocol") return '<w:p><w:r><w:br w:type="column"/></w:r></w:p>';
       if (unico && unico.tipo === "linea") return '<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="8E8E8E"/></w:pBdr></w:pPr></w:p>';
       if (unico && unico.tipo === "indice") {
-        // Campo TOC de Word con las entradas ya escritas (Word lo puede actualizar con F9).
-        const ent = titulos.map((t) => `<w:p><w:pPr><w:pStyle w:val="TDC${t.pa.estilo.slice(1)}"/></w:pPr>${texto(t.tramos.map((z) => z.x || "").join(""), {})}</w:p>`).join("");
-        return `<w:p><w:pPr><w:pStyle w:val="TOCHeading"/></w:pPr><w:r><w:t>Contenido</w:t></w:r></w:p><w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> TOC \\o "1-3" \\h \\z \\u </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r></w:p>${ent}<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>`;
+        // Campo TOC de Word con las entradas ya escritas, con su número de página (Word lo puede actualizar con F9).
+        if (unico.modo === "ilus")
+          return campoIndice('TOC \\h \\z \\c "Figura"', figuras.map((g) => entradaIndice("Tabladeilustraciones", `Figura ${g.n}. ${g.pie}`, pagPara ? pagPara(null, g.id) : null)).join("") || "<w:p/>");
+        const ent = titulos.map((t) => entradaIndice("TDC" + t.pa.estilo.slice(1), t.tramos.map((z) => z.x || "").join("").trim(), pagPara ? pagPara(t.k) : null)).join("");
+        return `<w:p><w:pPr><w:pStyle w:val="TOCHeading"/></w:pPr><w:r><w:t>Contenido</w:t></w:r></w:p>` + campoIndice('TOC \\o "1-3" \\h \\z \\u', ent || "<w:p/>");
       }
       let ppr = "";
       if (ESTILO_WORD[pa.estilo]) ppr += `<w:pStyle w:val="${ESTILO_WORD[pa.estilo]}"/>`;
@@ -1540,7 +1550,7 @@
           if (tal) { runs += tal; return; }
           if (t.e.tipo === "imagen") {
             runs += dibujo(t.e.src, t.e.w, t.e.alt, t.e.recorte, t.e.rot);
-            if (t.e.pie) despues += `<w:p><w:pPr><w:pStyle w:val="Caption"/></w:pPr>${texto("Figura " + ++nFigura + ". ", { b: true })}${texto(t.e.pie, {})}</w:p>`;
+            if (t.e.pie) { const nb = ++nFigura, rb = "<w:rPr><w:b/></w:rPr>"; despues += `<w:p><w:pPr><w:pStyle w:val="Caption"/></w:pPr>${texto("Figura ", { b: true })}<w:r>${rb}<w:fldChar w:fldCharType="begin"/></w:r><w:r>${rb}<w:instrText xml:space="preserve"> SEQ Figura \\* ARABIC </w:instrText></w:r><w:r>${rb}<w:fldChar w:fldCharType="separate"/></w:r><w:r>${rb}<w:t>${nb}</w:t></w:r><w:r>${rb}<w:fldChar w:fldCharType="end"/></w:r>${texto(". ", { b: true })}${texto(t.e.pie, {})}</w:p>`; }
           } else if (t.e.tipo === "nota") {
             notas.push(t.e.texto || "");
             runs += `<w:r><w:rPr><w:rStyle w:val="RefNota"/></w:rPr><w:footnoteReference w:id="${baseNota + notas.length}"/></w:r>`;
@@ -1670,7 +1680,7 @@ ${ep("Quote", "Quote", '<w:i/><w:iCs/><w:color w:val="404040"/>', '<w:spacing w:
 ${ep("Codigo", "Código", '<w:rFonts w:ascii="Courier New" w:hAnsi="Courier New" w:cs="Courier New"/><w:sz w:val="20"/>', '<w:shd w:val="clear" w:color="auto" w:fill="F3F3F3"/><w:spacing w:after="0"/>')}
 ${ep("ListParagraph", "List Paragraph", "", '<w:ind w:left="720"/><w:contextualSpacing/>')}
 ${ep("TOCHeading", "TOC Heading", ligera + '<w:color w:val="2F5496"/><w:sz w:val="32"/>', '<w:spacing w:before="240" w:after="0"/>')}
-${ep("TDC1", "toc 1", "", '<w:spacing w:after="100"/>')}${ep("TDC2", "toc 2", "", '<w:spacing w:after="100"/><w:ind w:left="220"/>')}${ep("TDC3", "toc 3", "", '<w:spacing w:after="100"/><w:ind w:left="440"/>')}
+${ep("Tabladeilustraciones", "table of figures", "", '<w:spacing w:after="0"/>')}${ep("TDC1", "toc 1", "", '<w:spacing w:after="100"/>')}${ep("TDC2", "toc 2", "", '<w:spacing w:after="100"/><w:ind w:left="220"/>')}${ep("TDC3", "toc 3", "", '<w:spacing w:after="100"/><w:ind w:left="440"/>')}
 ${ep("Header", "header", "", '<w:tabs><w:tab w:val="center" w:pos="4680"/><w:tab w:val="right" w:pos="9360"/></w:tabs><w:spacing w:after="0" w:line="240" w:lineRule="auto"/>')}
 ${ep("Footer", "footer", "", '<w:tabs><w:tab w:val="center" w:pos="4680"/><w:tab w:val="right" w:pos="9360"/></w:tabs><w:spacing w:after="0" w:line="240" w:lineRule="auto"/>')}
 <w:style w:type="character" w:styleId="Hyperlink"><w:name w:val="Hyperlink"/><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr></w:style>
