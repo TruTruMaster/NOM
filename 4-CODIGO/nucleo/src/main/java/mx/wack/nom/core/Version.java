@@ -12,7 +12,7 @@ package mx.wack.nom.core;
  */
 public final class Version {
     /** La misma que versionName del APK. */
-    public static final String APP = "0.22.0";
+    public static final String APP = "0.22.1";
     /** Nivel de la interfaz y del formato de documentos. 14 = espacios cifrados de extremo a extremo (letras con marca cx);
         15 = paginación nueva de Word (sin hojas en blanco de más) y Office con rutas irregulares (0.14.2);
         21 = campos nuevos de la 0.16.0 (transiciones y animaciones de PowerPoint: transOffice y sus árboles, sonidos,

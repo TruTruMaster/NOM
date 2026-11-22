@@ -3,9 +3,16 @@ titulo: Novedades
 descripcion: Qué cambió en cada versión, en palabras sencillas.
 orden: 1
 aplica: Navegador, App Android, Teléfono que comparte
-actualizado: 2026-11-21
-version: 0.22.0
+actualizado: 2026-11-22
+version: 0.22.1
 ---
+## 0.22.1 — noviembre de 2026
+
+- **Accesibilidad:** los botones de buscar e historial de los editores, nueva hoja, nueva diapositiva y las vistas del
+  texto ya se anuncian con su nombre en un lector de pantalla, y las iniciales de cada persona y la etiqueta de su
+  cursor se leen bien sobre cualquier color (contraste de al menos 4.5 a 1).
+- **Licencias:** el aviso de licencias ya nombra todas las bibliotecas y fuentes que van dentro de NOM.
+
 ## 0.22.0 — noviembre de 2026
 
 - **Excel, tablas dinámicas:** Insertar → Tabla dinámica, con campos en filas, columnas y filtro, y valores con suma,

@@ -2,6 +2,13 @@
 
 Lo que cambió en cada versión, en corto (es la página «Novedades» de la ayuda; la escribe `4-CODIGO/ayuda/generar.py`). El diario completo, día por día, está en `LOG.md`.
 
+## 0.22.1 — noviembre de 2026
+
+- **Accesibilidad:** los botones de buscar e historial de los editores, nueva hoja, nueva diapositiva y las vistas del
+  texto ya se anuncian con su nombre en un lector de pantalla, y las iniciales de cada persona y la etiqueta de su
+  cursor se leen bien sobre cualquier color (contraste de al menos 4.5 a 1).
+- **Licencias:** el aviso de licencias ya nombra todas las bibliotecas y fuentes que van dentro de NOM.
+
 ## 0.22.0 — noviembre de 2026
 
 - **Excel, tablas dinámicas:** Insertar → Tabla dinámica, con campos en filas, columnas y filtro, y valores con suma,
