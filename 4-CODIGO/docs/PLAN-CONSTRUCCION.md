@@ -324,7 +324,7 @@ reales de Microsoft (`pruebas/office/corpus.sh`, `fidelidad.py`, `ediciones.py`)
   colores de tema en PowerPoint. Se revisa con `pruebas/office/pantalla.py`.
 - [x] Teclear en un párrafo importado ya no mueve el cursor ni le quita su formato original.
 - [x] Reabrir sin conexión un documento con cambios sin enviar; aviso de versión entre app y servidor.
-- [ ] Lo que falta de ver: tabuladores con puntos guía (Word). Ya se ven: columnas de verdad (fase 22,
+- [x] Lo que falta de ver: tabuladores con puntos guía (Word; 21-nov: se leen, se pintan y se escriben, `tabulaciones_real.py` 5 de 5). Ya se ven: columnas de verdad (fase 22,
   `fa3cc00`), texto vertical en celdas y cuadros, bordes por celda (Word); notas, gráficas e imágenes del
   archivo (Excel, 0.15.1).
 - [x] Probar en el A55 (app y navegador) importar, editar, exportar y `.nom` (13 de noviembre, fase 12).
@@ -666,7 +666,7 @@ imagen con `pruebas/office/comparar_real.py`).
 - [x] Word: rellenos con degradado, trama o imagen en las formas, grupos y lienzos, secciones con otro tamaño u
       orientación y columnas (`fa3cc00`; w04 38.4 → 86.5 %, LOG 71); lo que flota con el texto alrededor (`b3432b4`); tablas
       que se parten entre hojas (`03c64a3`). Todo va en la 0.16.0.
-- [ ] Word: puntos guía del índice, división automática de palabras (w10), tabla flotante (`w:tblpPr`); volver a
+- [x] Word: puntos guía del índice (21-nov), división automática de palabras (20-nov, guiones como Word); la tabla flotante (`w:tblpPr`) pasó a la fase 24 (acomodo idéntico); volver a
       medir w06 (formas con puntas, transparencia y efectos, hechas en `fa3cc00`).
 - [x] Excel (importador versión 4, 0.15.3): tramas y degradados en celdas, bordes diagonales, alineación completa
       (vertical, girado, apilado, sangría, rellenar, reducir, centrar en la selección), desborde a los dos lados y
@@ -691,6 +691,64 @@ Detalle: `RELEVO-ESTADO-Y-PENDIENTES.md`, sección 9, y `LOG.md`, entrada 80.
       PowerPoint medido otra vez contra Office real.
 - [ ] Regresión completa, la vuelta en PowerPoint real de lo hecho el 17-nov, el A55 y publicar la 0.16.0.
 - [ ] Disco de 500 GB de la Pi: kernel con NVMe (lo hace el dueño; `SERVIDOR-PROPIO.md`).
+
+## Fase 24. Lo que falta para igualar a Office y para publicar en Google Play (22 de noviembre de 2026)
+
+Revisión del 22-nov para la presentación del 27-nov (`docs/PUBLICACION-Y-CUMPLIMIENTO.md`). Aquí van, como tareas,
+las filas «No» y «A medias» más importantes de `PARIDAD-OFFICE.md` (el detalle y las medidas siguen allá) y lo que
+pide Google Play. Cada tarea dice su módulo (el mismo reparto de la presentación, de los casos de uso y del plan de
+pruebas; ver «Avance por módulo» abajo). Lo que aquí dice «Word», «Excel» o «PowerPoint» se comprueba contra Office
+2024 real, como siempre.
+
+- [ ] **M3 · Word:** crear formas, SmartArt, gráficas y WordArt dentro de un texto (hoy se ven y se conservan, no se crean).
+- [ ] **M3 · Word:** marcadores y referencias cruzadas.
+- [ ] **M3 · Word:** temas y conjuntos de estilos del documento (colores y fuentes del tema).
+- [ ] **M3 · Word:** citas y bibliografía como las de Word, y tabla de autoridades.
+- [ ] **M3 · Word:** combinar correspondencia con el origen de datos de Word (`MERGEFIELD`), sobres y etiquetas.
+- [ ] **M3 · Word:** comparar y combinar dos documentos, y formularios con controles de contenido.
+- [ ] **M3 · Word:** acomodo idéntico junto a dibujos con contorno, cuadros de texto y tablas flotantes (w12 90.7 %,
+      w17 92.2 %, w10 90.4 % al 21-nov).
+- [ ] **M3 · Excel:** disposición de página e impresión (márgenes, área de impresión, títulos, saltos, ajustar a N
+      páginas, vista de saltos). Necesita la cola de impresión de la PC de Windows (`RELEVO-21NOV.md` §4).
+- [ ] **M3 · Excel:** previsión (hoja de previsión y `PRONOSTICO.ETS`).
+- [ ] **M3 · Excel:** tablas dinámicas completas (varios valores en columnas, agrupar fechas, «Mostrar valores como»,
+      segmentaciones).
+- [ ] **M3 · Excel:** formas, SmartArt y WordArt en la hoja, casilla en la celda y comentarios con hilo.
+- [ ] **M3 · PowerPoint:** insertar video y audio desde NOM (`PLAN-MEDIOS.md`, fases 3 y 4).
+- [ ] **M3 · PowerPoint:** crear SmartArt y editar el patrón de diapositivas.
+- [ ] **M3 · PowerPoint:** efectos 3D y estilos de forma; Transformar (Morph) medido contra el video.
+- [ ] **M3 · PowerPoint:** grabar la presentación y subtítulos en vivo.
+- [ ] **M3 · Macros:** abrir `.docm`, `.xlsm` y `.pptm` conservando el proyecto de VBA, y ver el código de cada módulo.
+- [ ] **M3 · Macros:** correrlas en un intérprete aislado y con aviso (celdas, rangos, ciclos, MsgBox, formato).
+- [ ] **M3 · Power Query:** conservar y mostrar las consultas (código M) y correr las que usan el mismo libro o un CSV.
+- [ ] **M3 · Formatos anteriores:** `.xls` y `.ppt` (el `.doc` está en la fase 21), `.odt`, `.ods`, `.odp` y `.rtf`.
+- [ ] **M3 · Revisar:** ortografía y gramática como el Editor de Word, con sinónimos.
+- [ ] **M2 · Google Play:** bloquear a una persona y reportar a una persona o un contenido desde la app (política de
+      contenido generado por usuarios: hay chat y @menciones).
+- [ ] **M4 · Medios:** almacén de video y audio (subir en partes y reanudar, entregar por partes, cifrado por bloques;
+      `PLAN-MEDIOS.md` fase 2).
+- [ ] **M5 · Legal:** domicilio del responsable en el aviso de privacidad (artículo 15 de la LFPDPPP de 2025) y revisión
+      de un abogado de los textos legales.
+- [ ] **M5 · Google Play:** ficha y declaraciones (seguridad de los datos, servicio en primer plano, público objetivo,
+      clasificación), paquete `.aab` firmado con una llave de carga propia y la prueba cerrada de 12 personas durante
+      14 días (cuentas personales nuevas). Lista completa en `docs/PUBLICACION-Y-CUMPLIMIENTO.md`.
+
+## Avance por módulo (lo que dice la presentación)
+
+El avance de cada módulo es **tareas terminadas entre tareas planeadas** de este plan (cada casilla cuenta igual; lo
+tachado o descartado no cuenta). Lo calcula `7-PRESENTACION/fuentes/presentacion.py` leyendo este archivo, así que al
+marcar una casilla basta con volver a generar la presentación.
+
+| Módulo | Fases y tareas que cuenta |
+|---|---|
+| M1. Gestión de cuentas | fase 11 |
+| M2. Gestión de accesos | fases 2, 3 y 15, y las tareas «M2» de la fase 24 |
+| M3. Editor | fases 1, 4, 5, 7, 8, 9, 10, 17 y 22; de la fase 20, todo menos 20.6 y 20.7; el `.doc` de la fase 21; las tareas «M3» de la fase 24 |
+| M4. Almacenamiento | fases 6 y 13, el disco de la Pi (fase 23) y las tareas «M4» de la fase 24 |
+| M5. Ayuda y legal | fases 14 y 18, y las tareas «M5» de la fase 24 |
+| M6. Digitalización (nuevo, se construye después del 27-nov) | 20.6 (PDF a texto) y 20.7 (OCR) |
+
+No cuentan las fases de pruebas, revisión y entregables (12, 16, 19, 21 salvo el `.doc`, 23 salvo el disco).
 
 ## Cómo quedó (8 de noviembre de 2026)
 
@@ -737,6 +795,10 @@ sesión anterior: `./desplegar.sh roles` para las columnas nuevas de usuarios.
 - La copia de trabajo `~/NOM-COLAB` no se actualizó en esta sesión (es más vieja que `~/NOM`).
 
 ## Orden recomendado para la siguiente sesión
+
+**Desde el 22 de noviembre de 2026:** empezar por `docs/RELEVO-22NOV.md` (revisión para la entrega del 27-nov:
+entregables al día, avance por módulo leído de este plan, fase 24, `docs/PUBLICACION-Y-CUMPLIMIENTO.md` con lo que
+pide Google Play y la ley, accesibilidad automática sin fallas). Lo de paridad sigue en `RELEVO-21NOV.md`.
 
 **Desde el 21 de noviembre de 2026:** empezar por `docs/RELEVO-21NOV.md` (0.19.0 publicada: la app de Android con su
 propio origen, guiones y números de línea como Word; sigue todo `PARIDAD-OFFICE.md` en «Sí» contra Office real).
