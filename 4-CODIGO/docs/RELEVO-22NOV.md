@@ -19,6 +19,21 @@ rechazos ni problemas, la accesibilidad, la compatibilidad, y su idea de logotip
 | Logotipo | Propuesta en `~/NOM/trabajo/22nov/logo/` (fuera de git, sin aplicar): `simbolo-v3.svg`, `logo-horizontal-v3*.svg`, comparación `v3.png` | Ver §3 |
 | Lo de seguridad que vería Google Play | Solo en el plan privado (`Auditoria-Seguridad-PLAN.md` §K) | — |
 
+## 1b. Publicación de la 0.22.1 (22-nov, 13:41): hecha
+
+- Lleva lo de accesibilidad (`5f7ddb2`), el aviso de licencias completo (`c010998`) y el **domicilio del responsable**
+  en el aviso de privacidad (`c1942aa`: Mar Mediterráneo 227, Popotla, Miguel Hidalgo, 11400; la versión del aviso
+  sigue en 2026-11-13: nadie tiene que aceptarlo de nuevo). Commit de versión `8434b1b` (interfaz 27, APK 40).
+- **Regresión completa de Windows** (`--carriles 10`, 1396 s): 39 de 41. Las dos que fallaron, solas en Windows: bien
+  (`1e15717`): `limites` era de la prueba (VL-18: en Windows el corte del envío da WinError 10053 y se perdía el 413;
+  ahora se lee en otro hilo) y `funciones_movil` 206/207 bajo carga (Beto tardó en ver la sugerencia aceptada; sola,
+  207/207, igual que en la 0.22.0). De paso: `regresion_windows.py` bajaba la carpeta «numlineas» en vez de la de la
+  corrida (ahora solo las que tienen fecha).
+- Pi: `nomcolab pi actualizar` (respaldo `datos-2026-11-22_134146`), `/api/red/info` 0.22.1 / 27, `humo.py` contra
+  www.nom.qd.je **34/34**. GitHub hasta `1e15717`. APK 40: release `v0.22.1` (SHA-256 `dc8a4aed…`, misma llave
+  `2ef146f6…`). IndexNow 200 (76 direcciones). **Falta el A55** (no estaba conectado).
+- Presentación regenerada: dice 0.22.1 y M5 79 % (167 de 212 tareas en total).
+
 ## 2. Lo que decide o hace el dueño (de `PUBLICACION-Y-CUMPLIMIENTO.md` §0)
 
 1. Crear el **correo del proyecto** (`contacto@nomcolab.dpdns.org` con Email Routing de Cloudflare, ver
