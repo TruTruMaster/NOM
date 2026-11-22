@@ -7,7 +7,7 @@ from comun import excel
 entrada, salida = (os.path.abspath(a) for a in sys.argv[1:3])
 x = excel()
 datos = {"abrio": False, "hojas": {}}
-rgb = lambda c: "#%02X%02X%02X" % (c & 255, (c >> 8) & 255, (c >> 16) & 255) if isinstance(c, (int, float)) and 0 <= c < 2 ** 24 else None
+rgb = lambda c: (lambda n: "#%02X%02X%02X" % (n & 255, (n >> 8) & 255, (n >> 16) & 255))(int(c)) if isinstance(c, (int, float)) and 0 <= c < 2 ** 24 else None
 try:
     wb = x.Workbooks.Open(entrada, 0, True)
     try:

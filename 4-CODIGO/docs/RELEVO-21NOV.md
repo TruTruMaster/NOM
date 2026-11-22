@@ -84,6 +84,17 @@ siluetas y «estrecho»/«a través») antes de volver a intentarlo.
   ver que siga con su sesión y sus datos, y que llegue a la Pi (la app ya usa su propio origen desde la 0.19.0).
 - Lo de después de la 0.20.0 (en main, sin publicar): ordenar, marcas ¶, tabulaciones, celda de enfoque.
 
+## 3c. 0.21.0: lo que encontró la regresión (21-nov, tarde)
+
+- `dlg is not defined` (`bf677b4`): la entrada «Estilos de celda» de la paleta de la hoja estaba en una lista sin `dlg`.
+- En el celular, un aviso (capa 300) tapaba el final de un menú largo (capa 150): desde «Comprobar accesibilidad» el menú
+  del documento es más largo y el aviso «Protegido…» quedaba encima de «Entrega con fecha límite». Los menús van ahora en
+  la capa 310 (`e76fbf3`); siguen abajo de la ruedita (1000) y la paleta (1500).
+- `rastreo.py` no cerraba el modo de lectura (no es una ventana `.velo`): `ESTADO.hoja` lo cuenta y se cierra con Escape.
+- Dato para «Dar formato como tabla»: en un libro sin tema (los de NOM) Excel 2024 usa el tema de Office nuevo
+  (Énfasis 1 `#156082`); «Medio 2» pinta el encabezado `#156082`, letra blanca en negrita, y las franjas `#C0E6F5`
+  (`windows/tabla_tema.py ENTRADA SALIDA RANGO ESTILO`).
+
 ## 4. Lo que falta (de `PARIDAD-OFFICE.md`)
 
 Igual que `RELEVO-20NOV-NOCHE.md` §3 y §4, menos lo de esta sesión: en PowerPoint las secciones y casi toda la pestaña
