@@ -130,6 +130,20 @@ estaba conectado).
 - `referencias_real.py` 13/13 (`windows/referencias_ver.py`, que también guarda la copia actualizada por Word).
 - Falta: tabla de autoridades (TA/TOA), citas y bibliografía de Word.
 
+## 3g. Excel: tablas dinámicas hechas en NOM (21/22-nov, sin publicar)
+
+- `js/dinamicas.js` (nuevo, en index.html y sw.js): `calcular` (diseño compacto, textos del Excel en español), `datos`,
+  `armar`; el XML (location, pivotFields, rowItems, colItems, pageFields, dataFields) sale **igual** al que escribe Excel en
+  los seis casos de `~/NOM/trabajo/dinamicas/casos.json`. La definición guardada en `t.pv[].tabla` lleva
+  `\u0001CACHE\u0001` en cacheId: se cambia al exportar (y por «1» al pintar: sin eso el DOMParser falla callado).
+- `ooxml.js`: `pintarDinamicaXl` a nivel de módulo (lo usa el importador: importación idéntica en x05, t02, x01);
+  `NOM.ooxml.tablaXl.pintarDinamica`; exportación en el libro nuevo (`dinArch`, cacheId 101+) y en el original
+  (`nomdinamicaN.xml`, `nomcacheN.xml`, pivotCaches sumadas con un cacheId libre). Caché con `refreshOnLoad="1"`.
+- `modo-hoja.js`: `t.pv`, `crearDinamica`, `armarDinamica` (escribe las celdas como Excel), `actualizarDinamica`,
+  `cambiarDinamica`, `quitarDinamica`, `dialogoDinamica`; sangría de los elementos de adentro con `capaLo["sgp:"]`.
+- El Excel de la PC está en inglés («Row Labels»): la prueba traduce. `windows/dinamica_excel.py` (Excel las hace) y
+  `windows/dinamicas_ver.py` (las lee y las actualiza). `dinamicas_real.py` 9/9.
+
 ## 4. Lo que falta (de `PARIDAD-OFFICE.md`)
 
 Igual que `RELEVO-20NOV-NOCHE.md` §3 y §4, menos lo de esta sesión: en PowerPoint las secciones y casi toda la pestaña

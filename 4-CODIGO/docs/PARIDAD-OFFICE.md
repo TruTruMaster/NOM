@@ -157,7 +157,13 @@ Falta: párrafos justificados o centrados con tabuladores, contornos (estrecho, 
 
 | Pestaña / grupo | Office | NOM |
 |---|---|---|
-| Hoja | Barra de fórmulas, filas, columnas, cuadrícula, tablas, tablas dinámicas, controles | Barra de fórmulas, filas y columnas (insertar, borrar, ancho, alto), hojas (nueva, renombrar, mover, duplicar, eliminar): sí. Tablas y tablas dinámicas **se ven** (100 % contra Excel); **crear tablas: sí** (Dar formato como tabla, ver Inicio · Estilos); crear tablas dinámicas: no. Controles de formulario se ven con su estado |
+| Hoja | Barra de fórmulas, filas, columnas, cuadrícula, tablas, tablas dinámicas, controles | Barra de fórmulas, filas y columnas (insertar, borrar, ancho, alto), hojas (nueva, renombrar, mover, duplicar, eliminar): sí. Tablas y tablas dinámicas **se ven** (100 % contra Excel); **crear tablas: sí** (Dar formato como tabla, ver Inicio · Estilos); **crear tablas dinámicas: sí** (21-nov: Insertar → Tabla dinámica, en una hoja nueva o en la celda elegida; campos en
+filas —hasta tres, con subtotales arriba como el diseño compacto—, en columnas, en el filtro, y valores con suma, cuenta,
+promedio, máximo o mínimo; Actualizar, cambiar los campos, eliminar; `js/dinamicas.js` arma las celdas y las tres partes de
+Excel —definición, caché y registros— igual que Excel, y el estilo se pinta con la misma lógica que las de los archivos;
+`dinamicas_real.py` 9 de 9: seis tablas dinámicas con las 173 celdas como Excel —texto, negrita, relleno, letra y
+sangría—, Excel las ve, al actualizarlas no cambian, y en x05 se suman a las que ya había). Falta: varios valores con un
+campo en columnas, agrupar fechas, «Mostrar valores como», segmentaciones. Controles de formulario se ven con su estado |
 | Teclas | F2, Entrar, Esc, Ctrl+Fin, Ctrl+D, Ctrl+R, Ctrl+Mayús+U | Sí lo principal (F2, Entrar, Esc, flechas, Ctrl+D/R, copiar fórmulas con referencias relativas, cuadrito de relleno) |
 | Cálculo | Automático, automático salvo tablas, manual, F9 | **Sí** (19-nov): automático, automático excepto tablas de datos y manual (las fórmulas se quedan con su valor hasta F9 —libro— o Mayús+F9 —hoja—, con el botón «Calcular» de Excel); `calcMode` se lee y se escribe. `libro_excel.py`: NOM no recalcula sin F9 y Excel 2024 abre en manual lo que descarga NOM, con los mismos valores |
 | Inicio · Fuente y alineación | Fuente, tamaño, negrita, color, relleno, bordes, alinear, ajustar texto, combinar, girar | Sí (también tramas y degradados de Excel, bordes diagonales, texto girado y apilado, sangría, reducir hasta ajustar) |

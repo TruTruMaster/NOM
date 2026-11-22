@@ -3560,7 +3560,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     if (!tablas.length) throw new Error("Este documento no tiene ninguna tabla");
     const nombres = [];
     const fab = fabricaXlsx(doc, null);
-    const graficasArch = [], dibujos = [], relsHojas = [], mediosXl = [], tablasArch = [], nombresLo = new Set();
+    const graficasArch = [], dibujos = [], relsHojas = [], mediosXl = [], tablasArch = [], nombresLo = new Set(), dinArch = [];
     const hojas = tablas.map((t, i) => {
       let n = F().nombreDeHoja(doc, t).replace(/[\\/?*[\]:]/g, " ").slice(0, 31) || `Hoja${i + 1}`;
       while (nombres.includes(n)) n = n.slice(0, 28) + " " + (i + 1);
@@ -3609,15 +3609,21 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         });
         dibujo += `<tableParts count="${ids.length}">${ids.map((r) => `<tablePart r:id="${r}"/>`).join("")}</tableParts>`;
       }
+      // tablas dinámicas: su definición (enlazada desde la hoja), su caché y sus registros
+      dinamicasDe(doc, t).forEach((r) => {
+        dinArch.push(r.partes);
+        (relsHojas[i] = relsHojas[i] || []).push({ id: "rIdP" + dinArch.length, tipo: T_PV_TABLA, destino: `../pivotTables/pivotTable${dinArch.length}.xml` });
+      });
       return hojaDesdeCero(t, ev, fab, (ref, esFecha) => fab.estilo(t, ref, esFecha), i === 0, dibujo);
     });
     const { fuentes, rellenos, bordes, xfs, numFmts, dxfs } = fab;
-    const libro = XML + `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${nombres.map((n, i) => `<sheet name="${x(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets>${definedNamesDe(doc)}<calcPr calcId="191029"${calcModeDe(doc)} fullCalcOnLoad="1"/></workbook>`;
+    const libro = XML + `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${nombres.map((n, i) => `<sheet name="${x(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets>${definedNamesDe(doc)}<calcPr calcId="191029"${calcModeDe(doc)} fullCalcOnLoad="1"/>${dinArch.length ? `<pivotCaches>${dinArch.map((_, k) => `<pivotCache cacheId="${101 + k}" r:id="rIdPC${k + 1}"/>`).join("")}</pivotCaches>` : ""}</workbook>`;
     const estilos = XML + `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${numFmts.length ? `<numFmts count="${numFmts.length}">${numFmts.join("")}</numFmts>` : ""}<fonts count="${fuentes.length}">${fuentes.join("")}</fonts>
 <fills count="${rellenos.length}">${rellenos.join("")}</fills><borders count="${bordes.length}">${bordes.join("")}</borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfs.length}">${xfs.join("")}</cellXfs>
 <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>${dxfs.length ? `<dxfs count="${dxfs.length}">${dxfs.join("")}</dxfs>` : ""}</styleSheet>`;
     const relsLibro = [...hojas.map((_, i) => ({ id: "rId" + (i + 1), tipo: T.hoja, destino: `worksheets/hoja${i + 1}.xml` })),
+      ...dinArch.map((_, k) => ({ id: "rIdPC" + (k + 1), tipo: T_PV_CACHE, destino: `pivotCache/pivotCacheDefinition${k + 1}.xml` })),
       { id: "rIdEst", tipo: T.estilos, destino: "styles.xml" }, ...(fab.usaDA ? [{ id: "rIdMeta", tipo: T_META, destino: "metadata.xml" }] : [])];
     return zip([
       { nombre: "[Content_Types].xml", datos: CT(`<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
@@ -3626,7 +3632,8 @@ ${hojas.map((_, i) => `<Override PartName="/xl/worksheets/hoja${i + 1}.xml" Cont
 ${dibujos.map((d) => `<Override PartName="/xl/drawings/drawing${d.n}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>`).join("")}
 ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`).join("")}
 ${mediosXl.map((m) => `<Override PartName="/${m.nombre}" ContentType="${m.ct}"/>`).join("")}
-${tablasArch.map((_, i) => `<Override PartName="/xl/tables/table${i + 1}.xml" ContentType="${CT_TABLA_XL}"/>`).join("")}`) },
+${tablasArch.map((_, i) => `<Override PartName="/xl/tables/table${i + 1}.xml" ContentType="${CT_TABLA_XL}"/>`).join("")}
+${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.xml" ContentType="${CT_PV_TABLA}"/><Override PartName="/xl/pivotCache/pivotCacheDefinition${k + 1}.xml" ContentType="${CT_PV_CACHE}"/><Override PartName="/xl/pivotCache/pivotCacheRecords${k + 1}.xml" ContentType="${CT_PV_REG}"/>`).join("")}`) },
       { nombre: "_rels/.rels", datos: RELS([{ tipo: T.doc, destino: "xl/workbook.xml" }]) },
       { nombre: "xl/workbook.xml", datos: libro },
       { nombre: "xl/styles.xml", datos: estilos },
@@ -3638,6 +3645,13 @@ ${tablasArch.map((_, i) => `<Override PartName="/xl/tables/table${i + 1}.xml" Co
       ...graficasArch.map((g, i) => ({ nombre: `xl/charts/chart${i + 1}.xml`, datos: g })),
       ...mediosXl.map((m) => ({ nombre: m.nombre, datos: m.datos })),
       ...tablasArch.map((d, i) => ({ nombre: `xl/tables/table${i + 1}.xml`, datos: d })),
+      ...dinArch.flatMap((d, k) => [
+        { nombre: `xl/pivotTables/pivotTable${k + 1}.xml`, datos: d.tabla.replace("\u0001CACHE\u0001", String(101 + k)) },
+        { nombre: `xl/pivotTables/_rels/pivotTable${k + 1}.xml.rels`, datos: RELS([{ id: "rId1", tipo: T_PV_CACHE, destino: `../pivotCache/pivotCacheDefinition${k + 1}.xml` }]) },
+        { nombre: `xl/pivotCache/pivotCacheDefinition${k + 1}.xml`, datos: d.cache },
+        { nombre: `xl/pivotCache/_rels/pivotCacheDefinition${k + 1}.xml.rels`, datos: RELS([{ id: "rId1", tipo: T_PV_REG, destino: `pivotCacheRecords${k + 1}.xml` }]) },
+        { nombre: `xl/pivotCache/pivotCacheRecords${k + 1}.xml`, datos: d.registros },
+      ]),
     ]);
   }
 
@@ -4113,6 +4127,7 @@ ${tablasArch.map((_, i) => `<Override PartName="/xl/tables/table${i + 1}.xml" Co
     fab.cmDA = metaRuta && pq.tiene(metaRuta) ? cmDeMetadatos(pq.texto(metaRuta) || "") : null;
     const usados = new Set(), nombres = [];
     let cambio = false, nNueva = 0, nGraf = 0, nDib = 0, nImgXl = 0, infoTablas = null;
+    const cachesNuevas = [];   // (tablas dinámicas hechas en NOM: [{ id, rid }] para las pivotCaches del libro)
     const tiene = (v) => v != null && v !== "" && v !== false;
     const planes = tablas.map((t, i) => {
       let n = F().nombreDeHoja(doc, t).replace(/[\\/?*[\]:]/g, " ").slice(0, 31) || `Hoja${i + 1}`;
@@ -4158,6 +4173,16 @@ ${tablasArch.map((_, i) => `<Override PartName="/xl/tables/table${i + 1}.xml" Co
         pq.pon(p.ruta, S.aplicar());
         cambio = true;
       }
+      // tablas dinámicas hechas en NOM: sus partes nuevas, enlazadas desde la hoja; su caché va al libro más abajo
+      dinamicasDe(doc, t).forEach((r) => {
+        const k = cachesNuevas.length + 1, rt = `xl/pivotTables/nomdinamica${k}.xml`, rc = `xl/pivotCache/nomcache${k}.xml`, rr = `xl/pivotCache/nomregistros${k}.xml`;
+        cachesNuevas.push({ tabla: rt, cache: rc, partes: r.partes });
+        pq.pon(rc, r.partes.cache); pq.tipo(rc, CT_PV_CACHE);
+        pq.pon(rr, r.partes.registros); pq.tipo(rr, CT_PV_REG); pq.agregaRel(rc, "rId1", T_PV_REG, "/" + rr);
+        pq.pon(rt, r.partes.tabla); pq.tipo(rt, CT_PV_TABLA); pq.agregaRel(rt, "rId1", T_PV_CACHE, "/" + rc);
+        pq.agregaRel(p.ruta, "rIdNomP" + k, T_PV_TABLA, "/" + rt);
+        cambio = true;
+      });
       // gráficas hechas en NOM: se agregan al dibujo de la hoja (o se le crea uno)
       const gs = doc.vivos().filter((g) => g.tipo === "grafica" && g.hoja === t.id);
       const ims = doc.vivos().filter((b) => b.tipo === "imagen" && b.hoja === t.id && b.src);
@@ -4298,6 +4323,24 @@ ${tablasArch.map((_, i) => `<Override PartName="/xl/tables/table${i + 1}.xml" Co
         piezasL.push([pos, pos, `<${prefL}calcPr${modoAttr("")} fullCalcOnLoad="1"/>`]);
       }
     }
+    if (cachesNuevas.length) {
+      // las cachés de las tablas dinámicas nuevas, con un cacheId que el libro no use
+      const pcs = hsL.find((h) => O.local(h.n) === "pivotCaches");
+      let maxId = 0;
+      if (pcs) (libroTxt.slice(pcs.i, pcs.f).match(/cacheId\s*=\s*"(\d+)"/g) || []).forEach((m) => (maxId = Math.max(maxId, +m.replace(/\D/g, ""))));
+      const els = cachesNuevas.map((cn, k) => {
+        const id = maxId + 1 + k, rid = "rIdNomPC" + (k + 1);
+        pq.agregaRel(LIBRO, rid, T_PV_CACHE, "/" + cn.cache);
+        pq.pon(cn.tabla, cn.partes.tabla.replace("\u0001CACHE\u0001", String(id)));
+        return `<${prefL}pivotCache cacheId="${id}" xmlns:r="${NS_R}" r:id="${rid}"/>`;
+      }).join("");
+      if (pcs) piezasL.push([pcs.cf, pcs.cf, els]);
+      else {
+        const DESPUES = ["smartTagPr", "smartTagTypes", "webPublishing", "fileRecoveryPr", "webPublishObjects", "extLst"];
+        const sig = hsL.find((h) => DESPUES.includes(O.local(h.n))), pos = sig ? sig.i : raizL.cf;
+        piezasL.push([pos, pos, `<${prefL}pivotCaches>${els}</${prefL}pivotCaches>`]);
+      }
+    }
     pq.pon(LIBRO, aplicarPiezas(libroTxt, piezasL));
     if (fab.usaDA && fab.cmDA == null) {
       // el libro no tenía metadatos de celda: se agrega la parte con la matriz dinámica (cm="1")
@@ -4386,6 +4429,15 @@ ${tablasArch.map((_, i) => `<Override PartName="/xl/tables/table${i + 1}.xml" Co
   // ---- Tablas con formato hechas en NOM (t.lo, «Dar formato como tabla»): xl/tables/tableN.xml como las escribe Excel.
   // Cada una: { id, n (nombre), c1, f1, c2, f2, estilo, enc, tot, rayasF, rayasC, primeraC, ultimaC, filtro }.
   const CT_TABLA_XL = "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml";
+  // ---- Tablas dinámicas hechas en NOM (t.pv, js/dinamicas.js): sus tres partes de Excel y cómo se enlazan
+  const T_PV_TABLA = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
+  const T_PV_CACHE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition";
+  const T_PV_REG = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
+  const CT_PV_TABLA = "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml";
+  const CT_PV_CACHE = "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml";
+  const CT_PV_REG = "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml";
+  /** Las tablas dinámicas de la hoja `t`, armadas con los datos de ahora (las que no se pueden armar se saltan). */
+  const dinamicasDe = (doc, t) => (Array.isArray(t && t.pv) && NOM.dinamicas ? t.pv.map((pv) => NOM.dinamicas.armar(doc, t, pv)).filter((r) => r && typeof r === "object") : []);
   const T_TABLA_XL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table";
   const FUNC_TOTAL_XL = { 101: "average", 102: "countNums", 103: "count", 104: "max", 105: "min", 107: "stdDev", 109: "sum", 110: "var" };
   const tablasLoDe = (t) => (Array.isArray(t && t.lo) ? t.lo.filter((lo) => lo && lo.c2 >= lo.c1 && lo.f2 >= lo.f1) : []);
@@ -4504,6 +4556,81 @@ ${tablasArch.map((_, i) => `<Override PartName="/xl/tables/table${i + 1}.xml" Co
       String(campos["bx:" + R] || "").split(";").filter(Boolean).forEach((q) => (propios[q.split(":")[0]] = q));
       for (const l in lados) if (!propios[l]) propios[l] = `${l}:${lados[l][0]}:${colorTabla(lados[l][1]) || "#000000"}`;
       campos["bx:" + R] = Object.values(propios).join(";");
+    }
+  }
+  const ORDEN_DINAMICA = ["wholeTable", "pageFieldLabels", "pageFieldValues", "firstColumnStripe", "secondColumnStripe", "firstRowStripe", "secondRowStripe", "blankRow",
+    "firstColumn", "firstSubtotalColumn", "secondSubtotalColumn", "thirdSubtotalColumn", "firstColumnSubheading", "secondColumnSubheading", "thirdColumnSubheading",
+    "firstRowSubheading", "secondRowSubheading", "thirdRowSubheading", "firstSubtotalRow", "secondSubtotalRow", "thirdSubtotalRow", "lastColumn", "headerRow", "firstHeaderCell", "totalRow"];
+  const NIVEL = ["first", "second", "third"];
+  /** Pinta en `campos` lo que el estilo `est2` pone en cada área de una tabla dinámica de Excel (pivotTableDefinition ya
+      leída: `pd`), con la precedencia de Excel. La usan el importador y las tablas dinámicas hechas en NOM (js/dinamicas.js). */
+  function pintarDinamicaXl(pd, est2, colorTabla, campos) {
+    const hijos = (n, nombre) => [...(n ? n.childNodes : [])].filter((c) => c.nodeType === 1 && (!nombre || c.localName === nombre));
+    const hijo = (n, nombre) => hijos(n, nombre)[0] || null;
+    const at = (n, a) => (n ? n.getAttribute(a) : null);
+    const loc = hijo(pd, "location"), si = hijo(pd, "pivotTableStyleInfo");
+    const [a1, a2] = String(at(loc, "ref") || "").split(":").map((q) => F().parseRef(q));
+    if (!a1) return;
+    const c1 = a1.c, f1 = a1.f, c2 = (a2 || a1).c, f2 = (a2 || a1).f;
+    const fData = f1 + +(at(loc, "firstDataRow") || 0), cData = c1 + +(at(loc, "firstDataCol") || 0), fEnc = f1 + +(at(loc, "firstHeaderRow") || 0);
+    const si1 = (a) => at(si, a) === "1";
+    const filasI = hijos(hijo(pd, "rowItems"), "i"), colsI = hijos(hijo(pd, "colItems"), "i");
+    const nCamposF = hijos(hijo(pd, "rowFields"), "field").length, nCamposC = hijos(hijo(pd, "colFields"), "field").filter((x) => at(x, "x") !== "-2").length;
+    const prof = (i) => +(at(i, "r") || 0) + Math.max(1, hijos(i, "x").length) - 1;
+    const capas = new Map();
+    const pon = (tipo, rc1, rf1, rc2, rf2) => {
+      if (!est2[tipo]) return;
+      for (let f = rf1; f <= rf2; f++) for (let c = rc1; c <= rc2; c++) {
+        const k = c + "," + f;
+        if (!capas.has(k)) capas.set(k, []);
+        capas.get(k).push({ tipo, e: est2[tipo], rc1, rf1, rc2, rf2 });
+      }
+    };
+    // botones de filtro de Excel: etiquetas de fila y de columna, y el valor de cada filtro
+    if (nCamposF) campos["fb:" + F().ref(c1, fEnc)] = true;
+    if (nCamposC && fEnc > f1) campos["fb:" + F().ref(cData, fEnc - 1)] = true;
+    pon("wholeTable", c1, f1, c2, f2);
+    // filtros (campos de página): encima de la tabla, con un renglón vacío en medio
+    const nPag = +(at(loc, "rowPageCount") || 0), nPagC = Math.max(1, +(at(loc, "colPageCount") || 0));
+    const nCamposP = hijos(hijo(pd, "pageFields"), "pageField").length;
+    for (let k = 0; k < nCamposP; k++) {
+      const fp = f1 - 1 - nPag + (k % Math.max(1, nPag)), cp = c1 + 3 * Math.floor(k / Math.max(1, nPag));
+      if (fp < 0) continue;
+      pon("pageFieldLabels", cp, fp, cp, fp);
+      pon("pageFieldValues", cp + 1, fp, cp + 1, fp);
+      campos["fb:" + F().ref(cp + 1, fp)] = true;
+    }
+    if (si1("showColStripes")) for (let c = cData; c <= c2; c++) { const s1 = (est2.firstColumnStripe || {}).s || 1, s2 = (est2.secondColumnStripe || {}).s || 1, k = (c - cData) % (s1 + s2); pon(k < s1 ? "firstColumnStripe" : "secondColumnStripe", c, fData, c, f2); }
+    if (si1("showRowStripes")) for (let f = fData; f <= f2; f++) { const s1 = (est2.firstRowStripe || {}).s || 1, s2 = (est2.secondRowStripe || {}).s || 1, k = (f - fData) % (s1 + s2); pon(k < s1 ? "firstRowStripe" : "secondRowStripe", c1, f, c2, f); }
+    if (si1("showRowHeaders") && cData > c1) pon("firstColumn", c1, fData, cData - 1, f2);
+    // cada fila de datos según su elemento: total general, subtotal, renglón vacío o subtítulo de un nivel de afuera
+    filasI.forEach((i, k) => {
+      const f = fData + k, t = at(i, "t");
+      if (f > f2) return;
+      if (t === "grand") pon("totalRow", c1, f, c2, f);
+      else if (t === "blank") pon("blankRow", c1, f, c2, f);
+      else if (t && t !== "data") pon(NIVEL[Math.min(2, prof(i))] + "SubtotalRow", c1, f, c2, f);
+      else if (nCamposF > 1 && prof(i) < nCamposF - 1) pon(NIVEL[Math.min(2, prof(i))] + "RowSubheading", c1, f, c2, f);
+    });
+    colsI.forEach((i, k) => {
+      const c = cData + k, t = at(i, "t");
+      if (c > c2) return;
+      if (t === "grand") { if (si1("showLastColumn")) pon("lastColumn", c, f1, c, f2); }
+      else if (t && t !== "data") pon(NIVEL[Math.min(2, prof(i))] + "SubtotalColumn", c, f1, c, f2);
+      else if (nCamposC > 1 && prof(i) < nCamposC - 1) pon(NIVEL[Math.min(2, prof(i))] + "ColumnSubheading", c, f1, c, fData - 1);
+    });
+    if (si1("showColHeaders") && fData > f1) pon("headerRow", c1, f1, c2, fData - 1);
+    pon("firstHeaderCell", c1, fEnc, c1, fEnc);
+    for (const [k, lista] of capas) {
+      const [c, f] = k.split(",").map(Number);
+      lista.sort((a, b) => ORDEN_DINAMICA.indexOf(a.tipo) - ORDEN_DINAMICA.indexOf(b.tipo));
+      pintarCapasXl(lista, c, f, campos, colorTabla);
+    }
+    // Excel no dibuja la cuadrícula dentro de una tabla dinámica (ni en sus filtros): fondo blanco donde no hay otro
+    for (let f = Math.max(0, f1 - 1 - nPag); f <= f2; f++) for (let c = c1; c <= c2; c++) {
+      if (f < f1 && !(capas.has(c + "," + f))) continue;
+      const R = F().ref(c, f);
+      if (!campos["r:" + R]) campos["r:" + R] = "#FFFFFF";
     }
   }
   const VERSION_XL = 13;   // (13: el tema del libro en t.xl.tema, para las tablas con formato hechas en NOM)
@@ -4921,10 +5048,6 @@ ${tablasArch.map((_, i) => `<Override PartName="/xl/tables/table${i + 1}.xml" Co
     }
     // ---- Tablas dinámicas (versión 3): su estilo pintado sobre sus áreas (filtros, encabezado, etiquetas de fila,
     // subtítulos y subtotales, total general de filas y de columnas), con la precedencia de Excel.
-    const ORDEN_DINAMICA = ["wholeTable", "pageFieldLabels", "pageFieldValues", "firstColumnStripe", "secondColumnStripe", "firstRowStripe", "secondRowStripe", "blankRow",
-      "firstColumn", "firstSubtotalColumn", "secondSubtotalColumn", "thirdSubtotalColumn", "firstColumnSubheading", "secondColumnSubheading", "thirdColumnSubheading",
-      "firstRowSubheading", "secondRowSubheading", "thirdRowSubheading", "firstSubtotalRow", "secondSubtotalRow", "thirdSubtotalRow", "lastColumn", "headerRow", "firstHeaderCell", "totalRow"];
-    const NIVEL = ["first", "second", "third"];
     function estilosDinamicas(ruta, campos) {
       const relsH = z.texto(ruta.replace(/([^/]+)$/, "_rels/$1.rels"));
       if (!relsH) return;
@@ -4933,73 +5056,11 @@ ${tablasArch.map((_, i) => `<Override PartName="/xl/tables/table${i + 1}.xml" Co
         const norm = rt.split("/").reduce((a, x) => { if (x === "..") a.pop(); else if (x && x !== ".") a.push(x); return a; }, []).join("/");
         const tx = z.texto(norm);
         if (!tx) return;
-        const pd = P(tx).documentElement, loc = hijo(pd, "location"), si = hijo(pd, "pivotTableStyleInfo");
-        if (!loc || !si) return;
+        const pd = P(tx).documentElement, si = hijo(pd, "pivotTableStyleInfo");
+        if (!hijo(pd, "location") || !si) return;
         const est2 = estilosTablaLibro[at(si, "name")] || (NOM.ESTILOS_TABLA || {})[at(si, "name")];
         if (!est2) return;
-        const [a1, a2] = String(at(loc, "ref") || "").split(":").map((q) => F().parseRef(q));
-        if (!a1) return;
-        const c1 = a1.c, f1 = a1.f, c2 = (a2 || a1).c, f2 = (a2 || a1).f;
-        const fData = f1 + +(at(loc, "firstDataRow") || 0), cData = c1 + +(at(loc, "firstDataCol") || 0), fEnc = f1 + +(at(loc, "firstHeaderRow") || 0);
-        const si1 = (a) => at(si, a) === "1";
-        const filasI = hijos(hijo(pd, "rowItems"), "i"), colsI = hijos(hijo(pd, "colItems"), "i");
-        const nCamposF = hijos(hijo(pd, "rowFields"), "field").length, nCamposC = hijos(hijo(pd, "colFields"), "field").filter((x) => at(x, "x") !== "-2").length;
-        const prof = (i) => +(at(i, "r") || 0) + Math.max(1, hijos(i, "x").length) - 1;
-        const capas = new Map();
-        const pon = (tipo, rc1, rf1, rc2, rf2) => {
-          if (!est2[tipo]) return;
-          for (let f = rf1; f <= rf2; f++) for (let c = rc1; c <= rc2; c++) {
-            const k = c + "," + f;
-            if (!capas.has(k)) capas.set(k, []);
-            capas.get(k).push({ tipo, e: est2[tipo], rc1, rf1, rc2, rf2 });
-          }
-        };
-        // botones de filtro de Excel: etiquetas de fila y de columna, y el valor de cada filtro
-        if (nCamposF) campos["fb:" + F().ref(c1, fEnc)] = true;
-        if (nCamposC && fEnc > f1) campos["fb:" + F().ref(cData, fEnc - 1)] = true;
-        pon("wholeTable", c1, f1, c2, f2);
-        // filtros (campos de página): encima de la tabla, con un renglón vacío en medio
-        const nPag = +(at(loc, "rowPageCount") || 0), nPagC = Math.max(1, +(at(loc, "colPageCount") || 0));
-        const nCamposP = hijos(hijo(pd, "pageFields"), "pageField").length;
-        for (let k = 0; k < nCamposP; k++) {
-          const fp = f1 - 1 - nPag + (k % Math.max(1, nPag)), cp = c1 + 3 * Math.floor(k / Math.max(1, nPag));
-          if (fp < 0) continue;
-          pon("pageFieldLabels", cp, fp, cp, fp);
-          pon("pageFieldValues", cp + 1, fp, cp + 1, fp);
-          campos["fb:" + F().ref(cp + 1, fp)] = true;
-        }
-        if (si1("showColStripes")) for (let c = cData; c <= c2; c++) { const s1 = (est2.firstColumnStripe || {}).s || 1, s2 = (est2.secondColumnStripe || {}).s || 1, k = (c - cData) % (s1 + s2); pon(k < s1 ? "firstColumnStripe" : "secondColumnStripe", c, fData, c, f2); }
-        if (si1("showRowStripes")) for (let f = fData; f <= f2; f++) { const s1 = (est2.firstRowStripe || {}).s || 1, s2 = (est2.secondRowStripe || {}).s || 1, k = (f - fData) % (s1 + s2); pon(k < s1 ? "firstRowStripe" : "secondRowStripe", c1, f, c2, f); }
-        if (si1("showRowHeaders") && cData > c1) pon("firstColumn", c1, fData, cData - 1, f2);
-        // cada fila de datos según su elemento: total general, subtotal, renglón vacío o subtítulo de un nivel de afuera
-        filasI.forEach((i, k) => {
-          const f = fData + k, t = at(i, "t");
-          if (f > f2) return;
-          if (t === "grand") pon("totalRow", c1, f, c2, f);
-          else if (t === "blank") pon("blankRow", c1, f, c2, f);
-          else if (t && t !== "data") pon(NIVEL[Math.min(2, prof(i))] + "SubtotalRow", c1, f, c2, f);
-          else if (nCamposF > 1 && prof(i) < nCamposF - 1) pon(NIVEL[Math.min(2, prof(i))] + "RowSubheading", c1, f, c2, f);
-        });
-        colsI.forEach((i, k) => {
-          const c = cData + k, t = at(i, "t");
-          if (c > c2) return;
-          if (t === "grand") { if (si1("showLastColumn")) pon("lastColumn", c, f1, c, f2); }
-          else if (t && t !== "data") pon(NIVEL[Math.min(2, prof(i))] + "SubtotalColumn", c, f1, c, f2);
-          else if (nCamposC > 1 && prof(i) < nCamposC - 1) pon(NIVEL[Math.min(2, prof(i))] + "ColumnSubheading", c, f1, c, fData - 1);
-        });
-        if (si1("showColHeaders") && fData > f1) pon("headerRow", c1, f1, c2, fData - 1);
-        pon("firstHeaderCell", c1, fEnc, c1, fEnc);
-        for (const [k, lista] of capas) {
-          const [c, f] = k.split(",").map(Number);
-          lista.sort((a, b) => ORDEN_DINAMICA.indexOf(a.tipo) - ORDEN_DINAMICA.indexOf(b.tipo));
-          pintarCapasXl(lista, c, f, campos, colorTabla);
-        }
-        // Excel no dibuja la cuadrícula dentro de una tabla dinámica (ni en sus filtros): fondo blanco donde no hay otro
-        for (let f = Math.max(0, f1 - 1 - nPag); f <= f2; f++) for (let c = c1; c <= c2; c++) {
-          if (f < f1 && !(capas.has(c + "," + f))) continue;
-          const R = F().ref(c, f);
-          if (!campos["r:" + R]) campos["r:" + R] = "#FFFFFF";
-        }
+        pintarDinamicaXl(pd, est2, colorTabla, campos);
       });
     }
     const hojaRef = (n) => (/^[A-Za-z_][A-Za-z0-9_.]*$/.test(n) ? n : "'" + n.replace(/'/g, "''") + "'");
@@ -7475,6 +7536,14 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       return campos;
     },
     color: (x, tema) => colorTablaConTema(tema)(x),
+    /** Lo mismo para una tabla dinámica, desde su pivotTableDefinition (la que arma js/dinamicas.js). */
+    pintarDinamica(xml, campos, tema) {
+      // (la definición guardada lleva la marca de la caché, que no es XML válido hasta que se exporta)
+      const pd = new DOMParser().parseFromString(String(xml).replace("\u0001CACHE\u0001", "1"), "application/xml").documentElement, si = pd && [...pd.childNodes].find((n) => n.localName === "pivotTableStyleInfo");
+      const est2 = si && (NOM.ESTILOS_TABLA || {})[si.getAttribute("name")];
+      if (est2) pintarDinamicaXl(pd, est2, colorTablaConTema(tema), campos);
+      return campos;
+    },
   };
   NOM.ooxml = { tablaXl, zip, docx, xlsx, pptx, formulaExcel, crc32, leerDocx, leerXlsx, leerPptx, modeloXlsx, huellasDocx, huellasPptx, parcialesPptx, abrirZip, conProteccion, seccionesPptx, usarOrigen: true };
 })();

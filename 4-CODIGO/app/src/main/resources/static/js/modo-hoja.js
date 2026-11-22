@@ -814,9 +814,13 @@
       const temaLibro = () => (t && t.xl && Array.isArray(t.xl.tema) ? t.xl.tema : null);
       function calcularCapaLo() {
         capaLo = {};
-        const lista = tablasLo();
-        hayLo = !!lista.length;
+        const lista = tablasLo(), pvs = dinamicas();
+        hayLo = !!(lista.length || pvs.length);
         if (!hayLo || !NOM.ooxml || !NOM.ooxml.tablaXl) return;
+        pvs.forEach((pv) => {
+          if (pv.tabla && NOM.ooxml.tablaXl.pintarDinamica) NOM.ooxml.tablaXl.pintarDinamica(pv.tabla, capaLo, temaLibro());
+          (pv.sang || []).forEach(([c, f, n]) => (capaLo["sgp:" + F().ref(c, f)] = n));
+        });
         lista.forEach((lo) => {
           NOM.ooxml.tablaXl.pintar(lo, capaLo, temaLibro());
           if (lo.enc && lo.filtro !== false) for (let c = lo.c1; c <= lo.c2; c++) capaLo["fb:" + F().ref(c, lo.f1)] = true;
@@ -955,6 +959,115 @@
         $("[data-estilo]", cuerpo).onclick = () => { const x = tablasLo().find((y) => y.id === id); galeriaLo("Estilos de tabla", (e) => opcionesLo(id, { estilo: e }), { lo: x ? { primeraC: x.primeraC, ultimaC: x.ultimaC, rayasF: x.rayasF, rayasC: x.rayasC } : null }); };
         $("[data-rango]", cuerpo).onclick = () => { if (!err(convertirLoEnRango(id))) { h.cerrar(); aviso("La tabla es ahora un rango normal (con su formato)", { tipo: "ok" }); } };
         $("form", cuerpo).onsubmit = (e) => e.preventDefault();
+      }
+      // ------------------------------------------------------------ tablas dinámicas (Insertar → Tabla dinámica, como Excel)
+      // t.pv: [{ id, n, origen: { hoja (nombre; null: esta), c1, f1, c2, f2 }, destino: { c, f }, filas, columnas, valores:
+      // [{ c, fn }], filtro: { c, sel } | null, estilo, tabla (su pivotTableDefinition, para pintarla), celdas: [refs], sang }].
+      // Lo que resume se escribe en las celdas (como Excel: se queda hasta «Actualizar»); el estilo se pinta en vivo.
+      const dinamicas = () => (t && Array.isArray(t.pv) ? t.pv : []);
+      const dinamicaEn = (c, f) => dinamicas().find((pv) => pv.area && c >= pv.area.c1 && c <= pv.area.c2 && f >= pv.area.f1 && f <= pv.area.f2) || null;
+      /** Los datos de origen: los nombres de los campos (la primera fila) y los registros (con sus valores ya calculados). */
+      const datosOrigen = (o) => NOM.dinamicas.datos(doc(), t, o);
+      /** Arma (o vuelve a armar: Actualizar) la tabla dinámica y escribe sus celdas. Devuelve la tabla o el motivo. */
+      function armarDinamica(pv, opc) {
+        const r = NOM.dinamicas.armar(doc(), t, pv);
+        if (typeof r === "string") return r;
+        const otras = dinamicas().filter((x) => x.id !== pv.id), choca = (a, b) => !(a.c2 < b.c1 || a.c1 > b.c2 || a.f2 < b.f1 || a.f1 > b.f2);
+        if (otras.some((x) => x.area && choca(x.area, r.rango2)) || tablasLo().some((x) => choca(x, r.rango2))) return "La tabla dinámica se encimaría con otra tabla";
+        const antes = new Set(pv.celdas || []), campos = {}, nuevas = [];
+        if (!opc || !opc.reemplazar) for (let f = r.rango2.f1; f <= r.rango2.f2; f++) for (let c = r.rango2.c1; c <= r.rango2.c2; c++) {
+          const ref = F().ref(c, f);
+          if (!antes.has(ref) && crudo(c, f) !== "") return "Ahí ya hay datos: elige otro lugar para la tabla dinámica";
+        }
+        r.celdas.forEach(([c, f, v]) => {
+          const ref = F().ref(c, f), txt = v == null ? "" : typeof v === "number" ? String(v) : /^[=+\-@]|^\d/.test(String(v)) && typeof v === "string" && isNaN(+v) ? "'" + v : String(v);
+          nuevas.push(ref); antes.delete(ref);
+          if ((t["c:" + ref] || "") !== txt) campos["c:" + ref] = txt || null;
+        });
+        antes.forEach((ref) => { if (t["c:" + ref]) campos["c:" + ref] = null; });
+        const nuevo = Object.assign({}, pv, { area: r.rango2, tabla: r.partes.tabla, celdas: nuevas, sang: r.sangrias });
+        campos.pv = dinamicas().some((x) => x.id === pv.id) ? dinamicas().map((x) => (x.id === pv.id ? nuevo : x)) : dinamicas().concat([nuevo]);
+        if ((t.filas || 30) <= r.rango2.f2 + 1) campos.filas = r.rango2.f2 + 5;
+        if ((t.cols || 10) <= r.rango2.c2 + 1) campos.cols = r.rango2.c2 + 3;
+        cambiarT(campos);
+        return nuevo;
+      }
+      function nombreDinamicaNuevo() {
+        const usados = new Set(doc().vivos().filter((b) => b.tipo === "tabla" && Array.isArray(b.pv)).flatMap((b) => b.pv.map((x) => String(x.n || "").toLowerCase())));
+        let k = 1;
+        while (usados.has("tabladinámica" + k)) k++;
+        return "TablaDinámica" + k;
+      }
+      /**
+       * Insertar → Tabla dinámica: def { origen (rango; por omisión la región de datos de la celda), destino ({ c, f } en esta
+       * hoja, o «nueva»: una hoja nueva con la tabla en A3, como Excel), filas, columnas, valores, filtro, estilo }.
+       */
+      function crearDinamica(def) {
+        if (ed.soloLectura || !t) return "Solo puedes ver esta hoja";
+        let o = def.origen;
+        if (!o) { const r0 = rango(); o = r0.c1 === r0.c2 && r0.f1 === r0.f2 ? regionActual(sel.c, sel.f) : r0; }
+        o = Object.assign({ hoja: null }, o);
+        if (def.destino === "nueva" || !def.destino) {
+          o.hoja = o.hoja || F().nombreDeHoja(doc(), t);
+          nuevaHoja();
+          t = tabla();
+        }
+        const destino = def.destino && def.destino !== "nueva" ? def.destino : { c: 0, f: 2 };
+        const pv = { id: NOM.DocCRDT.nuevoId(), n: def.n || nombreDinamicaNuevo(), origen: o, destino, filas: def.filas || [], columnas: def.columnas || [], valores: def.valores || [], filtro: def.filtro || null, estilo: def.estilo || "PivotStyleLight16" };
+        return armarDinamica(pv);
+      }
+      function actualizarDinamica(id) {
+        const pv = dinamicas().find((x) => x.id === id || x.n === id);
+        if (!pv) return "No está esa tabla dinámica";
+        return armarDinamica(pv, { reemplazar: true });
+      }
+      function cambiarDinamica(id, cambios) {
+        const pv = dinamicas().find((x) => x.id === id || x.n === id);
+        if (!pv) return "No está esa tabla dinámica";
+        return armarDinamica(Object.assign({}, pv, cambios), { reemplazar: true });
+      }
+      function quitarDinamica(id) {
+        const pv = dinamicas().find((x) => x.id === id || x.n === id);
+        if (!pv) return "No está esa tabla dinámica";
+        const campos = {};
+        (pv.celdas || []).forEach((ref) => { if (t["c:" + ref]) campos["c:" + ref] = null; });
+        const resto = dinamicas().filter((x) => x.id !== pv.id);
+        campos.pv = resto.length ? resto : null;
+        cambiarT(campos);
+        return true;
+      }
+      /** Los campos de la tabla dinámica (como el panel de Excel): cada campo a Filas, Columnas, Valores (con su resumen) o Filtro. */
+      function dialogoDinamica(pv) {
+        pv = pv || dinamicaEn(sel.c, sel.f);
+        let o = pv ? pv.origen : null;
+        if (!o) { const r0 = rango(); o = Object.assign({ hoja: null }, r0.c1 === r0.c2 && r0.f1 === r0.f2 ? regionActual(sel.c, sel.f) : r0); }
+        const d = datosOrigen(o);
+        if (typeof d === "string") return aviso(d, { tipo: "aviso" });
+        const lugar = (ci) => {
+          if (!pv) return "";
+          if (pv.filas.includes(ci)) return "filas"; if (pv.columnas.includes(ci)) return "columnas"; if (pv.filtro && pv.filtro.c === ci) return "filtro";
+          const v = pv.valores.find((x) => x.c === ci); return v ? "v:" + v.fn : "";
+        };
+        const opciones = [["", "—"], ["filas", "Filas"], ["columnas", "Columnas"], ["v:sum", "Valores: Suma"], ["v:count", "Valores: Cuenta"], ["v:average", "Valores: Promedio"], ["v:max", "Valores: Máx."], ["v:min", "Valores: Mín."], ["filtro", "Filtro"]];
+        const cuerpo = html(`<form class="col" style="gap:10px">
+          <p class="chico tenue">Datos: ${esc((o.hoja ? o.hoja + "!" : "") + F().ref(o.c1, o.f1) + ":" + F().ref(o.c2, o.f2))} · ${d.datos.length} filas</p>
+          <div class="din-campos">${d.campos.map((n, ci) => `<label class="fila" style="gap:8px;justify-content:space-between"><span class="recorta">${esc(n)}</span><select data-ci="${ci}">${opciones.map(([v, tx]) => `<option value="${v}"${lugar(ci) === v ? " selected" : ""}>${tx}</option>`).join("")}</select></label>`).join("")}</div>
+          ${pv ? "" : `<label class="fila" style="gap:6px"><input type="checkbox" data-nueva checked> En una hoja nueva (si no, en la celda elegida)</label>`}</form>`);
+        const pie = html(`<div style="display:contents">${pv ? `<button class="btn" type="button" data-quitar>Eliminar</button>` : ""}<span class="crece"></span><button class="btn" type="button" data-no>Cancelar</button><button class="btn primario" type="button" data-si>${pv ? "Aplicar" : "Crear"}</button></div>`);
+        const h = NOM.hoja({ titulo: pv ? "Campos de la tabla dinámica" : "Insertar tabla dinámica", icono: "table-2", cuerpo, pie });
+        // (el orden en que se eligen es el orden de los campos en cada área)
+        const orden = [];
+        $$("[data-ci]", cuerpo).forEach((s) => { if (s.value) orden.push(+s.dataset.ci); s.onchange = () => { const ci = +s.dataset.ci, k = orden.indexOf(ci); if (k >= 0) orden.splice(k, 1); if (s.value) orden.push(ci); }; });
+        $("[data-no]", pie).onclick = () => h.cerrar();
+        const bq = $("[data-quitar]", pie);
+        if (bq) bq.onclick = () => { quitarDinamica(pv.id); h.cerrar(); };
+        $("[data-si]", pie).onclick = () => {
+          const def = { filas: [], columnas: [], valores: [], filtro: null };
+          orden.forEach((ci) => { const v = $(`[data-ci="${ci}"]`, cuerpo).value; if (v === "filas") def.filas.push(ci); else if (v === "columnas") def.columnas.push(ci); else if (v === "filtro") def.filtro = { c: ci, sel: null }; else if (v.startsWith("v:")) def.valores.push({ c: ci, fn: v.slice(2) }); });
+          const r = pv ? cambiarDinamica(pv.id, def) : crearDinamica(Object.assign(def, { origen: o, destino: $("[data-nueva]", cuerpo).checked ? "nueva" : { c: sel.c, f: sel.f } }));
+          if (typeof r === "string") return aviso(r, { tipo: "aviso" });
+          h.cerrar();
+        };
       }
       // ------------------------------------------------------------ imágenes sobre la hoja (Insertar → Imágenes, como Excel)
       // Bloques { tipo: "imagen", hoja (la tabla), pagina, src, w, h (px), de: { c, f } (la celda donde empieza), alt }.
@@ -1973,6 +2086,7 @@
         const ref = F().ref(c, f), v = ev.valor(c, f), fmt = t["f:" + ref];
         const st = [];
         let color = vt("k:" + ref) || "", fondo = vt("r:" + ref) || "", negrita = !!vt("n:" + ref);
+        if (capaLo["sgp:" + ref]) st.push(`padding-left:${2 + 9 * capaLo["sgp:" + ref]}px`);   // (los elementos de adentro de una tabla dinámica, como Excel)
         for (const rg of conds) if (dentro(rg.r, c, f) && cumple(rg, v)) { if (rg.color) color = rg.color; if (rg.fondo) fondo = rg.fondo; if (rg.negrita) negrita = true; break; }
         // formato condicional de Excel: gana sobre el formato propio de la celda (como en Excel)
         const cx = cfx ? cfx.de(c, f) : null, capas = [], tams = [], pos = [];
@@ -3858,6 +3972,8 @@
               { texto: "Formato condicional…", corto: "Condicional", icono: "paint-bucket", off: lect, fn: dialogoCondicional },
               { texto: "Estilos de celda…", corto: "Estilos", icono: "paint-bucket", off: lect, fn: galeriaEstilosCelda },
               { texto: "Dar formato como tabla…", corto: "Tabla", icono: "table", off: lect, fn: dialogoFormatoTabla },
+              { texto: "Tabla dinámica…", corto: "Dinámica", icono: "table-2", off: lect, fn: () => dialogoDinamica(dinamicaEn(sel.c, sel.f)) },
+              ...(dinamicaEn(sel.c, sel.f) ? [{ texto: "Actualizar la tabla dinámica", corto: "Actualizar", icono: "refresh-cw", off: lect, fn: () => { const r = actualizarDinamica(dinamicaEn(sel.c, sel.f).id); if (typeof r === "string") aviso(r, { tipo: "aviso" }); } }] : []),
               ...(loEn(sel.c, sel.f) ? [{ texto: "Diseño de tabla…", corto: "Diseño", icono: "table", off: lect, fn: () => dialogoDisenoLo() }] : []),
               { texto: "Minigráficos…", corto: "Minigráficos", icono: "bar-chart", off: lect, fn: dialogoMinigraficos },
               { texto: "Imagen…", corto: "Imagen", icono: "image", off: lect, fn: () => insertarImagenHoja() },
@@ -3968,6 +4084,7 @@
           { texto: "Formato condicional…", icono: "paint-bucket", fn: dialogoCondicional },
           { texto: "Estilos de celda…", icono: "paint-bucket", fn: galeriaEstilosCelda },
           { texto: "Dar formato como tabla…", icono: "table", fn: dialogoFormatoTabla },
+          { texto: "Tabla dinámica…", icono: "table-2", claves: "tabla dinamica pivote resumen", fn: () => dialogoDinamica(dinamicaEn(sel.c, sel.f)) },
           { texto: "Diseño de tabla…", icono: "table", fn: () => dialogoDisenoLo() },
           { texto: "Minigráficos…", icono: "bar-chart", fn: dialogoMinigraficos },
           { texto: "Imagen…", icono: "image", fn: () => insertarImagenHoja() },
@@ -4095,6 +4212,7 @@
         herramientas: { quitarDuplicados, regionActual, textoEnColumnas, partirTexto, buscarObjetivo, consolidar, tablaDatos: crearTablaDatos, rellenoRapido },
         enfoque: alternarEnfoque, enfoqueActivo: () => enfoque, estiloCelda: aplicarEstiloCelda, minigraficos: { crear: crearMinigraficos, quitar: quitarMinigraficos }, imagen: insertarImagenHoja,
           tablasFormato: { crear: formatoComoTabla, opciones: opcionesLo, convertir: convertirLoEnRango, lista: () => tablasLo().slice(), en: loEn, capa: () => capaLo }, insertarFilas,
+          dinamicas: { crear: crearDinamica, actualizar: actualizarDinamica, cambiar: cambiarDinamica, quitar: quitarDinamica, lista: () => dinamicas().slice(), en: dinamicaEn },
         escenarios: { lista: escenariosHoja, guardar: guardarEscenario, quitar: quitarEscenario, mostrar: mostrarEscenario, resumen: resumenEscenarios },
         dialogos: { duplicados: dialogoDuplicados, textoColumnas: dialogoTextoColumnas, objetivo: dialogoObjetivo, nombres: administradorNombres, consolidar: dialogoConsolidar, tablaDatos: dialogoTablaDatos, escenarios: administradorEscenarios, rellenoRapido: ejecutarRellenoRapido, estilosCelda: galeriaEstilosCelda },
         calculo: { modo: modoCalculo, fijar: fijarModoCalculo, ahora: calcularAhora },
