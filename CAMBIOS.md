@@ -2,6 +2,11 @@
 
 Lo que cambió en cada versión, en corto (es la página «Novedades» de la ayuda; la escribe `4-CODIGO/ayuda/generar.py`). El diario completo, día por día, está en `LOG.md`.
 
+## 0.22.2 — noviembre de 2026
+
+- **Direcciones cortas:** `nom.qd.je` lleva a la página con su candado, `nom.qd.je/app` baja la app de Android y
+  `nom.qd.je/codigo` abre el código fuente.
+
 ## 0.22.1 — noviembre de 2026
 
 - **Accesibilidad:** los botones de buscar e historial de los editores, nueva hoja, nueva diapositiva y las vistas del
