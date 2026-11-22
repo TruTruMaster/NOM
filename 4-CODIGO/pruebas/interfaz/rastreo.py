@@ -35,7 +35,8 @@ VISIBLES = r"""() => {
 
 ESTADO = r"""() => ({
   hash: location.hash,
-  hoja: (document.querySelector('.velo .hoja h2') || {}).textContent || null,
+  // (el modo de lectura del texto también tapa todo y se cierra con Escape, como una ventana)
+  hoja: (document.querySelector('.velo .hoja h2') || {}).textContent || (document.querySelector('.wd-lectura') ? 'Modo de lectura' : null),
   menu: !!document.querySelector('.menu:not(.saliendo)'),
   // (una ruedita que ya se está cerrando, con su animación de 170 ms, no cuenta como abierta)
   rueda: !!document.querySelector('.rueda-velo:not(.saliendo):not(.cambiando)'),
