@@ -102,6 +102,9 @@ cifrados) no cuenta como recopilado; lo que pasa por la red del salón tampoco (
 
 ### 2.5 La ficha de la tienda
 
+**Lista para copiar en `docs/FICHA-GOOGLE-PLAY.md`** (textos medidos, capturas de 1080 × 1920 y gráfico de 1024 × 500
+en `marca/play/`).
+
 Nombre (hasta 30 caracteres), descripción corta (80) y larga (4000), ícono de 512 × 512 PNG, gráfico de funciones de
 1024 × 500, de 2 a 8 capturas de teléfono (las de `7-PRESENTACION/imagenes/app/*-cel.png` sirven de base), categoría
 «Productividad», **correo de contacto** (obligatorio, tarea 1) y la URL de la política de privacidad. Si se cambia el
