@@ -3799,6 +3799,69 @@
     pasos.push(final(ev.calcularTodo("=" + s, c, f)));
     return pasos;
   }
+  // ---- Referencias estructuradas de las tablas de Excel (Tabla1[Ventas], Tabla1[[#Encabezados],[Zona]], [@Ventas]…)
+  /** Fórmula con referencias estructuradas → la misma con referencias normales, para la celda (c, f) de la hoja `hojaAct`.
+      `tablas`: { nombre en minúsculas: { hoja, c1, f1, c2, f2, enc, tot, cols: [nombres] } }. La usan el importador de
+      Excel y el evaluador (las tablas con formato hechas en NOM, t.lo). */
+  function sinEstructuradas(fx, tablas, hojaAct, c, f, refHoja) {
+    refHoja = refHoja || ((n) => prefijoHoja(n).slice(0, -1));
+    if (!Object.keys(tablas).length || !/\[/.test(fx)) return fx;
+    const colDe = (T, n) => T.cols.findIndex((x) => x.toLowerCase() === String(n).replace(/^'|'$/g, "").replace(/'(.)/g, "$1").toLowerCase());
+    const rango = (T, cA, cB, fA, fB) => {
+      const pre = T.hoja && T.hoja !== hojaAct ? refHoja(T.hoja) + "!" : "";
+      const r1 = ref(T.c1 + cA, fA), r2 = ref(T.c1 + cB, fB);
+      return pre + (r1 === r2 ? r1 : r1 + ":" + r2);
+    };
+    const traducir = (T, dentro) => {
+      const datosA = T.f1 + T.enc, datosB = T.f2 - T.tot;
+      let partes = [], m;
+      const reCol = /\[([^\[\]]*)\]/g;
+      if (!/\[/.test(dentro)) partes = [dentro.trim()]; else while ((m = reCol.exec(dentro))) partes.push(m[1]);
+      const especial = partes.filter((x) => /^#/.test(x)).map((x) => x.toLowerCase()), nombres = partes.filter((x) => x && !/^#/.test(x));
+      let esta = especial.includes("#this row") || especial.includes("#esta fila") || /^@/.test(dentro.trim());
+      const nombresL = nombres.map((n) => n.replace(/^@/, "").trim()).filter(Boolean);
+      let fA = datosA, fB = datosB;
+      if (especial.includes("#all") || especial.includes("#todo")) { fA = T.f1; fB = T.f2; }
+      else if (especial.includes("#headers") || especial.includes("#encabezados")) { fA = fB = T.f1; if (especial.includes("#data") || especial.includes("#datos")) fB = datosB; }
+      else if (especial.includes("#totals") || especial.includes("#totales")) { fA = fB = T.f2; if (especial.includes("#data") || especial.includes("#datos")) fA = datosA; }
+      if (esta) { fA = fB = f; }
+      let cA = 0, cB = T.c2 - T.c1;
+      if (nombresL.length) {
+        const i1 = colDe(T, nombresL[0]), i2 = colDe(T, nombresL[nombresL.length - 1]);
+        if (i1 < 0 || i2 < 0) return null;
+        cA = Math.min(i1, i2); cB = Math.max(i1, i2);
+      }
+      return rango(T, cA, cB, fA, fB);
+    };
+    // Tabla[...] o Tabla[[...],[...]]; y [@Col] / [[#This Row],[Col]] sin nombre (la tabla de la celda)
+    let r = fx.replace(/([A-Za-z_\\][\w.\\]*)(\[(?:[^\[\]]|\[[^\[\]]*\])*\])/g, (todo, nom, br) => {
+      const T = tablas[nom.toLowerCase()];
+      if (!T) return todo;
+      const x = traducir(T, br.slice(1, -1));
+      return x || todo;
+    });
+    const propia = Object.values(tablas).find((T) => T.hoja === hojaAct && c >= T.c1 && c <= T.c2 && f >= T.f1 && f <= T.f2);
+    if (propia) r = r.replace(/(^|[^\w\]'!])(\[(?:[^\[\]]|\[[^\[\]]*\])*\])/g, (todo, antes, br) => { const x = traducir(propia, br.slice(1, -1)); return x ? antes + x : todo; });
+    return r;
+  }
+  /** Las tablas con formato hechas en NOM (t.lo) de todo el libro, para las referencias estructuradas; null si no hay. */
+  function tablasLoDe(doc, todas) {
+    let out = null;
+    for (const h of todas) {
+      if (!Array.isArray(h.lo) || !h.lo.length) continue;
+      const nombre = nombreDeHoja(doc, h);
+      for (const lo of h.lo) {
+        if (!lo || !lo.n) continue;
+        const cols = [];
+        for (let c = lo.c1; c <= lo.c2; c++) { const v = lo.enc ? h["c:" + ref(c, lo.f1)] : ""; cols.push(String(v == null || v === "" ? "Columna" + (c - lo.c1 + 1) : v)); }
+        (out = out || {})[String(lo.n).toLowerCase()] = { hoja: nombre, c1: lo.c1, f1: lo.f1, c2: lo.c2, f2: lo.f2, enc: lo.enc ? 1 : 0, tot: lo.tot ? 1 : 0, cols };
+      }
+    }
+    return out;
+  }
+  /** El lector de una hoja que da las fórmulas con referencias estructuradas ya traducidas (si el libro tiene tablas). */
+  const conTablas = (lector, tablas, hoja) => (!tablas ? lector : (c, f) => { const v = lector(c, f); return typeof v === "string" && v[0] === "=" && v.includes("[") ? sinEstructuradas(v, tablas, hoja, c, f) : v; });
+  const formulasConTablas = (lista, tablas, hoja) => (!tablas ? lista : () => lista().map(([c, f, v]) => [c, f, v.includes("[") ? sinEstructuradas(v, tablas, hoja, c, f) : v]));
   /** Los nombres definidos del libro (en «_doc», nombres: { minúsculas: { n, d } }): nombre → su definición. */
   function nombresDe(doc) {
     const m = doc && typeof doc.valor === "function" ? doc.valor("_doc", "nombres") : null;
@@ -3806,19 +3869,19 @@
     return (n) => { const x = m[String(n).toLowerCase()]; return x && x.d != null ? x.d : null; };
   }
   function evaluadorDeTabla(doc, b) {
-    const todas = doc ? hojasDe(doc) : [];
-    return evaluador(lectorDe(b), { nombres: nombresDe(doc),
-      nombre: doc ? nombreDeHoja(doc, b) : "", filas: b.filas || b.filasTexto || 30, cols: b.cols || b.colsTexto || 10,
-      formulas: formulasDe(b), sinDerrame: sinDerrameDe(b), combinada: combinadaDe(b),
+    const todas = doc ? hojasDe(doc) : [], tablas = doc ? tablasLoDe(doc, todas) : null, nb = doc ? nombreDeHoja(doc, b) : "";
+    return evaluador(conTablas(lectorDe(b), tablas, nb), { nombres: nombresDe(doc),
+      nombre: nb, filas: b.filas || b.filasTexto || 30, cols: b.cols || b.colsTexto || 10,
+      formulas: formulasConTablas(formulasDe(b), tablas, nb), sinDerrame: sinDerrameDe(b), combinada: combinadaDe(b),
       hojas: (n) => {
-        const x = todas.find((h) => normal(nombreDeHoja(doc, h)) === normal(n));
-        return x ? { obtener: lectorDe(x), filas: x.filas || 30, cols: x.cols || 10, nombre: nombreDeHoja(doc, x), formulas: formulasDe(x), sinDerrame: sinDerrameDe(x), combinada: combinadaDe(x) } : null;
+        const x = todas.find((h) => normal(nombreDeHoja(doc, h)) === normal(n)), nx = x ? nombreDeHoja(doc, x) : "";
+        return x ? { obtener: conTablas(lectorDe(x), tablas, nx), filas: x.filas || 30, cols: x.cols || 10, nombre: nx, formulas: formulasConTablas(formulasDe(x), tablas, nx), sinDerrame: sinDerrameDe(x), combinada: combinadaDe(x) } : null;
       },
     });
   }
 
   NOM.formulas = {
-    hojasDe, nombreDeHoja, evaluadorDeTabla, nombresDe, pasosEvaluar, literalDe,
+    hojasDe, nombreDeHoja, evaluadorDeTabla, nombresDe, pasosEvaluar, literalDe, sinEstructuradas, tablasLoDe,
     evaluador, formatear, aplicarFormato, formatoXL, ErrorF, FechaF, esNum, colLetra, colNum, ref, parseRef, NOMBRES, FIRMAS, ALIAS, INGLES,
     leerFecha, criterio, desplazar, ajustarEstructura, renombrarHoja, refsDe, textoRef, leerRef, transformarRefs, FORMATOS, esFormatoFecha,
     cambiarDecimales, leerEntrada, serie, calcularLiteral, prefijoHoja, textoFecha, aEspanol, formulasDe, conInterseccion,

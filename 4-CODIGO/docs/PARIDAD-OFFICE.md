@@ -164,9 +164,11 @@ en su propio libro; el nombre del estilo no se guarda en el archivo —Excel ve 
 libro nuevo de NOM la letra base es Calibri, no la Aptos Narrow de Excel 2024). **Dar formato como tabla: sí** (21-nov: los 60 estilos de Excel —Claro, Medio, Oscuro— en una galería con muestra; con o sin
 encabezados —sin ellos se inserta arriba la fila «Columna1»…, como Excel—; Diseño de tabla: nombre, fila de encabezado y de
 totales —«Total» y `SUBTOTAL(109,…)`—, filas y columnas con bandas, primera y última columna, botón de filtro, cambiar estilo,
-convertir en rango —el formato se queda en las celdas—; crece al insertar filas o columnas dentro; se pinta en vivo con la
+convertir en rango —el formato se queda en las celdas—; crece al insertar filas o columnas dentro y al escribir justo
+debajo o a la derecha —la columna nueva, «Columna4»—; referencias estructuradas (`=SUMA(Tabla1[Ventas])`, `[@Zona]`,
+`[#Encabezados]`…) en lo que se escribe en NOM, y Excel las guarda igual; el botón del encabezado abre el filtro; se pinta en vivo con la
 lógica del importador y el tema del libro —en uno de NOM, el de Office 2024—; sale como tabla de Excel, también en un libro
-que ya trae tablas; `tablas_formato_real.py` 10 de 10: 66 tablas con su rango, estilo, opciones y columnas, y las 798 celdas
+que ya trae tablas; `tablas_formato_real.py` 13 de 13: 66 tablas con su rango, estilo, opciones y columnas, y las 806 celdas
 con el mismo relleno, letra y negrita que en Excel) |
 | Inicio · Celdas | Insertar, eliminar, formato (alto, ancho, ocultar, proteger) | Sí; proteger hoja con sus permisos: sí |
 | Inicio · Edición | Autosuma, rellenar, borrar, ordenar y filtrar, buscar y seleccionar | Sí (orden y filtro **solo para mí** o para todos: extra) |

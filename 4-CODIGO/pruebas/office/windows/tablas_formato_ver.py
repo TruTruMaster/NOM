@@ -1,6 +1,7 @@
 """Las tablas con formato (ListObjects) de un .xlsx como las ve Excel: de cada una, su nombre, su rango, su estilo, sus
 opciones (encabezado, totales, franjas, primera y última columna, filtro), los nombres de sus columnas y, de cada celda,
-el relleno, el color de la letra y la negrita que se ven (DisplayFormat). Uso: tablas_formato_ver.py ENTRADA.xlsx SALIDA.json"""
+el relleno, el color de la letra y la negrita que se ven (DisplayFormat); y el valor y la fórmula de las CELDAS pedidas
+(de la primera hoja). Uso: tablas_formato_ver.py ENTRADA.xlsx SALIDA.json [CELDA …]"""
 import json, os, sys
 from comun import excel
 
@@ -27,6 +28,7 @@ try:
                               "ultimaC": bool(lo.ShowTableStyleLastColumn), "filtro": bool(lo.ShowAutoFilter), "cols": [lo.ListColumns(k).Name for k in range(1, lo.ListColumns.Count + 1)],
                               "celdas": celdas})
             datos["hojas"][h.Name] = lista
+        datos["valores"] = {c: [wb.Worksheets(1).Range(c).Value, wb.Worksheets(1).Range(c).Formula] for c in sys.argv[3:]}
     finally:
         wb.Close(False)
 except Exception as e:

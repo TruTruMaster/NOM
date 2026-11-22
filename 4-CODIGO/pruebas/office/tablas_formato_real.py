@@ -7,7 +7,8 @@
    otras con las opciones (fila de totales, primera y última columna, columnas con bandas, sin filas con bandas, sin
    encabezados). Descargado, Excel ve cada una con su nombre, rango, estilo, opciones y columnas (windows/tablas_formato_ver.py).
 2. Lo que se ve: el relleno, el color de la letra y la negrita de cada celda en NOM, igual que en Excel (DisplayFormat).
-3. Convertir en rango deja el formato en las celdas; insertar una fila dentro agranda la tabla.
+3. Escribir justo debajo o a la derecha agranda la tabla (como Excel); =SUMA(Tabla3[Ventas]) escrita en NOM se calcula
+   en NOM y en Excel igual; convertir en rango deja el formato en las celdas; insertar una fila dentro agranda la tabla.
 4. En un libro de Excel que ya trae tablas (t02-todo-excel.xlsx), una tabla hecha en NOM se suma a las de antes.
 5. Excel abre todo sin avisos.
 """
@@ -32,10 +33,10 @@ def anota(n, ok, det=""):
     res.append(ok); print(("  bien " if ok else "  MAL  ") + n + ("" if ok else f"  · {str(det)[:900]}"), flush=True)
 
 
-def excel_ver(xlsx):
+def excel_ver(xlsx, *celdas):
     import remoto
     remoto.subir([xlsx], "nomoffice/entrada")
-    remoto.correr_office("tf-" + xlsx.stem, "tablas_formato_ver.py", f"entrada\\{xlsx.name}", f"{xlsx.stem}.tf.json", timeout=900)
+    remoto.correr_office("tf-" + xlsx.stem, "tablas_formato_ver.py", f"entrada\\{xlsx.name}", f"{xlsx.stem}.tf.json", *celdas, timeout=900)
     tmp = SAL / f"{xlsx.stem}.tf.json"; remoto.bajar(f"nomoffice/{xlsx.stem}.tf.json", tmp)
     return json.loads(tmp.read_text(encoding="utf-8"))
 
@@ -88,7 +89,21 @@ def main():
         for lo in los:
             p.locator(f'td[data-c="{lo["c1"]}"][data-f="{lo["f1"]}"]').scroll_into_view_if_needed(); p.wait_for_timeout(60)
             vista_nom[lo["n"]] = p.evaluate(JS_VER, {"c1": lo["c1"], "f1": lo["f1"], "c2": lo["c2"], "f2": lo["f2"]})
-        v = excel_ver(bajar(p, "tablas-nom.xlsx"))
+        # escribir junto a una tabla la agranda (abajo; a la derecha, con encabezado «Columna4») y una fórmula con
+        # referencias estructuradas escrita en NOM se calcula
+        t3 = los[2]
+        for (cc, ff, val) in ((t3["c1"], t3["f2"] + 1, "Pnuevo"), (t3["c2"] + 1, t3["f1"] + 1, "x")):
+            p.locator(f'td[data-c="{cc}"][data-f="{ff}"]').click(); p.wait_for_timeout(150); p.keyboard.type(val); p.keyboard.press("Enter"); p.wait_for_timeout(300)
+        t3b = [x for x in p.evaluate("() => NOM.editorActual.modoApi.api.tablasFormato.lista()") if x["id"] == t3["id"]][0]
+        enc4 = p.evaluate("(r) => NOM.editorActual.modoApi.api.tabla()['c:' + r]", N_ref(t3["c2"] + 1, t3["f1"]))
+        anota("escribir debajo y a la derecha agranda la tabla (la columna nueva se llama «Columna4»)", t3b["f2"] == t3["f2"] + 1 and t3b["c2"] == t3["c2"] + 1 and enc4 == "Columna4", [t3b, enc4])
+        p.locator('td[data-c="25"][data-f="0"]').click(); p.wait_for_timeout(150); p.keyboard.type("=SUMA(Tabla3[Ventas])"); p.keyboard.press("Enter"); p.wait_for_timeout(500)
+        suma_nom = p.evaluate("() => NOM.editorActual.modoApi.api.evaluar().valor(25, 0)")
+        anota("=SUMA(Tabla3[Ventas]) en NOM da 66", suma_nom == 66, suma_nom)
+        los = p.evaluate("() => NOM.editorActual.modoApi.api.tablasFormato.lista()")
+        vista_nom[t3["n"]] = p.evaluate(JS_VER, {"c1": t3b["c1"], "f1": t3b["f1"], "c2": t3b["c2"], "f2": t3b["f2"]})
+        v = excel_ver(bajar(p, "tablas-nom.xlsx"), "Z1")
+        anota("Excel calcula la misma fórmula: 66 (y la guarda con su referencia a la tabla)", v.get("valores", {}).get("Z1", [None])[0] == 66 and "Tabla3[" in str(v.get("valores", {}).get("Z1", ["", ""])[1]), v.get("valores"))
         xl = {lo["nombre"]: lo for lo in list(v.get("hojas", {}).values())[0]} if v.get("hojas") else {}
         anota(f"Excel ve las {n} tablas", len(xl) == n, [v.get("error"), len(xl)])
         mal_meta, mal_celdas, celdas = [], [], 0
@@ -100,7 +115,7 @@ def main():
             dif = {k: (val, e[k]) for k, val in esperado.items() if e[k] != val}
             rng = f"{N_ref(lo['c1'], lo['f1'])}:{N_ref(lo['c2'], lo['f2'])}"
             if e["rango"] != rng: dif["rango"] = (rng, e["rango"])
-            if e["cols"] != ["Nombre", "Zona", "Ventas"]: dif["cols"] = e["cols"]
+            if e["cols"] != ["Nombre", "Zona", "Ventas"] + (["Columna4"] if lo["c2"] - lo["c1"] == 3 else []): dif["cols"] = e["cols"]
             if dif: mal_meta.append((lo["n"], dif))
             for ref, (fo, le, b) in e["celdas"].items():
                 celdas += 1

@@ -2740,6 +2740,19 @@
         if (!Object.keys(campos).length) return true;
         if (f >= (t.filas || 30) - 1) campos.filas = (t.filas || 30) + 10;
         if (c >= (t.cols || 10) - 1) campos.cols = (t.cols || 10) + 2;
+        // Como Excel (Autocorrección → «Incluir nuevas filas y columnas en la tabla»): escribir justo debajo o a la derecha
+        // de una tabla la agranda; una columna nueva lleva encabezado («Columna4» si no se escribió ahí).
+        if (ent.crudo != null && ent.crudo !== "" && !t[k] && !loEn(c, f)) {
+          const lo = tablasLo().find((x) => (!x.tot && f === x.f2 + 1 && c >= x.c1 && c <= x.c2) || (c === x.c2 + 1 && f >= x.f1 && f <= x.f2));
+          if (lo) {
+            const nuevo = Object.assign({}, lo, f === lo.f2 + 1 ? { f2: f } : { c2: c });
+            const choca = tablasLo().some((x) => x.id !== lo.id && !(nuevo.c2 < x.c1 || nuevo.c1 > x.c2 || nuevo.f2 < x.f1 || nuevo.f1 > x.f2));
+            if (!choca) {
+              if (c === lo.c2 + 1 && lo.enc && f !== lo.f1 && crudo(c, lo.f1) === "") campos["c:" + F().ref(c, lo.f1)] = "Columna" + (c - lo.c1 + 1);
+              campos.lo = tablasLo().map((x) => (x.id === lo.id ? nuevo : x));
+            }
+          }
+        }
         cambiarT(campos, opc);
         return true;
       }
@@ -3316,6 +3329,17 @@
       rej.addEventListener("pointerdown", () => { colTab = null; }, true);
       // (los botones +/− del esquema van dentro del número de fila o la letra de columna: que no la elijan)
       rej.addEventListener("pointerdown", (e) => { if (e.target.closest && e.target.closest(".esq-btn")) e.stopImmediatePropagation(); }, true);
+      // El botón de filtro del encabezado de una tabla (los 16 px de la derecha de la celda) abre el filtro de esa columna.
+      rej.addEventListener("click", (e) => {
+        const td = e.target.closest && e.target.closest("td[data-c]");
+        if (!td || !t) return;
+        const c = +td.dataset.c, f = +td.dataset.f, ref = F().ref(c, f);
+        if (!vt("fb:" + ref)) return;
+        const r = td.getBoundingClientRect();
+        if (e.clientX < r.right - 17 || e.clientX > r.right) return;
+        e.stopImmediatePropagation(); e.preventDefault();
+        dialogoFiltro(c);
+      }, true);
       rej.addEventListener("click", (e) => {
         const b = e.target.closest && e.target.closest(".esq-btn");
         if (!b) return;

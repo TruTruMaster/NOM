@@ -111,8 +111,10 @@ estaba conectado).
   `convertirLoEnRango`, `galeriaLo`, `dialogoDisenoLo`; `reacomodar` mueve las tablas; api `tablasFormato`.
 - Prueba: `tablas_formato_real.py` 10/10 (`windows/tablas_formato_ver.py`). La letra «automática» de un libro de NOM es
   la tinta de NOM (#1B1C26), en todas sus celdas; Excel la da negra (no es de las tablas).
-- Falta: que la tabla crezca sola al escribir junto a ella (Excel lo hace), el botón de filtro del encabezado abre el
-  filtro de NOM, referencias estructuradas (`Tabla1[Ventas]`) en fórmulas escritas en NOM.
+- Luego (mismo día): crece al escribir debajo o a la derecha (`escribir`), el botón del encabezado abre `dialogoFiltro`,
+  y las referencias estructuradas pasaron a `formulas.js` (`sinEstructuradas`, `tablasLoDe`, `conTablas`): el importador
+  la usa (importación idéntica en t02, x02, x05, x09) y `evaluadorDeTabla` traduce las fórmulas de las tablas de NOM.
+  `tablas_formato_real.py` 13/13. Falta: columnas calculadas (una fórmula en una columna se copia a toda la columna).
 
 ## 4. Lo que falta (de `PARIDAD-OFFICE.md`)
 

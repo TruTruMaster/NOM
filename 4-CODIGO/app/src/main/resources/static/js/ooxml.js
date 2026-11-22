@@ -5014,44 +5014,7 @@ ${tablasArch.map((_, i) => `<Override PartName="/xl/tables/table${i + 1}.xml" Co
     /** Fórmula con referencias estructuradas → la misma con referencias normales (para la celda c,f de la hoja). */
     function sinEstructuradas(fx, hojaAct, c, f) {
       fx = sinNombres(fx);
-      if (!Object.keys(tablasXl).length || !/\[/.test(fx)) return fx;
-      const colDe = (T, n) => T.cols.findIndex((x) => x.toLowerCase() === String(n).replace(/^'|'$/g, "").replace(/'(.)/g, "$1").toLowerCase());
-      const rango = (T, cA, cB, fA, fB) => {
-        const pre = T.hoja && T.hoja !== hojaAct ? hojaRef(T.hoja) + "!" : "";
-        const r1 = F().ref(T.c1 + cA, fA), r2 = F().ref(T.c1 + cB, fB);
-        return pre + (r1 === r2 ? r1 : r1 + ":" + r2);
-      };
-      const traducir = (T, dentro) => {
-        const datosA = T.f1 + T.enc, datosB = T.f2 - T.tot;
-        let partes = [], m;
-        const reCol = /\[([^\[\]]*)\]/g;
-        if (!/\[/.test(dentro)) partes = [dentro.trim()]; else while ((m = reCol.exec(dentro))) partes.push(m[1]);
-        const especial = partes.filter((x) => /^#/.test(x)).map((x) => x.toLowerCase()), nombres = partes.filter((x) => x && !/^#/.test(x));
-        let esta = especial.includes("#this row") || especial.includes("#esta fila") || /^@/.test(dentro.trim());
-        const nombresL = nombres.map((n) => n.replace(/^@/, "").trim()).filter(Boolean);
-        let fA = datosA, fB = datosB;
-        if (especial.includes("#all") || especial.includes("#todo")) { fA = T.f1; fB = T.f2; }
-        else if (especial.includes("#headers") || especial.includes("#encabezados")) { fA = fB = T.f1; if (especial.includes("#data") || especial.includes("#datos")) fB = datosB; }
-        else if (especial.includes("#totals") || especial.includes("#totales")) { fA = fB = T.f2; if (especial.includes("#data") || especial.includes("#datos")) fA = datosA; }
-        if (esta) { fA = fB = f; }
-        let cA = 0, cB = T.c2 - T.c1;
-        if (nombresL.length) {
-          const i1 = colDe(T, nombresL[0]), i2 = colDe(T, nombresL[nombresL.length - 1]);
-          if (i1 < 0 || i2 < 0) return null;
-          cA = Math.min(i1, i2); cB = Math.max(i1, i2);
-        }
-        return rango(T, cA, cB, fA, fB);
-      };
-      // Tabla[...] o Tabla[[...],[...]]; y [@Col] / [[#This Row],[Col]] sin nombre (la tabla de la celda)
-      let r = fx.replace(/([A-Za-z_\\][\w.\\]*)(\[(?:[^\[\]]|\[[^\[\]]*\])*\])/g, (todo, nom, br) => {
-        const T = tablasXl[nom.toLowerCase()];
-        if (!T) return todo;
-        const x = traducir(T, br.slice(1, -1));
-        return x || todo;
-      });
-      const propia = Object.values(tablasXl).find((T) => T.hoja === hojaAct && c >= T.c1 && c <= T.c2 && f >= T.f1 && f <= T.f2);
-      if (propia) r = r.replace(/(^|[^\w\]'!])(\[(?:[^\[\]]|\[[^\[\]]*\])*\])/g, (todo, antes, br) => { const x = traducir(propia, br.slice(1, -1)); return x ? antes + x : todo; });
-      return r;
+      return F().sinEstructuradas(fx, tablasXl, hojaAct, c, f, hojaRef);
     }
     // La fuente del libro (la primera de styles.xml: Aptos Narrow 11 en Office 2024) define el ancho de las
     // columnas (el ancho del dígito más ancho) y el alto de las filas, como en Excel.
