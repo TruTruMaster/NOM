@@ -4,8 +4,19 @@ descripcion: Qué cambió en cada versión, en palabras sencillas.
 orden: 1
 aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-21
-version: 0.21.0
+version: 0.22.0
 ---
+## 0.22.0 — noviembre de 2026
+
+- **Excel, tablas dinámicas:** Insertar → Tabla dinámica, con campos en filas, columnas y filtro, y valores con suma,
+  cuenta, promedio, máximo o mínimo; se ven como en Excel (con subtotales) y se actualizan cuando cambian los datos.
+- **Excel, Dar formato como tabla:** los 60 estilos de tabla de Excel, fila de totales, franjas, primera y última
+  columna, botón de filtro y convertir en rango; la tabla crece sola al escribir junto a ella y las fórmulas pueden
+  usar sus nombres, como `=SUMA(Tabla1[Ventas])`.
+- **Word, Referencias:** la tabla de contenido ya muestra el número de página de cada título; nuevas tabla de
+  ilustraciones (las imágenes con pie) e índice alfabético (marca palabras con Alt+Mayús+X).
+- Todo se abre igual en Word y Excel, y ellos lo pueden actualizar.
+
 ## 0.21.0 — noviembre de 2026
 
 - **Word, más herramientas de Inicio:** crear y modificar estilos (Estilos…), Tabulaciones…, Ordenar párrafos… (como
