@@ -220,6 +220,16 @@ propios en las modificadas). Cada archivo de terceros guarda su licencia junto a
 | REUSE (FSFE) | Que cada archivo diga su licencia | `reuse lint` |
 | PWABuilder | Si la página instalable está lista para tiendas (manifiesto, service worker) | pwabuilder.com |
 
+## 9b. Lo gratis que ya hay y lo que se puede agregar (22-nov)
+
+| Servicio | Ya se usa | Se puede agregar |
+|---|---|---|
+| **DigitalPlat** (dominio `nom.qd.je`) | DNS propio (200 registros por zona, cambios por API), la redirección `nom.qd.je` → `www` (HTTPS con certificado propio en `23.238.4.245`), los registros del correo (MX de ImprovMX y SPF) | **Monitor** del dominio (avisa si falla el DNS y 14 días antes de que venza el certificado: lo activa el dueño en el panel). La redirección es una por dominio (raíz y, si se quiere, `www`); los 4 lugares libres solo sirven con otros dominios. Enlaces cortos en `s.qzz.io/…` con contador y QR (no hacen falta: ver los atajos) |
+| **NOM mismo** | `nom.qd.je/app` (baja la app) y `nom.qd.je/codigo` (el código), 0.22.2 | Más atajos: una línea en `Atajos.java` |
+| **Cloudflare** (zona `nomcolab.dpdns.org`) | El túnel a la Raspberry, el certificado de `www`, caché de letras, imágenes, scripts y estilos (ya salen `REVALIDATED`: no hace falta otra regla; alargarla haría que, al publicar, la gente viera versiones viejas) | **Turnstile** al crear cuenta (verificación sin captcha, gratis), **después del 27-nov**: agrega un script de Cloudflare a la página (cambia la política de contenido y el aviso de privacidad, que hoy promete que no hay programas de terceros) y si falla nadie puede crear cuenta en plena demostración. Hoy crear cuentas ya tiene tope por dirección y por dispositivo |
+| **ImprovMX** | — | El correo `contacto@nom.qd.je` → Gmail del equipo (1 dominio y 25 direcciones gratis) |
+| **Google y Bing** | IndexNow avisa cada publicación | Search Console y Bing Webmaster: verificar con un TXT (se agrega por la API) para ver y pedir que indexen |
+
 ## 10. Fuentes
 
 - Nivel de API de Google Play: https://developer.android.com/google/play/requirements/target-sdk
