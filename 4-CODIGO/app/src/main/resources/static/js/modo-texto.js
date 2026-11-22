@@ -1688,7 +1688,9 @@
           }
           else if (e.tipo === "campo") {
             // campo de Word: su último valor (la fecha y la hora, al día), con la letra de su texto; Alt+F9: su código
-            const txt = verCodigos ? `{ ${(bl && bl.instr) || ""} }` : NOM.campos ? NOM.campos.textoVisible(bl, { idioma: doc().valor("_doc", "idioma") }) : String((bl && bl.res) || "");
+            const xe = /^\s*(XE|TA|TC)\b/i.test((bl && bl.instr) || "");
+            o.classList.toggle("wd-xe", xe);
+            const txt = verCodigos || (xe && marcasPintar) ? `{ ${(bl && bl.instr) || ""} }` : xe ? "" : NOM.campos ? NOM.campos.textoVisible(bl, { idioma: doc().valor("_doc", "idioma") }) : String((bl && bl.res) || "");
             o.innerHTML = `<span class="wd-campo-v">${envolver(txt, (bl && bl.a) || {})}</span>`;
             o.classList.toggle("codigo", verCodigos);
             o.title = ed.soloLectura ? "" : `Campo de Word: ${(bl && bl.instr) || ""}. «Actualizar campos» (F9) lo calcula otra vez; Alt+F9 muestra los códigos.`;
@@ -2648,6 +2650,9 @@
         /** Inserta donde está el cursor un bloque (índice, tabla de ilustraciones, salto…) o una imagen { src, w, h }. */
         insertarBloque: (e) => insertarBloque(e),
         insertarImagen: (img) => insertarImagenSrc(img),
+        /** Marca una entrada de índice (XE) en cada posición dada (o donde termina lo elegido). */
+        marcarEntrada: (instr, posiciones) => { sincronizar(); const s = leerSel(); marcarEn(posiciones || [s ? s.fin : visPintado.length], instr); },
+        entradasIndice: () => entradasIndiceAlfa(),
         /** Campos de Word: actualizar (F9), ver códigos (Alt+F9), insertar uno. */
         actualizarCampos: () => actualizarCampos(),
         alternarGuiones: () => alternarGuiones(),
@@ -3252,6 +3257,7 @@
        * como Word: cada entrada con puntos hasta su número de página (lo pone numerarIndices al terminar de paginar).
        */
       function pintarIndice(o, e) {
+        if (e && e.modo === "alfa") return pintarIndiceAlfa(o, e);
         const ilus = e && e.modo === "ilus";
         const ent = ilus ? entradasIlustraciones() : entradasContenido();
         const fila = (x) => `<a href="#" data-ir="${esc(x.ir)}" class="wd-ind-e n${x.n}"><span class="wd-ind-tx">${esc(x.t)}</span><span class="wd-ind-pg" ${x.pk ? `data-pg-k="${esc(x.pk)}"` : `data-pg-id="${esc(x.pid)}"`}></span></a>`;
@@ -3275,6 +3281,81 @@
           out.push({ ir: it.id, pid: it.id, n: 1, t: `Figura ${++n}. ${b.pie}` });
         }
         return out;
+      }
+      // ------------------------------------------------------------ índice alfabético (Referencias → Marcar entrada / Insertar índice)
+      /** Las marcas XE del documento, como las junta Word: { entrada: { pags: [n…], subs: { sub: [n…] }, ver } } en orden. */
+      function entradasIndiceAlfa() {
+        const L = {};
+        for (const it of sec().visibles()) {
+          if (!it.e || it.e.tipo !== "campo") continue;
+          const bl = it.e.ref ? doc().bloque(it.e.ref) : null, instr = String((bl && bl.instr) || "");
+          if (!/^\s*XE\b/i.test(instr) || !NOM.campos) continue;
+          const c = NOM.campos.leer(instr), txt = String(c.args[0] || "").trim();
+          if (!txt) continue;
+          const [prin, sub] = txt.split(/(?<!\\):/).map((x) => x.replace(/\\:/g, ":").trim());
+          // (\t "Véase …": en lugar del número de página; campos.leer no lo toma como modificador de XE)
+          const tv = /\\t\s+"([^"]*)"/i.exec(instr), pag = paginaPara(null, it.id) || 1, ver = tv ? tv[1] : null;
+          const E = (L[prin] = L[prin] || { pags: [], subs: {}, ver: null });
+          const lista = sub ? (E.subs[sub] = E.subs[sub] || { pags: [], ver: null }) : E;
+          if (ver) lista.ver = ver; else if (!lista.pags.includes(pag)) lista.pags.push(pag);
+        }
+        const orden = (a, b) => a.localeCompare(b, "es", { sensitivity: "base" }) || (a < b ? -1 : a > b ? 1 : 0);
+        const lineas = [];
+        const txtPags = (x) => (x.ver ? `. ${x.ver}` : x.pags.length ? ", " + x.pags.sort((a, b) => a - b).join(", ") : "");
+        Object.keys(L).sort(orden).forEach((k) => {
+          lineas.push({ n: 1, t: k + txtPags(L[k]) });
+          Object.keys(L[k].subs).sort(orden).forEach((s) => lineas.push({ n: 2, t: s + txtPags(L[k].subs[s]) }));
+        });
+        return lineas;
+      }
+      function pintarIndiceAlfa(o, e) {
+        const lineas = entradasIndiceAlfa(), cols = Math.max(1, Math.min(4, +e.cols || 2));
+        o.classList.add("wd-indice-alfa");
+        const h = lineas.length ? `<div class="wd-ind-alfa" style="column-count:${cols}">${lineas.map((x) => `<p class="i${x.n}">${esc(x.t)}</p>`).join("")}</div>`
+          : `<span class="suave">Elige una palabra y usa «Marcar entrada…» (Alt+Mayús+X) para que aparezca aquí.</span>`;
+        // (en Word, el párrafo que abre el campo cierra la sección de antes: arriba del índice queda un párrafo vacío)
+        const hp = o.closest("p"), cs = hp ? getComputedStyle(hp) : null;
+        const esp = cs ? Math.round(((parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2) + (parseFloat(cs.marginBottom) || 0)) * 10) / 10 : 0;
+        // (y el que cierra la sección de columnas es un párrafo vacío más dentro de las columnas)
+        const h2 = cols > 1 && lineas.length ? `<div class="wd-ind-esp" style="height:${esp}px"></div>` + h.replace(/<\/div>$/, `<div class="wd-ind-esp" style="height:${esp}px"></div></div>`) : h;
+        if (o.dataset.alfa !== h2) { o.dataset.alfa = h2; o.innerHTML = h2; return true; }
+        return false;
+      }
+      /** Marcar entrada (Alt+Mayús+X, como Word): un campo XE oculto después de lo elegido; «Marcar todas»: en cada vez que aparece. */
+      async function marcarEntrada() {
+        if (ed.soloLectura || !NOM.campos) return;
+        sincronizar();
+        const s = leerSel(), elegido = s && !s.col ? visPintado.slice(s.ini, s.fin).map((x) => (x.e ? "" : x.c)).join("").trim() : "";
+        const cuerpoD = html(`<form class="col" style="gap:10px"><label class="col">Entrada principal <input data-prin autocomplete="off" value="${esc(elegido)}"></label>
+          <label class="col">Subentrada <input data-sub autocomplete="off"></label><p class="chico tenue">Las marcas no se ven (se ven con las marcas de formato ¶). El índice las junta con su página.</p></form>`);
+        const pie = html(`<div style="display:contents">${elegido ? `<button class="btn" type="button" data-todas>Marcar todas</button>` : ""}<span class="crece"></span><button class="btn" type="button" data-no>Cerrar</button><button class="btn primario" type="button" data-si>Marcar</button></div>`);
+        const h = NOM.hoja({ titulo: "Marcar entrada de índice", icono: "bookmark", cuerpo: cuerpoD, pie });
+        const instr = () => { const p0 = $("[data-prin]", cuerpoD).value.trim().replace(/:/g, "\\:").replace(/"/g, "'"), sb = $("[data-sub]", cuerpoD).value.trim().replace(/:/g, "\\:").replace(/"/g, "'"); return p0 ? `XE "${p0}${sb ? ":" + sb : ""}"` : null; };
+        $("[data-no]", pie).onclick = () => h.cerrar();
+        $("[data-si]", pie).onclick = () => { const i = instr(); if (!i) return; marcarEn([s && !s.col ? s.fin : (s ? s.ini : visPintado.length)], i); h.cerrar(); NOM.aviso("Entrada marcada", { tipo: "ok" }); };
+        const bt = $("[data-todas]", pie);
+        if (bt) bt.onclick = () => {
+          const i = instr(); if (!i) return;
+          const txt = visPintado.map((x) => (x.e ? "\u0000" : x.c)).join(""), pos = [];
+          let k = -1;
+          while ((k = txt.indexOf(elegido, k + 1)) >= 0) { const a = txt[k - 1], b = txt[k + elegido.length]; if (!(a && /[\p{L}\p{N}]/u.test(a)) && !(b && /[\p{L}\p{N}]/u.test(b))) pos.push(k + elegido.length); }
+          marcarEn(pos, i); h.cerrar(); NOM.aviso(`${pos.length} entrada(s) marcada(s)`, { tipo: "ok" });
+        };
+      }
+      /** Pone el campo XE `instr` en cada posición (de atrás hacia adelante, para que no se muevan las de antes). */
+      function marcarEn(posiciones, instr) {
+        if (!posiciones.length) return;
+        comando(() => {
+          const grupo = "xe-" + Date.now();
+          let ultimo = 0;
+          posiciones.slice().sort((a, b) => b - a).forEach((p) => {
+            const ref = NOM.DocCRDT.nuevoId();
+            doc().cambiar(ref, { enTexto: true, tipo: "campo", instr, res: "" }, { origen: "comando" });
+            const fin = insertarEn(p, [{ c: OBJ, obj: { tipo: "campo", ref } }], grupo);
+            if (!ultimo) ultimo = fin;
+          });
+          return { sel: [ultimo, ultimo] };
+        });
       }
       /** El número de página de cada entrada de las tablas de contenido e ilustraciones, según la paginación de la vista. */
       function numerarIndices(raiz0) {
@@ -4433,6 +4514,10 @@
         paginarBase();
         for (let k = 0; k < 4 && revisarAcomodos(); k++) paginarBase();
         numerarIndices();
+        // el índice alfabético depende de las páginas: si cambió, se pinta otra vez y se pagina una vez más
+        let otra = false;
+        $$(".wd-indice-alfa[data-obj]", cuerpo).forEach((o) => { const it = sec().item(o.dataset.id); if (it && it.e && pintarIndiceAlfa(o, it.e)) otra = true; });
+        if (otra) { paginarBase(); numerarIndices(); }
       }
       function paginarBase() {
         clearTimeout(tPag); tPag = null;
@@ -5703,6 +5788,8 @@
           { texto: "Línea horizontal", icono: "minus", fn: () => insertarBloque({ tipo: "linea" }) },
           { texto: "Índice (tabla de contenido)", icono: "list-tree", fn: () => insertarBloque({ tipo: "indice" }) },
           { texto: "Tabla de ilustraciones", icono: "image", fn: () => insertarBloque({ tipo: "indice", modo: "ilus" }) },
+          { texto: "Marcar entrada de índice…", icono: "bookmark", atajo: "Alt+Mayús+X", fn: marcarEntrada },
+          { texto: "Índice alfabético", icono: "list", fn: () => insertarBloque({ tipo: "indice", modo: "alfa", cols: 2 }) },
           { texto: "Ecuación…", icono: "sigma", fn: () => dialogoEcuacion(null) },
           { texto: "Nota al pie…", icono: "superscript", fn: () => dialogoNota(null) },
           { texto: "Columnas (dos lado a lado)", icono: "columns-3", fn: () => insertarColumnas(2) },

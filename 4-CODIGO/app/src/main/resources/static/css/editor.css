@@ -566,6 +566,11 @@
 .wd-indice a { display: flex; align-items: baseline; color: #000; text-decoration: none; padding: 0 0 5pt; }
 .wd-indice a:hover .wd-ind-tx { text-decoration: underline; }
 .wd-indice .n2 { padding-left: 11pt; } .wd-indice .n3 { padding-left: 22pt; }
+/* índice alfabético de Word: «Índice 1» y «Índice 2» con sangría francesa, en columnas */
+.wd-ind-alfa { column-gap: 36pt; }
+.wd-ind-alfa p { margin: 0; padding-left: 11pt; text-indent: -11pt; break-inside: avoid; }
+.wd-ind-alfa p.i2 { padding-left: 22pt; }
+.wd-obj.wd-campo.wd-xe > .wd-campo-v { border-bottom: 1px dotted currentColor; }
 /* como Word: la entrada, puntos hasta el margen derecho y el número de página */
 .wd-ind-tx { flex: 0 1 auto; min-width: 0; }
 .wd-ind-pg { flex: 1 0 2em; display: flex; justify-content: flex-end; white-space: nowrap; overflow: hidden; }

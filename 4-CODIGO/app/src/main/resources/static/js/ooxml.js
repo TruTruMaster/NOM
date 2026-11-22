@@ -1341,7 +1341,7 @@
         i = emitirUnidad(i, piezas);
       }
       sueltas(us.length);
-      const cuerpo = piezas.join("");
+      const cuerpo = piezas.join("").replace(/\u0001SEC[AB]\d*\u0001/g, "");
 
       function ensamblar(E) {
         const cambio = (k) => { const v = doc.valor("_doc", k), h0 = og.h.d ? og.h.d[k] : undefined; return v == null ? h0 != null : h0 !== H(v); };
@@ -1459,6 +1459,17 @@
       if (unico && unico.tipo === "salto") return '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
       if (unico && unico.tipo === "saltocol") return '<w:p><w:r><w:br w:type="column"/></w:r></w:p>';
       if (unico && unico.tipo === "linea") return '<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="8E8E8E"/></w:pBdr></w:pPr></w:p>';
+      if (unico && unico.tipo === "indice" && unico.modo === "alfa") {
+        // Campo INDEX de Word con las entradas ya escritas («Entrada, 2, 5», las subentradas con «Índice 2»). Con columnas,
+        // en su propia sección continua, como lo deja Word (las marcas \u0001SEC…\u0001 se cambian al armar el documento).
+        const cols = Math.max(1, Math.min(4, +unico.cols || 2));
+        const lineas = edA && edA.doc === doc && edA.modoApi && edA.modoApi.textoApi && edA.modoApi.textoApi.entradasIndice ? edA.modoApi.textoApi.entradasIndice() : [];
+        const ent = lineas.map((l) => `<w:p><w:pPr><w:pStyle w:val="Indice${l.n}"/></w:pPr>${texto(l.t, {})}</w:p>`).join("") || "<w:p/>";
+        if (cols === 1) return campoIndice('INDEX \\z "3082"', ent);
+        // como Word: el párrafo que abre el campo cierra la sección de antes y el último del resultado cierra la de columnas
+        return `<w:p><w:pPr>\u0001SECA\u0001</w:pPr><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> INDEX \\c &quot;${cols}&quot; \\z &quot;3082&quot; </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r></w:p>`
+          + ent + `<w:p><w:pPr>\u0001SECB${cols}\u0001</w:pPr></w:p><w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>`;
+      }
       if (unico && unico.tipo === "indice") {
         // Campo TOC de Word con las entradas ya escritas, con su número de página (Word lo puede actualizar con F9).
         if (unico.modo === "ilus")
@@ -1659,8 +1670,15 @@
     }
     if (notas.length) rels.push({ id: "rIdNotas", tipo: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes", destino: "footnotes.xml" });
     const notasXml = XML + `<w:footnotes ${NSW}><w:footnote w:type="separator" w:id="-1"><w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:separator/></w:r></w:p></w:footnote><w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>${notas.map((t, i) => `<w:footnote w:id="${baseNota + i + 1}"><w:p><w:pPr><w:pStyle w:val="TextoNota"/></w:pPr><w:r><w:rPr><w:rStyle w:val="RefNota"/></w:rPr><w:footnoteRef/></w:r><w:r><w:t xml:space="preserve"> ${x(t)}</w:t></w:r></w:p></w:footnote>`).join("")}</w:footnotes>`;
+    // la hoja y los márgenes (de la sección final y de las que abre un índice alfabético con columnas)
+    const pgSzX = `<w:pgSz w:w="${(hor ? TAM[1] : TAM[0]) * TWIP}" w:h="${(hor ? TAM[0] : TAM[1]) * TWIP}"${hor ? ' w:orient="landscape"' : ""}/>`;
+    const pgMarX = `<w:pgMar w:top="${mv(m.s)}" w:right="${mv(m.d)}" w:bottom="${mv(m.i)}" w:left="${mv(m.iz)}" w:header="720" w:footer="720" w:gutter="0"/>`;
+    const conSecIndice = /\u0001SECA\u0001/.test(cuerpo);
+    const cuerpoSec = !conSecIndice ? cuerpo : cuerpo
+      .replace(/\u0001SECA\u0001/g, `<w:sectPr>${refs}${pgSzX}${pgMarX}${ep2.primera && (hayEnc || hayPie) ? "<w:titlePg/>" : ""}</w:sectPr>`)
+      .replace(/\u0001SECB(\d+)\u0001/g, (_, n) => `<w:sectPr><w:type w:val="continuous"/>${pgSzX}${pgMarX}<w:cols w:num="${n}" w:space="720"/></w:sectPr>`);
     const documento = XML + `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">
-<w:body>${cuerpo || "<w:p/>"}<w:sectPr>${refs}<w:pgSz w:w="${(hor ? TAM[1] : TAM[0]) * TWIP}" w:h="${(hor ? TAM[0] : TAM[1]) * TWIP}"${hor ? ' w:orient="landscape"' : ""}/><w:pgMar w:top="${mv(m.s)}" w:right="${mv(m.d)}" w:bottom="${mv(m.i)}" w:left="${mv(m.iz)}" w:header="720" w:footer="720" w:gutter="0"/>${lnNumTypeXml(doc.valor("_doc", "numLineas") ? (doc.valor("_doc", "numLineas") || {}).v : (doc.valor("_doc", "pagina") || {}).numLin)}${ep2.inicio > 1 ? `<w:pgNumType w:start="${ep2.inicio}"/>` : ""}${ep2.primera && (hayEnc || hayPie) ? "<w:titlePg/>" : ""}</w:sectPr></w:body></w:document>`;
+<w:body>${cuerpoSec || "<w:p/>"}<w:sectPr>${refs}${conSecIndice ? '<w:type w:val="continuous"/>' : ""}${pgSzX}${pgMarX}${lnNumTypeXml(doc.valor("_doc", "numLineas") ? (doc.valor("_doc", "numLineas") || {}).v : (doc.valor("_doc", "pagina") || {}).numLin)}${ep2.inicio > 1 ? `<w:pgNumType w:start="${ep2.inicio}"/>` : ""}${ep2.primera && (hayEnc || hayPie) ? "<w:titlePg/>" : ""}</w:sectPr></w:body></w:document>`;
     const ep = (id, nombre, rpr, ppr, extra) => `<w:style w:type="paragraph" w:styleId="${id}"><w:name w:val="${nombre}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:uiPriority w:val="9"/><w:qFormat/>${extra || ""}${ppr ? `<w:pPr>${ppr}</w:pPr>` : ""}${rpr ? `<w:rPr>${rpr}</w:rPr>` : ""}</w:style>`;
     // 1.4 El formato base del documento (el del espacio) es el estilo Normal de Word.
     const fb = doc.valor("_doc", "formato") || {};
@@ -1680,7 +1698,7 @@ ${ep("Quote", "Quote", '<w:i/><w:iCs/><w:color w:val="404040"/>', '<w:spacing w:
 ${ep("Codigo", "Código", '<w:rFonts w:ascii="Courier New" w:hAnsi="Courier New" w:cs="Courier New"/><w:sz w:val="20"/>', '<w:shd w:val="clear" w:color="auto" w:fill="F3F3F3"/><w:spacing w:after="0"/>')}
 ${ep("ListParagraph", "List Paragraph", "", '<w:ind w:left="720"/><w:contextualSpacing/>')}
 ${ep("TOCHeading", "TOC Heading", ligera + '<w:color w:val="2F5496"/><w:sz w:val="32"/>', '<w:spacing w:before="240" w:after="0"/>')}
-${ep("Tabladeilustraciones", "table of figures", "", '<w:spacing w:after="0"/>')}${ep("TDC1", "toc 1", "", '<w:spacing w:after="100"/>')}${ep("TDC2", "toc 2", "", '<w:spacing w:after="100"/><w:ind w:left="220"/>')}${ep("TDC3", "toc 3", "", '<w:spacing w:after="100"/><w:ind w:left="440"/>')}
+${ep("Tabladeilustraciones", "table of figures", "", '<w:spacing w:after="0"/>')}${ep("Indice1", "index 1", "", '<w:spacing w:after="0" w:line="240" w:lineRule="auto"/><w:ind w:left="220" w:hanging="220"/>')}${ep("Indice2", "index 2", "", '<w:spacing w:after="0" w:line="240" w:lineRule="auto"/><w:ind w:left="440" w:hanging="220"/>')}${ep("TDC1", "toc 1", "", '<w:spacing w:after="100"/>')}${ep("TDC2", "toc 2", "", '<w:spacing w:after="100"/><w:ind w:left="220"/>')}${ep("TDC3", "toc 3", "", '<w:spacing w:after="100"/><w:ind w:left="440"/>')}
 ${ep("Header", "header", "", '<w:tabs><w:tab w:val="center" w:pos="4680"/><w:tab w:val="right" w:pos="9360"/></w:tabs><w:spacing w:after="0" w:line="240" w:lineRule="auto"/>')}
 ${ep("Footer", "footer", "", '<w:tabs><w:tab w:val="center" w:pos="4680"/><w:tab w:val="right" w:pos="9360"/></w:tabs><w:spacing w:after="0" w:line="240" w:lineRule="auto"/>')}
 <w:style w:type="character" w:styleId="Hyperlink"><w:name w:val="Hyperlink"/><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr></w:style>
