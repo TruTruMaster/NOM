@@ -95,6 +95,25 @@ siluetas y «estrecho»/«a través») antes de volver a intentarlo.
   (Énfasis 1 `#156082`); «Medio 2» pinta el encabezado `#156082`, letra blanca en negrita, y las franjas `#C0E6F5`
   (`windows/tabla_tema.py ENTRADA SALIDA RANGO ESTILO`).
 
+## 3d. Publicación de la 0.21.0 (21-nov, 19:35): hecha
+
+Regresión de Windows 37/40 y, con los tres arreglos de §3c, las cinco que fallaron 5/5. Pi (jar de `e76fbf3`, humo 34/34
+en www.nom.qd.je), GitHub (`7c3fe47`), APK 38 (release «más reciente»), IndexNow 76 direcciones. **Falta el A55** (no
+estaba conectado).
+
+## 3e. Después de la 0.21.0: Dar formato como tabla (sin publicar)
+
+- `ooxml.js`: el pintado de estilos de tabla del importador pasó a nivel de módulo (`pintarTablaXl`, `pintarCapasXl`,
+  `colorTablaConTema`, `TEMA_OFFICE_XL`); la importación da idéntico en t02, x01, x05, x06, x07 y x10. `NOM.ooxml.tablaXl`
+  lo ofrece a la hoja. Exportación: `xmlTablaXl`/`columnasTablaXl`/`nombreTablaXl`, en el libro nuevo (`tablasArch`) y en
+  el original (`nomtablaN.xml`, `tableParts` sumado a los que había). `VERSION_XL` 13: `t.xl.tema`.
+- `modo-hoja.js`: `t.lo`, `capaLo` + `vt()` (lo propio de la celda gana), `formatoComoTabla`, `opcionesLo`,
+  `convertirLoEnRango`, `galeriaLo`, `dialogoDisenoLo`; `reacomodar` mueve las tablas; api `tablasFormato`.
+- Prueba: `tablas_formato_real.py` 10/10 (`windows/tablas_formato_ver.py`). La letra «automática» de un libro de NOM es
+  la tinta de NOM (#1B1C26), en todas sus celdas; Excel la da negra (no es de las tablas).
+- Falta: que la tabla crezca sola al escribir junto a ella (Excel lo hace), el botón de filtro del encabezado abre el
+  filtro de NOM, referencias estructuradas (`Tabla1[Ventas]`) en fórmulas escritas en NOM.
+
 ## 4. Lo que falta (de `PARIDAD-OFFICE.md`)
 
 Igual que `RELEVO-20NOV-NOCHE.md` §3 y §4, menos lo de esta sesión: en PowerPoint las secciones y casi toda la pestaña
@@ -102,6 +121,13 @@ Presentación pasaron a «Sí» (quedan presentar en línea, grabar, subtítulos
 de x10; también en Excel las tablas de datos (crearlas) y los escenarios. Unas 51 filas o partes de fila en «No» o «A medias»
 (Word ~23, Excel ~12, PowerPoint ~13, comunes ~11). En la pestaña Datos de Excel queda la previsión; en Word, el control
 de cambios pasó a «Sí».
+
+**Macros y Power Query (el dueño, 21-nov: «son la ventaja del Excel y PowerPoint originales»)**: hoy no hay nada (ni en
+otras ramas): un `.xlsm`/`.docm`/`.pptm` no se abre, y las consultas de Power Query de un `.xlsx` deberían conservarse
+(se parcha el original) pero no se ha medido. Plan: (1) abrir los tres con macros y conservar `vbaProject.bin` (Office
+las corre al descargar), ver el código de cada módulo (MS-OVBA), y de Power Query medir que se conservan y mostrar las
+consultas (DataMashup) con su código M; (2) correr macros de Excel en un intérprete aislado y con aviso (celdas, rangos,
+ciclos, MsgBox, formato) y consultas con fuentes del libro o CSV, cada resultado contra Excel real.
 
 **Para el dueño — imprimir de Excel**: medir cómo parte Excel una hoja en páginas (Disposición de página, Vista de saltos)
 necesita la cola de impresión de Windows en la PC de Office, y ahí está **desactivada** (`sc qc spooler`: DISABLED; quizá a

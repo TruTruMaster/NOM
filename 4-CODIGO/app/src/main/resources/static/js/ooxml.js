@@ -3532,7 +3532,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     if (!tablas.length) throw new Error("Este documento no tiene ninguna tabla");
     const nombres = [];
     const fab = fabricaXlsx(doc, null);
-    const graficasArch = [], dibujos = [], relsHojas = [], mediosXl = [];
+    const graficasArch = [], dibujos = [], relsHojas = [], mediosXl = [], tablasArch = [], nombresLo = new Set();
     const hojas = tablas.map((t, i) => {
       let n = F().nombreDeHoja(doc, t).replace(/[\\/?*[\]:]/g, " ").slice(0, 31) || `Hoja${i + 1}`;
       while (nombres.includes(n)) n = n.slice(0, 28) + " " + (i + 1);
@@ -3570,6 +3570,17 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
           dibujo = `<drawing r:id="rIdD1"/>`;
         }
       }
+      // tablas con formato (Dar formato como tabla)
+      const los = tablasLoDe(t);
+      if (los.length) {
+        const ids = los.map((lo) => {
+          tablasArch.push(xmlTablaXl(lo, tablasArch.length + 1, nombreTablaXl(lo.n, nombresLo), columnasTablaXl(lo, t, ev)));
+          const rid = "rIdT" + tablasArch.length;
+          (relsHojas[i] = relsHojas[i] || []).push({ id: rid, tipo: T_TABLA_XL, destino: `../tables/table${tablasArch.length}.xml` });
+          return rid;
+        });
+        dibujo += `<tableParts count="${ids.length}">${ids.map((r) => `<tablePart r:id="${r}"/>`).join("")}</tableParts>`;
+      }
       return hojaDesdeCero(t, ev, fab, (ref, esFecha) => fab.estilo(t, ref, esFecha), i === 0, dibujo);
     });
     const { fuentes, rellenos, bordes, xfs, numFmts, dxfs } = fab;
@@ -3586,7 +3597,8 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
 ${hojas.map((_, i) => `<Override PartName="/xl/worksheets/hoja${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}
 ${dibujos.map((d) => `<Override PartName="/xl/drawings/drawing${d.n}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>`).join("")}
 ${graficasArch.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`).join("")}
-${mediosXl.map((m) => `<Override PartName="/${m.nombre}" ContentType="${m.ct}"/>`).join("")}`) },
+${mediosXl.map((m) => `<Override PartName="/${m.nombre}" ContentType="${m.ct}"/>`).join("")}
+${tablasArch.map((_, i) => `<Override PartName="/xl/tables/table${i + 1}.xml" ContentType="${CT_TABLA_XL}"/>`).join("")}`) },
       { nombre: "_rels/.rels", datos: RELS([{ tipo: T.doc, destino: "xl/workbook.xml" }]) },
       { nombre: "xl/workbook.xml", datos: libro },
       { nombre: "xl/styles.xml", datos: estilos },
@@ -3597,6 +3609,7 @@ ${mediosXl.map((m) => `<Override PartName="/${m.nombre}" ContentType="${m.ct}"/>
       ...dibujos.flatMap((d) => [{ nombre: `xl/drawings/drawing${d.n}.xml`, datos: d.xml }, { nombre: `xl/drawings/_rels/drawing${d.n}.xml.rels`, datos: RELS(d.rels) }]),
       ...graficasArch.map((g, i) => ({ nombre: `xl/charts/chart${i + 1}.xml`, datos: g })),
       ...mediosXl.map((m) => ({ nombre: m.nombre, datos: m.datos })),
+      ...tablasArch.map((d, i) => ({ nombre: `xl/tables/table${i + 1}.xml`, datos: d })),
     ]);
   }
 
@@ -4071,7 +4084,7 @@ ${mediosXl.map((m) => `<Override PartName="/${m.nombre}" ContentType="${m.ct}"/>
     const metaRuta = relMeta ? pq.resolver(LIBRO, relMeta.destino) : null;
     fab.cmDA = metaRuta && pq.tiene(metaRuta) ? cmDeMetadatos(pq.texto(metaRuta) || "") : null;
     const usados = new Set(), nombres = [];
-    let cambio = false, nNueva = 0, nGraf = 0, nDib = 0, nImgXl = 0;
+    let cambio = false, nNueva = 0, nGraf = 0, nDib = 0, nImgXl = 0, infoTablas = null;
     const tiene = (v) => v != null && v !== "" && v !== false;
     const planes = tablas.map((t, i) => {
       let n = F().nombreDeHoja(doc, t).replace(/[\\/?*[\]:]/g, " ").slice(0, 31) || `Hoja${i + 1}`;
@@ -4091,6 +4104,30 @@ ${mediosXl.map((m) => `<Override PartName="/${m.nombre}" ContentType="${m.ct}"/>
         p.ruta = `xl/worksheets/nomhoja${++nNueva}.xml`;
         const estiloDe = (ref, esFecha) => { const camb = new Set(CELDA_FMT.filter((k) => tiene(t[k + ":" + ref]))); const fecha = esFecha && !tiene(t["f:" + ref]) ? "dd/mm/yyyy" : null; return camb.size || fecha ? fab.estiloDesde(t, ref, 0, camb, fecha) : 0; };
         pq.pon(p.ruta, hojaDesdeCero(t, ev, fab, estiloDe, i === 0, ""));
+        cambio = true;
+      }
+      // tablas con formato hechas en NOM: una parte nueva cada una, junto a las que ya traía la hoja
+      const los = tablasLoDe(t);
+      if (los.length) {
+        if (!infoTablas) {
+          infoTablas = { id: 0, nombres: new Set() };
+          pq.nombres().filter((n) => /^xl\/tables\/[^/]+\.xml$/i.test(n)).forEach((n) => {
+            const tx = pq.texto(n) || "", id = /<(?:\w+:)?table\b[^>]*?\sid\s*=\s*"(\d+)"/.exec(tx), nm = /\sdisplayName\s*=\s*"([^"]*)"/.exec(tx);
+            if (id) infoTablas.id = Math.max(infoTablas.id, +id[1]);
+            if (nm) infoTablas.nombres.add(nm[1].toLowerCase());
+          });
+        }
+        const rids = los.map((lo) => {
+          const id = ++infoTablas.id, ruta = `xl/tables/nomtabla${id}.xml`, rid = "rIdNomT" + id;
+          pq.pon(ruta, xmlTablaXl(lo, id, nombreTablaXl(lo.n, infoTablas.nombres), columnasTablaXl(lo, t, ev))); pq.tipo(ruta, CT_TABLA_XL);
+          pq.agregaRel(p.ruta, rid, T_TABLA_XL, "/" + ruta);
+          return rid;
+        });
+        const hx = pq.texto(p.ruta), S = seccionesHoja(hx), tp = S.una("tableParts");
+        const antes = tp ? (hx.slice(tp.i, tp.f).match(/<(?:\w+:)?tablePart\b[^>]*\/>/g) || []) : [];
+        const nuevos = rids.map((r) => S.pf(`<tablePart xmlns:r="${NS_R}" r:id="${r}"/>`));
+        S.pon("tableParts", S.pf(`<tableParts count="${antes.length + nuevos.length}">`) + antes.join("") + nuevos.join("") + S.pf("</tableParts>"));
+        pq.pon(p.ruta, S.aplicar());
         cambio = true;
       }
       // gráficas hechas en NOM: se agregan al dibujo de la hoja (o se le crea uno)
@@ -4318,7 +4355,130 @@ ${mediosXl.map((m) => `<Override PartName="/${m.nombre}" ContentType="${m.ct}"/>
   // libro los guarda en «_doc» (nombres), para el Administrador de nombres · 8 esquema: el nivel de cada fila (ol:) y de
   // cada columna (olc:) agrupada · 9 «mostrar fórmulas» de la hoja (vf) · 10 tablas de datos (t="dataTable": cada celda
   // de su lugar lleva =TABLA(fila;columna), como la muestra Excel).
-  const VERSION_XL = 12;
+  // ---- Tablas con formato hechas en NOM (t.lo, «Dar formato como tabla»): xl/tables/tableN.xml como las escribe Excel.
+  // Cada una: { id, n (nombre), c1, f1, c2, f2, estilo, enc, tot, rayasF, rayasC, primeraC, ultimaC, filtro }.
+  const CT_TABLA_XL = "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml";
+  const T_TABLA_XL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table";
+  const FUNC_TOTAL_XL = { 101: "average", 102: "countNums", 103: "count", 104: "max", 105: "min", 107: "stdDev", 109: "sum", 110: "var" };
+  const tablasLoDe = (t) => (Array.isArray(t && t.lo) ? t.lo.filter((lo) => lo && lo.c2 >= lo.c1 && lo.f2 >= lo.f1) : []);
+  /** Las columnas de una tabla para Excel: el nombre (el texto del encabezado, sin repetir ni vacío) y lo de la fila de
+      totales (un SUBTOTAL de la columna o un rótulo). */
+  function columnasTablaXl(lo, t, ev) {
+    const vistos = new Set(), out = [];
+    for (let c = lo.c1; c <= lo.c2; c++) {
+      let n = lo.enc ? String(F().formatear(ev.valor(c, lo.f1)) || "").trim() : "";
+      if (!n) n = "Columna" + (c - lo.c1 + 1);
+      let m = n, k = 2;
+      while (vistos.has(m.toLowerCase())) m = n + k++;
+      vistos.add(m.toLowerCase());
+      const col = { n: m };
+      if (lo.tot) {
+        const cr = String(t["c:" + F().ref(c, lo.f2)] || "");
+        const sm = /^=\s*SUBTOTAL\(\s*(\d+)\s*,/i.exec(cr);
+        if (sm && FUNC_TOTAL_XL[+sm[1]]) col.fn = FUNC_TOTAL_XL[+sm[1]];
+        else if (cr && !cr.startsWith("=")) col.rot = cr;
+      }
+      out.push(col);
+    }
+    return out;
+  }
+  function xmlTablaXl(lo, id, nombre, cols) {
+    const ref = F().ref(lo.c1, lo.f1) + ":" + F().ref(lo.c2, lo.f2), si = (v) => (v ? "1" : "0");
+    const af = lo.enc && lo.filtro !== false ? `<autoFilter ref="${F().ref(lo.c1, lo.f1)}:${F().ref(lo.c2, lo.f2 - (lo.tot ? 1 : 0))}"/>` : "";
+    return XML + `<table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" id="${id}" name="${x(nombre)}" displayName="${x(nombre)}" ref="${ref}"${lo.enc ? "" : ' headerRowCount="0"'}${lo.tot ? ' totalsRowCount="1"' : ""}>${af}`
+      + `<tableColumns count="${cols.length}">${cols.map((c, i) => `<tableColumn id="${i + 1}" name="${x(c.n)}"${c.rot ? ` totalsRowLabel="${x(c.rot)}"` : ""}${c.fn ? ` totalsRowFunction="${c.fn}"` : ""}/>`).join("")}</tableColumns>`
+      + (lo.estilo === "" ? `<tableStyleInfo showFirstColumn="0" showLastColumn="0" showRowStripes="0" showColumnStripes="0"/>`
+        : `<tableStyleInfo name="${x(lo.estilo || "TableStyleMedium2")}" showFirstColumn="${si(lo.primeraC)}" showLastColumn="${si(lo.ultimaC)}" showRowStripes="${si(lo.rayasF !== false)}" showColumnStripes="${si(lo.rayasC)}"/>`)
+      + `</table>`;
+  }
+  /** Nombre de tabla válido y único en el libro (Excel: letra o «_» al principio, sin espacios). */
+  function nombreTablaXl(n, usados) {
+    let b = String(n || "Tabla").replace(/[^\p{L}\p{N}_.]/gu, "_");
+    if (!/^[\p{L}_]/u.test(b)) b = "_" + b;
+    let m = b, k = 2;
+    while (usados.has(m.toLowerCase())) m = b + "_" + k++;
+    usados.add(m.toLowerCase());
+    return m;
+  }
+  // ---- Estilos de tabla de Excel: lo que pinta un estilo (NOM.ESTILOS_TABLA o uno del libro) en cada celda de una tabla,
+  // con la precedencia de Excel. Lo usan el importador (las tablas de un libro de Excel) y la hoja (las tablas hechas en
+  // NOM con «Dar formato como tabla», que se pintan en vivo). `colorTabla` traduce «t4:0.8», «#RRGGBB» o «i22».
+  /** El tema de Office de Excel 2024 (el que usa Excel en un libro sin tema propio, como los de NOM), en el orden de los
+      índices de Excel: 0 lt1, 1 dk1, 2 lt2, 3 dk2, 4-9 énfasis, 10 vínculo, 11 vínculo visitado. */
+  const TEMA_OFFICE_XL = ["FFFFFF", "000000", "E8E8E8", "0E2841", "156082", "E97132", "196B24", "0F9ED5", "A02B93", "4EA72E", "467886", "96607D"];
+  /** El tinte de Excel sobre un color del tema (HLS de Windows con enteros, como el importador en la versión 3). */
+  function conTinteXl(hex, tinte) {
+    if (!tinte) return hex;
+    const [R, G, B] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)), [H, L, S] = rgbAHls(R, G, B);
+    if (!S) { const L3 = Math.max(0, Math.min(HLSMAX, Math.round(tinte < 0 ? L * (1 + tinte) : L * (1 - tinte) + HLSMAX * tinte))), g = Math.floor((L3 * 255 + 120) / HLSMAX); return [g, g, g].map((v) => v.toString(16).padStart(2, "0")).join("").toUpperCase(); }
+    const L2 = tinte < 0 ? Math.trunc(L * (1 + tinte)) : Math.trunc((((Math.max(R, G, B) + Math.min(R, G, B)) * HLSMAX) / 510) * (1 - tinte) + (HLSMAX - HLSMAX * (1 - tinte)));
+    return hlsARgb(H, Math.max(0, Math.min(HLSMAX, L2)), S).map((v) => Math.max(0, Math.min(255, v)).toString(16).padStart(2, "0")).join("").toUpperCase();
+  }
+  /** Traductor de colores de estilo de tabla con un tema (12 colores sin «#»; si falta, el de Office 2024). */
+  const colorTablaConTema = (tema) => (x) => {
+    if (!x) return null;
+    if (x[0] === "#") return x.toUpperCase();
+    if (x[0] === "i") return INDEXADOS_XL[+x.slice(1)] ? "#" + INDEXADOS_XL[+x.slice(1)] : null;
+    const m = /^t(\d+)(?::(-?[\d.eE-]+))?$/.exec(x), tm = tema || TEMA_OFFICE_XL;
+    return m && tm[+m[1]] ? "#" + conTinteXl(tm[+m[1]], +(m[2] || 0)) : null;
+  };
+  /** Pinta en `campos` (r:, k:, n:, i:, bx:) las celdas de una tabla { c1, f1, c2, f2, enc, tot, rayasF, rayasC,
+      primeraC, ultimaC } con el estilo `est2`. Lo que `campos` ya tenga gana. */
+  function pintarTablaXl(tb, est2, colorTabla, campos) {
+    const { c1, c2, f1, f2 } = tb, fEnc = tb.enc ? f1 : -1, fTot = tb.tot ? f2 : -1, d1 = f1 + (tb.enc ? 1 : 0), d2 = f2 - (tb.tot ? 1 : 0);
+    // franjas: cada una mide «s» filas (o columnas); la primera y la segunda se alternan
+    const franja = (i, ini, n1, n2) => { const k = (i - ini) % (n1 + n2), a = i - k; return k < n1 ? [0, a, a + n1 - 1] : [1, a + n1, a + n1 + n2 - 1]; };
+    const s1F = (est2.firstRowStripe || {}).s || 1, s2F = (est2.secondRowStripe || {}).s || 1, s1C = (est2.firstColumnStripe || {}).s || 1, s2C = (est2.secondColumnStripe || {}).s || 1;
+    for (let f = f1; f <= f2; f++) for (let c = c1; c <= c2; c++) {
+      const capas = [], pon = (tipo, rc1, rf1, rc2, rf2) => { if (est2[tipo]) capas.push({ e: est2[tipo], rc1, rf1, rc2, rf2 }); };
+      pon("wholeTable", c1, f1, c2, f2);
+      const enDatos = f >= d1 && f <= d2;
+      if (enDatos && tb.rayasC) { const [n, a, b] = franja(c, c1, s1C, s2C); pon(n ? "secondColumnStripe" : "firstColumnStripe", a, d1, Math.min(b, c2), d2); }
+      if (enDatos && tb.rayasF) { const [n, a, b] = franja(f, d1, s1F, s2F); pon(n ? "secondRowStripe" : "firstRowStripe", c1, a, c2, Math.min(b, d2)); }
+      if (tb.ultimaC && c === c2) pon("lastColumn", c2, f1, c2, f2);
+      if (tb.primeraC && c === c1) pon("firstColumn", c1, f1, c1, f2);
+      if (f === fEnc) pon("headerRow", c1, f, c2, f);
+      if (f === fTot) pon("totalRow", c1, f, c2, f);
+      if (f === fEnc && c === c1) pon("firstHeaderCell", c, f, c, f);
+      if (f === fEnc && c === c2) pon("lastHeaderCell", c, f, c, f);
+      if (f === fTot && c === c1) pon("firstTotalCell", c, f, c, f);
+      if (f === fTot && c === c2) pon("lastTotalCell", c, f, c, f);
+      pintarCapasXl(capas, c, f, campos, colorTabla);
+      if (!campos["r:" + F().ref(c, f)]) campos["r:" + F().ref(c, f)] = "#FFFFFF";   // sin cuadrícula adentro, como Excel
+    }
+  }
+  /** Pinta una celda con las capas de un estilo de tabla (de menor a mayor precedencia): relleno, letra y bordes
+      (los de afuera de cada región o las líneas de adentro). Lo propio de la celda gana. */
+  function pintarCapasXl(capas, c, f, campos, colorTabla) {
+    let relleno = null, tinta = null, negrita = false, cursiva = false;
+    const lados = {};
+    for (const x of capas) {
+      const e = x.e;
+      if (e.f) relleno = e.f;
+      if (e.k) tinta = e.k;
+      if (e.b) negrita = true;
+      if (e.i) cursiva = true;
+      if (e.bd) {
+        const bd = e.bd, ar = f === x.rf1 ? bd.t : bd.h, ab = f === x.rf2 ? bd.b : bd.h, iz = c === x.rc1 ? bd.l : bd.v, de = c === x.rc2 ? bd.r : bd.v;
+        if (ar) lados.a = ar;
+        if (ab) lados.b = ab;
+        if (iz) lados.i = iz;
+        if (de) lados.d = de;
+      }
+    }
+    const R = F().ref(c, f);
+    if (relleno && !campos["r:" + R]) { const x = colorTabla(relleno); if (x) campos["r:" + R] = x; }
+    if (tinta && !campos["k:" + R]) { const x = colorTabla(tinta); if (x && x !== "#000000") campos["k:" + R] = x; }
+    if (negrita && !campos["n:" + R]) campos["n:" + R] = true;
+    if (cursiva && !campos["i:" + R]) campos["i:" + R] = true;
+    if (Object.keys(lados).length) {
+      const propios = {};
+      String(campos["bx:" + R] || "").split(";").filter(Boolean).forEach((q) => (propios[q.split(":")[0]] = q));
+      for (const l in lados) if (!propios[l]) propios[l] = `${l}:${lados[l][0]}:${colorTabla(lados[l][1]) || "#000000"}`;
+      campos["bx:" + R] = Object.values(propios).join(";");
+    }
+  }
+  const VERSION_XL = 13;   // (13: el tema del libro en t.xl.tema, para las tablas con formato hechas en NOM)
   function modeloXlsx(z, version) {
     const V = version || VERSION_XL;
     const P = (t) => new DOMParser().parseFromString(t, "application/xml");
@@ -4728,58 +4888,7 @@ ${mediosXl.map((m) => `<Override PartName="/${m.nombre}" ContentType="${m.ct}"/>
         if (!tb.estilo) continue;
         const est2 = estilosTablaLibro[tb.estilo] || (NOM.ESTILOS_TABLA || {})[tb.estilo];
         if (!est2) continue;
-        const { c1, c2, f1, f2 } = tb, fEnc = tb.enc ? f1 : -1, fTot = tb.tot ? f2 : -1, d1 = f1 + (tb.enc ? 1 : 0), d2 = f2 - (tb.tot ? 1 : 0);
-        // franjas: cada una mide «s» filas (o columnas); la primera y la segunda se alternan
-        const franja = (i, ini, n1, n2) => { const k = (i - ini) % (n1 + n2), a = i - k; return k < n1 ? [0, a, a + n1 - 1] : [1, a + n1, a + n1 + n2 - 1]; };
-        const s1F = (est2.firstRowStripe || {}).s || 1, s2F = (est2.secondRowStripe || {}).s || 1, s1C = (est2.firstColumnStripe || {}).s || 1, s2C = (est2.secondColumnStripe || {}).s || 1;
-        for (let f = f1; f <= f2; f++) for (let c = c1; c <= c2; c++) {
-          const capas = [], pon = (tipo, rc1, rf1, rc2, rf2) => { if (est2[tipo]) capas.push({ e: est2[tipo], rc1, rf1, rc2, rf2 }); };
-          pon("wholeTable", c1, f1, c2, f2);
-          const enDatos = f >= d1 && f <= d2;
-          if (enDatos && tb.rayasC) { const [n, a, b] = franja(c, c1, s1C, s2C); pon(n ? "secondColumnStripe" : "firstColumnStripe", a, d1, Math.min(b, c2), d2); }
-          if (enDatos && tb.rayasF) { const [n, a, b] = franja(f, d1, s1F, s2F); pon(n ? "secondRowStripe" : "firstRowStripe", c1, a, c2, Math.min(b, d2)); }
-          if (tb.ultimaC && c === c2) pon("lastColumn", c2, f1, c2, f2);
-          if (tb.primeraC && c === c1) pon("firstColumn", c1, f1, c1, f2);
-          if (f === fEnc) pon("headerRow", c1, f, c2, f);
-          if (f === fTot) pon("totalRow", c1, f, c2, f);
-          if (f === fEnc && c === c1) pon("firstHeaderCell", c, f, c, f);
-          if (f === fEnc && c === c2) pon("lastHeaderCell", c, f, c, f);
-          if (f === fTot && c === c1) pon("firstTotalCell", c, f, c, f);
-          if (f === fTot && c === c2) pon("lastTotalCell", c, f, c, f);
-          pintarCapas(capas, c, f, campos);
-          if (!campos["r:" + F().ref(c, f)]) campos["r:" + F().ref(c, f)] = "#FFFFFF";   // sin cuadrícula adentro, como Excel
-        }
-      }
-    }
-    /** Pinta una celda con las capas de un estilo de tabla (de menor a mayor precedencia): relleno, letra y bordes
-        (los de afuera de cada región o las líneas de adentro). Lo propio de la celda gana. */
-    function pintarCapas(capas, c, f, campos) {
-      let relleno = null, tinta = null, negrita = false, cursiva = false;
-      const lados = {};
-      for (const x of capas) {
-        const e = x.e;
-        if (e.f) relleno = e.f;
-        if (e.k) tinta = e.k;
-        if (e.b) negrita = true;
-        if (e.i) cursiva = true;
-        if (e.bd) {
-          const bd = e.bd, ar = f === x.rf1 ? bd.t : bd.h, ab = f === x.rf2 ? bd.b : bd.h, iz = c === x.rc1 ? bd.l : bd.v, de = c === x.rc2 ? bd.r : bd.v;
-          if (ar) lados.a = ar;
-          if (ab) lados.b = ab;
-          if (iz) lados.i = iz;
-          if (de) lados.d = de;
-        }
-      }
-      const R = F().ref(c, f);
-      if (relleno && !campos["r:" + R]) { const x = colorTabla(relleno); if (x) campos["r:" + R] = x; }
-      if (tinta && !campos["k:" + R]) { const x = colorTabla(tinta); if (x && x !== "#000000") campos["k:" + R] = x; }
-      if (negrita && !campos["n:" + R]) campos["n:" + R] = true;
-      if (cursiva && !campos["i:" + R]) campos["i:" + R] = true;
-      if (Object.keys(lados).length) {
-        const propios = {};
-        String(campos["bx:" + R] || "").split(";").filter(Boolean).forEach((q) => (propios[q.split(":")[0]] = q));
-        for (const l in lados) if (!propios[l]) propios[l] = `${l}:${lados[l][0]}:${colorTabla(lados[l][1]) || "#000000"}`;
-        campos["bx:" + R] = Object.values(propios).join(";");
+        pintarTablaXl(tb, est2, colorTabla, campos);
       }
     }
     // ---- Tablas dinámicas (versión 3): su estilo pintado sobre sus áreas (filtros, encabezado, etiquetas de fila,
@@ -4855,7 +4964,7 @@ ${mediosXl.map((m) => `<Override PartName="/${m.nombre}" ContentType="${m.ct}"/>
         for (const [k, lista] of capas) {
           const [c, f] = k.split(",").map(Number);
           lista.sort((a, b) => ORDEN_DINAMICA.indexOf(a.tipo) - ORDEN_DINAMICA.indexOf(b.tipo));
-          pintarCapas(lista, c, f, campos);
+          pintarCapasXl(lista, c, f, campos, colorTabla);
         }
         // Excel no dibuja la cuadrícula dentro de una tabla dinámica (ni en sus filtros): fondo blanco donde no hay otro
         for (let f = Math.max(0, f1 - 1 - nPag); f <= f2; f++) for (let c = c1; c <= c2; c++) {
@@ -4969,6 +5078,7 @@ ${mediosXl.map((m) => `<Override PartName="/${m.nombre}" ContentType="${m.ct}"/>
         campos.xl = { fuente: fuenteLibro.nombre || "Calibri", tam: fuenteLibro.sz || 11, w0, h0: Math.round((drh || 15) * 96 / 72),
           rejilla: !(sv && at(sv, "showGridLines") === "0"), rtl: !!(sv && at(sv, "rightToLeft") === "1"), zoom: sv && +at(sv, "zoomScale") ? +at(sv, "zoomScale") : 100,
           oculta: estado === "hidden" || estado === "veryHidden" };
+        if (V >= 13 && temaXl.some(Boolean)) campos.xl.tema = temaXl.map((c) => c || null);
         if (V >= 9 && sv && /^(1|true)$/.test(at(sv, "showFormulas") || "")) campos.vf = true;
       }
       let maxF = 0, maxC = 0;
@@ -7365,5 +7475,15 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
     return zip(sale);
   }
 
-  NOM.ooxml = { zip, docx, xlsx, pptx, formulaExcel, crc32, leerDocx, leerXlsx, leerPptx, modeloXlsx, huellasDocx, huellasPptx, parcialesPptx, abrirZip, conProteccion, seccionesPptx, usarOrigen: true };
+  /** Para la hoja: pinta en `campos` lo que el estilo de la tabla `lo` pone en cada celda (con el tema del libro o el de Office). */
+  const tablaXl = {
+    pintar(lo, campos, tema) {
+      const est2 = lo.estilo === "" ? null : (NOM.ESTILOS_TABLA || {})[lo.estilo || "TableStyleMedium2"];
+      if (!est2) return campos;
+      pintarTablaXl({ c1: lo.c1, f1: lo.f1, c2: lo.c2, f2: lo.f2, enc: lo.enc ? 1 : 0, tot: lo.tot ? 1 : 0, rayasF: lo.rayasF !== false, rayasC: !!lo.rayasC, primeraC: !!lo.primeraC, ultimaC: !!lo.ultimaC }, est2, colorTablaConTema(tema), campos);
+      return campos;
+    },
+    color: (x, tema) => colorTablaConTema(tema)(x),
+  };
+  NOM.ooxml = { tablaXl, zip, docx, xlsx, pptx, formulaExcel, crc32, leerDocx, leerXlsx, leerPptx, modeloXlsx, huellasDocx, huellasPptx, parcialesPptx, abrirZip, conProteccion, seccionesPptx, usarOrigen: true };
 })();

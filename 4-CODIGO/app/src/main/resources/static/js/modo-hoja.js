@@ -805,6 +805,157 @@
           aviso(`Tabla de datos en ${textoRango(r)}: ${res.celdas} celdas. Ctrl+Z para deshacer`, { tipo: "ok" });
         };
       }
+      // ------------------------------------------------------------ tablas con formato (Inicio → Dar formato como tabla, como Excel)
+      // t.lo: [{ id, n (nombre), c1, f1, c2, f2, estilo, enc, tot, rayasF, rayasC, primeraC, ultimaC, filtro }]. El estilo se
+      // pinta en vivo (capaLo) con la misma lógica que el importador de Excel (NOM.ooxml.tablaXl); lo propio de cada celda gana.
+      const tablasLo = () => (t && Array.isArray(t.lo) ? t.lo : []);
+      let capaLo = {}, hayLo = false;
+      const vt = (k) => { const v = t[k]; return v != null && v !== "" && v !== false ? v : capaLo[k]; };
+      const temaLibro = () => (t && t.xl && Array.isArray(t.xl.tema) ? t.xl.tema : null);
+      function calcularCapaLo() {
+        capaLo = {};
+        const lista = tablasLo();
+        hayLo = !!lista.length;
+        if (!hayLo || !NOM.ooxml || !NOM.ooxml.tablaXl) return;
+        lista.forEach((lo) => {
+          NOM.ooxml.tablaXl.pintar(lo, capaLo, temaLibro());
+          if (lo.enc && lo.filtro !== false) for (let c = lo.c1; c <= lo.c2; c++) capaLo["fb:" + F().ref(c, lo.f1)] = true;
+        });
+      }
+      const loEn = (c, f) => tablasLo().find((lo) => c >= lo.c1 && c <= lo.c2 && f >= lo.f1 && f <= lo.f2) || null;
+      const ESTILOS_LO = [["Claro", "Light", 21], ["Medio", "Medium", 28], ["Oscuro", "Dark", 11]];
+      const nombreEstiloLo = (k) => { const m = /^TableStyle(Light|Medium|Dark)(\d+)$/.exec(k || ""); return m ? `Estilo de tabla ${{ Light: "claro", Medium: "medio", Dark: "oscuro" }[m[1]]} ${m[2]}` : "Ninguno"; };
+      /** Nombre nuevo «TablaN» que no use otra tabla del libro. */
+      function nombreLoNuevo() {
+        const usados = new Set(doc().vivos().filter((b) => b.tipo === "tabla" && Array.isArray(b.lo)).flatMap((b) => b.lo.map((x) => String(x.n || "").toLowerCase())));
+        let k = 1;
+        while (usados.has("tabla" + k)) k++;
+        return "Tabla" + k;
+      }
+      /** Los encabezados como los deja Excel: texto fijo (una fórmula queda con su valor), sin repetir y nunca vacíos. */
+      function encabezadosLo(c1, c2, f, campos) {
+        const ev = evaluar(), vistos = new Set();
+        for (let c = c1; c <= c2; c++) {
+          const ref = F().ref(c, f), cr = String(crudo(c, f));
+          let n = cr.startsWith("=") ? String(F().formatear(ev.valor(c, f)) || "") : cr;
+          n = n.trim() || "Columna" + (c - c1 + 1);
+          let m = n, k = 2;
+          while (vistos.has(m.toLowerCase())) m = n + k++;
+          vistos.add(m.toLowerCase());
+          if (m !== cr) campos["c:" + ref] = m;
+        }
+      }
+      /**
+       * Dar formato como tabla: el rango elegido (o la región de datos de la celda) pasa a ser una tabla con el estilo.
+       * Sin encabezados, Excel inserta arriba una fila con «Columna1», «Columna2»…; aquí también. Devuelve la tabla o el motivo.
+       */
+      function formatoComoTabla(estilo, opc) {
+        opc = opc || {};
+        if (ed.soloLectura || !t) return "Solo puedes ver esta hoja";
+        let r = opc.rango || rango();
+        if (r.c1 === r.c2 && r.f1 === r.f2) r = regionActual(sel.c, sel.f);
+        if (tablasLo().some((lo) => !(r.c2 < lo.c1 || r.c1 > lo.c2 || r.f2 < lo.f1 || r.f1 > lo.f2))) return "Una tabla no puede encimarse con otra";
+        for (const k in t) if (k.startsWith("m:") && t[k]) { const p = F().parseRef(k.slice(2)); if (p && p.c >= r.c1 && p.c <= r.c2 && p.f >= r.f1 && p.f <= r.f2) return "Una tabla no puede tener celdas combinadas: sepáralas primero"; }
+        const enc = opc.enc !== false;
+        if (!enc) { reacomodar("f", r.f1, 1); t = tabla(); r = { c1: r.c1, c2: r.c2, f1: r.f1, f2: r.f2 + 1 }; }
+        const campos = {};
+        encabezadosLo(r.c1, r.c2, r.f1, campos);
+        const lo = { id: NOM.DocCRDT.nuevoId(), n: nombreLoNuevo(), c1: r.c1, f1: r.f1, c2: r.c2, f2: r.f2, estilo: estilo || "TableStyleMedium2", enc: 1, tot: 0, rayasF: true, rayasC: false, primeraC: false, ultimaC: false, filtro: true };
+        campos.lo = tablasLo().concat([lo]);
+        cambiarT(campos);
+        return lo;
+      }
+      /** Opciones de una tabla (Diseño de tabla): estilo, nombre, fila de encabezado y de totales, franjas, primera y última columna, filtro. */
+      function opcionesLo(id, cambios) {
+        const lo = tablasLo().find((x) => x.id === id || x.n === id);
+        if (!lo || ed.soloLectura) return "No está esa tabla";
+        const nuevo = Object.assign({}, lo, cambios), campos = {};
+        if ("n" in cambios) {
+          const n = String(cambios.n || "").trim();
+          if (!/^[\p{L}_][\p{L}\p{N}_.]*$/u.test(n)) return "El nombre empieza con una letra o «_» y no lleva espacios";
+          if (doc().vivos().some((b) => b.tipo === "tabla" && Array.isArray(b.lo) && b.lo.some((x) => x.id !== lo.id && String(x.n).toLowerCase() === n.toLowerCase()))) return "Ya hay una tabla con ese nombre";
+          nuevo.n = n;
+        }
+        if ("tot" in cambios && !!cambios.tot !== !!lo.tot) {
+          if (cambios.tot) {
+            const f = lo.f2 + 1;
+            for (let c = lo.c1; c <= lo.c2; c++) if (crudo(c, f) !== "") return "Debajo de la tabla hay datos: deja una fila libre para los totales";
+            if (lo.c1 < lo.c2) campos["c:" + F().ref(lo.c1, f)] = "Total";
+            campos["c:" + F().ref(lo.c2, f)] = `=SUBTOTAL(109,${F().ref(lo.c2, lo.f1 + (lo.enc ? 1 : 0))}:${F().ref(lo.c2, lo.f2)})`;
+            if ((t.filas || 30) <= f) campos.filas = f + 1;
+            nuevo.f2 = f; nuevo.tot = 1;
+          } else {
+            for (let c = lo.c1; c <= lo.c2; c++) if (crudo(c, lo.f2) !== "") campos["c:" + F().ref(c, lo.f2)] = null;
+            nuevo.f2 = lo.f2 - 1; nuevo.tot = 0;
+          }
+        }
+        if ("enc" in cambios && !!cambios.enc !== !!lo.enc) {
+          if (cambios.enc) {
+            const f = lo.f1 - 1;
+            if (f < 0) return "No hay fila arriba de la tabla para los encabezados";
+            for (let c = lo.c1; c <= lo.c2; c++) if (crudo(c, f) !== "") return "Arriba de la tabla hay datos: deja una fila libre para los encabezados";
+            encabezadosLo(lo.c1, lo.c2, f, campos);
+            nuevo.f1 = f; nuevo.enc = 1;
+          } else {
+            for (let c = lo.c1; c <= lo.c2; c++) campos["c:" + F().ref(c, lo.f1)] = null;
+            nuevo.f1 = lo.f1 + 1; nuevo.enc = 0;
+          }
+        }
+        if (nuevo.f2 < nuevo.f1) return "La tabla se quedaría sin filas";
+        campos.lo = tablasLo().map((x) => (x.id === lo.id ? nuevo : x));
+        cambiarT(campos);
+        return nuevo;
+      }
+      /** Convertir en rango, como Excel: la tabla deja de serlo y su formato se queda en las celdas. */
+      function convertirLoEnRango(id) {
+        const lo = tablasLo().find((x) => x.id === id || x.n === id);
+        if (!lo || ed.soloLectura) return "No está esa tabla";
+        const capa = NOM.ooxml.tablaXl.pintar(lo, {}, temaLibro()), campos = {};
+        for (const k in capa) { const v = t[k]; if (v == null || v === "" || v === false) campos[k] = capa[k]; }
+        const resto = tablasLo().filter((x) => x.id !== lo.id);
+        campos.lo = resto.length ? resto : null;
+        cambiarT(campos);
+        return true;
+      }
+      /** La muestra de un estilo de tabla (5 columnas, encabezado y 4 filas), como en la galería de Excel. */
+      function muestraLo(estilo, opc) {
+        const lo = Object.assign({ c1: 0, f1: 0, c2: 4, f2: 4, estilo, enc: 1, tot: 0, rayasF: true }, opc || {}), capa = NOM.ooxml.tablaXl.pintar(lo, {}, temaLibro());
+        let h = "";
+        for (let f = 0; f <= 4; f++) for (let c = 0; c <= 4; c++) {
+          const ref = F().ref(c, f), st = [`background:${capa["r:" + ref] || "#FFFFFF"}`];
+          String(capa["bx:" + ref] || "").split(";").filter(Boolean).forEach((q) => { const [l, e, k] = q.split(":"); const lado = { a: "top", b: "bottom", i: "left", d: "right" }[l]; if (lado) st.push(`border-${lado}:${e === "medium" || e === "thick" || e === "double" ? 2 : 1}px solid ${k}`); });
+          h += `<i style="${st.join(";")}">${f === 0 || capa["n:" + ref] ? `<b style="background:${capa["k:" + ref] || "#000000"}"></b>` : `<b style="background:${capa["k:" + ref] || "#000000"};opacity:.45"></b>`}</i>`;
+        }
+        return `<span class="lo-muestra" aria-hidden="true">${h}</span>`;
+      }
+      /** La galería de estilos de tabla (Claro, Medio, Oscuro); al elegir uno llama a `alElegir(estilo)`. */
+      function galeriaLo(titulo, alElegir, opc) {
+        const cuerpo = html(`<div class="col" style="gap:10px">${opc && opc.encabezados ? `<label class="fila" style="gap:6px"><input type="checkbox" data-enc checked> La tabla tiene encabezados</label>` : ""}
+          ${ESTILOS_LO.map(([g, k, n]) => `<section class="col" style="gap:4px"><b class="chico">${g}</b><div class="lo-galeria">${Array.from({ length: n }, (_, i) => `TableStyle${k}${i + 1}`).filter((e) => (NOM.ESTILOS_TABLA || {})[e]).map((e) => `<button class="lo-estilo" type="button" data-lo-estilo="${e}" title="${esc(nombreEstiloLo(e))}" aria-label="${esc(nombreEstiloLo(e))}">${muestraLo(e, opc && opc.lo)}</button>`).join("")}</div></section>`).join("")}</div>`);
+        const h = NOM.hoja({ titulo, icono: "table", cuerpo, ancha: true });
+        $$("[data-lo-estilo]", cuerpo).forEach((b) => (b.onclick = () => { const ec = $("[data-enc]", cuerpo); const r = alElegir(b.dataset.loEstilo, { enc: ec ? ec.checked : true }); if (typeof r === "string") return aviso(r, { tipo: "aviso" }); h.cerrar(); }));
+        return h;
+      }
+      const dialogoFormatoTabla = () => galeriaLo("Dar formato como tabla", (e, o) => formatoComoTabla(e, o), { encabezados: true });
+      /** Diseño de tabla (la pestaña contextual de Excel): nombre, opciones de estilo, cambiar estilo y convertir en rango. */
+      function dialogoDisenoLo(lo) {
+        lo = lo || loEn(sel.c, sel.f);
+        if (!lo) return aviso("Elige una celda de una tabla", { tipo: "info" });
+        const op = [["enc", "Fila de encabezado"], ["tot", "Fila de totales"], ["rayasF", "Filas con bandas"], ["primeraC", "Primera columna"], ["ultimaC", "Última columna"], ["rayasC", "Columnas con bandas"], ["filtro", "Botón de filtro"]];
+        const val = (k) => (k === "rayasF" || k === "filtro" ? lo[k] !== false : !!lo[k]);
+        const cuerpo = html(`<form class="col" style="gap:10px">
+          <label class="col">Nombre de la tabla <input data-nombre autocomplete="off" value="${esc(lo.n || "")}"></label>
+          <p class="chico tenue">${esc(F().ref(lo.c1, lo.f1) + ":" + F().ref(lo.c2, lo.f2))} · ${esc(nombreEstiloLo(lo.estilo))}</p>
+          <div class="lo-opciones">${op.map(([k, tx]) => `<label class="fila" style="gap:6px"><input type="checkbox" data-op="${k}"${val(k) ? " checked" : ""}> ${tx}</label>`).join("")}</div>
+          <div class="fila" style="gap:8px;flex-wrap:wrap"><button class="btn" type="button" data-estilo>${ico("palette")} Cambiar estilo…</button><button class="btn" type="button" data-rango>${ico("table-cells-split")} Convertir en rango</button></div></form>`);
+        const h = NOM.hoja({ titulo: "Diseño de tabla", icono: "table", cuerpo });
+        const id = lo.id, err = (r) => { if (typeof r === "string") { aviso(r, { tipo: "aviso" }); return true; } return false; };
+        $("[data-nombre]", cuerpo).onchange = (e) => { if (err(opcionesLo(id, { n: e.target.value }))) e.target.value = (tablasLo().find((x) => x.id === id) || {}).n || ""; };
+        $$("[data-op]", cuerpo).forEach((c) => (c.onchange = () => { const k = c.dataset.op, v = c.checked; if (err(opcionesLo(id, { [k]: k === "enc" || k === "tot" ? (v ? 1 : 0) : v }))) c.checked = !v; }));
+        $("[data-estilo]", cuerpo).onclick = () => { const x = tablasLo().find((y) => y.id === id); galeriaLo("Estilos de tabla", (e) => opcionesLo(id, { estilo: e }), { lo: x ? { primeraC: x.primeraC, ultimaC: x.ultimaC, rayasF: x.rayasF, rayasC: x.rayasC } : null }); };
+        $("[data-rango]", cuerpo).onclick = () => { if (!err(convertirLoEnRango(id))) { h.cerrar(); aviso("La tabla es ahora un rango normal (con su formato)", { tipo: "ok" }); } };
+        $("form", cuerpo).onsubmit = (e) => e.preventDefault();
+      }
       // ------------------------------------------------------------ imágenes sobre la hoja (Insertar → Imágenes, como Excel)
       // Bloques { tipo: "imagen", hoja (la tabla), pagina, src, w, h (px), de: { c, f } (la celda donde empieza), alt }.
       const imagenesHoja = () => (t ? doc().vivos().filter((b) => b.tipo === "imagen" && b.hoja === t.id && b.src) : []);
@@ -1489,7 +1640,7 @@
         return `<svg xmlns="http://www.w3.org/2000/svg">${linea(u, "0", "100%", "100%", "0")}${linea(w, "0", "0", "100%", "100%")}</svg>`;
       }
       function ladosBx(ref) {
-        const x = t["bx:" + ref];
+        const x = vt("bx:" + ref);
         if (!x) return null;
         const o = {};
         String(x).split(";").forEach((q) => { const [l, e, k] = q.split(":"); if (l && BX_ANCHO[e] && /^#[0-9A-Fa-f]{6}$/.test(k || "")) o[l] = [e, k]; });
@@ -1821,7 +1972,7 @@
       function aspectoBase(c, f, ev, conds, cfx) {
         const ref = F().ref(c, f), v = ev.valor(c, f), fmt = t["f:" + ref];
         const st = [];
-        let color = t["k:" + ref] || "", fondo = t["r:" + ref] || "", negrita = !!t["n:" + ref];
+        let color = vt("k:" + ref) || "", fondo = vt("r:" + ref) || "", negrita = !!vt("n:" + ref);
         for (const rg of conds) if (dentro(rg.r, c, f) && cumple(rg, v)) { if (rg.color) color = rg.color; if (rg.fondo) fondo = rg.fondo; if (rg.negrita) negrita = true; break; }
         // formato condicional de Excel: gana sobre el formato propio de la celda (como en Excel)
         const cx = cfx ? cfx.de(c, f) : null, capas = [], tams = [], pos = [];
@@ -1845,7 +1996,7 @@
         }
         // botón de filtro de Excel (tablas, filtros de la hoja y tablas dinámicas), a la derecha de la celda
         if (xl() && t["nt:" + ref]) { capas.push(NOTA_XL); tams.push("6px 6px"); pos.push("right top"); }
-        if (xl() && t["fb:" + ref]) { capas.unshift(t["fb:" + ref] === 2 ? BOTON_FILTRADO : BOTON_FILTRO); tams.unshift("15px 15px"); pos.unshift("right 1px center"); }
+        if ((xl() || hayLo) && vt("fb:" + ref)) { capas.unshift(vt("fb:" + ref) === 2 ? BOTON_FILTRADO : BOTON_FILTRO); tams.unshift("15px 15px"); pos.unshift("right 1px center"); }
         // bordes en diagonal de Excel (sobre el relleno; en una combinada, de esquina a esquina de toda ella)
         const yoBx = xl() ? ladosBx(ref) : null;
         if (yoBx && (yoBx.u || yoBx.w)) { capas.push(urlSvg(svgDiagonal(yoBx.u, yoBx.w))); tams.push("100% 100%"); pos.push("0 0"); }
@@ -1866,13 +2017,13 @@
         const tf = t["tf:" + ref];
         if (tf && NOM.textoRico) st.push("font-family:" + NOM.textoRico.cssFuente(tf));
         const bd = String(t["bd:" + ref] || "");
-        if (xl()) {
+        if (xl() || hayLo) {
           // Bordes como Excel: cada lado con su estilo y su color. Cada celda pinta su derecha y su abajo (como la
           // cuadrícula), con el más grueso entre el suyo y el de la vecina; un relleno tapa la cuadrícula.
           const yo = ladosBx(ref), der = ladosBx(F().ref(c + 1, f)), ab = ladosBx(F().ref(c, f + 1));
-          if (yo || der || ab || fondo || t["r:" + F().ref(c + 1, f)] || t["r:" + F().ref(c, f + 1)]) {
+          if (yo || der || ab || fondo || vt("r:" + F().ref(c + 1, f)) || vt("r:" + F().ref(c, f + 1))) {
             const bR = mejorBx(yo && yo.d, der && der.i), bB = mejorBx(yo && yo.b, ab && ab.a);
-            const fR = fondo || t["r:" + F().ref(c + 1, f)], fB = fondo || t["r:" + F().ref(c, f + 1)];
+            const fR = fondo || vt("r:" + F().ref(c + 1, f)), fB = fondo || vt("r:" + F().ref(c, f + 1));
             // (la línea es de 1 px como la cuadrícula; lo que pasa de 1 px va como sombra: Excel no agranda la fila por un borde)
             const sh = [], hueco = /^#[0-9A-Fa-f]{6}$/.test(fondo || "") ? fondo : "#FFFFFF";
             const grueso = (x, h) => {
@@ -2023,6 +2174,7 @@
       }
       function render() {
         t = tabla();
+        if (t) calcularCapaLo();
         if (!t) {
           rej.innerHTML = `<div class="vacio" style="margin:32px">${ico("sheet")}<h3>Esta página no tiene hoja</h3><p>Tu permiso es solo para ver.</p></div>`;
           pintarBandeja();
@@ -3054,6 +3206,14 @@
         for (const k in t) if (reacomodable(k) && t[k] != null && t[k] !== "" && t[k] !== false && !(k in nuevos)) campos[k] = null;
         for (const k in nuevos) if (JSON.stringify(nuevos[k]) !== JSON.stringify(t[k] == null ? null : t[k])) campos[k] = nuevos[k];
         campos[eje === "f" ? "filas" : "cols"] = Math.max(1, total + n);
+        // las tablas con formato crecen o se achican con lo insertado o borrado dentro (y se van si se borran enteras)
+        if (tablasLo().length) {
+          const lista = tablasLo().map((lo) => {
+            const rg = F().ajustarEstructura("=" + F().ref(lo.c1, lo.f1) + ":" + F().ref(lo.c2, lo.f2), ajuste), g = rg.includes("#REF!") ? null : G().rango(rg.slice(1));
+            return g ? Object.assign({}, lo, { c1: g.c1, f1: g.f1, c2: g.c2, f2: g.f2 }) : null;
+          }).filter(Boolean);
+          if (JSON.stringify(lista) !== JSON.stringify(t.lo)) campos.lo = lista.length ? lista : null;
+        }
         const fija = eje === "f" ? t.fijasF : t.fijasC;
         if (fija && en < fija) campos[eje === "f" ? "fijasF" : "fijasC"] = n > 0 ? fija + n : Math.max(en, fija + n) || null;
         if (eje === "c" && t.vistaComun) {
@@ -3673,6 +3833,8 @@
               { texto: "Lista desplegable…", corto: "Lista…", icono: "list-checks", off: lect, fn: dialogoValidacion },
               { texto: "Formato condicional…", corto: "Condicional", icono: "paint-bucket", off: lect, fn: dialogoCondicional },
               { texto: "Estilos de celda…", corto: "Estilos", icono: "paint-bucket", off: lect, fn: galeriaEstilosCelda },
+              { texto: "Dar formato como tabla…", corto: "Tabla", icono: "table", off: lect, fn: dialogoFormatoTabla },
+              ...(loEn(sel.c, sel.f) ? [{ texto: "Diseño de tabla…", corto: "Diseño", icono: "table", off: lect, fn: () => dialogoDisenoLo() }] : []),
               { texto: "Minigráficos…", corto: "Minigráficos", icono: "bar-chart", off: lect, fn: dialogoMinigraficos },
               { texto: "Imagen…", corto: "Imagen", icono: "image", off: lect, fn: () => insertarImagenHoja() },
               { texto: "Borrar formato", corto: "Sin formato", icono: "remove-formatting", off: lect, fn: borrarFormato },
@@ -3781,6 +3943,8 @@
           { texto: "Formato de celdas…", icono: "settings", atajo: "Ctrl+1", fn: dialogoFormato },
           { texto: "Formato condicional…", icono: "paint-bucket", fn: dialogoCondicional },
           { texto: "Estilos de celda…", icono: "paint-bucket", fn: galeriaEstilosCelda },
+          { texto: "Dar formato como tabla…", icono: "table", fn: dialogoFormatoTabla },
+          { texto: "Diseño de tabla…", icono: "table", fn: () => dialogoDisenoLo() },
           { texto: "Minigráficos…", icono: "bar-chart", fn: dialogoMinigraficos },
           { texto: "Imagen…", icono: "image", fn: () => insertarImagenHoja() },
           { texto: "Lista desplegable o validación…", icono: "list-checks", fn: dialogoValidacion },
@@ -3835,6 +3999,7 @@
 
       /** Actualiza solo los valores visibles; no reconstruye la tabla (no estorba a quien escribe). */
       function actualizarValores() {
+        calcularCapaLo();   // (las tablas con formato pudieron cambiar: su estilo, sus opciones o su rango)
         const ev = evaluar(), conds = reglas("cf"), cfx = xl() ? prepararCfx(ev) : null;
         $$("td", rej).forEach((td) => {
           const c = +td.dataset.c, f = +td.dataset.f, ref = F().ref(c, f);
@@ -3843,7 +4008,7 @@
           td.classList.toggle("num", a.num);
           td.classList.toggle("err", a.err);
           td.toggleAttribute("data-negrita", a.negrita);
-          td.toggleAttribute("data-cursiva", !!t["i:" + ref]);
+          td.toggleAttribute("data-cursiva", !!vt("i:" + ref));
           td.toggleAttribute("data-subrayado", !!t["u:" + ref]);
           if ((td.getAttribute("style") || "") !== a.st) { if (a.st) td.setAttribute("style", a.st); else td.removeAttribute("style"); }
           td.title = a.formula;
@@ -3905,6 +4070,7 @@
         // herramientas de datos como las de Excel (también para las pruebas contra Excel real)
         herramientas: { quitarDuplicados, regionActual, textoEnColumnas, partirTexto, buscarObjetivo, consolidar, tablaDatos: crearTablaDatos, rellenoRapido },
         enfoque: alternarEnfoque, enfoqueActivo: () => enfoque, estiloCelda: aplicarEstiloCelda, minigraficos: { crear: crearMinigraficos, quitar: quitarMinigraficos }, imagen: insertarImagenHoja,
+          tablasFormato: { crear: formatoComoTabla, opciones: opcionesLo, convertir: convertirLoEnRango, lista: () => tablasLo().slice(), en: loEn, capa: () => capaLo }, insertarFilas,
         escenarios: { lista: escenariosHoja, guardar: guardarEscenario, quitar: quitarEscenario, mostrar: mostrarEscenario, resumen: resumenEscenarios },
         dialogos: { duplicados: dialogoDuplicados, textoColumnas: dialogoTextoColumnas, objetivo: dialogoObjetivo, nombres: administradorNombres, consolidar: dialogoConsolidar, tablaDatos: dialogoTablaDatos, escenarios: administradorEscenarios, rellenoRapido: ejecutarRellenoRapido, estilosCelda: galeriaEstilosCelda },
         calculo: { modo: modoCalculo, fijar: fijarModoCalculo, ahora: calcularAhora },

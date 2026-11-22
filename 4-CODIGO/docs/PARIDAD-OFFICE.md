@@ -150,7 +150,7 @@ Falta: párrafos justificados o centrados con tabuladores, contornos (estrecho, 
 
 | Pestaña / grupo | Office | NOM |
 |---|---|---|
-| Hoja | Barra de fórmulas, filas, columnas, cuadrícula, tablas, tablas dinámicas, controles | Barra de fórmulas, filas y columnas (insertar, borrar, ancho, alto), hojas (nueva, renombrar, mover, duplicar, eliminar): sí. Tablas y tablas dinámicas **se ven** (100 % contra Excel); crearlas: no. Controles de formulario se ven con su estado |
+| Hoja | Barra de fórmulas, filas, columnas, cuadrícula, tablas, tablas dinámicas, controles | Barra de fórmulas, filas y columnas (insertar, borrar, ancho, alto), hojas (nueva, renombrar, mover, duplicar, eliminar): sí. Tablas y tablas dinámicas **se ven** (100 % contra Excel); **crear tablas: sí** (Dar formato como tabla, ver Inicio · Estilos); crear tablas dinámicas: no. Controles de formulario se ven con su estado |
 | Teclas | F2, Entrar, Esc, Ctrl+Fin, Ctrl+D, Ctrl+R, Ctrl+Mayús+U | Sí lo principal (F2, Entrar, Esc, flechas, Ctrl+D/R, copiar fórmulas con referencias relativas, cuadrito de relleno) |
 | Cálculo | Automático, automático salvo tablas, manual, F9 | **Sí** (19-nov): automático, automático excepto tablas de datos y manual (las fórmulas se quedan con su valor hasta F9 —libro— o Mayús+F9 —hoja—, con el botón «Calcular» de Excel); `calcMode` se lee y se escribe. `libro_excel.py`: NOM no recalcula sin F9 y Excel 2024 abre en manual lo que descarga NOM, con los mismos valores |
 | Inicio · Fuente y alineación | Fuente, tamaño, negrita, color, relleno, bordes, alinear, ajustar texto, combinar, girar | Sí (también tramas y degradados de Excel, bordes diagonales, texto girado y apilado, sangría, reducir hasta ajustar) |
@@ -161,7 +161,13 @@ millares, moneda y porcentaje— con su vista previa; como Excel, lo que define 
 «Normal» lo quita; definiciones sacadas de cómo ve NOM los estilos hechos en Excel —`herramientas/estilos_celda.py` →
 `js/estilos-celda-datos.js`—; `estilos_celda_real.py` 6 de 6: aplicados desde NOM, Excel pinta las 94 celdas igual que
 en su propio libro; el nombre del estilo no se guarda en el archivo —Excel ve la celda en «Normal» con ese formato— y en un
-libro nuevo de NOM la letra base es Calibri, no la Aptos Narrow de Excel 2024). Dar formato como tabla: se ve; crearla: no |
+libro nuevo de NOM la letra base es Calibri, no la Aptos Narrow de Excel 2024). **Dar formato como tabla: sí** (21-nov: los 60 estilos de Excel —Claro, Medio, Oscuro— en una galería con muestra; con o sin
+encabezados —sin ellos se inserta arriba la fila «Columna1»…, como Excel—; Diseño de tabla: nombre, fila de encabezado y de
+totales —«Total» y `SUBTOTAL(109,…)`—, filas y columnas con bandas, primera y última columna, botón de filtro, cambiar estilo,
+convertir en rango —el formato se queda en las celdas—; crece al insertar filas o columnas dentro; se pinta en vivo con la
+lógica del importador y el tema del libro —en uno de NOM, el de Office 2024—; sale como tabla de Excel, también en un libro
+que ya trae tablas; `tablas_formato_real.py` 10 de 10: 66 tablas con su rango, estilo, opciones y columnas, y las 798 celdas
+con el mismo relleno, letra y negrita que en Excel) |
 | Inicio · Celdas | Insertar, eliminar, formato (alto, ancho, ocultar, proteger) | Sí; proteger hoja con sus permisos: sí |
 | Inicio · Edición | Autosuma, rellenar, borrar, ordenar y filtrar, buscar y seleccionar | Sí (orden y filtro **solo para mí** o para todos: extra) |
 | Insertar | Tabla dinámica, gráficas, minigráficos, imágenes, formas, cuadro de texto, vínculo, casilla, símbolos | Gráficas: sí (las de NOM; las de Excel se ven en su lugar, también 3D, cascada, histograma, Pareto, embudo, rectángulos, solar, cajas). Imágenes, formas, SmartArt y WordArt del archivo **se ven**. **Insertar imágenes: sí** (21-nov: Más → Imagen… en la celda
