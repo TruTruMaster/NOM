@@ -26,11 +26,17 @@
 - `4-CODIGO/entregables/Auditoria_Seguridad_NOM_5IM7_WACK.pdf` cambió de nombre, pero por dentro sigue diciendo
   NOM-COLAB (no hay fuente para regenerarlo).
 
-## 3. Cómo seguir
+## 3. Publicado (25-nov, 10:05)
 
-- **GitHub (manos del dueño):** borrar el repo vacío `TruTruMaster/nom`, renombrar `NOM-COLAB` a `NOM` y borrar el secreto
-  `AZURE_WEBAPP_PUBLISH_PROFILE`. El token de `tokensito` no tiene permiso de administración y `gh` necesita
-  `gh auth login`. Después: `git remote set-url origin https://github.com/TruTruMaster/NOM.git`.
-- Publicar la 0.23.0 en este orden: Pi (`nom pi actualizar`, humo), `git push`, APK (`publicar-apk.sh`), buscadores.
+- GitHub: se borró el repo vacío `TruTruMaster/nom`, `NOM-COLAB` se renombró a **`TruTruMaster/NOM`** (los enlaces
+  viejos redirigen) y se borró el secreto `AZURE_WEBAPP_PUBLISH_PROFILE`. Token nuevo en `tokensito` (el `gh` de esta PC
+  sigue sin sesión: falla la conexión, se usa la API con `curl`).
+- Pi: 0.23.0 con `nom pi actualizar`; `humo.py` contra `www.nom.qd.je` 36 de 36. Commit `c5b6afb` en `main`.
+- Release `v0.23.0` con `NOM.apk` y `NOM-COLAB.apk` (el mismo archivo); `/app`, el enlace nuevo y el viejo bajan el
+  mismo APK. IndexNow avisado (76 direcciones). GitHub tenía «servicio degradado»: hubo que reintentar.
+
+## 4. Cómo seguir
+
+- Instalar la 0.23.0 en el A55 cuando esté en la misma red.
 - La regresión de Windows no se corrió (la PC no respondía); los PDF de casos de uso y del ensayo salieron de LibreOffice:
   revisarlos en Word.
