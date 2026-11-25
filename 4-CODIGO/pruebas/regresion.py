@@ -78,6 +78,7 @@ def pruebas(modo, out):
         ("carga", [sys.executable, str(AQUI / "carga.py"), "--personas", "5", "--segundos", "10"], True, 20, None),
         ("cuentas_equipo", [PY, i("prueba_cuentas_equipo.py"), cap], True, 115, None),
         ("sin_internet", [PY, i("prueba_sin_internet.py"), cap], True, 100, None),
+        ("mudanza", [PY, i("prueba_mudanza.py"), str(JAR)], False, 25, None),
         ("e2e", [PY, i("prueba_e2e.py"), cap], True, 50, None),
         ("ayuda", [PY, i("prueba_ayuda.py"), cap], True, 15, None),
         ("red", [PY, i("prueba_red.py"), cap], True, 35, None),

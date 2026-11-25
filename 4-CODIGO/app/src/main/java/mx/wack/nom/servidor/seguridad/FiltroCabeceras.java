@@ -31,12 +31,25 @@ public class FiltroCabeceras extends OncePerRequestFilter {
             + "connect-src 'self' https: http:; worker-src 'self'; manifest-src 'self'; object-src 'none'; "
             + "base-uri 'self'; form-action 'self'; frame-ancestors 'self'";
 
+    /** ¿El navegador ve esta página en un origen de confianza (https o este mismo equipo)? */
+    static boolean confiable(HttpServletRequest req) {
+        if ("https".equalsIgnoreCase(req.getHeader("X-Forwarded-Proto")) || req.isSecure()) return true;
+        String host = req.getHeader("Host");
+        if (host == null) return false;
+        host = host.trim().toLowerCase(java.util.Locale.ROOT).replaceAll(":\\d+$", "");
+        return host.equals("localhost") || host.endsWith(".localhost") || host.startsWith("127.") || host.equals("[::1]");
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain cadena) throws ServletException, IOException {
         res.setHeader("X-Content-Type-Options", "nosniff");
         res.setHeader("X-Frame-Options", "SAMEORIGIN");
         res.setHeader("Referrer-Policy", "no-referrer");
-        res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+        // mudanza.html es la única que se comunica con una ventana de la otra dirección de NOM (js/mudanza.js).
+        boolean mudanza = "/mudanza.html".equals(req.getRequestURI());
+        // El navegador solo aplica esta cabecera en https o en este mismo equipo; por http en la red del salón la
+        // ignora y deja un aviso en la consola, así que ahí no se manda.
+        if (confiable(req)) res.setHeader("Cross-Origin-Opener-Policy", mudanza ? "unsafe-none" : "same-origin");
         res.setHeader("Cross-Origin-Resource-Policy", "same-site");
         res.setHeader("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), payment=()");
         if (!req.getRequestURI().startsWith("/api/")) res.setHeader("Content-Security-Policy", CSP);
@@ -45,7 +58,7 @@ public class FiltroCabeceras extends OncePerRequestFilter {
         // fuera la del servidor (Firefox lo hacía al recargar sin conexión).
         else res.setHeader("Cache-Control", "no-store");
         // Las direcciones de un solo uso (unirse a un espacio, ver una proyección) no van en los buscadores.
-        if (req.getRequestURI().startsWith("/unirse") || req.getRequestURI().startsWith("/proyectar")) res.setHeader("X-Robots-Tag", "noindex");
+        if (mudanza || req.getRequestURI().startsWith("/unirse") || req.getRequestURI().startsWith("/proyectar")) res.setHeader("X-Robots-Tag", "noindex");
         if ("https".equalsIgnoreCase(req.getHeader("X-Forwarded-Proto")) || req.isSecure())
             res.setHeader("Strict-Transport-Security", "max-age=15552000");
         cadena.doFilter(req, res);

@@ -4,8 +4,7 @@ Escribe, calcula, presenta y dibuja en equipo, al mismo tiempo, con o sin Intern
 Word, Excel y PowerPoint. Gratis, sin anuncios y de código abierto (**GPL-3.0**), en el navegador y
 en Android. Hasta **50 personas conectadas a la vez** por espacio.
 
-- **En Internet:** **https://www.nom.qd.je** (también responde en https://nomcolab.dpdns.org, el
-  nombre de antes; las cuentas son las mismas).
+- **En Internet:** **https://www.nom.qd.je**.
 - **App de Android:** la última versión siempre en
   [Releases](https://github.com/TruTruMaster/NOM/releases/latest) (`NOM.apk`). Cada
   versión trae su SHA-256 y la huella del certificado de firma, para comprobar que es la original.

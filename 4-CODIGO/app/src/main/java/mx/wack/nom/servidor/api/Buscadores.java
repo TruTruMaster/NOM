@@ -15,10 +15,10 @@ import mx.wack.nom.servidor.seguridad.Origen;
  * titulo y resumen, la imagen para compartir y los datos estructurados (schema.org).
  *
  * La direccion principal ("canonica") sale de NOM_CANONICO (p. ej. https://nom.qd.je). Asi el sitio
- * se puede abrir por varios nombres (nom.qd.je y nomcolab.dpdns.org) y los buscadores juntan todo en
- * uno solo, sin que nadie pierda lo que tiene guardado en el navegador con el otro nombre (cada
- * nombre tiene su propio almacenamiento: por eso no se redirige). Sin NOM_CANONICO, cada nombre es
- * su propia direccion principal.
+ * se puede abrir por varios nombres y los buscadores juntan todo en uno solo. El navegador que abre el
+ * nombre de antes pasa al principal desde la pagina (js/mudanza.js), despues de pasar lo que guardaba ahi:
+ * el servidor no redirige porque cada nombre tiene su propio almacenamiento. Sin NOM_CANONICO, cada nombre
+ * es su propia direccion principal.
  *
  * Los archivos (static/) no llevan nada de esto: la app de Android los abre desde sus archivos y ahi
  * no sirve. Se agrega al servirlos por la red.

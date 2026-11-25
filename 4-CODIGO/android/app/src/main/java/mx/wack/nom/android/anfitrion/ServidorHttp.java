@@ -378,9 +378,10 @@ final class ServidorHttp {
                 + "Access-Control-Allow-Headers: Authorization, Content-Type, Accept\r\nAccess-Control-Max-Age: 3600\r\n";
     }
 
-    /** Las mismas cabeceras de seguridad que pone la computadora (FiltroCabeceras). */
+    /** Las mismas cabeceras de seguridad que pone la computadora (FiltroCabeceras). Sin Cross-Origin-Opener-Policy:
+     *  a este teléfono siempre se entra por http en la red local, donde el navegador la ignora y deja un aviso. */
     static final String SEGURAS = "X-Content-Type-Options: nosniff\r\nX-Frame-Options: SAMEORIGIN\r\nReferrer-Policy: no-referrer\r\n"
-            + "Cross-Origin-Opener-Policy: same-origin\r\nCross-Origin-Resource-Policy: same-site\r\n"
+            + "Cross-Origin-Resource-Policy: same-site\r\n"
             + "Permissions-Policy: camera=(self), microphone=(), geolocation=(), payment=()\r\n";
     /** La política de contenido de la página (igual que FiltroCabeceras.CSP); la API no la lleva. */
     static final String CSP = "Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "

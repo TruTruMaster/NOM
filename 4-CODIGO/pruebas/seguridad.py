@@ -59,9 +59,10 @@ def r(m, u, b=None, t=None, de=None):
         with urllib.request.urlopen(q, timeout=30) as x:
             c = x.read(); return x.status, (json.loads(c) if c[:1] in b"{[" else None)
     except urllib.error.HTTPError as e: return e.code, None
-def cabeceras(u):
+def cabeceras(u, host=None):
     try:
-        with urllib.request.urlopen(B + u, timeout=30) as x: return {k.lower(): v for k, v in x.headers.items()}
+        q = urllib.request.Request(B + u, headers={"Host": host} if host else {})
+        with urllib.request.urlopen(q, timeout=30) as x: return {k.lower(): v for k, v in x.headers.items()}
     except urllib.error.HTTPError as e: return {k.lower(): v for k, v in e.headers.items()}
 def canal(u):
     """Abre un canal en vivo y lo cierra en cuanto contesta: devuelve el código y el tipo de contenido."""
@@ -382,8 +383,16 @@ try:
     prueba("12.1 …y que no se diga de dónde viene", "no-referrer", cp.get("referrer-policy"))
     prueba("12.1 …y solo corre programas de este servidor", True, "script-src 'self'" in cp.get("content-security-policy", "") and "object-src 'none'" in cp.get("content-security-policy", ""))
     prueba("12.1 La API también lleva las cabeceras", ["nosniff", "no-referrer"], [ca.get("x-content-type-options"), ca.get("referrer-policy")])
-    prueba("12.1 La página aísla ventanas y recursos", ["same-origin", "same-site"], [cp.get("cross-origin-opener-policy"), cp.get("cross-origin-resource-policy")])
-    prueba("12.1 La API aísla ventanas y recursos", ["same-origin", "same-site"], [ca.get("cross-origin-opener-policy"), ca.get("cross-origin-resource-policy")])
+    # Cross-Origin-Opener-Policy solo cuenta en https o en este mismo equipo: por http en la red local (el teléfono que
+    # comparte, siempre) el navegador la ignora y avisa en la consola, así que ahí no se manda.
+    coop = "same-origin" if re.match(r"https://|http://(localhost|127\.)", B) else None
+    prueba("12.1 La página aísla ventanas y recursos", [coop, "same-site"], [cp.get("cross-origin-opener-policy"), cp.get("cross-origin-resource-policy")])
+    prueba("12.1 La API aísla ventanas y recursos", [coop, "same-site"], [ca.get("cross-origin-opener-policy"), ca.get("cross-origin-resource-policy")])
+    if not EXTERNO:
+        prueba("12.1 Por http en la red local no manda la cabecera que el navegador ignora", None,
+               cabeceras("/", host=f"192.168.1.20:{P}").get("cross-origin-opener-policy"))
+        prueba("12.1 Solo mudanza.html deja hablar con la ventana de la otra dirección", "unsafe-none",
+               cabeceras("/mudanza.html").get("cross-origin-opener-policy"))
 
     # Cambiar la contraseña sabiendo la actual
     r("POST", "/api/cuentas/registro", {"nombre": "cambia", "contrasena": CL})

@@ -4,8 +4,14 @@ descripcion: Qué cambió en cada versión, en palabras sencillas.
 orden: 1
 aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-25
-version: 0.23.0
+version: 0.23.1
 ---
+## 0.23.1 — noviembre de 2026
+
+- **Una sola dirección:** NOM solo se usa en **www.nom.qd.je**. Si abres en el navegador la dirección de antes, te
+  lleva sola a la nueva; si guardaste algo en ese navegador (documentos sin cuenta o cambios sin enviar), primero lo
+  pasa con un clic, sin pisar lo que ya tengas en la nueva. Las apps ya instaladas siguen funcionando igual.
+
 ## 0.23.0 — noviembre de 2026
 
 - **Ahora sí, solo NOM:** lo que descargas (tus datos, los reportes y la app de Android, `NOM.apk`) ya se llama NOM, y
@@ -167,9 +173,9 @@ version: 0.23.0
 
 ## 0.16.0 — noviembre de 2026
 
-- **Se llama NOM.** Antes NOM-COLAB. La dirección principal es **www.nom.qd.je**; la de antes
-  (nomcolab.dpdns.org) sigue funcionando con las mismas cuentas, y la app las trata como el mismo lugar
-  (un QR o un enlace con el nombre de antes ya no la cambia de servidor ni cierra tu sesión).
+- **Se llama NOM.** Antes NOM-COLAB. La dirección principal es **www.nom.qd.je**; la de antes sigue
+  funcionando con las mismas cuentas, y la app las trata como el mismo lugar (un QR o un enlace con el
+  nombre de antes ya no la cambia de servidor ni cierra tu sesión).
 - **Archivos de Office con contraseña:** se abren pidiendo la contraseña (el cifrado de Office 2010 en
   adelante y el de Office 2007) y se pueden descargar con contraseña. Office los abre igual.
 - **Protección como en Office:** «Restringir edición» de Word (solo lectura, solo comentarios, solo

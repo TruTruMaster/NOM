@@ -3,8 +3,7 @@
 Suite colaborativa: **texto, hojas de cálculo, presentaciones y diagramas en una sola app**,
 con edición simultánea. Funciona en la red local sin depender de Internet (un equipo o un
 teléfono hace de servidor) o en el servidor propio: una Raspberry Pi publicada con Cloudflare
-Tunnel en **https://www.nom.qd.je** (también responde en https://nomcolab.dpdns.org, el nombre de
-antes; `docs/SERVIDOR-PROPIO.md` y `docs/DOMINIO-Y-BUSCADORES.md`).
+Tunnel en **https://www.nom.qd.je** (`docs/SERVIDOR-PROPIO.md` y `docs/DOMINIO-Y-BUSCADORES.md`).
 
 WACK
 

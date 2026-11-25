@@ -7,9 +7,9 @@ Raspberry, con sus cuentas y su base de datos):
 |---|---|
 | `https://www.nom.qd.je` | La dirección principal: la que se ve en Google, Bing y los demás. |
 | `nom.qd.je` | El nombre para compartir: redirige a `www.nom.qd.je`. **Al 17-nov solo por `http://`**: GitHub Pages todavía no emite su certificado (por `https://` el navegador ve el de `*.github.io` y avisa). |
-| `https://nomcolab.dpdns.org` | El de siempre. **No se apaga:** las apps 0.15.x le hablan a este nombre (desde la 0.16.0 la app usa `www.nom.qd.je` y trata los dos como la misma nube), los pases van firmados con él y quien ya guardó cosas en el navegador con este nombre las sigue teniendo ahí. |
+| `https://nomcolab.dpdns.org` | El de siempre, **oculto desde la 0.23.1 (25-nov)**: ya no se muestra en ningún lado y el navegador que lo abre pasa a `www.nom.qd.je` (con `mudanza.html`, que antes pasa lo guardado en ese navegador; `js/mudanza.js`). Sigue como infraestructura: es la zona de Cloudflare de la que cuelga `www.nom.qd.je` (Cloudflare for SaaS) y su API sigue contestando. **No se apaga ni se deja vencer:** las apps 0.15.x le hablan a este nombre (desde la 0.16.0 la app usa `www.nom.qd.je` y trata los dos como la misma nube), los pases van firmados con él y quien ya guardó cosas en el navegador con este nombre las sigue teniendo ahí. |
 
-No se redirige un nombre al otro, porque el navegador guarda la sesión y los documentos de cada
+(Hasta la 0.23.0) No se redirigía un nombre al otro, porque el navegador guarda la sesión y los documentos de cada
 nombre por separado. Una redirección dejaría a la gente sin sesión y sin lo que tenía guardado sin
 Internet. Para que los buscadores no los cuenten como dos sitios, cada página dice cuál es su dirección
 principal (`<link rel="canonical">`). Esa dirección sale de `NOM_CANONICO` en `/etc/nom.conf`.

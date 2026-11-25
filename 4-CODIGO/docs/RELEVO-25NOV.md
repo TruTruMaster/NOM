@@ -35,7 +35,19 @@
 - Release `v0.23.0` con `NOM.apk` y `NOM-COLAB.apk` (el mismo archivo); `/app`, el enlace nuevo y el viejo bajan el
   mismo APK. IndexNow avisado (76 direcciones). GitHub tenía «servicio degradado»: hubo que reintentar.
 
-## 4. Cómo seguir
+## 4. 0.23.1: nomcolab.dpdns.org oculto
+
+- Ya no se muestra en ningún lado (README, ayuda, aviso de privacidad, novedades). El navegador que lo abre pasa a
+  `www.nom.qd.je`: si no guarda nada de NOM, al momento; si guarda algo, por `mudanza.html` (`js/mudanza.js`), que con
+  un clic abre la dirección nueva y le pasa todo por `postMessage` sin pisar lo que ya haya allá. Solo esa página
+  lleva `Cross-Origin-Opener-Policy: unsafe-none`. Prueba: `pruebas/interfaz/prueba_mudanza.py` (Chrome y Firefox,
+  12 de 12; está en la regresión como `mudanza`).
+- Sigue como infraestructura (no se apaga ni se deja vencer): la zona de Cloudflare de la que cuelga `www.nom.qd.je`,
+  la API para las apps ya instaladas y la firma de los pases (`NOM_NUBE`).
+- `Cross-Origin-Opener-Policy` ya no se manda por http en la red local (el navegador la ignora y avisaba en la
+  consola: fallaba `cuentas_equipo`); el teléfono que comparte no la manda nunca.
+
+## 5. Cómo seguir
 
 - Instalar la 0.23.0 en el A55 cuando esté en la misma red.
 - La regresión de Windows no se corrió (la PC no respondía); los PDF de casos de uso y del ensayo salieron de LibreOffice:

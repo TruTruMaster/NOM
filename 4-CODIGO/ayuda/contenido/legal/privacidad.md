@@ -15,7 +15,7 @@ opera NOM. Domicilio para oír y recibir notificaciones: **Mar Mediterráneo 227
 cualquier trámite sobre tus datos también puedes usar el medio de contacto de la sección
 [Cómo ejercer tus derechos](#derechos).
 
-Este aviso aplica a la nube de NOM ([www.nom.qd.je](https://www.nom.qd.je), también en [nomcolab.dpdns.org](https://nomcolab.dpdns.org)) y a
+Este aviso aplica a la nube de NOM ([www.nom.qd.je](https://www.nom.qd.je)) y a
 la app de Android. Una computadora o un teléfono que comparte en un salón **lo opera quien lo
 enciende** (una escuela, una oficina o cualquier persona): es esa persona quien responde por lo que se guarda
 en su equipo.
