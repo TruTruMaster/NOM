@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>NOM-COLAB sí es un sistema distribuido</title>
+<style>
+@font-face { font-family: 'Nunito'; src: url(../../4-CODIGO/app/src/main/resources/static/fonts/nunito-latin-wght-normal.woff2) format('woff2'); font-weight: 200 1000; }
+@font-face { font-family: 'Nunito'; src: url(../../4-CODIGO/app/src/main/resources/static/fonts/nunito-latin-ext-wght-normal.woff2) format('woff2'); font-weight: 200 1000; unicode-range: U+0100-024F, U+1E00-1EFF, U+2020, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+:root { --guinda: #6E1F3A; --azul: #1F5FA8; --amar: #F2B705; --tinta: #1F1B24; --gris: #5E5A66; --linea: #CFC8BE; --crema: #FAF6EF; --marino: #1E2A44; }
+@page { size: letter; margin: 2.2cm 2.4cm 2.3cm 2.4cm; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #fff; color: var(--tinta); font-family: 'Carlito', 'Calibri', Arial, sans-serif; font-size: 11.5pt; line-height: 1.42; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+p { margin: 0 0 6.5pt; text-align: justify; hyphens: auto; }
+h1 { font-family: 'Nunito', Arial, sans-serif; color: var(--guinda); font-size: 17pt; font-weight: 900; line-height: 1.15; margin: 0 0 3pt; }
+.bajada { font-size: 10.5pt; color: var(--gris); margin: 0 0 10pt; padding-bottom: 6pt; border-bottom: 2.5px solid var(--guinda); text-align: left; }
+h2 { font-family: 'Nunito', Arial, sans-serif; color: var(--guinda); font-size: 12.5pt; font-weight: 800; margin: 11pt 0 4pt; break-after: avoid; }
+i, em { font-style: italic; }
+.cita { margin: 4pt 0 7pt 14pt; padding-left: 9pt; border-left: 3px solid var(--amar); font-style: italic; text-align: left; }
+ol.cond { margin: 2pt 0 7pt 0; padding-left: 18pt; }
+ol.cond li { margin-bottom: 1.5pt; text-align: justify; }
+table { width: 100%; border-collapse: collapse; margin: 0 0 8pt; font-size: 9.6pt; line-height: 1.3; }
+tr { break-inside: avoid; }
+th, td { text-align: left; vertical-align: top; padding: 3pt 5pt; border: 1px solid var(--linea); }
+th { background: var(--guinda); color: #fff; font-family: 'Nunito', Arial, sans-serif; font-weight: 800; font-size: 8.8pt; }
+td:first-child { font-weight: 700; width: 17%; }
+td:last-child { width: 25%; color: var(--gris); }
+tr:nth-child(even) td { background: #FBF9F6; }
+.pie-tabla { break-after: avoid; font-size: 9pt; color: var(--gris); margin: 2pt 0 3pt; text-align: left; }
+code { font-family: 'DejaVu Sans Mono', monospace; font-size: 8.2pt; }
+.refs p { text-indent: -16pt; padding-left: 16pt; font-size: 10pt; line-height: 1.32; margin-bottom: 3.5pt; text-align: left; hyphens: manual; }
+
+/* Dos versiones del mismo texto: .L solo en la larga (portada aparte + 4 páginas), .C solo en la corta (4 páginas con portada) */
+body.corto .L { display: none !important; }
+body:not(.corto) .C { display: none !important; }
+
+/* Portada */
+.portada { height: 23.3cm; display: flex; flex-direction: column; font-family: 'Nunito', Arial, sans-serif; break-after: page; position: relative; }
+.portada .barra { height: 9pt; background: var(--guinda); border-radius: 3pt; }
+.portada .marca { display: flex; align-items: center; gap: 12pt; margin-top: 22pt; }
+.portada .marca img { height: 2.3cm; }
+.portada .marca b { font-size: 24pt; font-weight: 900; letter-spacing: 2px; display: block; line-height: 1; color: var(--marino); }
+.portada .marca span { font-size: 10.5pt; color: var(--gris); }
+.portada .centro { margin-top: auto; margin-bottom: auto; }
+.portada .tipo { font-size: 10pt; font-weight: 800; letter-spacing: 4px; color: var(--azul); text-transform: uppercase; }
+.portada .titulo { font-size: 32pt; font-weight: 900; line-height: 1.08; color: var(--guinda); margin: 8pt 0 12pt; }
+.portada .sub { font-size: 13pt; color: var(--tinta); line-height: 1.35; max-width: 14cm; font-family: 'Carlito', Arial, sans-serif; }
+.portada .linea { width: 3.2cm; height: 4px; background: var(--amar); margin: 18pt 0 16pt; border-radius: 2px; }
+.portada .datos { font-family: 'Carlito', Arial, sans-serif; font-size: 11.5pt; line-height: 1.5; }
+.portada .datos b { font-family: 'Nunito', Arial, sans-serif; font-size: 9.5pt; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gris); display: block; margin-bottom: 2pt; }
+.portada .abajo { display: flex; justify-content: space-between; align-items: flex-end; font-family: 'Carlito', Arial, sans-serif; font-size: 11pt; color: var(--gris); border-top: 1px solid var(--linea); padding-top: 8pt; }
+.portada .abajo i { font-family: 'Nunito', Arial, sans-serif; font-weight: 700; color: var(--guinda); }
+</style>
+</head>
+<body>
+
+<section class="portada">
+  <div class="barra"></div>
+  <div class="marca">
+    <img src="../../6-PLAN-DE-PRUEBAS/imagenes/logo-wack.png" alt="WACK">
+    <div><b>WACK</b><span>Desarrollo de software para colaborar en tiempo real</span></div>
+  </div>
+  <div class="centro">
+    <div class="tipo">Ensayo · Proyecto NOM-COLAB</div>
+    <div class="titulo">NOM-COLAB sí es un<br>sistema distribuido</div>
+    <div class="sub">Qué dice la definición, qué hace el sistema y por qué la ubicación de la base de datos no decide la cuestión</div>
+    <div class="linea"></div>
+    <div class="datos">
+      <b>Equipo del proyecto</b>
+      González Azuara Arturo Leonardo<br>
+      Martínez Ortega Uriel Alejandro<br>
+      Rodríguez Esparza Diego Alejandro<br>
+      Soria Flores Josep Aarón
+    </div>
+  </div>
+  <div class="abajo"><span>Ciudad de México, noviembre de 2026</span><i>“We carry the flame”</i></div>
+</section>
+
+<h1>NOM-COLAB sí es un sistema distribuido</h1>
+<p class="bajada">Qué dice la definición, qué hace el sistema y por qué la ubicación de la base de datos no decide la cuestión</p>
+
+<p>En la revisión del proyecto se objetó que NOM-COLAB no es un sistema distribuido porque, en su instalación principal, el servidor y la base de datos corren en el mismo equipo; para serlo, se dijo, tendrían que estar en direcciones IP distintas, aunque fuera asignando dos direcciones dentro de un mismo dispositivo. La objeción merece una respuesta seria, porque toca la pregunta de fondo: <em>¿qué hace que un sistema sea distribuido?</em> Este ensayo sostiene que NOM-COLAB sí lo es, y que lo es por razones que no dependen de dónde corre la base de datos. <span class="L">Primero se revisa la definición en los autores de referencia; después se contrasta con lo que el sistema hace, con el código como evidencia; luego se responde a la objeción y, por último, se reconocen los límites del diseño.</span><span class="C">Para demostrarlo se revisa la definición, se contrasta con lo que el sistema hace y se responde a la objeción.</span></p>
+
+<h2>1. Qué es un sistema distribuido</h2>
+<p>Liu (2004) lo define como</p>
+<p class="cita">una colección de computadoras independientes, interconectadas mediante una red, que son capaces de colaborar en una tarea,</p>
+<p>y aclara que las computadoras son independientes cuando no comparten memoria ni espacio de ejecución. Coulouris, Dollimore, Kindberg y Blair (2012) lo precisan: es aquel en el que componentes situados en computadoras conectadas en red se comunican y coordinan sus acciones <em>únicamente mediante el paso de mensajes</em>; de ahí se siguen tres rasgos de todo sistema distribuido: concurrencia, ausencia de un reloj global y fallas independientes. Tanenbaum y van Steen (2008) añaden la mirada del usuario: el conjunto debe presentarse como un único sistema coherente.</p>
+<p>De estas definiciones salen cuatro condiciones que se pueden comprobar:</p>
+<ol class="cond">
+  <li>varios nodos autónomos;</li>
+  <li>comunicación solo por mensajes a través de una red;</li>
+  <li>coordinación para una tarea común;</li>
+  <li>apariencia de un solo sistema.</li>
+</ol>
+<p>Ninguna menciona la base de datos ni exige que un servidor y su base estén en equipos distintos. Esa separación tiene nombre propio, <em>distribución vertical</em> o arquitectura de varios niveles (Tanenbaum y van Steen, 2008), y es una de las maneras de repartir un sistema, no la definición de sistema distribuido.</p>
+
+<h2>2. NOM-COLAB frente a las cuatro condiciones</h2>
+<p><b>Nodos autónomos.</b> El escenario sin Internet es el más claro: un teléfono Android sirve el espacio de trabajo (incluso creando su propio punto de acceso) y cada integrante entra desde su teléfono o su computadora. Son equipos distintos, cada uno con su IP, su memoria, su procesador y su batería: exactamente las «computadoras independientes» de Liu. <span class="L">En Internet participan además la Raspberry Pi 5 que sirve www.nom.qd.je, la red de Cloudflare que la publica por un túnel, otra computadora que recibe cada día una copia de los respaldos y, en la versión de Azure, el servidor de aplicaciones y la base Azure SQL, que son servicios separados unidos por la red.</span><span class="C">En Internet se suman la Raspberry Pi 5 que sirve www.nom.qd.je, la red de Cloudflare que la publica y otra computadora que guarda cada día los respaldos.</span></p>
+<p><b>Paso de mensajes.</b> Los nodos no comparten memoria: todo lo que saben unos de otros llega como mensaje. Hay peticiones HTTP para leer y guardar, un canal de eventos del servidor (SSE) por el que llegan al instante las operaciones de los demás y anuncios por difusión UDP con los que cada servidor se da a conocer en el Wi-Fi. Es el paradigma cliente-servidor sobre sockets que describe Liu (2004)<span class="L">, el de sus ejemplos de aceptador y solicitante de conexión,</span> llevado a una aplicación completa.</p>
+<p><b>Una tarea común.</b> Aquí está la diferencia con una página web convencional, en la que el navegador solo muestra lo que guarda el servidor. En NOM-COLAB cada dispositivo conectado tiene una <em>réplica completa</em> del documento, la modifica localmente primero y envía sus cambios en lotes de unos 16 ms; en la red local llegan a los demás en unos 20 ms. Hasta 50 personas por espacio escriben a la vez en el mismo texto, hoja de cálculo, presentación o diagrama. Liu (2004) incluye entre los paradigmas de la computación distribuida las aplicaciones colaborativas (<em>groupware</em>), en las que varios procesos participan en una sesión compartida; NOM-COLAB pertenece a ese paradigma.</p>
+<p><b>Un solo sistema.</b> Todos terminan viendo el mismo documento y nadie necesita saber dónde está el servidor: la app lo encuentra con «Buscar en este Wi-Fi» o con un código QR. Eso es transparencia de ubicación.</p>
+
+<h2>3. Los problemas de un sistema distribuido, resueltos en el código</h2>
+<p>La prueba más fuerte no es la lista de equipos, sino que el sistema tuvo que resolver los problemas que solo aparecen cuando un sistema está distribuido. Un programa centralizado no necesitaría nada de lo que <span class="L">resume la tabla 1.</span><span class="C">sigue.</span></p>
+
+<div class="L">
+<p class="pie-tabla"><b>Tabla 1.</b> Rasgos de un sistema distribuido según Coulouris et al. (2012) y dónde los resuelve NOM-COLAB.</p>
+<table>
+  <thead><tr><th>Rasgo</th><th>Cómo aparece en NOM-COLAB</th><th>Dónde se comprueba</th></tr></thead>
+  <tr><td>Concurrencia</td><td>Varias personas cambian a la vez el mismo documento, incluso la misma palabra, y todas las réplicas terminan iguales.</td><td>Prueba automática: 5 usuarios y 200 órdenes de llegada dan el mismo resultado (<code>MotorCRDTTest</code>)</td></tr>
+  <tr><td>Sin reloj global</td><td>Cada cambio lleva un reloj de Lamport y el id de su nodo: todos eligen el mismo ganador sin consultarse.</td><td><code>MotorCRDT.java</code> en el servidor y <code>crdt.js</code> en el navegador</td></tr>
+  <tr><td>Fallas independientes</td><td>Si se cae la red, cada equipo sigue editando; sus cambios esperan cifrados en el dispositivo y se envían al volver.</td><td><code>cola.js</code> y <code>sw.js</code></td></tr>
+  <tr><td>Réplicas que se separan</td><td>Si otra persona cambió el documento mientras uno estaba sin conexión, lo propio queda en una rama que se compara y se fusiona.</td><td><code>Replica.java</code> y <code>ramas.js</code></td></tr>
+  <tr><td>Varios servidores</td><td>El espacio trabajado en el teléfono se copia cada 5 minutos con la Raspberry o con Azure; los dos quedan con la unión.</td><td><code>ServicioSincronia.java</code></td></tr>
+  <tr><td>Confianza sin red</td><td>La nube firma un pase de 10 minutos que el teléfono verifica sin Internet, con la llave pública que trae la app.</td><td><code>ServicioPases.java</code></td></tr>
+</table>
+</div>
+
+<p class="C">Primero, la <b>concurrencia</b>: varias personas cambian a la vez el mismo documento, incluso la misma palabra, y todas las réplicas terminan iguales; una prueba automática lo comprueba con 5 usuarios y 200 órdenes de llegada distintos. Segundo, la <b>ausencia de un reloj global</b>, que se explica abajo. Tercero, las <b>fallas independientes</b>: si se cae la red, cada equipo sigue editando y sus cambios esperan en el dispositivo; si mientras tanto otra persona cambió el documento, lo propio queda en una <em>rama</em> que después se compara y se fusiona. Además, un espacio trabajado en el teléfono se copia cada 5 minutos con la Raspberry o con Azure, y la nube firma un pase de 10 minutos que el teléfono verifica sin Internet.</p>
+
+<p>El caso del reloj es el más revelador. Los relojes de los teléfonos no coinciden, así que ordenar los cambios por hora sería un error. NOM-COLAB usa relojes lógicos de Lamport (1978): cada nodo cuenta sus eventos y, al recibir un mensaje, adelanta su contador; con el id del nodo como desempate se obtiene un orden total que todos calculan igual. Sobre eso, el texto se maneja letra por letra, con un identificador propio para cada carácter, como un tipo de dato replicado libre de conflictos o CRDT (Shapiro, Preguiça, Baquero y Zawirski, 2011): sus operaciones son idempotentes y conmutativas, de modo que el resultado no depende del orden en que lleguen.<span class="L"> Para las ramas, al perder la conexión se guarda el reloj más alto conocido de cada nodo, un vector de relojes, y con él se distingue lo que otro cambió «mientras tanto».</span></p>
+<p class="L">Incluso la seguridad está repartida: en los espacios con cifrado de extremo a extremo, el contenido se cifra en cada dispositivo antes de salir y el servidor guarda lo que no puede leer. Parte del trabajo del sistema ocurre, por diseño, fuera del servidor.</p>
+
+<h2>4. Respuesta a la objeción</h2>
+<p><b>Confunde niveles con nodos.</b> Separar la base de datos del servidor es distribución vertical: decide en qué máquina corre cada capa. Es una opción de arquitectura, no la condición para ser distribuido; un sistema cliente-servidor de dos niveles también lo es, y la Web es el ejemplo clásico (Coulouris et al., 2012).</p>
+<p><b>Los datos que importan ya están en IP distintas.</b> La base H2 guarda cuentas, sesiones y preferencias. Los espacios y documentos, que es lo que la gente edita, existen al mismo tiempo en el servidor, en cada dispositivo conectado, en otro servidor cuando el espacio está sincronizado y en la computadora que guarda los respaldos. Además, en la versión de Azure el servidor de aplicaciones y Azure SQL ya son servicios separados conectados por la red: ahí el criterio de la objeción se cumple tal cual.</p>
+<p><b>Separarlos dentro del mismo equipo no agregaría nada.</b> Dar al servidor y a la base dos direcciones en un solo dispositivo cumpliría la letra del criterio, pero no sus propiedades: los dos procesos seguirían compartiendo hardware, reloj y energía, y si el equipo se apaga caen juntos. No habría fallas independientes, que es justo lo que distingue a un sistema distribuido. El cambio solo sumaría un salto de red y un servicio más expuesto, en contra del trabajo de seguridad del proyecto, que mantiene la base sin acceso desde la red.</p>
+
+<h2 class="L">5. Límites que conviene reconocer</h2>
+<p class="L">Sostener la tesis no obliga a exagerarla. En cada instalación, el espacio lo coordina un servidor: es una organización cliente-servidor centralizada, no una red entre pares, y si ese servidor se cae cada quien sigue editando su réplica, pero nadie ve los cambios de los demás hasta que vuelve. Tampoco es una <em>base de datos distribuida</em> en el sentido de Özsu y Valduriez (2020), porque la base de cuentas no está fragmentada ni replicada entre sitios, y las instalaciones (la Raspberry, Azure y el servidor de un salón) tienen cuentas independientes, unidas solo por la copia de espacios y los pases. Si la objeción quería decir «base de datos distribuida», en ese punto tiene razón; pero es otro concepto, y NOM-COLAB nunca lo ha pretendido.</p>
+<p class="C">Hay que reconocer un límite: en cada instalación el espacio lo coordina un servidor (cliente-servidor, no una red entre pares), y la base de cuentas no es una <em>base de datos distribuida</em> en el sentido de Özsu y Valduriez (2020). Si eso quería decir la objeción, tiene razón en ese punto, pero es otro concepto, y NOM-COLAB no lo pretende.</p>
+
+<h2><span class="L">6</span><span class="C">5</span>. Conclusión</h2>
+<p>Un sistema es distribuido cuando computadoras independientes se coordinan por mensajes para una tarea común y se presentan como un solo sistema. NOM-COLAB cumple las cuatro condiciones y, además, resuelve con relojes lógicos, réplicas que convergen y ramas para el trabajo sin conexión los problemas que solo tiene un sistema distribuido. La ubicación de la base de datos es una decisión de arquitectura, y en Azure ya está separada, no un requisito de la definición. Simular esa separación dentro de un equipo no lo haría más distribuido: lo que lo hace distribuido es que funciona en muchos equipos a la vez y sigue funcionando cuando alguno falla.</p>
+
+<h2>Referencias</h2>
+<div class="refs">
+<p>Coulouris, G., Dollimore, J., Kindberg, T. y Blair, G. (2012). <i>Distributed systems: Concepts and design</i> (5.ª ed.). Addison-Wesley.</p>
+<p>Lamport, L. (1978). Time, clocks, and the ordering of events in a distributed system. <i>Communications of the ACM, 21</i>(7), 558-565. https://doi.org/10.1145/359545.359563</p>
+<p>Liu, M. L. (2004). <i>Computación distribuida: Fundamentos y aplicaciones</i>. Pearson Educación.</p>
+<p>Özsu, M. T. y Valduriez, P. (2020). <i>Principles of distributed database systems</i> (4.ª ed.). Springer.</p>
+<p>Shapiro, M., Preguiça, N., Baquero, C. y Zawirski, M. (2011). Conflict-free replicated data types. En <i>Stabilization, Safety, and Security of Distributed Systems</i> (pp. 386-400). Springer.</p>
+<p>Tanenbaum, A. S. y van Steen, M. (2008). <i>Sistemas distribuidos: Principios y paradigmas</i> (2.ª ed.). Pearson Educación.</p>
+</div>
+
+</body>
+</html>
