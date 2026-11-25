@@ -47,6 +47,10 @@
 - `Cross-Origin-Opener-Policy` ya no se manda por http en la red local (el navegador la ignora y avisaba en la
   consola: fallaba `cuentas_equipo`); el teléfono que comparte no la manda nunca.
 
+- **Publicada el 25-nov a las 10:25:** Pi 0.23.1 (humo 36 de 36), commit `e6d8c19`, release `v0.23.1` (APK 43, con
+  `NOM.apk` y `NOM-COLAB.apk`), IndexNow. Seguridad 448 de 448. Comprobado en Chrome y Firefox: abrir
+  `https://nomcolab.dpdns.org/?x` lleva a `https://www.nom.qd.je/?x`.
+
 ## 5. Cómo seguir
 
 - Instalar la 0.23.0 en el A55 cuando esté en la misma red.
