@@ -1,6 +1,6 @@
 """Pruebas de seguridad de NOM contra un servidor recién arrancado (datos temporales).
 
-    python3 pruebas/seguridad.py                 # usa app/target/nom-colab.jar
+    python3 pruebas/seguridad.py                 # usa app/target/nom.jar
     python3 pruebas/seguridad.py ruta/al.jar
     NOM_PRUEBA_RAPIDA=1 python3 pruebas/seguridad.py   # sin la prueba de la fecha de entrega (1 min)
     NOM_BASE=http://192.168.0.77:8080 python3 pruebas/seguridad.py   # contra un servidor ya encendido
@@ -20,13 +20,12 @@ de seguridad, cambiar la contraseña, borrar la cuenta, boletos de un solo uso p
 vivo, bloqueo de intentos por red, tope de cuentas nuevas por hora, almacenamiento de la cuenta y
 que los documentos se guarden comprimidos (y sigan abriendo tras reiniciar el servidor).
 Imprime cada prueba y termina con error si alguna falla.
-Los roles de la base de Azure SQL se prueban aparte con azure/desplegar.sh roles.
 """
 import base64, glob, gzip, json, os, re, secrets, shutil, subprocess, time, urllib.request, urllib.parse
 import sys, tempfile, http.client
 AQUI = os.path.dirname(os.path.abspath(__file__))
-JAR = sys.argv[1] if len(sys.argv) > 1 else os.path.join(AQUI, "..", "app", "target", "nom-colab.jar")
-D = tempfile.mkdtemp(prefix="nomcolab-pruebas-")
+JAR = sys.argv[1] if len(sys.argv) > 1 else os.path.join(AQUI, "..", "app", "target", "nom.jar")
+D = tempfile.mkdtemp(prefix="nom-pruebas-")
 JAVA = shutil.which("java") or "java"
 EXTERNO = os.environ.get("NOM_BASE", "").rstrip("/")
 def libre(preferido=None):
@@ -383,6 +382,8 @@ try:
     prueba("12.1 …y que no se diga de dónde viene", "no-referrer", cp.get("referrer-policy"))
     prueba("12.1 …y solo corre programas de este servidor", True, "script-src 'self'" in cp.get("content-security-policy", "") and "object-src 'none'" in cp.get("content-security-policy", ""))
     prueba("12.1 La API también lleva las cabeceras", ["nosniff", "no-referrer"], [ca.get("x-content-type-options"), ca.get("referrer-policy")])
+    prueba("12.1 La página aísla ventanas y recursos", ["same-origin", "same-site"], [cp.get("cross-origin-opener-policy"), cp.get("cross-origin-resource-policy")])
+    prueba("12.1 La API aísla ventanas y recursos", ["same-origin", "same-site"], [ca.get("cross-origin-opener-policy"), ca.get("cross-origin-resource-policy")])
 
     # Cambiar la contraseña sabiendo la actual
     r("POST", "/api/cuentas/registro", {"nombre": "cambia", "contrasena": CL})
@@ -559,7 +560,7 @@ try:
     prueba("13.2 Un pase de una nube que no está en la lista no se acepta", True, r("POST", "/api/cuentas/pase/entrar", {"pase": (pa[1] or {}).get("pase", "x.y")})[0] in (401, 403))
     if not EXTERNO and pa[0] == 200 and ll[0] == 200:
         # Otro NOM (como el teléfono que comparte) que confía en la llave de este.
-        D2 = tempfile.mkdtemp(prefix="nomcolab-pruebas-b-")
+        D2 = tempfile.mkdtemp(prefix="nom-pruebas-b-")
         P2 = libre(8093); B2 = f"http://localhost:{P2}"
         nubes = json.dumps([{"nube": f"http://localhost:{P}", "llave": ll[1]["llave"]}])
         srv2 = subprocess.Popen([JAVA, "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P2), NOM_DATOS=D2, NOM_DESCUBRIMIENTO="false", NOM_NUBES_CONFIABLES=nubes), stdout=open(os.path.join(D2, "servidor.log"), "a"), stderr=subprocess.STDOUT)
@@ -752,7 +753,7 @@ try:
                     try: z.close()
                     except OSError: pass
                 self.socks = []
-        D3 = tempfile.mkdtemp(prefix="nomcolab-pruebas-tel-")
+        D3 = tempfile.mkdtemp(prefix="nom-pruebas-tel-")
         P3 = libre(8094); B3 = f"http://localhost:{P3}"
         srv3 = subprocess.Popen([JAVA, "-Dnom.umbralRama=1000", "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P3), NOM_DATOS=D3, NOM_DESCUBRIMIENTO="false"), stdout=open(os.path.join(D3, "servidor.log"), "a"), stderr=subprocess.STDOUT)
         PP = libre(8096)
@@ -891,7 +892,7 @@ try:
                 h2_cifrada(os.path.join(D, "nom-db.mv.db"))])
         prueba("14.1 La llave vive fuera de la carpeta de datos", [True, False], [os.path.exists(os.path.join(D + "-llaves", "reposo.key")), any("reposo.key" in f for _, _, fs in os.walk(D) for f in fs)])
         # Un servidor nuevo sin cifrar, con datos en claro: al arrancar con cifrado, se cifran solos.
-        D4 = tempfile.mkdtemp(prefix="nomcolab-pruebas-claro-")
+        D4 = tempfile.mkdtemp(prefix="nom-pruebas-claro-")
         P4 = libre(8097); B4 = f"http://localhost:{P4}"
         def arrancar4(**extra):
             return subprocess.Popen([JAVA, "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P4), NOM_DATOS=D4, NOM_DESCUBRIMIENTO="false", **extra), stdout=open(os.path.join(D4 + ".log"), "a"), stderr=subprocess.STDOUT)
@@ -1175,7 +1176,7 @@ try:
             prueba("12.1 Un boleto sin usar vence a los 30 segundos", 401, canal(f"/api/espacios/{salon}/eventos?boleto={boleto_viejo}&cliente=prueba-b")[0])
     if not EXTERNO:
         # 17.6 Memoria: un documento sin uso sale de la memoria (aquí a los 2 s) y vuelve del disco igual, con sus cambios.
-        D6 = tempfile.mkdtemp(prefix="nomcolab-pruebas-m-")
+        D6 = tempfile.mkdtemp(prefix="nom-pruebas-m-")
         P6 = libre(8095); B6 = f"http://localhost:{P6}"
         srv6 = subprocess.Popen([JAVA, "-Dnom.inactivoMs=2000", "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P6), NOM_DATOS=D6, NOM_DESCUBRIMIENTO="false"), stdout=open(os.path.join(D6, "servidor.log"), "a"), stderr=subprocess.STDOUT)
         r6 = lambda *a, **k: rq(B6, *a, **k)[:2]
@@ -1203,7 +1204,7 @@ try:
             srv6.kill(); srv6.wait(30)
             shutil.rmtree(D6, ignore_errors=True); shutil.rmtree(D6 + "-llaves", ignore_errors=True)
         # 16.1 y 16.3 en un servidor aparte con 1 MB por cuenta: 50 personas a la vez y el chat dentro de la cuota
-        D5 = tempfile.mkdtemp(prefix="nomcolab-pruebas-e-")
+        D5 = tempfile.mkdtemp(prefix="nom-pruebas-e-")
         P5 = libre(8096); B5 = f"http://localhost:{P5}"
         srv5 = subprocess.Popen([JAVA, "-jar", JAR], env=dict(os.environ, NOM_PUERTO=str(P5), NOM_DATOS=D5, NOM_DESCUBRIMIENTO="false", NOM_CUOTA_MB="1"), stdout=open(os.path.join(D5, "servidor.log"), "a"), stderr=subprocess.STDOUT)
         r5 = lambda *a, **k: rq(B5, *a, **k)[:2]

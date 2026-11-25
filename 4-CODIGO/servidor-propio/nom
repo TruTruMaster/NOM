@@ -1,0 +1,252 @@
+#!/usr/bin/env bash
+# nom - prende y apaga NOM en esta computadora o en la Raspberry Pi.
+#
+#   nom                       menú: 1) Local o 2) Pi, y luego qué hacer
+#   nom local up|down|estado|reiniciar
+#   nom pi estado|up|down|reiniciar|actualizar|respaldo|bitacora|instalar
+#
+# Local: el jar como servicio de usuario (systemd: nom.service, puerto 8080, datos en
+#        ~/nom-servidor), con Tailscale Funnel. Desde el 16-nov la nube es la Raspberry: el
+#        túnel de Cloudflare (nom-tunel.service) usa EL MISMO túnel que la Pi, así que "up" no
+#        lo enciende si la nube ya contesta desde otro equipo (Cloudflare repartiría a la gente
+#        entre dos servidores con datos distintos). "down" lo apaga y le quita el arranque
+#        automático hasta el siguiente "up".
+# Pi:    la Raspberry Pi (pi5 en Tailscale) es la casa de https://www.nom.qd.je (y del nombre de
+#        antes, https://nomcolab.dpdns.org): el jar y el túnel corren ahí como servicios
+#        supervisados (s6). "actualizar" le sube el jar nuevo (si no arranca, la Pi regresa sola al
+#        anterior); "respaldo" hace uno y trae una copia aquí.
+# Todo se queda en planes gratuitos. Más detalles: docs/SERVIDOR-PROPIO.md.
+AQUI="$(dirname "$(readlink -f "$0")")"
+LOCAL_DIR="$HOME/nom-servidor"
+LOCAL_PUERTO=8080
+SERVICIO="nom.service"
+TUNEL="nom-tunel.service"
+DOMINIO="https://nomcolab.dpdns.org"
+
+T0=$(date +%s.%N)
+ERR=0
+log() { printf '[%9.3f] %s\n' "$(echo "$(date +%s.%N) - $T0" | bc)" "$*"; }
+err() { ERR=$((ERR + 1)); log "$*"; }
+TMP=$(mktemp); trap 'rm -f "$TMP" "$TMP.err"' EXIT
+finish() {
+  if [ "$ERR" -eq 0 ]; then log "nom: $DESTINO $ACCION terminado, 0 errores"; exit 0; fi
+  log "nom: $DESTINO $ACCION terminó con $ERR error(es)"; exit 1
+}
+
+# ==================================================================== Local
+# El jar que se publica: el de 2-PAGINA-Servidor en la copia de entrega, o el recién compilado.
+jar_fuente() {
+  local j
+  for j in "$AQUI/../../2-PAGINA-Servidor/nom.jar" "$AQUI/../app/target/nom.jar"; do
+    [ -f "$j" ] && { readlink -f "$j"; return 0; }
+  done
+  return 1
+}
+local_dir_publica() { tailscale status --json 2>/dev/null | python3 -c "import sys,json;print('https://'+json.load(sys.stdin)['Self']['DNSName'].rstrip('.'))" 2>/dev/null; }
+local_activo() { systemctl --user is-active --quiet "$SERVICIO"; }
+local_http() { curl -s -o /dev/null -w '%{http_code} %{time_total}' --max-time "${2:-5}" "$1"; }
+
+need_local() {
+  if ! systemctl --user cat "$SERVICIO" >/dev/null 2>&1; then
+    err "local: no existe el servicio $SERVICIO (ver docs/SERVIDOR-PROPIO.md, sección Instalar)"; finish
+  fi
+  command -v tailscale >/dev/null 2>&1 || { err "local: falta Tailscale"; finish; }
+}
+
+# Copia el jar nuevo solo con el servidor apagado (cambiarlo con la JVM leyéndolo la tumba).
+local_actualizar_jar() {
+  local fuente; fuente=$(jar_fuente) || { log "local: no encontré un jar nuevo; se usa el que ya está"; return 0; }
+  if [ ! -f "$LOCAL_DIR/nom.jar" ] || ! cmp -s "$fuente" "$LOCAL_DIR/nom.jar"; then
+    mkdir -p "$LOCAL_DIR" && cp "$fuente" "$LOCAL_DIR/nom.jar" && log "local: jar actualizado desde $fuente"
+  else
+    log "local: el jar ya es la versión más reciente"
+  fi
+}
+
+local_up() {
+  if local_activo; then
+    log "local: el servidor ya estaba prendido"
+    systemctl --user enable --quiet "$SERVICIO" 2>/dev/null
+  else
+    local_actualizar_jar
+    log "local: prendiendo el servidor (puerto $LOCAL_PUERTO)"
+    systemctl --user enable --now "$SERVICIO" || { err "local: no arrancó (journalctl --user -u $SERVICIO)"; return 1; }
+    local i r
+    for i in $(seq 1 60); do
+      r=$(local_http "http://127.0.0.1:$LOCAL_PUERTO/api/red/info" 2)
+      [ "${r%% *}" = "200" ] && break
+      sleep 1
+    done
+    if [ "${r%% *}" = "200" ]; then log "local: responde en http://127.0.0.1:$LOCAL_PUERTO"; else err "local: no responde tras 60 s"; return 1; fi
+  fi
+  # El túnel de la laptop es el mismo de la Raspberry: encenderlo mientras la Pi sirve la nube partiría a la
+  # gente entre dos servidores. Solo se enciende si la nube no contesta o si contesta este mismo equipo.
+  local quien
+  quien=$(curl -s --max-time 10 "$DOMINIO/api/red/info" | sed -n 's/.*"equipo":"\([^"]*\)".*/\1/p')
+  if [ -n "$quien" ] && [ "$quien" != "$(hostname)" ]; then
+    log "túnel: NO se enciende: $DOMINIO ya lo sirve «$quien» (la Raspberry). Esta computadora queda solo en la red local y en Funnel."
+  elif systemctl --user cat "$TUNEL" >/dev/null 2>&1; then
+    log "túnel: publicando en $DOMINIO"
+    if systemctl --user enable --now "$TUNEL"; then
+      for i in $(seq 1 30); do r=$(local_http "$DOMINIO/api/red/info" 10); [ "${r%% *}" = "200" ] && break; sleep 2; done
+      if [ "${r%% *}" = "200" ]; then log "túnel: HTTP 200 en ${r##* }s"; else err "túnel: $DOMINIO -> HTTP ${r%% *} (journalctl --user -u $TUNEL)"; fi
+    else
+      err "túnel: no arrancó (journalctl --user -u $TUNEL)"
+    fi
+  fi
+  log "funnel: publicando en internet"
+  if tailscale funnel --bg "$LOCAL_PUERTO" >"$TMP" 2>&1; then
+    local pub; pub=$(local_dir_publica)
+    log "funnel: encendido -> $pub"
+    r=$(local_http "$pub/api/red/info" 20)
+    if [ "${r%% *}" = "200" ]; then log "funnel: HTTP 200 en ${r##* }s"; else log "funnel: HTTP ${r%% *} (puede tardar unos segundos)"; fi
+    log "listo: $DOMINIO  (también $pub)"
+  else
+    err "funnel: falló: $(head -3 "$TMP" | tr '\n' ' ')"
+  fi
+}
+
+local_down() {
+  if systemctl --user cat "$TUNEL" >/dev/null 2>&1; then
+    systemctl --user disable --now --quiet "$TUNEL" && log "túnel: apagado ($DOMINIO deja de responder)" || err "túnel: no se pudo apagar"
+  fi
+  if tailscale funnel status 2>/dev/null | grep -q "Funnel on"; then
+    tailscale funnel --https=443 off >/dev/null 2>&1 && log "funnel: apagado (la dirección pública deja de responder)" || err "funnel: no se pudo apagar"
+  else
+    log "funnel: ya estaba apagado"
+  fi
+  if local_activo; then
+    systemctl --user disable --now --quiet "$SERVICIO" && log "local: servidor apagado (no arranca solo hasta el siguiente up)" || err "local: no se pudo apagar"
+  else
+    log "local: el servidor ya estaba apagado"
+  fi
+}
+
+local_estado() {
+  if local_activo; then
+    local pid desde mem
+    pid=$(systemctl --user show "$SERVICIO" -p MainPID --value)
+    desde=$(systemctl --user show "$SERVICIO" -p ActiveEnterTimestamp --value)
+    mem=$(systemctl --user show "$SERVICIO" -p MemoryCurrent --value)
+    log "local: PRENDIDO (pid $pid, desde $desde, RAM $((mem / 1048576)) MB)"
+    local r; r=$(local_http "http://127.0.0.1:$LOCAL_PUERTO/api/red/info" 5)
+    log "local: http://127.0.0.1:$LOCAL_PUERTO -> HTTP ${r%% *} en ${r##* }s"
+  else
+    log "local: APAGADO"
+  fi
+  if systemctl --user is-active --quiet "$TUNEL"; then
+    local r; r=$(local_http "$DOMINIO/api/red/info" 15)
+    log "túnel: ENCENDIDO $DOMINIO -> HTTP ${r%% *}"
+  else
+    log "túnel: APAGADO ($DOMINIO no responde)"
+  fi
+  log "arranque automático: servidor $(systemctl --user is-enabled "$SERVICIO" 2>/dev/null), túnel $(systemctl --user is-enabled "$TUNEL" 2>/dev/null), vigía $(systemctl --user is-active nom-vigia.timer 2>/dev/null)"
+  local pub; pub=$(local_dir_publica)
+  if tailscale funnel status 2>/dev/null | grep -q "Funnel on"; then
+    local r; r=$(local_http "$pub/api/red/info" 15)
+    log "funnel: ENCENDIDO $pub -> HTTP ${r%% *}"
+  else
+    log "funnel: APAGADO ($pub no responde desde internet)"
+  fi
+  log "datos: $LOCAL_DIR/datos ($(du -sh "$LOCAL_DIR/datos" 2>/dev/null | cut -f1))"
+  local ult; ult=$(ls -1t "$LOCAL_DIR"/respaldos/datos-*.tar.gz 2>/dev/null | head -1)
+  log "respaldo: $([ -n "$ult" ] && echo "último $(basename "$ult")" || echo "todavía no hay") (diario 03:30; también al apagar con este script)"
+}
+
+# Respaldo al apagar: lo que se escribió hoy queda guardado aunque la computadora no esté a las 03:30.
+local_respaldar() { [ -x "$LOCAL_DIR/respaldar.sh" ] && "$LOCAL_DIR/respaldar.sh" && log "respaldo: hecho"; }
+
+# ==================================================================== Pi
+PI_HOST="${NOM_PI:-pi5}"
+PI_CMD="doas -n /usr/local/sbin/nom-pi"
+pi_ssh() { ssh -o BatchMode=yes -o ConnectTimeout=10 "$PI_HOST" "$@"; }
+pi_lineas() { while IFS= read -r l; do log "pi: $l"; done; }
+need_pi() {
+  if ! pi_ssh true 2>/dev/null; then err "pi: no puedo entrar a $PI_HOST por SSH (¿está prendida y en Tailscale?)"; finish; fi
+}
+pi_publico() { local r; r=$(local_http "$DOMINIO/api/red/info" 20); if [ "${r%% *}" = "200" ]; then log "pi: $DOMINIO -> HTTP 200 en ${r##* }s"; else err "pi: $DOMINIO -> HTTP ${r%% *}"; fi; }
+pi_estado() { pi_ssh "$PI_CMD estado" 2>&1 | pi_lineas; pi_publico; }
+pi_orden() { pi_ssh "$PI_CMD $1" 2>&1 | pi_lineas; [ "${PIPESTATUS[0]}" -eq 0 ] || err "pi: '$1' terminó con error"; }
+pi_actualizar() {
+  local fuente; fuente=$(jar_fuente) || { err "pi: no encontré el jar (compila con mvn package)"; return 1; }
+  log "pi: subiendo $(basename "$fuente") ($(du -h "$fuente" | cut -f1))"
+  scp -q -o ConnectTimeout=10 "$fuente" "$PI_HOST:/home/user/nom.jar.nuevo" || { err "pi: no se pudo copiar el jar"; return 1; }
+  pi_orden actualizar
+  pi_publico
+}
+# Hace un respaldo en la Pi y trae una copia a esta computadora (por si se daña la tarjeta de la Pi).
+pi_respaldo() {
+  pi_orden respaldo
+  local ult; ult=$(pi_ssh 'ls -1t /var/lib/nom/respaldos/datos-2*.tar.gz 2>/dev/null | head -1')
+  [ -n "$ult" ] || { err "pi: no hay respaldos"; return 1; }
+  mkdir -p "$LOCAL_DIR/respaldos-pi"
+  if scp -q "$PI_HOST:$ult" "$LOCAL_DIR/respaldos-pi/"; then
+    ls -1t "$LOCAL_DIR"/respaldos-pi/datos-*.tar.gz | tail -n +15 | xargs -r rm -f
+    log "pi: copia en $LOCAL_DIR/respaldos-pi/$(basename "$ult")"
+  else err "pi: no se pudo traer la copia"; fi
+}
+# Manda los archivos de servidor-propio/pi (y el jar) y corre el instalador como root (pide la contraseña de la Pi).
+pi_instalar() {
+  local d="$AQUI/../servidor-propio/pi" fuente
+  [ -f "$d/instalar-pi.sh" ] || { err "pi: falta $d/instalar-pi.sh"; return 1; }
+  pi_ssh 'rm -rf /tmp/nom-pi && mkdir -p /tmp/nom-pi' || return 1
+  tar -C "$d" -cf - . | pi_ssh 'tar -xf - -C /tmp/nom-pi' || { err "pi: no se pudieron copiar los archivos"; return 1; }
+  if fuente=$(jar_fuente); then scp -q "$fuente" "$PI_HOST:/tmp/nom-pi/nom.jar"; fi
+  log "pi: corriendo el instalador (escribe la contraseña de la Pi cuando la pida)"
+  ssh -t "$PI_HOST" 'doas sh /tmp/nom-pi/instalar-pi.sh; rm -rf /tmp/nom-pi' || err "pi: el instalador terminó con error"
+}
+
+# ==================================================================== menú
+elegir() {  # elegir "Pregunta" opción1 opción2 ...  -> deja el número en $ELEGIDO
+  local p="$1"; shift; local i=1 o
+  echo; echo "$p"
+  for o in "$@"; do echo "  $i) $o"; i=$((i + 1)); done
+  while :; do
+    read -r -p "Elige [1-$#] (q para salir): " ELEGIDO || exit 0
+    [ "$ELEGIDO" = "q" ] && exit 0
+    [[ "$ELEGIDO" =~ ^[0-9]+$ ]] && [ "$ELEGIDO" -ge 1 ] && [ "$ELEGIDO" -le $# ] && return 0
+  done
+}
+
+DESTINO=""; ACCION=""
+case "$1" in
+  local|pi) DESTINO=$1; ACCION=$2; ARG=$3 ;;
+  "") ;;
+  -h|--help|ayuda) sed -n 2,18p "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  *) sed -n 2,18p "$0" | sed 's/^# \{0,1\}//'; echo; echo "nom: opción desconocida '$1'"; exit 1 ;;
+esac
+
+if [ -z "$DESTINO" ]; then
+  echo "NOM"
+  if systemctl --user is-active --quiet "$SERVICIO" 2>/dev/null; then est="prendido"; else est="apagado"; fi
+  elegir "¿Dónde?" "Local  (esta computadora; ahora: $est)" "Pi     ($DOMINIO, la Raspberry Pi)"
+  DESTINO=$(echo "local pi" | cut -d' ' -f"$ELEGIDO")
+fi
+if [ -z "$ACCION" ] && [ "$DESTINO" = pi ]; then
+  elegir "¿Qué hago en la Pi?" "Estado" "Subir el jar nuevo (actualizar)" "Reiniciar" "Respaldo ahora (y traer copia)" "Ver la bitácora" "Apagar (down)" "Prender (up)"
+  ACCION=$(echo "estado actualizar reiniciar respaldo bitacora down up" | cut -d' ' -f"$ELEGIDO")
+fi
+if [ -z "$ACCION" ]; then
+  elegir "¿Qué hago en $DESTINO?" "Prender (up)" "Apagar (down)" "Estado" "Reiniciar"
+  ACCION=$(echo "up down estado reiniciar" | cut -d' ' -f"$ELEGIDO")
+fi
+case "$ACCION" in status|state) ACCION=estado ;; restart|reset) ACCION=reiniciar ;; esac
+
+echo
+log "nom: $DESTINO $ACCION, $(date +%Y-%m-%dT%H:%M:%S%:z) en $(hostname)"
+case "$DESTINO:$ACCION" in
+  local:up) need_local; local_up ;;
+  local:down) need_local; local_down; local_respaldar ;;
+  local:estado) need_local; local_estado ;;
+  local:reiniciar) need_local; log "nom: fase 1/2 apagar"; local_down; log "nom: fase 2/2 prender"; local_up ;;
+  pi:estado) need_pi; pi_estado ;;
+  pi:up) need_pi; pi_orden prender; pi_publico ;;
+  pi:down) need_pi; pi_orden apagar ;;
+  pi:reiniciar) need_pi; pi_orden reiniciar; pi_publico ;;
+  pi:actualizar) need_pi; pi_actualizar ;;
+  pi:respaldo) need_pi; pi_respaldo ;;
+  pi:bitacora) need_pi; pi_ssh "$PI_CMD bitacora ${ARG:-servidor} 40" ;;
+  pi:instalar) need_pi; pi_instalar ;;
+  *) err "nom: acción desconocida '$ACCION' (usa up, down, estado o reiniciar)" ;;
+esac
+finish

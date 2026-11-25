@@ -1,30 +1,28 @@
 # NOM en tu propia computadora (servidor propio en internet)
 
-Además de Azure (una copia que se hizo para una demostración y casi siempre está apagada), NOM puede
+NOM puede
 correr en una computadora de la casa y estar en internet **gratis**, sin abrir puertos del módem y con HTTPS.
 
 > **Estado actual (13 de noviembre de 2026):** el servidor propio corre en la **Raspberry Pi 5**
-> (ver "En la Raspberry Pi", abajo). Los servicios de la laptop (`nomcolab.service`,
-> `nomcolab-tunel.service`) están apagados y deshabilitados; lo que se describe de la laptop queda
+> (ver "En la Raspberry Pi", abajo). Los servicios de la laptop (`nom.service`,
+> `nom-tunel.service`) están apagados y deshabilitados; lo que se describe de la laptop queda
 > como la forma de montarlo en otra computadora.
 >
 > **16 de noviembre de 2026:** también el nombre corto: **`www.nom.qd.je` es la dirección principal**
 > (Cloudflare for SaaS sobre la misma zona y el mismo túnel; `nom.qd.je` sin www redirige con GitHub Pages) y
 > lo de los buscadores: ver `docs/DOMINIO-Y-BUSCADORES.md`.
 >
-> **Ojo (17-nov):** el túnel de la laptop (`nomcolab-tunel.service`) y el de la Pi son **el mismo túnel**
+> **Ojo (17-nov):** el túnel de la laptop (`nom-tunel.service`) y el de la Pi son **el mismo túnel**
 > (869abbea…). Si los dos corren, Cloudflare reparte a la gente entre los dos equipos, que tienen datos
-> distintos. Por eso `nomcolab local up` ya no enciende el túnel cuando la nube contesta desde la Pi.
+> distintos. Por eso `nom local up` ya no enciende el túnel cuando la nube contesta desde la Pi.
 
-| | Azure | Servidor propio (Raspberry Pi) |
-|---|---|---|
-| Dirección | `https://nomcolab-wack.azurewebsites.net` | **`https://www.nom.qd.je`** (y `https://nomcolab.dpdns.org`, el nombre de antes) |
-| Base de datos | Azure SQL (serverless, oferta gratis) | H2 en `/var/lib/nomcolab/datos` |
-| Límites | F1: 60 min de CPU al día, se duerme sin visitas, 1 GB de RAM compartida | Raspberry Pi 5 (8 GB) y el internet de la casa; 200 MB por cuenta, a la vista |
-| Costo | $0 (crédito de Azure for Students sin tocar) | $0 más la luz |
-| Encendido | Normalmente apagado; `nomcolab` → 1 Azure | **Siempre prendido** (s6 lo levanta si se cae) |
-
-Las dos son independientes: cuentas, espacios y documentos de una no aparecen en la otra.
+| Servidor propio (Raspberry Pi) | |
+|---|---|
+| Dirección | **`https://www.nom.qd.je`** (y `https://nomcolab.dpdns.org`, el nombre de antes) |
+| Base de datos | H2 en `/var/lib/nom/datos` |
+| Límites | Raspberry Pi 5 (8 GB) y el internet de la casa; 200 MB por cuenta, a la vista |
+| Costo | $0 más la luz |
+| Encendido | **Siempre prendido** (s6 lo levanta si se cae) |
 
 ## El dominio: nomcolab.dpdns.org (Cloudflare Tunnel)
 
@@ -37,7 +35,7 @@ son los de una cuenta gratis de Cloudflare (`anirban.ns.cloudflare.com` y
   la red de la escuela, y nadie ve la IP de la computadora;
 - Cloudflare pone el certificado HTTPS y lo renueva solo;
 - `nomcolab.dpdns.org` y `www.nomcolab.dpdns.org` son registros CNAME al túnel
-  `nomcolab` (los crea `servidor-propio/tunel.sh`);
+  `nom` (los crea `servidor-propio/tunel.sh`);
 - el tiempo real funciona: el servidor manda un "latido" cada 20 s y Cloudflare corta una
   conexión hasta después de 100 s sin datos.
 
@@ -45,10 +43,10 @@ son los de una cuenta gratis de Cloudflare (`anirban.ns.cloudflare.com` y
 |---|---|
 | Certificado de la cuenta (`cloudflared tunnel login`) | `~/.cloudflared/cert.pem` |
 | Credenciales del túnel | `~/.cloudflared/<id>.json` (no se suben a GitHub) |
-| Configuración (a qué puerto manda cada nombre) | `~/.cloudflared/nomcolab.yml` |
-| Servicio | `~/.config/systemd/user/nomcolab-tunel.service` |
+| Configuración (a qué puerto manda cada nombre) | `~/.cloudflared/nom.yml` |
+| Servicio | `~/.config/systemd/user/nom-tunel.service` |
 
-El túnel se llama `nomcolab` (id `869abbea-c306-4ef3-b6ff-2dc21263328a`). En la misma cuenta
+El túnel se llama `nom` (id `869abbea-c306-4ef3-b6ff-2dc21263328a`). En la misma cuenta
 de Cloudflare está el túnel `pi5` de la Raspberry Pi, que publica `vefose.pp.ua`; son
 independientes.
 
@@ -64,13 +62,13 @@ Cloudflare: zona `nomcolab.dpdns.org` → *SSL/TLS* → *Edge Certificates* → 
 
 ## Siempre prendido
 
-- `nomcolab.service` y `nomcolab-tunel.service` tienen `[Install]` y están habilitados: con
+- `nom.service` y `nom-tunel.service` tienen `[Install]` y están habilitados: con
   *linger* activado arrancan al prender la computadora **aunque nadie inicie sesión**, y
   `Restart=always` los vuelve a levantar si se caen.
-- **Vigía** (`nomcolab-vigia.timer`, cada 2 min): si el servidor no contesta en
+- **Vigía** (`nom-vigia.timer`, cada 2 min): si el servidor no contesta en
   `127.0.0.1:8080` o el túnel no tiene conexiones con Cloudflare dos veces seguidas, reinicia
-  el que falló. Lo que hace queda en `journalctl --user -u nomcolab-vigia`.
-- La computadora **no se duerme**: `/etc/systemd/logind.conf.d/nomcolab-siempre-prendido.conf`
+  el que falló. Lo que hace queda en `journalctl --user -u nom-vigia`.
+- La computadora **no se duerme**: `/etc/systemd/logind.conf.d/nom-siempre-prendido.conf`
   hace que cerrar la tapa no haga nada, y los modos de suspensión están deshabilitados
   (`systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
   suspend-then-hibernate.target`). Para volver a lo normal: borrar ese archivo y
@@ -96,20 +94,20 @@ Está pensado para proyectos personales; el tráfico pasa por sus servidores y t
 ancho de banda que sobran para una escuela. Solo publica por los puertos 443, 8443 o 10000 y el
 nombre siempre termina en `.ts.net` (no acepta un dominio propio).
 
-El equipo se renombró a `nomcolab` en Tailscale para que la dirección lo diga.
+El equipo se renombró a `nom` en Tailscale para que la dirección lo diga.
 
 ## Prender, apagar, estado
 
-Todo se hace con el script `nomcolab` (`4-CODIGO/azure/nomcolab`, enlazado en `~/.local/bin`):
+Todo se hace con el script `nom` (`4-CODIGO/servidor-propio/nom`, enlazado en `~/.local/bin`):
 
 ```
-$ nomcolab
+$ nom
 NOM
 
 ¿Dónde?
-  1) Azure  (https://nomcolab-wack.azurewebsites.net)
-  2) Local  (esta computadora, por Tailscale Funnel; ahora: apagado)
-Elige [1-2] (q para salir): 2
+  1) Local  (esta computadora; ahora: apagado)
+  2) Pi     (https://nomcolab.dpdns.org, la Raspberry Pi)
+Elige [1-2] (q para salir): 1
 
 ¿Qué hago en local?
   1) Prender (up)
@@ -118,9 +116,8 @@ Elige [1-2] (q para salir): 2
   4) Reiniciar
 ```
 
-También sin menú: `nomcolab local up`, `nomcolab local down`, `nomcolab local estado`,
-`nomcolab local reiniciar` (y lo mismo con `azure`). La forma anterior `nomcolab --up` /
-`--down` / `--state` / `--reset` sigue funcionando para Azure.
+También sin menú: `nom local up`, `nom local down`, `nom local estado`,
+`nom local reiniciar` (y `nom pi …` para la Raspberry).
 
 | Acción local | Qué hace |
 |---|---|
@@ -136,28 +133,28 @@ siguiente **Prender**. **Reiniciar** es la forma de cargar un jar nuevo de `2-PA
 
 | Dónde | Qué |
 |---|---|
-| `~/nomcolab-servidor/nom-colab.jar` | La copia del jar que corre (se actualiza al prender) |
-| `~/nomcolab-servidor/datos/` | Cuentas (H2), espacios, documentos y versiones |
-| `~/nomcolab-servidor/respaldos/` | `datos-AAAA-MM-DD_HHMM.tar.gz`: uno diario a las 03:30 y otro al apagar; se guardan los últimos 14 |
-| `~/.config/systemd/user/nomcolab.service` | El servidor (arranca solo con la computadora) |
-| `~/.config/systemd/user/nomcolab-tunel.service` | El túnel de Cloudflare hacia `nomcolab.dpdns.org` |
-| `~/.config/systemd/user/nomcolab-vigia.{service,timer}` y `~/nomcolab-servidor/vigia.sh` | El vigía (cada 2 min) |
-| `~/.config/systemd/user/nomcolab-respaldo.{service,timer}` | El respaldo diario |
+| `~/nom-servidor/nom.jar` | La copia del jar que corre (se actualiza al prender) |
+| `~/nom-servidor/datos/` | Cuentas (H2), espacios, documentos y versiones |
+| `~/nom-servidor/respaldos/` | `datos-AAAA-MM-DD_HHMM.tar.gz`: uno diario a las 03:30 y otro al apagar; se guardan los últimos 14 |
+| `~/.config/systemd/user/nom.service` | El servidor (arranca solo con la computadora) |
+| `~/.config/systemd/user/nom-tunel.service` | El túnel de Cloudflare hacia `nomcolab.dpdns.org` |
+| `~/.config/systemd/user/nom-vigia.{service,timer}` y `~/nom-servidor/vigia.sh` | El vigía (cada 2 min) |
+| `~/.config/systemd/user/nom-respaldo.{service,timer}` | El respaldo diario |
 | `4-CODIGO/servidor-propio/` | Las fuentes de todo lo anterior y `instalar.sh` |
 
 Para restaurar un respaldo: apagar, mover la carpeta `datos` a otro lado y descomprimir el
-respaldo dentro de `~/nomcolab-servidor` (`tar -xzf respaldos/datos-….tar.gz`), y prender.
+respaldo dentro de `~/nom-servidor` (`tar -xzf respaldos/datos-….tar.gz`), y prender.
 
 ## Instalar en otra computadora (Linux)
 
-Primero apagar el de esta computadora (`nomcolab local down`): dos equipos con el mismo túnel
+Primero apagar el de esta computadora (`nom local down`): dos equipos con el mismo túnel
 se reparten las visitas y cada uno tiene sus propios datos.
 
 1. Tener la copia de entrega en `~/NOM` (con `2-PAGINA-Servidor/`). Copiar los datos si se
-   quieren conservar (un respaldo de `~/nomcolab-servidor/respaldos`).
+   quieren conservar (un respaldo de `~/nom-servidor/respaldos`).
 2. Instalar `cloudflared` desde `pkg.cloudflare.com` (instrucciones para Debian/Ubuntu en la
    página de Cloudflare) y copiar `~/.cloudflared/` de esta computadora (cert.pem, el `.json`
-   del túnel y `nomcolab.yml`); o correr `cloudflared tunnel login` y dejar que `tunel.sh`
+   del túnel y `nom.yml`); o correr `cloudflared tunnel login` y dejar que `tunel.sh`
    lo arme.
 3. Opcional: Tailscale con la misma cuenta, con HTTPS y Funnel habilitados.
 4. `~/NOM/4-CODIGO/servidor-propio/instalar.sh` (deja todo habilitado y prendido).
@@ -205,21 +202,21 @@ tarjeta no se lleve datos y respaldos a la vez, la laptop trae cada día el más
 
 | Archivo | Para qué |
 |---|---|
-| `4-CODIGO/servidor-propio/pi/traer-respaldos.sh` | Copia por `scp` el respaldo más nuevo de `pi5:/var/lib/nomcolab/respaldos/`, comprueba que llegó completo y guarda los últimos 30 |
-| `~/nomcolab-servidor/respaldos-pi/` | Donde quedan (solo los puede leer el usuario) |
-| `~/.config/systemd/user/nomcolab-traer-respaldos.{service,timer}` | Diario a las 09:30; si la laptop estaba apagada, al prenderla |
+| `4-CODIGO/servidor-propio/pi/traer-respaldos.sh` | Copia por `scp` el respaldo más nuevo de `pi5:/var/lib/nom/respaldos/`, comprueba que llegó completo y guarda los últimos 30 |
+| `~/nom-servidor/respaldos-pi/` | Donde quedan (solo los puede leer el usuario) |
+| `~/.config/systemd/user/nom-traer-respaldos.{service,timer}` | Diario a las 09:30; si la laptop estaba apagada, al prenderla |
 
 Instalarlo en otro equipo (necesita `ssh pi5` con llave):
 
 ```sh
-mkdir -p ~/nomcolab-servidor && cp 4-CODIGO/servidor-propio/pi/traer-respaldos.sh ~/nomcolab-servidor/
-cp 4-CODIGO/servidor-propio/nomcolab-traer-respaldos.* ~/.config/systemd/user/
-systemctl --user daemon-reload && systemctl --user enable --now nomcolab-traer-respaldos.timer
-~/nomcolab-servidor/traer-respaldos.sh      # una vez, para probar
+mkdir -p ~/nom-servidor && cp 4-CODIGO/servidor-propio/pi/traer-respaldos.sh ~/nom-servidor/
+cp 4-CODIGO/servidor-propio/nom-traer-respaldos.* ~/.config/systemd/user/
+systemctl --user daemon-reload && systemctl --user enable --now nom-traer-respaldos.timer
+~/nom-servidor/traer-respaldos.sh      # una vez, para probar
 ```
 
-Restaurar en la Pi: `scp` del respaldo a la Pi, `/usr/local/sbin/nomcolab-pi apagar`, descomprimirlo en
-`/var/lib/nomcolab` (`tar -xzf datos-….tar.gz`, deja la carpeta `datos`) y `/usr/local/sbin/nomcolab-pi prender`.
+Restaurar en la Pi: `scp` del respaldo a la Pi, `/usr/local/sbin/nom-pi apagar`, descomprimirlo en
+`/var/lib/nom` (`tar -xzf datos-….tar.gz`, deja la carpeta `datos`) y `/usr/local/sbin/nom-pi prender`.
 
 ## Cifrado en reposo (desde la 0.13.0)
 
@@ -232,8 +229,8 @@ respaldos también van cifrados**.
 
 - **La llave** es `reposo.key` en la carpeta de llaves: `NOM_LLAVES`, o si no, la carpeta
   `<datos>-llaves` **junto** a la de datos (nunca adentro, así no viaja en los respaldos). En la
-  Pi: `/var/lib/nomcolab/datos-llaves/reposo.key` (solo la lee el usuario `nomcolab`). En Azure se
-  puede dar en la configuración como `NOM_LLAVE_REPOSO` (base64). Ahí mismo vive la llave con la
+  Pi: `/var/lib/nom/datos-llaves/reposo.key` (solo la lee el usuario `nom`). También se
+  puede dar como variable de entorno `NOM_LLAVE_REPOSO` (base64). Ahí mismo vive la llave con la
   que el servidor firma los pases (`pases-privada.p8`, fase 13).
 - **La primera vez** que arranca la 0.13.0 crea la llave y cifra todo lo que estaba en claro
   (cada archivo se reemplaza de una vez: si se va la luz a la mitad, sigue al volver). Se ensayó
@@ -242,9 +239,9 @@ respaldos también van cifrados**.
 - **Sin la llave, el servidor no arranca** (para no empezar de cero creyendo que no hay datos), y
   tampoco con una llave que no es la de esos datos: lo comprueba descifrando `datos/cifrado.json`.
 - **Guardar una copia de la llave, aparte** (en una memoria USB o un gestor de contraseñas; no en
-  la misma laptop que guarda los respaldos): `ssh pi5 doas -n /usr/local/sbin/nomcolab-pi llave`
+  la misma laptop que guarda los respaldos): `ssh pi5 doas -n /usr/local/sbin/nom-pi llave`
   (la orden `llave` llega a la Pi al volver a correr `instalar-pi.sh`; mientras, con la contraseña:
-  `ssh -t pi5 doas cat /var/lib/nomcolab/datos-llaves/reposo.key`). **Si se pierde la llave, los
+  `ssh -t pi5 doas cat /var/lib/nom/datos-llaves/reposo.key`). **Si se pierde la llave, los
   datos y los respaldos ya no se pueden abrir.**
 - **Restaurar un respaldo** en otra máquina: la carpeta `datos` del respaldo más la llave en
   `datos-llaves/reposo.key` (o `NOM_LLAVE_REPOSO`).
@@ -267,26 +264,26 @@ no repite lo que ya está hecho):
 
 | Qué | Dónde |
 |---|---|
-| Servicios supervisados por s6 (arrancan con la Pi y se levantan solos si se caen) | `nomcolab-servidor` (el jar, usuario `nomcolab` sin privilegios), `nomcolab-tunel` (Cloudflare Tunnel → `www.nom.qd.je` y `nomcolab.dpdns.org`), `nomcolab-vigia` (cada minuto revisa que contesten) |
-| El jar | `/opt/nomcolab/nom-colab.jar` |
-| Datos | `/var/lib/nomcolab/datos` |
-| Ajustes (puerto, cuota por cuenta…) | `/etc/nomcolab.conf` |
+| Servicios supervisados por s6 (arrancan con la Pi y se levantan solos si se caen) | `nom-servidor` (el jar, usuario `nom` sin privilegios), `nom-tunel` (Cloudflare Tunnel → `www.nom.qd.je` y `nomcolab.dpdns.org`), `nom-vigia` (cada minuto revisa que contesten) |
+| El jar | `/opt/nom/nom.jar` |
+| Datos | `/var/lib/nom/datos` |
+| Ajustes (puerto, cuota por cuenta…) | `/etc/nom.conf` |
 | Bitácoras | `/var/log/<servicio>` (10 archivos de 1 MB) |
-| Respaldo | diario a las 02:00 en la Pi (se guardan 14) y copia diaria en la laptop (`~/nomcolab-servidor/respaldos-pi/`, ver la sección anterior) |
+| Respaldo | diario a las 02:00 en la Pi (se guardan 14) y copia diaria en la laptop (`~/nom-servidor/respaldos-pi/`, ver la sección anterior) |
 
-La orden `nomcolab-pi` (con `doas` sin contraseña solo para ella, **con su ruta completa**: `doas nomcolab-pi`
+La orden `nom-pi` (con `doas` sin contraseña solo para ella, **con su ruta completa**: `doas nom-pi`
 pide contraseña y se queda esperando; la orden se eleva sola) hace lo de todos los días:
 
 ```
-ssh pi5 /usr/local/sbin/nomcolab-pi estado      # servicios, túnel, jar, datos, respaldo y temperatura
-ssh pi5 /usr/local/sbin/nomcolab-pi reiniciar
-ssh pi5 /usr/local/sbin/nomcolab-pi respaldo    # un respaldo ahora
-ssh pi5 /usr/local/sbin/nomcolab-pi bitacora
+ssh pi5 /usr/local/sbin/nom-pi estado      # servicios, túnel, jar, datos, respaldo y temperatura
+ssh pi5 /usr/local/sbin/nom-pi reiniciar
+ssh pi5 /usr/local/sbin/nom-pi respaldo    # un respaldo ahora
+ssh pi5 /usr/local/sbin/nom-pi bitacora
 # Actualizar el servidor: copiar el jar nuevo y pedir el cambio (respalda antes y vuelve al anterior si no arranca)
-scp 2-PAGINA-Servidor/nom-colab.jar pi5:/home/user/nom-colab.jar.nuevo && ssh pi5 /usr/local/sbin/nomcolab-pi actualizar
+scp 2-PAGINA-Servidor/nom.jar pi5:/home/user/nom.jar.nuevo && ssh pi5 /usr/local/sbin/nom-pi actualizar
 ```
 
-Desde la laptop también: `4-CODIGO/azure/nomcolab pi estado|actualizar|respaldo|bitacora|…`.
+Desde la laptop también: `4-CODIGO/servidor-propio/nom pi estado|actualizar|respaldo|bitacora|…`.
 
 El túnel `pi5` de `vefose.pp.ua` (otro sitio del dueño en la misma Pi) no se toca.
 
@@ -300,7 +297,7 @@ El usuario conectó un disco de **500 GB** (no se consiguió el de 2 TB) y reini
   módulos (`# CONFIG_MODULES is not set`), **sin NVMe** (`# CONFIG_BLK_DEV_NVME is not set`) y **sin nada de USB**
   (`# CONFIG_USB_SUPPORT is not set`): ni un disco NVMe ni uno USB pueden verse. El dispositivo queda sin
   controlador y no existe `/dev/nvme0n1`. (El sistema está en la **microSD**, `mmcblk0`, de 64 GB; no es un SSD.)
-- NOM volvió solo tras el reinicio (servidor, túnel con 4 conexiones, datos intactos). `nomcolab-pi estado` muestra
+- NOM volvió solo tras el reinicio (servidor, túnel con 4 conexiones, datos intactos). `nom-pi estado` muestra
   «1794975195 seconds» de encendido porque la Pi arrancó con el reloj en 1970 (su reloj no tiene pila) y luego lo
   corrigió por la red: es solo cosmético.
 
@@ -312,15 +309,14 @@ El usuario conectó un disco de **500 GB** (no se consiguió el de 2 TB) y reini
    `linux-rpi` 6.18.58, que está instalado; hay que confirmar en `/boot` que trae NVMe.)
 2. Con el disco a la vista (`/dev/nvme0n1`): una partición GPT, `mkfs.ext4 -L nom-datos`, montarlo por su UUID en
    `/etc/fstab` **con `nofail`** (si el disco falla, la Pi sigue arrancando desde la microSD).
-3. Con NOM apagado (`/usr/local/sbin/nomcolab-pi apagar`): mover `/var/lib/nomcolab` al disco (datos, llaves y
-   respaldos) y montarlo en el mismo lugar, o cambiar `NOM_DATOS` en `/etc/nomcolab.conf`; prender y
-   `nomcolab-pi estado`.
+3. Con NOM apagado (`/usr/local/sbin/nom-pi apagar`): mover `/var/lib/nom` al disco (datos, llaves y
+   respaldos) y montarlo en el mismo lugar, o cambiar `NOM_DATOS` en `/etc/nom.conf`; prender y
+   `nom-pi estado`.
 
 ## Historia del dominio
 
-Primero se pidió `nomcolab.eu.org` (23 de octubre de 2026, solicitud
+Primero se pidió `nom.eu.org` (23 de octubre de 2026, solicitud
 `20261023061539-arf-26319`); eu.org lo revisa a mano y no llegó a aprobarse. Se usa
-`nomcolab.dpdns.org` (DigitalPlat), con la misma cuenta de Cloudflare. El plan F1 de Azure no
-acepta dominios propios, así que el dominio apunta al servidor propio.
+`nomcolab.dpdns.org` (DigitalPlat), con la misma cuenta de Cloudflare. El dominio apunta al servidor propio.
 
 `is.gd` no deja cambiar a dónde apunta un enlace: si la dirección cambia, hay que crear otro.

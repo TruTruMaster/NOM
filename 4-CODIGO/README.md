@@ -4,9 +4,7 @@ Suite colaborativa: **texto, hojas de cálculo, presentaciones y diagramas en un
 con edición simultánea. Funciona en la red local sin depender de Internet (un equipo o un
 teléfono hace de servidor) o en el servidor propio: una Raspberry Pi publicada con Cloudflare
 Tunnel en **https://www.nom.qd.je** (también responde en https://nomcolab.dpdns.org, el nombre de
-antes; `docs/SERVIDOR-PROPIO.md` y `docs/DOMINIO-Y-BUSCADORES.md`). La copia en Azure
-(https://nomcolab-wack.azurewebsites.net, `docs/DESPLIEGUE-AZURE.md`) fue para una demostración y
-normalmente está apagada.
+antes; `docs/SERVIDOR-PROPIO.md` y `docs/DOMINIO-Y-BUSCADORES.md`).
 
 WACK
 
@@ -18,9 +16,7 @@ NOM/
 │   └── src/main/resources/static/   la interfaz (la misma para navegador y Android)
 ├── android/        App Android 7+ que empaqueta esa interfaz (y en Android 8+ puede ser el servidor)
 ├── diagramas/      UML en PlantUML, mapa de navegación (navegacion/generar.py) y actividades (A1-A8)
-├── azure/          desplegar.sh (crea Azure, roles de la base, sube el jar) · roles-bd.sql · AplicarSql.java ·
-│                   nomcolab (prende y apaga Azure o el servidor propio)
-├── servidor-propio/ publicar NOM desde una computadora o la Raspberry Pi (pi/: servicios s6, respaldo, nomcolab-pi)
+├── servidor-propio/ publicar NOM desde una computadora o la Raspberry Pi (nom: prende y apaga; pi/: servicios s6, respaldo, nom-pi)
 ├── pruebas/        seguridad.py (API) · interfaz/ (la página en navegadores reales) · office/ (Word, Excel y PowerPoint)
 └── docs/           RELEVO-ESTADO-Y-PENDIENTES.md (empezar aquí) · PLAN-CONSTRUCCION.md · PARIDAD-OFFICE-REAL.md ·
                     PLAN-MEDIOS.md · DISENO-UI.md · SERVIDOR-PROPIO.md · DOMINIO-Y-BUSCADORES.md · GUIA-FACIL-DE-USAR.md · MARCA.md
@@ -33,8 +29,8 @@ Requiere JDK 17 o superior.
 
 ```bash
 cd app
-mvn package -DskipTests          # genera target/nom-colab.jar
-java -jar target/nom-colab.jar   # puerto 8080; datos en ./datos-nom
+mvn package -DskipTests          # genera target/nom.jar
+java -jar target/nom.jar   # puerto 8080; datos en ./datos-nom
 ```
 
 La consola muestra las direcciones para entrar:
@@ -46,10 +42,7 @@ NOM listo.
 ```
 
 Variables opcionales: `NOM_PUERTO` (puerto HTTP) y `NOM_DATOS` (carpeta de datos).
-Usuarios y sesiones van en una base de datos: H2 embebido por defecto
-(`NOM_DATOS/nom-db`), o Azure SQL con `SPRING_DATASOURCE_URL/_USERNAME/_PASSWORD` y
-`NOM_DB_PLATAFORMA=sqlserver`. En línea: https://nomcolab-wack.azurewebsites.net
-(ver `docs/DESPLIEGUE-AZURE.md`).
+Usuarios y sesiones van en una base de datos H2 embebida (`NOM_DATOS/nom-db`).
 El firewall debe permitir el puerto TCP 8080 y el UDP 47474 (anuncio de espacios en la LAN).
 
 ## Usarlo desde el navegador
@@ -94,7 +87,6 @@ python pruebas/interfaz/prueba_funciones.py SALIDA   # que cada función haga lo
 python pruebas/office/fidelidad.py       # Word, Excel y PowerPoint reales de Microsoft: abrir y volver a guardar
 python pruebas/office/comparar_real.py ARCHIVO   # contra Word, Excel y PowerPoint 2024 de verdad (docs/PARIDAD-OFFICE-REAL.md)
 python pruebas/office/visor.py SALIDA archivos…   # cómo se ve en NOM junto a LibreOffice
-cd azure && ./desplegar.sh roles         # roles de la base en Azure SQL: los aplica y prueba qué se permite y qué no
 ```
 
 Las mismas pruebas de la interfaz corren con `--movil` (ancho de celular), con `NOM_NAVEGADOR=firefox`,
@@ -106,7 +98,7 @@ tanda quedan en `../6-PLAN-DE-PRUEBAS/registros/`.
 
 | Módulo (mapa de navegación) | Funcionalidad |
 |---|---|
-| **Gestión de cuentas** | Base de datos (H2 / Azure SQL) con **seguridad con roles en la base** · sin administrador general: cada cuenta controla sus espacios · crear cuenta con **código de recuperación** · iniciar y cerrar sesión · recuperar la contraseña con el código · cambiar la contraseña y **borrar la cuenta** · contraseñas con PBKDF2 + sal · bloqueo por intentos (por cuenta y por red) y tope de cuentas nuevas por hora · preferencias (tema, letra, movimiento) · lo guardado en el equipo va **cifrado** (bóveda por cuenta) |
+| **Gestión de cuentas** | Base de datos H2 · roles en cada espacio (Propietario / Puede editar / Solo lectura) · sin administrador general: cada cuenta controla sus espacios · crear cuenta con **código de recuperación** · iniciar y cerrar sesión · recuperar la contraseña con el código · cambiar la contraseña y **borrar la cuenta** · contraseñas con PBKDF2 + sal · bloqueo por intentos (por cuenta y por red) y tope de cuentas nuevas por hora · preferencias (tema, letra, movimiento) · lo guardado en el equipo va **cifrado** (bóveda por cuenta) |
 | **Espacios de trabajo** | Crear espacio · **invitar con código de 8 letras o QR** (con fecha de vencimiento, anulable, y entrada **sin cuenta con un alias al azar**) · agregar por nombre de usuario · visible en el mismo Wi-Fi (UDP) · Puede editar / Solo lectura / quitar · máximo 50 personas a la vez · carpetas, destacados, ordenar y buscar dentro del contenido · **papelera de 30 días** · @menciones · plantillas del espacio · letra de los textos nuevos · descargar todo · cuánto ocupa y depurar versiones · copia en otro NOM |
 | **Editores** | 4 tipos (fijo al crear) · **texto tipo Word letra por letra** (estilos, listas, tablas, imágenes, notas al pie, ecuaciones, índice, encabezado y pie, columnas, marca de agua, configurar página) · **hoja de cálculo** (fórmulas en español e inglés, referencias $ y entre hojas, relleno, filtro y orden personales, fijar filas, formato condicional, listas desplegables, gráficas) · **presentación** (temas, diseños, animaciones, transiciones, notas, modo presentador, proyector, láser) · **diagrama** (UML, entidad-relación, diagramas listos, texto a diagrama, conectores) · **ruedita de acciones** en los cuatro · comentarios y **modo sugerencia** · partes asignadas a una persona · entrega con fecha límite · **recibo del proceso de escritura** verificable · investigar y citar en APA · deshacer/rehacer · sin conexión con cola persistente |
 | **Importar y exportar** | .docx, .xlsx y .pptx de Office, también con contraseña (lo que no se tocó sale idéntico; lo editado se cambia sobre el archivo original), .nom (formato propio comprimido), PDF, HTML, Markdown, CSV, SVG y PNG. Medido contra Office 2024 real: `docs/PARIDAD-OFFICE-REAL.md` |

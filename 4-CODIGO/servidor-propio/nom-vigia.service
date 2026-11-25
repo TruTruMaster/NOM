@@ -1,0 +1,6 @@
+[Unit]
+Description=Vigía de NOM (reinicia el servidor o el túnel si dejan de responder)
+
+[Service]
+Type=oneshot
+ExecStart=%h/nom-servidor/vigia.sh

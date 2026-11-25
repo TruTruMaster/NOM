@@ -89,8 +89,8 @@ end note
 
 note bottom of servidor
   Spring Boot 4.1 / JDK 17.
-  El mismo jar corre en la red local (H2),
-  en Azure (Azure SQL) o en una computadora
-  propia publicada con Tailscale Funnel.
+  El mismo jar corre en la red local (H2)
+  o en el servidor propio (Raspberry Pi)
+  publicado con Cloudflare Tunnel.
 end note
 @enduml

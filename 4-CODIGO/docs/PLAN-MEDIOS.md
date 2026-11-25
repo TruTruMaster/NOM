@@ -8,7 +8,6 @@ Decidido por el usuario el 17 de noviembre de 2026 (lo que dijo, resumido):
 - **Límites de subida que no castiguen**; la Raspberry Pi iba a recibir un disco de **2 TB**; el 17-nov en la noche se
   le puso uno de **500 GB** (NVMe; todavía no se usa: el kernel de la Pi no trae NVMe, ver `SERVIDOR-PROPIO.md`):
   «decide lo mejor para MUCHOS usuarios».
-- **Azure ya no cuenta** (no se diseña para su cuota de 50 MB).
 - Al descargar: **lo más ligero para el ancho de banda** del servidor.
 
 ## Decisiones técnicas

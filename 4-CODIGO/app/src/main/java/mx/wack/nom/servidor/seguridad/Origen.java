@@ -10,21 +10,12 @@ import jakarta.servlet.http.HttpServletRequest;
  *
  * Detras de un tunel o de un balanceador todas las peticiones llegan desde el mismo lugar y la
  * direccion real viene en una cabecera. Esa cabecera solo se cree cuando quien la entrega es de
- * confianza (si no, cualquiera podria escribirla):
- *  - este mismo equipo (el tunel de Cloudflare o Funnel corren aqui), o
- *  - en Azure, una direccion "de enlace" (169.254.x.x, fe80::), que es desde donde entrega las
- *    peticiones esa plataforma. Fuera de Azure no: cualquier equipo de la misma red (la casa de la
- *    Raspberry, el salon) puede llegar por su direccion fe80:: y escribir la cabecera que quiera.
+ * confianza (si no, cualquiera podria escribirla): solo este mismo equipo (el tunel de Cloudflare o
+ * Funnel corren aqui). Ningun otro equipo de la red, ni por su direccion de enlace (fe80::).
  * Una peticion de este mismo equipo sin cabecera es del propio equipo: null (sin limites).
  */
 public final class Origen {
     private Origen() { }
-
-    /** ¿Corre en Azure App Service? (la plataforma pone WEBSITE_SITE_NAME a cada Web App). */
-    private static final boolean EN_AZURE = System.getenv("WEBSITE_SITE_NAME") != null;
-
-    /** Direcciones de enlace de las que se creen las cabeceras de reenvio: solo en Azure. */
-    static boolean enlaceConfiable(InetAddress a) { return EN_AZURE && a != null && a.isLinkLocalAddress(); }
 
     /**
      * La direccion publica de este servidor tal como la ve quien llama (p. ej. https://nomcolab.dpdns.org):
@@ -38,7 +29,7 @@ public final class Origen {
         boolean confiable;
         try {
             InetAddress a = remota == null ? null : InetAddress.getByName(remota);
-            confiable = a == null || a.isLoopbackAddress() || enlaceConfiable(a);
+            confiable = a == null || a.isLoopbackAddress();
         } catch (Exception e) { confiable = false; }
         String esquema = req.getScheme();
         String fp = req.getHeader("X-Forwarded-Proto");
@@ -76,29 +67,27 @@ public final class Origen {
 
     public static String de(HttpServletRequest req) {
         String remota = req.getRemoteAddr();
-        boolean local, enlace = false;
+        boolean local;
         try {
             InetAddress a = remota == null ? null : InetAddress.getByName(remota);
             local = a == null || a.isLoopbackAddress();
-            enlace = enlaceConfiable(a);
         } catch (Exception e) { local = false; }
-        if (!local && !enlace) return remota;
+        if (!local) return remota;
         // El nombre corto (nom.qd.je) llega por Vercel, que reenvia a la nube por Cloudflare: la
         // direccion de la persona viene en X-Real-IP, y solo se cree si trae la clave que Vercel
         // agrega en cada peticion (NOM_PROXY_SECRETO; Vercel reemplaza la que mande cualquiera).
         String ip = deVercel(req);
         if (ip != null) return ip;
-        // CF-Connecting-IP la pone Cloudflare, que entra por el túnel de este mismo equipo; en Azure no hay Cloudflare
-        // delante, así que ahí no se cree.
-        String r = local ? req.getHeader("CF-Connecting-IP") : null;
+        // CF-Connecting-IP la pone Cloudflare, que entra por el túnel de este mismo equipo.
+        String r = req.getHeader("CF-Connecting-IP");
         if (r == null || r.isBlank()) {
             r = req.getHeader("X-Forwarded-For");
             // Cada intermediario agrega al final la dirección de donde le llegó: se toma la última.
             if (r != null && r.contains(",")) r = r.substring(r.lastIndexOf(',') + 1);
-            // Azure la manda con el puerto ("203.0.113.5:51234"): se queda solo la direccion.
+            // Si llega con el puerto ("203.0.113.5:51234"), se queda solo la direccion.
             if (r != null && r.trim().matches("\\d+(\\.\\d+){3}:\\d+")) r = r.trim().substring(0, r.trim().lastIndexOf(':'));
         }
-        if (r == null || r.isBlank()) return local ? null : remota;
+        if (r == null || r.isBlank()) return null;
         return r.trim();
     }
 }

@@ -10,8 +10,8 @@
 
 -- ------------------------- CUENTAS -----------------------------------
 -- Sin administrador general: cada cuenta controla sus espacios; los permisos viven en
--- la tabla acceso (por espacio). Lo implementado y desplegado en Azure SQL esta en
--- app/src/main/resources/schema-sqlserver.sql y schema-h2.sql.
+-- la tabla acceso (por espacio). Lo implementado esta en
+-- app/src/main/resources/schema-h2.sql.
 CREATE TABLE usuario (
     id                UUID         PRIMARY KEY,
     nombre            VARCHAR(50)  NOT NULL UNIQUE,

@@ -231,6 +231,7 @@
     const priv = await crypto.subtle.importKey("jwk", privJwk, { name: "ECDH", namedCurve: "P-256" }, false, ["deriveBits"]);
     const pub = await crypto.subtle.importKey("jwk", pubJwk, { name: "ECDH", namedCurve: "P-256" }, false, []);
     const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: "ECDH", public: pub }, priv, 256));
+    // "nom-colab" (el nombre de antes) se queda así a propósito: con otro texto no se abrirían los espacios cifrados.
     return C().sha256(unir(bits, C().bytes("nom-colab/e2e/envoltura")));
   }
   /** Envuelve una llave para una llave pública (ECDH con una llave de un solo uso). */

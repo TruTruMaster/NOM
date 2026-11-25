@@ -89,7 +89,7 @@
     if (NOM.anfitrion && NOM.anfitrion.esLocal && NOM.anfitrion.esLocal()) return "este teléfono (comparte sin Internet)";
     const dir = api.empaquetada ? api.servidor() : location.origin;
     const equipo = (dir.replace(/^https?:\/\//i, "").match(/^\[[^\]]*\]|^[^/:]+/) || [""])[0].toLowerCase();
-    if (/(^|\.)nomcolab\.dpdns\.org$|(^|\.)nom\.qd\.je$|azurewebsites\.net$|\.ts\.net$/.test(equipo)) return "NOM en Internet";
+    if (/(^|\.)nom\.dpdns\.org$|(^|\.)nom\.qd\.je$|\.ts\.net$/.test(equipo)) return "NOM en Internet";
     if (/^(localhost|127(\.\d+){3}|\[::1\])$/.test(equipo)) return "este equipo (es el servidor)";
     return "el equipo " + equipo;
   }
@@ -1270,7 +1270,7 @@
     if (misDatos) misDatos.onclick = async () => {
       try {
         const d = await api.get("/api/cuentas/datos", undefined, { ms: 60000 });
-        NOM.formatos.descargar("mis-datos-nom-colab.json", "application/json", JSON.stringify(d, null, 2));
+        NOM.formatos.descargar("mis-datos-nom.json", "application/json", JSON.stringify(d, null, 2));
       } catch (e) { aviso(e.message, { tipo: "error" }); }
     };
     const leerForm = () => ({

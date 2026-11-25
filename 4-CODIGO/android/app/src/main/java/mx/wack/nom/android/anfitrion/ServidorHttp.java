@@ -380,6 +380,7 @@ final class ServidorHttp {
 
     /** Las mismas cabeceras de seguridad que pone la computadora (FiltroCabeceras). */
     static final String SEGURAS = "X-Content-Type-Options: nosniff\r\nX-Frame-Options: SAMEORIGIN\r\nReferrer-Policy: no-referrer\r\n"
+            + "Cross-Origin-Opener-Policy: same-origin\r\nCross-Origin-Resource-Policy: same-site\r\n"
             + "Permissions-Policy: camera=(self), microphone=(), geolocation=(), payment=()\r\n";
     /** La política de contenido de la página (igual que FiltroCabeceras.CSP); la API no la lleva. */
     static final String CSP = "Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "

@@ -17,7 +17,7 @@ demás después.
    el servidor del teléfono (`android/app/src/main/java/mx/wack/nom/android/anfitrion/`, la clase
    que replica las rutas, `ApiTelefono`). Si no, en el celular-servidor la función no existe.
 3. **La lógica va en `nucleo/`** (Java sin frameworks), para que la usen Spring y Android por igual.
-4. **Se prueba en local (puerto 8099), no en Azure.** Para editar CSS/JS sin recompilar:
+4. **Se prueba en local (puerto 8099), no en la Raspberry.** Para editar CSS/JS sin recompilar:
    `SPRING_WEB_RESOURCES_STATIC_LOCATIONS=file:<repo>/4-CODIGO/app/src/main/resources/static/`.
 5. **Si cambia algo de la interfaz**, recompilar el APK y subir `versionName`/`versionCode` en
    `android/app/build.gradle.kts` (hoy 0.15.4 / 30; la siguiente, 0.16.0 / 31) junto con `Version.java`,
@@ -189,7 +189,7 @@ Base: `lienzo.js` ya tiene los campos `bloqueado` y `grupo` (un solo nivel; ver 
   editabas").
 - [x] **6.4 Respaldo automático en el teléfono servidor**: copia diaria de `filesDir/servidor` con
   las últimas 7, y botón "Exportar todo" (junto con el .zip de Office de PENDIENTES 4).
-- [x] **6.5 Sincronizar entre servidores** (teléfono del salón con Azure o el servidor propio).
+- [x] **6.5 Sincronizar entre servidores** (teléfono del salón con el servidor propio).
   Es lo más grande de la lista: hacerlo al final.
 
 ## Fase 7. Comentarios, solidez y lo demás
@@ -328,9 +328,9 @@ reales de Microsoft (`pruebas/office/corpus.sh`, `fidelidad.py`, `ediciones.py`)
   `fa3cc00`), texto vertical en celdas y cuadros, bordes por celda (Word); notas, gráficas e imágenes del
   archivo (Excel, 0.15.1).
 - [x] Probar en el A55 (app y navegador) importar, editar, exportar y `.nom` (13 de noviembre, fase 12).
-- [x] Raspberry Pi: servicios s6 supervisados (`servidor-propio/pi/`), respaldo diario, `nomcolab-pi`.
-- [x] Subir el jar nuevo a la Pi (11 de noviembre: 0.12.0, con `nomcolab-pi actualizar`) y LOG.
-- [x] `nomcolab pi …` desde la laptop (`azure/nomcolab pi estado|up|down|reiniciar|actualizar|respaldo|bitacora|instalar`).
+- [x] Raspberry Pi: servicios s6 supervisados (`servidor-propio/pi/`), respaldo diario, `nom-pi`.
+- [x] Subir el jar nuevo a la Pi (11 de noviembre: 0.12.0, con `nom-pi actualizar`) y LOG.
+- [x] `nom pi …` desde la laptop (`servidor-propio/nom pi estado|up|down|reiniciar|actualizar|respaldo|bitacora|instalar`).
 - [x] Una copia de los respaldos de la Pi en otro equipo (fase 11).
 
 ## Fase 11. Seguridad, cuentas y almacenamiento (11 de noviembre de 2026, versión 0.12.1)
@@ -457,6 +457,8 @@ Detalle en `docs/PLAN-CUENTAS-PC-Y-AYUDA.md`, partes D.2 y E. No hay edades: los
       ni el chat; otro miembro, el QR con la llave en el #, el enlace para ver y el proyector) y la
       sección 15 de `pruebas/seguridad.py`. Versión 0.13.0 (interfaz 14).
 - [x] ~~Azure unida a la misma cuenta~~: descartada (17-nov: «Azure ya no se toma en cuenta»).
+- [x] Azure quitado del proyecto (25-nov): recursos de la nube borrados, sin `azure.yml`, sin `4-CODIGO/azure/`, sin
+      soporte de Azure SQL en el servidor ni menciones en la ayuda, los diagramas y los documentos.
 
 ## Fase 16. Pruebas antes de la presentación (13 al 20 de noviembre de 2026)
 
@@ -783,10 +785,9 @@ página; el APK (0.11.0) y el jar de `2-PAGINA-Servidor/` llevan todo.
 **Arreglos de seguridad de esta sesión**: el dibujo de los íconos y los colores que vienen del
 documento ya no pueden meter código en la página (se limpian antes de pintarlos).
 
-**Antes de subir a Azure**: lo de esta sesión no cambia la base de datos (todo va en los archivos
-JSON del servidor; la biblioteca de cada espacio en `biblioteca/<espacio>.json`). El servidor
-necesita salida a Internet para Investigar y Wikidata (Azure la tiene). Sigue pendiente lo de la
-sesión anterior: `./desplegar.sh roles` para las columnas nuevas de usuarios.
+Lo de esta sesión no cambia la base de datos (todo va en los archivos JSON del servidor; la
+biblioteca de cada espacio en `biblioteca/<espacio>.json`). El servidor necesita salida a Internet
+para Investigar y Wikidata.
 
 **Limitaciones conocidas**:
 - El service worker solo existe en https o en localhost (en `http://<ip-del-salón>` ayuda la app).
@@ -796,6 +797,9 @@ sesión anterior: `./desplegar.sh roles` para las columnas nuevas de usuarios.
 - La copia de trabajo `~/NOM-COLAB` no se actualizó en esta sesión (es más vieja que `~/NOM`).
 
 ## Orden recomendado para la siguiente sesión
+
+**Desde el 23 de noviembre de 2026:** empezar por `docs/RELEVO-23NOV.md` (comprobación del dominio, cabeceras de
+aislamiento y regresión de seguridad en verde; los cambios siguen sin publicar).
 
 **Desde el 22 de noviembre de 2026:** empezar por `docs/RELEVO-22NOV.md` (revisión para la entrega del 27-nov:
 entregables al día, avance por módulo leído de este plan, fase 24, `docs/PUBLICACION-Y-CUMPLIMIENTO.md` con lo que
@@ -867,7 +871,7 @@ A55 (ver `docs/RELEVO-PRUEBAS-0.12.2.md`, sección 4). La lista de abajo es la d
    y Investigar con los datos del teléfono.
 2. Revisión de facilidad de uso de lo nuevo (menús Insertar, Investigar, papelera y carpetas) con
    alguien que no conozca la app, de cualquier edad.
-3. Subir a Azure (después de `./desplegar.sh roles`) y probar Investigar desde la nube.
+3. Probar Investigar desde la nube (la Raspberry).
 4. Lo que quedó fuera en `PENDIENTES.md` (incrustar una hoja en una presentación, línea de tiempo
    de animaciones, recuperar lo cortado en el celular).
 
@@ -903,11 +907,6 @@ Las 7 fases están construidas en Spring, en el servidor del teléfono (`ApiTele
 
 **Falta probar en el A55 real** (la app y el teléfono como servidor con otra persona conectada):
 el APK compila y lleva todo, pero en esta sesión no hubo teléfono.
-
-**Antes de subir a Azure**: la base de la nube necesita las columnas nuevas de usuarios
-(`invitado_de`, `hash_recuperacion`, `sal_recuperacion`). El usuario de la aplicación no puede
-alterar tablas, así que hay que correr `./desplegar.sh roles` (o `azure/roles-bd.sql` con el
-administrador) antes del despliegue. Opcional: `NOM_CUOTA_MB=50` para la cuota por persona.
 
 **Limitaciones conocidas**:
 - El service worker solo existe en https o en localhost. Quien entra por `http://<ip-del-salón>`

@@ -3,7 +3,7 @@ temporales y deja el resultado en ../registros/limites.json.  Uso: python3 prueb
 import json, os, subprocess, sys, tempfile, time, urllib.request, http.client
 import shutil, socket
 # (el jar de este repositorio, donde esté; Java el de JAVA o el del PATH; un puerto libre desde el 8093)
-JAR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "4-CODIGO", "app", "target", "nom-colab.jar"))
+JAR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "4-CODIGO", "app", "target", "nom.jar"))
 def _libre(p=None):
     # (un puerto que da el sistema: con varias pruebas a la vez, dos escogían el mismo «desde el 8093»)
     with socket.socket() as s_:

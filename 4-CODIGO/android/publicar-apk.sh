@@ -1,13 +1,13 @@
 #!/bin/sh
-# Publica 3-APP-Android/NOM-COLAB.apk como la release "más reciente" en GitHub, para que el
-# botón "Descarga la app" de la página (https://.../releases/latest/download/NOM-COLAB.apk) dé
+# Publica 3-APP-Android/NOM.apk como la release "más reciente" en GitHub, para que el
+# botón "Descarga la app" de la página (https://.../releases/latest/download/NOM.apk) dé
 # siempre esta versión. El archivo lo sirve la red de GitHub, no la conexión del servidor.
 #
-# Correrlo después de compilar el APK (cuando ya está copiado en 3-APP-Android/NOM-COLAB.apk).
+# Correrlo después de compilar el APK (cuando ya está copiado en 3-APP-Android/NOM.apk).
 # Necesita el token de GitHub en ~/NOM/tokensito.
 set -e
-REPO="TruTruMaster/NOM-COLAB"
-APK="$HOME/NOM/3-APP-Android/NOM-COLAB.apk"
+REPO="TruTruMaster/NOM"
+APK="$HOME/NOM/3-APP-Android/NOM.apk"
 TOK="$(cat "$HOME/NOM/tokensito")"
 VER="$(grep -oE 'versionName = "[^"]+"' "$HOME/NOM/4-CODIGO/android/app/build.gradle.kts" | head -1 | sed 's/.*"\([^"]*\)".*/\1/')"
 TAG="v$VER"
@@ -30,11 +30,15 @@ else
   api -X PATCH "https://api.github.com/repos/$REPO/releases/$ID" -d "$(NOTA="$NOTA" python3 -c "import json,os;print(json.dumps({'make_latest':'true','body':os.environ['NOTA'].replace(chr(92)+'n',chr(10))}))")" >/dev/null
   echo "  release $TAG ya existía (id $ID), marcada como la más reciente"
   # Si ya tenía el APK, se borra para volver a subirlo.
-  OLD="$(api "https://api.github.com/repos/$REPO/releases/$ID/assets" | python3 -c 'import sys,json;[print(a["id"]) for a in json.load(sys.stdin) if a["name"]=="NOM-COLAB.apk"]')"
+  OLD="$(api "https://api.github.com/repos/$REPO/releases/$ID/assets" | python3 -c 'import sys,json;[print(a["id"]) for a in json.load(sys.stdin) if a["name"] in ("NOM.apk","NOM-COLAB.apk")]')"
   for a in $OLD; do api -X DELETE "https://api.github.com/repos/$REPO/releases/assets/$a" >/dev/null; echo "  asset anterior borrado"; done
 fi
-curl -s -H "Authorization: Bearer $TOK" -H 'Content-Type: application/vnd.android.package-archive' \
-  --data-binary @"$APK" "https://uploads.github.com/repos/$REPO/releases/$ID/assets?name=NOM-COLAB.apk" \
-  | python3 -c 'import sys,json;d=json.load(sys.stdin);print("  subido:",d.get("name"),d.get("size"),d.get("state"))'
-echo "Listo. Enlace fijo: https://github.com/$REPO/releases/latest/download/NOM-COLAB.apk"
+# NOM.apk es el nombre de hoy; NOM-COLAB.apk (el mismo archivo) es para las apps y los enlaces de antes del cambio de
+# nombre, que buscan ese archivo en la release más reciente.
+for NOMBRE in NOM.apk NOM-COLAB.apk; do
+  curl -s -H "Authorization: Bearer $TOK" -H 'Content-Type: application/vnd.android.package-archive' \
+    --data-binary @"$APK" "https://uploads.github.com/repos/$REPO/releases/$ID/assets?name=$NOMBRE" \
+    | python3 -c 'import sys,json;d=json.load(sys.stdin);print("  subido:",d.get("name"),d.get("size"),d.get("state"))'
+done
+echo "Listo. Enlace fijo: https://github.com/$REPO/releases/latest/download/NOM.apk"
 echo "SHA-256: $SHA · certificado: $CERT"

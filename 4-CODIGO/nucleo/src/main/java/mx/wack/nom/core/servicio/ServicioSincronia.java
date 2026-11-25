@@ -25,7 +25,7 @@ import mx.wack.nom.core.modelo.Usuario;
 
 /**
  * 6.5 Copia de un espacio en otro servidor: el telefono del salon (que trabajo sin Internet) con
- * Azure o el servidor propio, y al reves. Como los dos usan el mismo CRDT, sincronizar es mandar
+ * el servidor propio, y al reves. Como los dos usan el mismo CRDT, sincronizar es mandar
  * todo lo que uno tiene al otro (cada registro con su reloj y su nodo originales) y traer lo que
  * tiene el otro: los dos quedan con la union, sin importar el orden. No se borra nada en ningun
  * lado y los accesos de cada servidor no se tocan.

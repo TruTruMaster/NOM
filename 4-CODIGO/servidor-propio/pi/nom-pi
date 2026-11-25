@@ -1,0 +1,101 @@
+#!/bin/sh
+# nom-pi: NOM en la Raspberry Pi.
+#
+#   nom-pi estado        servicios, si contesta, túnel, datos y último respaldo
+#   nom-pi reiniciar     reinicia el servidor y el túnel
+#   nom-pi apagar        apaga todo (vuelve con: nom-pi prender, o al reiniciar la Pi)
+#   nom-pi prender
+#   nom-pi respaldo      hace un respaldo ahora (se guardan 14)
+#   nom-pi actualizar    instala el jar que esté en /home/user/nom.jar.nuevo;
+#                             si el nuevo no arranca, regresa al anterior
+#   nom-pi bitacora [servidor|tunel|vigia] [líneas]
+#   nom-pi llave         muestra la llave del cifrado en reposo (guárdala FUERA de la Pi y de
+#                             la laptop de los respaldos: sin ella no se abren los datos ni los respaldos)
+#   nom-pi dominio       revisa si el nombre corto (www.nom.qd.je) ya llega a este servidor; si sí, lo
+#                             vuelve la dirección principal para los buscadores (NOM_CANONICO)
+set -u
+VAR=/var/lib/nom
+OPT=/opt/nom
+JAR=$OPT/nom.jar
+NUEVO=/home/user/nom.jar.nuevo
+RUN=/run/service
+[ "$(id -u)" = 0 ] || exec doas "$0" "$@"
+[ -r /etc/nom.conf ] && . /etc/nom.conf
+P=${NOM_PUERTO:-8080}
+contesta() { wget -q -O /dev/null -T "${1:-5}" "http://127.0.0.1:$P/api/red/info" 2>/dev/null; }
+esperar() { i=0; until contesta 3; do i=$((i + 1)); [ $i -ge "${1:-90}" ] && return 1; sleep 1; done; return 0; }
+respaldo() {
+  f=$VAR/respaldos/datos-$(date +%Y-%m-%d_%H%M%S).tar.gz
+  tar -czf "$f.n" -C $VAR datos && mv "$f.n" "$f" || { rm -f "$f.n"; echo "respaldo: falló"; return 1; }
+  chown root:adm "$f"; chmod 640 "$f"
+  ls -1t $VAR/respaldos/datos-2*.tar.gz 2>/dev/null | tail -n +15 | xargs -r rm -f
+  echo "respaldo: $f ($(du -h "$f" | cut -f1))"
+}
+estado() {
+  for s in nom-servidor nom-tunel nom-vigia; do
+    printf '%-18s %s\n' "$s" "$(s6-svstat $RUN/$s 2>/dev/null || echo 'no existe')"
+  done
+  if contesta 5; then echo "servidor:  contesta en http://127.0.0.1:$P"; else echo "servidor:  NO contesta en el puerto $P"; fi
+  t=$(wget -q -O - -T 5 http://127.0.0.1:20242/ready 2>/dev/null | sed -n 's/.*"readyConnections":\([0-9]*\).*/\1/p')
+  echo "túnel:     ${t:-0} conexiones con Cloudflare (nomcolab.dpdns.org$(grep -q 'nom.qd.je' /etc/cloudflared/nom.yml 2>/dev/null && echo ' y www.nom.qd.je'))"
+  echo "principal: $(sed -n 's/^export NOM_CANONICO=//p' /etc/nom.conf 2>/dev/null | tail -1 | grep . || echo 'la de cada nombre (sin NOM_CANONICO)')"
+  echo "jar:       $(ls -l $JAR 2>/dev/null | awk '{print $5" bytes, "$6" "$7" "$8}')"
+  echo "datos:     $(du -sh $VAR/datos 2>/dev/null | cut -f1) en $VAR/datos"
+  u=$(ls -1t $VAR/respaldos/datos-*.tar.gz 2>/dev/null | head -1)
+  echo "respaldo:  $([ -n "$u" ] && basename "$u" || echo 'todavía no hay') ($(ls $VAR/respaldos | wc -l) guardados; diario a las 02:00)"
+  echo "equipo:    $(( $(cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null || echo 0) / 1000 )) °C, disco $(df -h / | awk 'NR==2{print $5" usado, "$4" libres"}'), RAM libre $(free -m | awk 'NR==2{print $7}') MB"
+}
+case "${1:-estado}" in
+  estado) estado ;;
+  reiniciar)
+    s6-svc -r $RUN/nom-servidor; s6-svc -r $RUN/nom-tunel
+    sleep 2
+    if esperar 90; then echo "reiniciado: contesta"; else echo "reiniciado, pero no contesta tras 90 s (nom-pi bitacora)"; exit 1; fi ;;
+  apagar) s6-rc -d change nom && echo "apagado" ;;
+  prender) s6-rc -u change nom && { esperar 90 && echo "prendido: contesta" || { echo "no contesta tras 90 s"; exit 1; }; } ;;
+  respaldo) respaldo ;;
+  actualizar)
+    [ -f $NUEVO ] && ! [ -L $NUEVO ] || { echo "actualizar: no hay $NUEVO"; exit 1; }
+    [ "$(wc -c < $NUEVO)" -gt 1000000 ] && unzip -tq $NUEVO >/dev/null 2>&1 \
+      || { echo "actualizar: $NUEVO no es un jar completo"; exit 1; }
+    if [ -f $JAR ] && cmp -s $NUEVO $JAR; then rm -f $NUEVO; echo "actualizar: ya estaba esa versión"; exit 0; fi
+    respaldo || exit 1
+    s6-svc -wD -T 40000 -d $RUN/nom-servidor
+    [ -f $JAR ] && cp -p $JAR $JAR.anterior
+    cp $NUEVO $JAR.n && chown root:root $JAR.n && chmod 644 $JAR.n && mv $JAR.n $JAR
+    s6-svc -u $RUN/nom-servidor
+    if esperar 120; then rm -f $NUEVO; echo "actualizar: versión nueva funcionando"; estado
+    else
+      echo "actualizar: la versión nueva no contestó; regreso a la anterior"
+      s6-svc -wD -T 40000 -d $RUN/nom-servidor
+      [ -f $JAR.anterior ] && cp -p $JAR.anterior $JAR
+      s6-svc -u $RUN/nom-servidor
+      esperar 120 && echo "actualizar: la anterior contesta" || echo "actualizar: tampoco contesta la anterior (nom-pi bitacora)"
+      exit 1
+    fi ;;
+  llave)
+    f=$VAR/datos-llaves/reposo.key
+    [ -r "$f" ] || { echo "llave: todavía no hay (la crea el servidor al arrancar con cifrado)"; exit 1; }
+    echo "Llave del cifrado en reposo (base64). Guárdala en un lugar seguro, separada de los respaldos:"
+    cat "$f" ;;
+  dominio)
+    CORTO=https://www.nom.qd.je
+    if wget -q -O /dev/null -T 15 "$CORTO/api/red/info" 2>/dev/null; then
+      echo "dominio: $CORTO contesta"
+      if grep -q '^export NOM_CANONICO=' /etc/nom.conf 2>/dev/null; then
+        echo "dominio: ya es la dirección principal ($(sed -n 's/^export NOM_CANONICO=//p' /etc/nom.conf | tail -1))"
+      else
+        printf '\n# Dirección principal para los buscadores (la puso nom-pi dominio el %s).\nexport NOM_CANONICO=%s\n' "$(date +%Y-%m-%d)" "$CORTO" >> /etc/nom.conf
+        s6-svc -r $RUN/nom-servidor; sleep 2
+        if esperar 120; then echo "dominio: listo, $CORTO es la dirección principal"; else echo "dominio: el servidor no contesta tras el cambio (nom-pi bitacora)"; exit 1; fi
+      fi
+    else
+      echo "dominio: $CORTO todavía no llega aquí (faltan pasos de docs/DOMINIO-Y-BUSCADORES.md o el DNS no se ha propagado)"
+      exit 1
+    fi ;;
+  bitacora)
+    s=${2:-servidor}; case "$s" in servidor|tunel|vigia) ;; *) echo "bitacora: servidor, tunel o vigia"; exit 1 ;; esac
+    n=${3:-60}; case "$n" in *[!0-9]*|'') n=60 ;; esac
+    tail -n "$n" /var/log/nom-$s/current ;;
+  *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+esac

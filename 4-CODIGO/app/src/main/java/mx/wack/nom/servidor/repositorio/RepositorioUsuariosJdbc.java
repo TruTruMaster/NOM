@@ -26,14 +26,12 @@ import tools.jackson.core.type.TypeReference;
 
 /**
  * Usuarios, sesiones y preferencias en la base de datos (diagrama 12).
- * H2 embebido en la red local; Azure SQL Database en la nube. El SQL es el
- * comun a los dos motores; las tablas se crean con schema-h2.sql o
- * schema-sqlserver.sql segun spring.sql.init.platform.
+ * H2 embebido (en la computadora, la Raspberry o el telefono); las tablas se crean con
+ * schema-h2.sql.
  *
  * Las columnas de noviembre de 2026 (invitado_de, hash_recuperacion, sal_recuperacion) se usan
- * si ya existen. En Azure la pagina no puede crearlas (entra sin ALTER): mientras no se corra
- * "./desplegar.sh roles", esos tres datos se guardan en usuarios-extra.json y se pasan a la base
- * en cuanto las columnas aparecen.
+ * si ya existen. Si la base no deja crearlas, esos tres datos se guardan en usuarios-extra.json
+ * y se pasan a la base en cuanto las columnas aparecen.
  */
 @Repository
 public class RepositorioUsuariosJdbc implements RepositorioUsuarios {

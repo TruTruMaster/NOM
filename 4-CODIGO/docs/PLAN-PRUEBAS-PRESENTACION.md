@@ -18,7 +18,6 @@ defecto nuevo se anota como DEF-42, DEF-43… en la tabla del final, con su prue
 |---|---|---|---|
 | Todo lo de 0.12.x (editores, Office, cuentas, permisos, sin red, seguridad) | laptop, escritorio, A55, Raspberry | 1542 de 1542 | Solo repetir como regresión |
 | Fases 13-15 (alias, pase, ramas, cifrado, chat, ayuda) | laptop (navegador automático) y emulador de Android | seguridad 363, e2e 27, sin Internet 22, ayuda 18, funciones 170, red 24, cuentas 61, límites 18, unitarias 9, teléfono 18 | **Nunca en el A55 ni en el escritorio reales** |
-| Azure con 0.13.0 | Azure (13-nov, esta revisión) | humo 31 de 31; 5 personas a la vez sin perder nada (p50 0.59 s, p95 1.15 s) | Repetir el día antes si se va a mostrar |
 | Raspberry con 0.13.0 | nomcolab.dpdns.org (esta revisión) | 5 personas a la vez sin perder nada (p50 0.24 s) | Ciclo completo con equipos reales |
 | Carga (cuántas personas aguantan) | laptop (esta revisión, sin tope) | **100 personas escribiendo a la vez: 0 letras perdidas, 0 entregas perdidas, p95 10 ms** | Medir en la Pi y en el teléfono |
 | Red de la escuela | — | — | **Nunca** |
@@ -31,9 +30,7 @@ defecto nuevo se anota como DEF-42, DEF-43… en la tabla del final, con su prue
 | H-1 | Máximo de personas conectadas por espacio: era 5 (requisito RNF Espacios 1). | Un salón no cabía. La carga demostró que no era un límite técnico (100 a la vez sin perder nada). | **Decidido y hecho (0.13.1):** 50 por espacio y en el mismo documento (`nom.espacio.max-usuarios`, `NOM_MAX_PERSONAS`, `Difusor.MAX_PERSONAS` en el teléfono). Requisito, casos de uso, diagramas, ayuda, pantalla de inicio y VL-13/VL-14 al día. Pruebas: `seguridad.py` 16.1 y `prueba_limites.py`. |
 | H-2 | Tope de 30 cuentas nuevas por hora desde una misma red. | En la escuela todos salen con la misma IP. | **Hecho (0.13.1): tope por dispositivo**, 5 por hora (`NOM_REGISTROS_HORA_EQUIPO`). La MAC no se puede leer (ningún navegador la da, Android 6+ devuelve una falsa y la cambia por red, y no viaja por Internet); se usa el `ANDROID_ID` resumido con SHA-256 en la app (sigue igual tras borrar datos o reinstalar, comprobado en el emulador) y un número al azar guardado en el navegador. Con dispositivo, el tope por red sube a 200 (solo frena programas); sin dispositivo (apps viejas, programas) sigue 30 por red. Solo en memoria; aviso de privacidad actualizado. Pruebas: `seguridad.py` 16.2. |
 | H-3 (DEF-42) | El chat no contaba en el almacenamiento. | Una cuenta podía llenar el disco de la Pi. | **Corregido (0.13.1):** el chat (mensajes y archivos) cuenta en la cuota del dueño del espacio; con la cuota llena no se suben archivos (el texto sí). Pruebas: `seguridad.py` 16.3. |
-| H-4 | Azure no tenía límite por cuenta (faltaba `NOM_CUOTA_MB`). | Disco del plan gratuito (1 GB). | **Corregido:** 50 MB en Azure y en `azure/desplegar.sh`. |
-| H-5 | La llave del cifrado y la de los pases **solo están en la Pi** (`/var/lib/nomcolab/datos-llaves`). La copia diaria en la laptop no la incluye. | Si se daña la memoria de la Pi, no se abre ningún dato ni respaldo; si cambia la de los pases, hay que publicar otro APK. | **Decisión del dueño: no se copia** (riesgo aceptado). |
-| H-6 | El APK solo confía en la llave de pases de la Raspberry. | En Azure el pase se emite, pero el teléfono no lo acepta. Es lo esperado. | Decirlo así si preguntan: «la nube de la app es nuestro servidor propio». |
+| H-5 | La llave del cifrado y la de los pases **solo están en la Pi** (`/var/lib/nom/datos-llaves`). La copia diaria en la laptop no la incluye. | Si se daña la memoria de la Pi, no se abre ningún dato ni respaldo; si cambia la de los pases, hay que publicar otro APK. | **Decisión del dueño: no se copia** (riesgo aceptado). |
 | H-7 | Una hoja de Excel importada muestra hasta **5000 filas y 60 columnas** (`LIM_F`, `LIM_C` en `ooxml.js`); lo demás se conserva en el archivo. | Alguien abre una hoja grande y cree que se perdieron datos. | Ya avisa; probarlo (F-2) y saberlo decir. |
 
 ---
@@ -79,7 +76,7 @@ la laptop y la Raspberry. Antes: regresar el A55 (ver `RELEVO-PRUEBAS-0.12.2.md`
 
 | # | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|
-| B-1 | APK publicable en el A55 | Instalar `3-APP-Android/NOM-COLAB.apk` encima del de depuración; abrir | Abre sin pedir desinstalar; misma sesión; versión 0.13.0 en Ajustes; sin errores de política de contenido |
+| B-1 | APK publicable en el A55 | Instalar `3-APP-Android/NOM.apk` encima del de depuración; abrir | Abre sin pedir desinstalar; misma sesión; versión 0.13.0 en Ajustes; sin errores de política de contenido |
 | B-2 | Los dos casos pendientes del A55 | (a) teclear muy rápido «B» en D5 con `=SUMAR.SI(...)`; (b) «Entrega con fecha límite» y guardar | (a) la letra no se pierde; (b) la fecha queda guardada (no 0). Si falla: DEF nuevo |
 | B-3 | Alias al azar en el teléfono que comparte | A55 con Wi-Fi sin Internet comparte un espacio; la laptop entra | Entra con alias generado (sin escribir apodo); al volver entra como el mismo alias |
 | B-4 | Pase firmado | Con Internet en la laptop: entrar a la nube, luego al espacio del A55 | Conserva su cuenta (no alias); el pase vence a los 10 min y es de un solo uso |
@@ -121,7 +118,6 @@ al ritmo de una persona; mide tiempos, letras perdidas y entregas perdidas).
 |---|---|---|---|
 | D-1 | Laptop sin tope de 5 (`--nom.espacio.max-usuarios=1000`) | `carga.py --personas 5,10,25,50,100 --segundos 15` | **Medido:** 100 personas, 4934 envíos, 7444 letras, 0 perdidas; p95 10 ms |
 | D-2 | La Pi (con el tope actual) | `NOM_BASE=https://nomcolab.dpdns.org carga.py --personas 5 --borrar` | **Medido:** p50 238 ms, p95 255 ms, 0 perdidas |
-| D-3 | Azure | `NOM_BASE=https://nomcolab-wack.azurewebsites.net carga.py --personas 5 --borrar` | **Medido:** p50 586 ms, p95 1154 ms, 0 perdidas (plan gratuito) |
 | D-4 | La Pi con el tope de 50 (0.13.1) | `carga.py --personas 10,25,50 --borrar` (las cuentas de la prueba no mandan dispositivo: cuentan 30 por hora desde la red; correrlo desde el propio equipo de la Pi con `ssh pi5` y un túnel, o en dos horas) | p95 < 2 s (RNF), 0 perdidas |
 | D-5 | El A55 como servidor | `adb forward tcp:8098 tcp:8080`, `NOM_BASE=http://localhost:8098 carga.py --personas 5,10,20` (en el teléfono no hay cuentas: hay que adaptar el registro al alias) | Medir y fijar ahí el tope del teléfono |
 
@@ -132,7 +128,7 @@ pierde nada.
 
 ## Bloque E. Almacenamiento (cuánto le toca a cada persona)
 
-Cómo funciona hoy: cada cuenta tiene un límite (**200 MB en la Pi, 50 MB en Azure, sin límite en
+Cómo funciona hoy: cada cuenta tiene un límite (**200 MB en la Pi, sin límite en
 el servidor del salón**). Cuenta lo que ocupan los **espacios de los que es propietaria**
 (documentos y versiones, ya comprimidos y cifrados); lo que escribe en espacios ajenos ocupa el
 lugar del dueño de ese espacio. Un documento no puede pasar de **25 MB**. La Pi tiene 54.6 GB
@@ -220,30 +216,6 @@ o `.pptx` y tiene que abrirse en Office sin «reparar» y verse como en la app.
 | K-5 | Documento a presentación y a mapa mental (generar sin IA) | `.pptx` | Igual que K-3 |
 | K-6 | Validación automática | `office/integridad.py` sobre todo lo de K-1 a K-5; y abrir cada archivo con LibreOffice sin interfaz (`soffice --headless --convert-to pdf`) | 0 fallas; el PDF se genera |
 
-## Bloque G. Azure (otra materia, pero por si preguntan)
-
-Hecho el 13 de noviembre: la Web App ya tenía la 0.13.0 desplegada por el flujo de GitHub. Se
-prendió, se probó y se volvió a apagar.
-
-- `pruebas/humo.py` contra Azure: **31 de 31** (registro y sesión en Azure SQL, la página entra a la
-  base como `nomcolab_app`, que solo tiene permisos sobre los datos; roles por espacio; los cuatro
-  tipos de documento; lector no escribe (403); versiones; canal en vivo; chat; pase; borrar
-  cuentas).
-- Carga con 5 personas: correcta, p50 0.59 s (el plan gratuito es lento; por eso la app usa la
-  Raspberry).
-- Se agregó el límite por cuenta de 50 MB (`NOM_CUOTA_MB`), que faltaba.
-
-**El día antes**, si se va a mostrar: `nomcolab azure up` (unos 3 min), luego
-`NOM_BASE=https://nomcolab-wack.azurewebsites.net python3 4-CODIGO/pruebas/humo.py`; al terminar,
-`nomcolab azure down`.
-
-Cómo explicarlo: la entrega de la otra materia pedía base de datos en la nube con seguridad con
-roles, y eso está en Azure (Azure SQL + usuarios con rol). Para el proyecto, **la nube es nuestro
-servidor propio** (Raspberry Pi 5 + túnel de Cloudflare). Es gratis, siempre prendido, más rápido,
-con los datos cifrados, y es el único en el que confía la app para los pases.
-
----
-
 ## Bloque H. Aceptación con personas ajenas (SUS)
 
 Cinco personas que no conocen la app, de preferencia de edades distintas. Tareas guiadas, cada una
@@ -268,7 +240,7 @@ ayuda. Se anota lo que confundió.
 - Ensayo completo dos veces: una en casa y otra, si se puede, en el salón.
 - **Plan B por si algo falla en vivo:** el A55 como servidor con su propia red; documentos de
   ejemplo ya preparados; capturas o video de cada parte.
-- La víspera: bloque A completo, `humo.py` contra la Pi (y Azure si se muestra), A55 cargado, APK
+- La víspera: bloque A completo, `humo.py` contra la Pi, A55 cargado, APK
   0.13.0 instalado, sesión abierta.
 
 ---
@@ -298,8 +270,6 @@ entrega del 27 de noviembre) y regenerar el PDF.
 | A (línea base) | 13-nov | laptop | | | `regresion.sh` |
 | D-1 | 13-nov | laptop | Correcto | — | 100 personas, 0 perdidas, p95 10 ms |
 | D-2 | 13-nov | Pi | Correcto | — | 5 personas, p50 238 ms |
-| D-3 | 13-nov | Azure | Correcto | — | 5 personas, p50 586 ms |
-| G (humo) | 13-nov | Azure | 31 de 31 | — | cuota de 50 MB agregada |
 | H-3 | 13-nov | código | Corregido en 0.13.1 | DEF-42 | el chat no contaba en la cuota; `seguridad.py` 16.3 |
 | H-1, H-2 | 13-nov | laptop | Hecho en 0.13.1 | — | 50 por espacio; tope por dispositivo; `seguridad.py` 375 de 375, límites VL-13/VL-14 con 50 y 51 |
 | J (medida) | 13-nov | laptop | Medido | — | `.nom` 73-85 % del original; `xz -9e` 39-82 %: hay margen en Excel |

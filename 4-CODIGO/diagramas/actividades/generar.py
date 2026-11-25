@@ -202,7 +202,7 @@ class Diagrama:
     # --------------------------------------------------------------- drawio
     def drawio(self):
         alto = max(nd.bottom for nd in self.nodos.values()) + 30
-        c = ['<mxfile host="nom-colab-generar.py"><diagram name="%s"><mxGraphModel grid="1" gridSize="10">'
+        c = ['<mxfile host="nom-generar.py"><diagram name="%s"><mxGraphModel grid="1" gridSize="10">'
              '<root><mxCell id="0"/><mxCell id="1" parent="0"/>' % html.escape(self.titulo)]
         c.append(f'<mxCell id="titulo" value="{html.escape(self.titulo)}" style="text;html=1;fontColor={TITULO_COLOR};fontSize=14;align=left;" vertex="1" parent="1">'
                  f'<mxGeometry x="10" y="4" width="600" height="22" as="geometry"/></mxCell>')

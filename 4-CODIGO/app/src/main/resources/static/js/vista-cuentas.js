@@ -401,7 +401,7 @@
         if (p) f.append(p);
       } else if (api.empaquetada) {
         const srv = api.servidor().replace(/^https?:\/\//, "");
-        const internet = /(^|\.)nomcolab\.dpdns\.org$|(^|\.)nom\.qd\.je$|azurewebsites\.net|\.ts\.net$/.test(srv.replace(/\/.*$/, ""));
+        const internet = /(^|\.)nom\.dpdns\.org$|(^|\.)nom\.qd\.je$|\.ts\.net$/.test(srv.replace(/\/.*$/, ""));
         // H-8: a un equipo del Wi-Fi se entra con una cuenta de ESE equipo. Se dice arriba y en grande,
         // para que nadie escriba ahí la contraseña de su cuenta de Internet.
         if (!internet && !f.querySelector("[data-aviso-wifi]")) {
@@ -417,7 +417,7 @@
         // En un navegador normal (no la app): un enlace para descargar la app de Android. El
         // archivo lo entrega la red de GitHub (Fastly), no la conexión del servidor, y
         // ".../releases/latest/..." trae siempre la versión más reciente que se haya publicado.
-        f.append(html(`<p class="servidor-pie">${ico("smartphone", "ico-s")}<span>¿Usas Android? <a href="https://github.com/TruTruMaster/NOM-COLAB/releases/latest/download/NOM-COLAB.apk" rel="noopener" data-micro="Descargar la app para Android|Se descarga desde la red de GitHub, así que no gasta los datos del servidor. Ábrela en el teléfono para instalarla; trae siempre la versión más reciente."><b>Descarga la app</b></a> · siempre la más reciente</span></p>`));
+        f.append(html(`<p class="servidor-pie">${ico("smartphone", "ico-s")}<span>¿Usas Android? <a href="https://github.com/TruTruMaster/NOM/releases/latest/download/NOM.apk" rel="noopener" data-micro="Descargar la app para Android|Se descarga desde la red de GitHub, así que no gasta los datos del servidor. Ábrela en el teléfono para instalarla; trae siempre la versión más reciente."><b>Descarga la app</b></a> · siempre la más reciente</span></p>`));
       }
     }
 
@@ -484,7 +484,7 @@
       const original = b.innerHTML;
       b.disabled = true;
       b.innerHTML = `<span class="cargando"></span>`;
-      // En Azure la base de datos gratuita se pausa sin uso y tarda ~1 min en despertar.
+      // Si el servidor tarda en contestar, se avisa que sigue conectando.
       const lento = setTimeout(() => { if (b.isConnected) b.innerHTML = `<span class="cargando"></span> Conectando con la base de datos…`; }, 4000);
       try { await fn(); } catch (e) { mostrarError(f, e); }
       finally { clearTimeout(lento); if (b.isConnected && !f._cuenta) { b.disabled = false; b.innerHTML = original; } else if (b.isConnected) b.innerHTML = original; }

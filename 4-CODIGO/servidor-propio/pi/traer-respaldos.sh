@@ -6,17 +6,17 @@
 # corre en la laptop (o en cualquier otro equipo con `ssh pi5`) y trae el respaldo más nuevo que
 # todavía no tenga. Aquí se guardan los últimos 30.
 #
-#   traer-respaldos.sh              trae el más nuevo a ~/nomcolab-servidor/respaldos-pi
+#   traer-respaldos.sh              trae el más nuevo a ~/nom-servidor/respaldos-pi
 #   traer-respaldos.sh /otra/carpeta
 #   NOM_PI=otro-nombre traer-respaldos.sh
 #
-# Se instala con un temporizador diario (nomcolab-traer-respaldos.timer); si la laptop estaba
+# Se instala con un temporizador diario (nom-traer-respaldos.timer); si la laptop estaba
 # apagada a esa hora, corre al prenderla. No necesita contraseña: el usuario de la Pi está en el
 # grupo adm y puede leer los respaldos.
 set -u
 PI="${NOM_PI:-pi5}"
-ORIGEN=/var/lib/nomcolab/respaldos
-DESTINO="${1:-$HOME/nomcolab-servidor/respaldos-pi}"
+ORIGEN=/var/lib/nom/respaldos
+DESTINO="${1:-$HOME/nom-servidor/respaldos-pi}"
 GUARDAR=30
 mkdir -p "$DESTINO" && chmod 700 "$DESTINO" || { echo "traer-respaldos: no se pudo crear $DESTINO"; exit 1; }
 SSH="ssh -o BatchMode=yes -o ConnectTimeout=20"

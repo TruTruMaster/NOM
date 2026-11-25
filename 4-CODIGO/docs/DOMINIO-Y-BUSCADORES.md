@@ -12,7 +12,7 @@ Raspberry, con sus cuentas y su base de datos):
 No se redirige un nombre al otro, porque el navegador guarda la sesión y los documentos de cada
 nombre por separado. Una redirección dejaría a la gente sin sesión y sin lo que tenía guardado sin
 Internet. Para que los buscadores no los cuenten como dos sitios, cada página dice cuál es su dirección
-principal (`<link rel="canonical">`). Esa dirección sale de `NOM_CANONICO` en `/etc/nomcolab.conf`.
+principal (`<link rel="canonical">`). Esa dirección sale de `NOM_CANONICO` en `/etc/nom.conf`.
 
 ## 1. Cómo quedó (16 de noviembre de 2026)
 
@@ -43,12 +43,12 @@ eso los servicios tratan a DigitalPlat como dueño de todo `qd.je`:
 
 ## 2. Lo que hay en el código
 
-- **DNS en Cloudflare:** `origen.nomcolab.dpdns.org` → el túnel `nomcolab` (CNAME con proxy). Será el
+- **DNS en Cloudflare:** `origen.nomcolab.dpdns.org` → el túnel `nomcolab` de Cloudflare (CNAME con proxy; ese nombre del túnel en Cloudflare no se cambia). Será el
   «origen de respaldo».
 - **Servidor** (`Buscadores.java`, `PaginasApi.java`): la portada y cada página de ayuda y legal
   llevan su dirección principal, lo que muestran las redes al compartir el enlace (Open Graph y
   tarjeta de X, con `img/compartir.png` de 1200×630) y datos de schema.org. En la portada son WebSite
-  con los nombres con que la buscan (NOM y los de antes: NOM-COLAB, NOMCOLAB, nomcolab), Organization con el logo y
+  con el nombre con que la buscan (NOM), Organization con el logo y
   WebApplication. En la ayuda son WebPage y la ruta de migas. `robots.txt` y `sitemap.xml` se arman
   con la dirección principal. `/unirse` y `/proyectar` salen con `noindex`.
 - **Página:** un título que describe la app; la portada de `index.html` trae texto que leen los
@@ -56,7 +56,7 @@ eso los servicios tratan a DigitalPlat como dueño de todo `qd.je`:
   categorías.
 - **La app reconoce nom.qd.je** como la nube (`acceso.js`, `vista-cuentas.js`, `vista-espacios.js`) y
   `pases/nubes.json` la incluye con la misma llave.
-- **Raspberry:** `servidor-propio/pi/dominio-corto.sh` y `nomcolab-pi dominio` (ver el paso 5).
+- **Raspberry:** `servidor-propio/pi/dominio-corto.sh` y `nom-pi dominio` (ver el paso 5).
 - **IndexNow:** la clave `static/3a92e080d98e04396ecf06f47cdca7a4.txt` y
   `herramientas/buscadores/avisar.py`.
 - `pruebas/humo.py` revisa robots, sitemap, la portada y el `noindex` de `/unirse`.
@@ -81,8 +81,8 @@ Las dos páginas dicen «NOM» desde la 0.16.0 (18-nov).
 
 **Raspberry:** `doas sh ~/dominio-corto/dominio-corto.sh` (una vez) puso el túnel con
 `www.nom.qd.je`, `NOM_NUBE=https://nomcolab.dpdns.org` (los pases valen en los APK ya instalados) y la
-orden `nomcolab-pi dominio`, que dejó `NOM_CANONICO=https://www.nom.qd.je`. Para cambiar la principal:
-editar esa línea en `/etc/nomcolab.conf` y `nomcolab-pi reiniciar`.
+orden `nom-pi dominio`, que dejó `NOM_CANONICO=https://www.nom.qd.je`. Para cambiar la principal:
+editar esa línea en `/etc/nom.conf` y `nom-pi reiniciar`.
 
 ## 4. Los buscadores
 
@@ -103,7 +103,7 @@ Otras cosas que ayudan y no cuestan:
   la descripción. Para refrescar la de Facebook:
   <https://developers.facebook.com/tools/debug/>.
 
-**Qué esperar:** buscando `nomcolab`, `nom colab` o `NOM`, el sitio debería salir arriba unos
+**Qué esperar:** buscando `NOM` o `nom`, el sitio debería salir arriba unos
 días o semanas después de que Google lo indexe: es un nombre propio y casi no hay competencia. Con
 solo `nom` es muy difícil, porque es una palabra muy común (en México la ocupan las Normas Oficiales
 Mexicanas). Eso no se arregla con ajustes, solo con que mucha gente enlace y busque el sitio. Los datos

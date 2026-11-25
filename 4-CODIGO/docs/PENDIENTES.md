@@ -15,7 +15,7 @@ Marcar con `[x]` lo que se vaya terminando.
 - [x] **Cola de cambios sin conexión**: lo que se edite sin conexión se guarda y se manda solo
       al volver (el CRDT ya permite juntar los cambios).
 - [x] **Sincronizar entre servidores**: cuando el teléfono del salón vuelva a tener internet,
-      subir el espacio a Azure o al servidor propio (y bajar los cambios de allá).
+      subir el espacio al servidor propio (y bajar los cambios de allá).
 - [x] **Modo salón**: el maestro crea un espacio, los alumnos entran con el QR y un apodo (sin
       registrarse) y el maestro ve el documento de cada uno en vivo.
 

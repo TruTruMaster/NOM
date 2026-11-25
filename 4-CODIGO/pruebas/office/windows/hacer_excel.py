@@ -587,7 +587,7 @@ def x07(x):
     with b.paso("saltos de página manuales"):
         h7.HPageBreaks.Add(h7.Range("A40")); h7.HPageBreaks.Add(h7.Range("A80"))
     h8 = L.hoja("Protegida"); h8.Range("A1").Value = "Celda bloqueada"; h8.Range("B1").Value = "Celda libre"; h8.Range("B1").Locked = False
-    with b.paso("hoja protegida"): h8.Protect("nomcolab", True, True, True)
+    with b.paso("hoja protegida"): h8.Protect("nom", True, True, True)
     h9 = L.hoja("Dividida")
     for i in range(1, 60): h9.Cells(i, 1).Value = i
     with b.paso("ventana dividida sin inmovilizar"):
@@ -596,7 +596,7 @@ def x07(x):
         h10 = L.hoja("Diseño de página"); h10.Range("A1").Value = "Esta hoja se guardó en vista de diseño de página"
         h10.Activate(); L.wb.Windows(1).View = 3
     with b.paso("libro protegido (estructura)"):
-        L.wb.Worksheets(1).Activate(); L.wb.Protect("nomcolab", True)
+        L.wb.Worksheets(1).Activate(); L.wb.Protect("nom", True)
     return L.guardar()
 
 

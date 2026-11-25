@@ -65,6 +65,7 @@ public final class CifradoReposo {
         try {
             Mac m = Mac.getInstance("HmacSHA256");
             m.init(new SecretKeySpec(llave.getEncoded(), "HmacSHA256"));
+            // "nom-colab" es el nombre de antes y se queda así a propósito: con otro texto los datos ya guardados no se abrirían.
             return m.doFinal(("nom-colab/reposo/" + para).getBytes(StandardCharsets.UTF_8));
         } catch (GeneralSecurityException e) { throw new IllegalStateException(e); }
     }

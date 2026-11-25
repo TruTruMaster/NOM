@@ -1,0 +1,18 @@
+# Cloudflare Tunnel de NOM en la Raspberry Pi (servicio nom-tunel).
+# Es un segundo cloudflared: el de vefose.pp.ua (servicio cloudflared) no se toca.
+tunnel: 869abbea-c306-4ef3-b6ff-2dc21263328a
+credentials-file: /etc/cloudflared/869abbea-c306-4ef3-b6ff-2dc21263328a.json
+metrics: 127.0.0.1:20242
+ingress:
+  - hostname: nomcolab.dpdns.org
+    service: http://127.0.0.1:8080
+  - hostname: www.nomcolab.dpdns.org
+    service: http://127.0.0.1:8080
+  # El nombre corto (docs/DOMINIO-Y-BUSCADORES.md): www.nom.qd.je llega por Cloudflare for SaaS
+  # (CNAME a origen.nomcolab.dpdns.org, que apunta a este mismo túnel). nom.qd.je solo (la raíz)
+  # no puede ser CNAME: redirige a www.nom.qd.je desde fuera.
+  - hostname: www.nom.qd.je
+    service: http://127.0.0.1:8080
+  - hostname: nom.qd.je
+    service: http://127.0.0.1:8080
+  - service: http_status:404

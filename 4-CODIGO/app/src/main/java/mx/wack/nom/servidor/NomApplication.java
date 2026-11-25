@@ -1,0 +1,28 @@
+package mx.wack.nom.servidor;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
+
+/**
+ * Nodo local de NOM. Sirve la interfaz web, la API y el canal en tiempo
+ * real a los equipos de la misma red. Arranca con:
+ *
+ *     ./mvnw spring-boot:run        o        java -jar target/nom.jar
+ *
+ * y se abre en http://localhost:8080 (o en la IP del equipo desde la LAN).
+ */
+@SpringBootApplication(scanBasePackages = "mx.wack.nom")
+@EnableScheduling
+public class NomApplication {
+    public static void main(String[] args) {
+        // D.1 Cifrado en reposo: la llave, la base H2 cifrada y que la llave abra estos datos.
+        try {
+            ArranqueCifrado.preparar();
+        } catch (Exception e) {
+            System.err.println("NOM no arranca: " + e.getMessage());
+            System.exit(1);
+        }
+        SpringApplication.run(NomApplication.class, args);
+    }
+}

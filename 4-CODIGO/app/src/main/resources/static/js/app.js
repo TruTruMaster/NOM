@@ -264,7 +264,7 @@
       NOM.aviso(`Este servidor tiene una versión anterior de NOM${info.version && suya ? " (" + info.version + ")" : ""} que esta app (${NOM.VERSION}). Puedes trabajar, pero lo que importes de Word, Excel o PowerPoint puede verse distinto en la página hasta que actualicen el servidor.`, { tipo: "aviso", ms: 12000 });
     } else {
       NOM.aviso(`Hay una versión más nueva de la app (${info.version || "nueva"}; tienes la ${NOM.VERSION}). Actualízala para ver los documentos igual que en la página.`,
-        { tipo: "aviso", ms: 15000, accion: { texto: "Descargar", fn: () => { location.href = "https://github.com/TruTruMaster/NOM-COLAB/releases/latest/download/NOM-COLAB.apk"; } } });
+        { tipo: "aviso", ms: 15000, accion: { texto: "Descargar", fn: () => { location.href = "https://github.com/TruTruMaster/NOM/releases/latest/download/NOM.apk"; } } });
     }
   };
   // ¿Servidor en la red local o en la nube? Cambia los textos de conexión y "Unirse".

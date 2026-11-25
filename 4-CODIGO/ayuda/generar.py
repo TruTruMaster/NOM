@@ -29,7 +29,7 @@ STATIC = os.path.normpath(os.path.join(AQUI, "..", "app", "src", "main", "resour
 FORMULAS = os.path.join(STATIC, "js", "formulas.js")
 SW = os.path.join(STATIC, "sw.js")
 PUBLICO = "https://www.nom.qd.je"
-REPO = "https://github.com/TruTruMaster/NOM-COLAB"
+REPO = "https://github.com/TruTruMaster/NOM"
 
 # Datos del responsable y contacto (un solo lugar). G.2: el equipo todavía no crea el correo del
 # proyecto; mientras, el contacto es por GitHub (reportes y avisos privados de seguridad).
@@ -427,7 +427,7 @@ def main():
         print("Enlaces rotos:\n  " + "\n  ".join(rotos)); sys.exit(1)
 
     escribir("ayuda/indice.json", json.dumps(indice, ensure_ascii=False, separators=(",", ":")))
-    # robots.txt y sitemap.xml (la Raspberry se deja encontrar; Azure manda noindex en sus cabeceras).
+    # robots.txt y sitemap.xml (la Raspberry se deja encontrar en buscadores).
     # Por la red los arma el servidor con la dirección principal (NOM_CANONICO, ver Buscadores.java);
     # estos son los de la app y la base del sitemap. La portada va primero.
     escribir("robots.txt", f"# NOM\nUser-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /unirse\nDisallow: /proyectar\nDisallow: /ayuda/buscar\n\nSitemap: {PUBLICO}/sitemap.xml\n")

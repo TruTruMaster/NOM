@@ -1,6 +1,0 @@
-[Unit]
-Description=Respaldo de los datos de NOM
-
-[Service]
-Type=oneshot
-ExecStart=%h/nomcolab-servidor/respaldar.sh

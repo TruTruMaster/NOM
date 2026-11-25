@@ -10,7 +10,7 @@
     </parent>
 
     <groupId>mx.wack</groupId>
-    <artifactId>nom-colab</artifactId>
+    <artifactId>nom</artifactId>
     <version>0.1.0</version>
     <name>NOM</name>
     <description>Suite colaborativa en red local - Equipo 6 WACK</description>
@@ -32,7 +32,7 @@
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
         <!-- Base de datos: usuarios, roles, sesiones y preferencias (modulo Gestion de cuentas).
-             H2 embebido en el equipo que comparte la red; Azure SQL Database en la nube. -->
+             H2 embebido en el equipo que comparte (computadora, Raspberry o teléfono). -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-jdbc</artifactId>
@@ -43,11 +43,6 @@
             <scope>runtime</scope>
         </dependency>
         <dependency>
-            <groupId>com.microsoft.sqlserver</groupId>
-            <artifactId>mssql-jdbc</artifactId>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc-test</artifactId>
             <scope>test</scope>
@@ -55,7 +50,7 @@
     </dependencies>
 
     <build>
-        <finalName>nom-colab</finalName>
+        <finalName>nom</finalName>
         <plugins>
             <!-- El núcleo (modelo, CRDT y servicios) vive en ../nucleo: lo comparten este
                  servidor y el servidor de la app Android. -->
@@ -78,7 +73,7 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <mainClass>mx.wack.nom.servidor.NomColabApplication</mainClass>
+                    <mainClass>mx.wack.nom.servidor.NomApplication</mainClass>
                 </configuration>
             </plugin>
         </plugins>

@@ -76,9 +76,8 @@ tus equipos. Los ven los miembros del espacio. Ver el [Aviso de privacidad](lega
 En tu equipo, en el camino por Internet y en el disco del servidor, sí; y en los espacios cifrados
 de extremo a extremo, ni el servidor puede leerlos. Ver [Cifrado](ayuda:cuentas/cifrado).
 
-### 16. ¿La cuenta de la página es la misma que la de la app? ¿Y la de Azure? {#p16}
-La de la página y la app «En Internet», sí. La versión en Azure es aparte (otra base): se hizo para una
-demostración y casi siempre está apagada.
+### 16. ¿La cuenta de la página es la misma que la de la app? {#p16}
+Sí: la de la página y la de la app «En Internet» son la misma cuenta.
 
 ### 17. ¿Qué es «Conexión sin cifrar»? {#p17}
 Un aviso de la red del salón (http). Ver [Conexión sin cifrar](ayuda:cuentas/conexion-sin-cifrar).

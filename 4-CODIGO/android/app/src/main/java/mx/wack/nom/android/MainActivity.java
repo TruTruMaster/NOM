@@ -505,6 +505,7 @@ public class MainActivity extends Activity {
             try {
                 String a = android.provider.Settings.Secure.getString(getContentResolver(), android.provider.Settings.Secure.ANDROID_ID);
                 if (a == null || a.isEmpty()) return "";
+                // "nom-colab-equipo" (el nombre de antes) se queda así: con otro texto cada teléfono cambiaría de identificador.
                 byte[] h = java.security.MessageDigest.getInstance("SHA-256").digest(("nom-colab-equipo:" + a).getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 return Base64.encodeToString(h, Base64.URL_SAFE | Base64.NO_PADDING | Base64.NO_WRAP).substring(0, 32);
             } catch (Exception e) {

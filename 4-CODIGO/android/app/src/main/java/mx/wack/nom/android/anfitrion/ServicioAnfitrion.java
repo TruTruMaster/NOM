@@ -146,7 +146,7 @@ public class ServicioAnfitrion extends Service {
         }
         documentos = new ServicioDocumentos(docsRepo, espacios, cuentas, difusor, cifrado, nodo);
         descubrimiento = new Descubrimiento(nodo, espaciosRepo, usuarios, Json.YO, true, 47474);
-        // 6.5: copia de los espacios conectados con Azure o con el servidor propio (cuando hay Internet).
+        // 6.5: copia de los espacios conectados con el servidor propio (cuando hay Internet).
         ServicioSincronia sincronia = new ServicioSincronia(espacios, documentos, Json.YO, nodo);
 
         // Fase 9: fuentes para investigar (cuando el teléfono tiene Internet) y la biblioteca del espacio.

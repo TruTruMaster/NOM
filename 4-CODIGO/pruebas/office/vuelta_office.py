@@ -131,7 +131,7 @@ def armar(con_ediciones=True):
                 for suf, clave in (("", "salida"), ("-vianom", "salidaNom")):
                     (SALE / f"{orig.stem}.{nombre_caso}{suf}.{ext}").write_bytes(base64.b64decode(r[clave])); n += 1
         r = pag.evaluate(JS_NUEVOS)
-        for ext, b64 in r.items(): (SALE / f"nuevo-nom-colab.{ext}").write_bytes(base64.b64decode(b64)); n += 1
+        for ext, b64 in r.items(): (SALE / f"nuevo-nom.{ext}").write_bytes(base64.b64decode(b64)); n += 1
         if errores: print("  errores de JavaScript:", errores[:3])
         nav.close()
     if con_ediciones:

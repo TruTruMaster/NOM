@@ -369,6 +369,7 @@ ${formas.join("\n")}
    */
   function aNomBytes(doc) {
     const O = NOM.origen, H = O.huella, foto = fotoModelo(doc), og = O.leer(doc);
+    // "nom-colab" es la marca del formato .nom desde antes del cambio de nombre: se queda para que abran los archivos viejos y las apps viejas.
     const adj = [], json = { f: "nom-colab", v: 3 };
     let cuerpo, enOrigen = null;
     if (og && og.h && og.h.b) {

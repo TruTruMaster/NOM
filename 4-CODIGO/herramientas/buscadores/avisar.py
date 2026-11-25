@@ -24,7 +24,7 @@ STATIC = os.path.normpath(os.path.join(AQUI, "..", "..", "app", "src", "main", "
 
 
 def bajar(url):
-    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "nomcolab-indexnow/1"}), timeout=30) as r:
+    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "nom-indexnow/1"}), timeout=30) as r:
         return r.read().decode("utf-8")
 
 
@@ -47,7 +47,7 @@ def main():
         sys.exit("avisar: el sitemap no tiene direcciones de " + host)
     cuerpo = json.dumps({"host": host, "key": clave, "keyLocation": f"{sitio}/{clave}.txt", "urlList": urls}).encode()
     pedido = urllib.request.Request("https://api.indexnow.org/indexnow", data=cuerpo, method="POST",
-                                    headers={"Content-Type": "application/json; charset=utf-8", "User-Agent": "nomcolab-indexnow/1"})
+                                    headers={"Content-Type": "application/json; charset=utf-8", "User-Agent": "nom-indexnow/1"})
     try:
         with urllib.request.urlopen(pedido, timeout=30) as r:
             print(f"IndexNow: {r.status} — {len(urls)} direcciones de {host} avisadas")

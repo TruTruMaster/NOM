@@ -1,0 +1,7 @@
+[Unit]
+Description=Trae a este equipo el respaldo más nuevo de NOM que hizo la Raspberry
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/nom-servidor/traer-respaldos.sh

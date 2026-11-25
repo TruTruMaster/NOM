@@ -16,7 +16,7 @@ antes de enviar la app, volver a leer las páginas de la sección 10.
 | 6 | **Cuenta de desarrollador y prueba cerrada** | Una cuenta personal nueva necesita 12 personas en prueba cerrada durante 14 días antes de pedir producción | El equipo | Fase 24 (M5) |
 | 7 | **Registrarse como desarrollador de Android** | Desde 2027 (México incluido) un APK de un desarrollador no registrado deja de instalarse en teléfonos certificados, también el de GitHub (sección 3) | El equipo | — |
 | 8 | **Accesibilidad a mano**: lector de pantalla (TalkBack, NVDA) y tamaño de letra del sistema en la app | Lo automático ya da 0 fallas (sección 5); lo demás solo se ve probando | El equipo y código | — |
-| 9 | **Nombre y logotipo**: búsqueda en el IMPI antes de registrar «NOM-COLAB»; un logotipo nuevo sin parecido a Pac-Man | Evitar una oposición o una demanda de marca (sección 7) | El equipo | — |
+| 9 | **Nombre y logotipo**: búsqueda en el IMPI antes de registrar «NOM»; un logotipo nuevo sin parecido a Pac-Man | Evitar una oposición o una demanda de marca (sección 7) | El equipo | — |
 
 Nada de esto impide la entrega del 27-nov (la app se distribuye por GitHub y la página está en línea); 1, 2 y 3 sí
 conviene tenerlos antes de abrir la app a más personas, y 4 a 6 solo hacen falta para Google Play.
@@ -25,19 +25,19 @@ conviene tenerlos antes de abrir la app a más personas, y 4 a 6 solo hacen falt
 
 | Requisito | Cómo está | Prueba |
 |---|---|---|
-| Aviso de privacidad integral y simplificado (LFPDPPP 2025) | `/legal/privacidad` y `/legal/privacidad-corto`, con datos, finalidades, encargados (Cloudflare, Azure, GitHub), conservación, derechos ARCO, menores, cookies y autoridad (Secretaría Anticorrupción y Buen Gobierno) | En línea: https://www.nom.qd.je/legal/privacidad |
+| Aviso de privacidad integral y simplificado (LFPDPPP 2025) | `/legal/privacidad` y `/legal/privacidad-corto`, con datos, finalidades, encargados (Cloudflare, GitHub), conservación, derechos ARCO, menores, cookies y autoridad (Secretaría Anticorrupción y Buen Gobierno) | En línea: https://www.nom.qd.je/legal/privacidad |
 | Términos, uso aceptable, reportar contenido, accesibilidad, permisos de Android, licencias, almacenamiento | `/legal/` (fase 14), se aceptan al crear la cuenta y se vuelven a pedir si cambian | `prueba_ayuda.py` |
 | Borrar la cuenta desde la app **y** desde la web | Menú de la cuenta → «Borrar mi cuenta…» (también en www.nom.qd.je); qué se borra y en cuánto tiempo: `ayuda/cuentas/borrar-la-cuenta` | `seguridad.py` |
 | Descargar mis datos (derecho de acceso) | Ajustes → «Descargar los datos de mi cuenta» | `seguridad.py` |
 | Sin publicidad, sin estadísticas de terceros, sin rastreadores | No hay SDK de terceros en la app (solo `desugar_jdk_libs`); la página no manda nada a otros servicios | `build.gradle.kts`, revisión del código |
 | Nivel de API (Google Play pide **36** desde el 31-ago-2026) | `targetSdk = 37`, `compileSdk = 37`, `minSdk = 24` | `aapt2 dump badging` del APK publicado |
-| Páginas de memoria de 16 KB (apps con código nativo) | El APK no trae bibliotecas nativas (`.so`): no aplica | `unzip -l NOM-COLAB.apk` (0 archivos `.so`) |
+| Páginas de memoria de 16 KB (apps con código nativo) | El APK no trae bibliotecas nativas (`.so`): no aplica | `unzip -l NOM.apk` (0 archivos `.so`) |
 | Android 16 y 17: atrás predictivo, de borde a borde, pantallas grandes | `OnBackInvokedCallback`, márgenes con `WindowInsets` (barras y teclado), sin orientación fija | `MainActivity.java` |
 | Permisos mínimos y explicados | Cámara y notificaciones se piden al usarlas; nada de ubicación, contactos, micrófono, SMS ni «todos los archivos» | `/legal/permisos-android` |
 | La app no es de depuración | El APK publicado no lleva `debuggable` | `aapt2 dump badging` |
 | Accesibilidad automática (WCAG 2.2 AA) | **0 fallas en 28 pantallas** (axe-core 4.10) después de los arreglos del 22-nov | `pruebas/interfaz/prueba_axe.py` 28/28 |
 | Licencia del código y avisos de terceros | GPL-3.0 (`LICENSE`), `/legal/licencias` con cada biblioteca y fuente (el 22-nov se agregaron Mediabunny y las fuentes de las medidas de Office) | `/legal/licencias` |
-| Página principal del repositorio | `README.md` en la raíz (antes se llamaba `LEEME.md` y GitHub no lo mostraba) | github.com/TruTruMaster/NOM-COLAB |
+| Página principal del repositorio | `README.md` en la raíz (antes se llamaba `LEEME.md` y GitHub no lo mostraba) | github.com/TruTruMaster/NOM |
 
 ## 2. Google Play (si se publica ahí)
 
@@ -79,7 +79,7 @@ cifrados) no cuenta como recopilado; lo que pasa por la red del salón tampoco (
 | IDs de dispositivo (resumen SHA-256 del identificador de Android, solo en memoria una hora) | Sí | Sí | Prevención de fraudes, seguridad y cumplimiento |
 | Ubicación, contactos, salud, finanzas, navegación, registros de fallas, ID de publicidad | No | — | — |
 
-- **¿Se comparte con terceros?** No (Cloudflare y Azure procesan datos por cuenta de NOM: son proveedores, no «compartir»).
+- **¿Se comparte con terceros?** No (Cloudflare procesa datos por cuenta de NOM: es un proveedor, no «compartir»).
 - **¿Cifrado en tránsito?** Sí (la nube solo acepta HTTPS; `seguridad_red.xml`).
 - **¿Se puede pedir que se borren?** Sí: en la app y en la web; enlace para la ficha:
   `https://www.nom.qd.je/ayuda/cuentas/borrar-la-cuenta` (explica qué se borra y que los respaldos se van en 14 días,
@@ -190,9 +190,9 @@ Los mínimos salen de lo que usa la interfaz: `color-mix()` en CSS (Chrome 111, 
   Canva de Canva Pty Ltd, Android de Google y «QR Code» de DENSO WAVE, y que NOM no está afiliado. Abrir y guardar
   Open XML está permitido (es norma ISO/IEC 29500 y Microsoft la cubre con su Open Specification Promise). Las fuentes
   que imitan las medidas de Office no copian el dibujo de ninguna fuente de Microsoft (`fonts/LICENCIAS-FUENTES.txt`).
-- **El nombre:** antes de registrar «NOM-COLAB» como marca, buscarlo en el IMPI (MARCia) en las clases 9 (software)
+- **El nombre:** antes de registrar «NOM» como marca, buscarlo en el IMPI (MARCia) en las clases 9 (software)
   y 42 (servicios en línea). Ojo: «NOM» también es la sigla de *Norma Oficial Mexicana*, que es un signo oficial; la
-  marca compuesta «NOM-COLAB» se distingue mejor que «NOM» sola.
+  marca compuesta «NOM» se distingue mejor que «NOM» sola.
 - **El logotipo nuevo (propuesta de caritas que «comen» el documento):** la idea (nom nom = comer, tres colores =
   colaborar) es buena, pero tres círculos con la boca en cuña se parecen mucho al personaje de **Pac-Man**, que Bandai
   Namco tiene registrado como marca en decenas de países, también para software, y que defiende. Para usarla sin

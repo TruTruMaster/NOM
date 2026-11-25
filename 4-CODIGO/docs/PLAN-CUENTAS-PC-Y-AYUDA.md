@@ -24,13 +24,12 @@ Contenido:
 |---|---|
 | Licencia del código | **GPL-3.0** (archivo `LICENSE` y sección en el README) |
 | Cuentas | **Con Internet hay cuenta** (la de la Raspberry, la misma en la app y en la página). **Quien no tiene Internet no entra a ninguna cuenta**, pase lo que pase: alias generado al azar. Esto es **por persona**: si al mismo espacio (p. ej. el del teléfono que comparte) se une alguien que sí tiene Internet, **conserva su cuenta** |
-| Azure | **Se une con todo** (una sola cuenta), pero por ahora es de adorno: no se sabe si será requisito. No se trabaja en ello hasta que se pida |
 | Lo editado sin Internet | Si nadie más cambió el documento mientras tanto, se sube tal cual. Si alguien más lo cambió, **se abre una rama** y el original de la nube no se toca |
 | La computadora | Basta con la página descargada (service worker): crear documentos nuevos y editar la última versión que se tenga de cada uno. Sin Internet no se actualizan los espacios ni la nube: todo se queda en el equipo hasta que vuelva |
 | Documentos en el servidor | **Se cifran** (parte D) |
 | Edad | **No hay edad.** Los espacios son cerrados: nadie entra sin invitación (sin ella, unirse solo deja una solicitud que el dueño acepta o no, `ServicioEspacios.unirse`). Cada quien es responsable de unirse o no a un grupo de trabajo; si es menor de edad, sus tutores son responsables, no el equipo. NOM está pensado para empresas y escuelas, y la edición (texto, hojas, presentaciones, diagramas) es de uso libre para cualquiera |
 | Fin del servicio | Es un proyecto escolar: al terminar, **el proyecto se queda congelado en GitHub** como portafolio de los cuatro integrantes, y ya. Sin aviso previo ni proceso de cierre |
-| Responsable del aviso, buscadores, «¿Te resultó útil?» | Las recomendaciones de la primera versión: equipo WACK con un correo solo del proyecto; la ayuda de la Raspberry visible en buscadores y Azure con `noindex`; contador anónimo o nada |
+| Responsable del aviso, buscadores, «¿Te resultó útil?» | Las recomendaciones de la primera versión: equipo WACK con un correo solo del proyecto; la ayuda de la Raspberry visible en buscadores; contador anónimo o nada |
 
 Se **quita** de la primera versión del plan: el verificador de contraseñas en el teléfono y el pase
 guardado para usarse sin Internet (sin Internet no hay cuenta), el permiso «Acceso a la red local»
@@ -42,7 +41,6 @@ pero solo recién sacado con Internet (A.2).
 | Dónde | Base de datos | Cuentas |
 |---|---|---|
 | Página en `https://nomcolab.dpdns.org` y app con «Internet» | La de la Raspberry | Las mismas en las dos |
-| Página en Azure | Azure SQL, otra base | Otras (se unirán cuando Azure sea requisito) |
 | Teléfono como servidor | La del teléfono (`Almacen`) | Hoy: apodo con QR o código, **o una cuenta creada en el teléfono** (eso se quita, parte A) |
 
 - Sin Internet, lo editado se guarda en la cola cifrada del equipo y **al volver la red se junta
@@ -58,9 +56,9 @@ pero solo recién sacado con Internet (A.2).
   (**hoy comprimidos, sin cifrar**); la IP solo en memoria para los límites contra el abuso;
   respaldos diarios de la Raspberry (los últimos 14, y copias en la laptop del equipo). No se pide
   correo, nombre real, teléfono ni fecha de nacimiento.
-- Terceros que ven el tráfico: Cloudflare (túnel; además mete su script de estadísticas), Microsoft
-  Azure cuando se usa, GitHub al descargar el APK.
-- Bibliotecas con su licencia: Spring Boot (Apache-2.0), H2 (MPL-2.0 o EPL-1.0), mssql-jdbc (MIT),
+- Terceros que ven el tráfico: Cloudflare (túnel; además mete su script de estadísticas) y GitHub al
+  descargar el APK.
+- Bibliotecas con su licencia: Spring Boot (Apache-2.0), H2 (MPL-2.0 o EPL-1.0),
   qrcode-generator (MIT), jsQR (Apache-2.0); fuentes Nunito, Carlito, Caladea, Liberation y Comic Neue (OFL).
   **Con GPL-3.0 todo es compatible:** Apache-2.0, MIT y MPL-2.0 se pueden combinar con GPL-3.0
   (H2 se usa bajo su MPL-2.0, no la EPL-1.0) y las fuentes OFL se distribuyen aparte.
@@ -216,7 +214,7 @@ conviene hacerlos en orden:
 
 - El servidor cifra con AES-256-GCM lo que escribe en disco: documentos, versiones, comentarios, y
   los **respaldos**. La llave vive fuera de la carpeta de datos (en la Raspberry, en un archivo solo
-  legible por el servicio; en Azure, en su configuración).
+  legible por el servicio).
 - Protege contra: robo del disco o de la tarjeta de la Raspberry, un respaldo copiado a otro lado.
 - **No** protege contra quien administra el servidor (tiene la llave). El aviso lo dice así.
 - Trabajo: chico; el resto del servidor no cambia.
@@ -259,7 +257,7 @@ espacio de D.2). Lo que ya hay que tener en cuenta:
 Un sitio **aparte de la app**, como la documentación de Microsoft: páginas sueltas que se leen sin
 iniciar sesión, con barra lateral, buscador, migas de pan, «En este artículo», «Se aplica a» y fecha
 de actualización. Vive en el mismo servidor, en `/ayuda/` y `/legal/`, para que exista también sin
-Internet: lo sirve la Raspberry, Azure, el jar y el teléfono como servidor, y va dentro del APK.
+Internet: lo sirve la Raspberry, el jar y el teléfono como servidor, y va dentro del APK.
 
 ### F.2 Mapa del sitio
 
@@ -300,7 +298,7 @@ Internet: lo sirve la Raspberry, Azure, el jar y el teléfono como servidor, y v
   accesibilidad/                Declaración de accesibilidad
   denuncias/                    Reportar contenido
 /.well-known/security.txt       Contacto para fallas de seguridad
-/sitemap.xml, /robots.txt       Raspberry visible; Azure con noindex
+/sitemap.xml, /robots.txt       Raspberry visible
 ```
 
 ### F.3 Las páginas legales
@@ -315,7 +313,7 @@ lea: es un proyecto escolar, no asesoría legal.
 - **Aviso integral:** responsable (equipo WACK, correo del proyecto); qué datos (el inventario de
   «Cómo está hoy», más los alias y las ramas); finalidades: solo dar el servicio, **ninguna**
   secundaria (sin publicidad, sin vender, sin estadísticas propias); quién más ve los datos
-  (Cloudflare, Microsoft Azure, GitHub); dónde están; cuánto se guardan (mientras exista la cuenta;
+  (Cloudflare, GitHub); dónde están; cuánto se guardan (mientras exista la cuenta;
   respaldos hasta 14 días después; lo del equipo hasta que la persona lo borre); **cifrado**: en el
   equipo siempre; en el servidor, lo que diga D según el nivel que ya esté hecho (no prometer el
   nivel 2 antes de tenerlo); derechos ARCO y revocación (correo; y lo que se hace solo: Descargar
@@ -356,7 +354,7 @@ escribí sin Internet cuando vuelve la red? 12. ¿Qué es una rama y por qué se
 13. ¿Cómo junto una rama con el original?
 
 Cuentas y datos: 14. ¿Dónde se guardan mis documentos y quién los puede ver? 15. ¿Están cifrados?
-16. ¿La cuenta de la página es la misma que la de la app? ¿Y la de Azure? 17. ¿Qué es «Conexión sin
+16. ¿La cuenta de la página es la misma que la de la app? 17. ¿Qué es «Conexión sin
 cifrar»? 18. ¿Cómo descargo todo lo mío y borro mi cuenta? ¿Qué queda después? 19. Me bloqueó tras
 varios intentos: ¿cuánto dura?
 
@@ -416,7 +414,6 @@ edades y que al terminar el proyecto se queda congelado en GitHub.
 
 | # | Qué | Cuándo |
 |---|---|---|
-| G.1 | **Cómo se une Azure** (una sola base para todo: o usa la de la Raspberry, o una réplica) | Solo si Azure llega a ser requisito |
 | G.2 | **Crear el correo del proyecto** (para el aviso, `security.txt` y denuncias) | Al empezar la fase 14; lo crea el equipo |
 
 ## H. Orden, pruebas y documentos

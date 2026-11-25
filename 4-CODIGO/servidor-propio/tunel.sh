@@ -1,5 +1,5 @@
 #!/bin/sh
-# Crea (una sola vez) el Cloudflare Tunnel "nomcolab", escribe ~/.cloudflared/nomcolab.yml y
+# Crea (una sola vez) el Cloudflare Tunnel "nomcolab" (así se llama en Cloudflare), escribe ~/.cloudflared/nom.yml y
 # apunta nomcolab.dpdns.org y www.nomcolab.dpdns.org a él.
 # Antes: `cloudflared tunnel login` con la cuenta de Cloudflare que tiene la zona
 # nomcolab.dpdns.org (deja ~/.cloudflared/cert.pem).
@@ -10,7 +10,7 @@
 # su .json está en ~/.cloudflared (por ejemplo, copiado de otra computadora), lo reutiliza.
 set -e
 DOMINIO="${NOM_DOMINIO:-nomcolab.dpdns.org}"
-NOMBRE=nomcolab
+NOMBRE=nomcolab   # nombre del túnel en Cloudflare: es el que ya existe, no se cambia
 C="$HOME/.cloudflared"
 [ -f "$C/cert.pem" ] || { echo "Falta $C/cert.pem: corre 'cloudflared tunnel login' primero"; exit 1; }
 export C NOMBRE DOMINIO
@@ -43,7 +43,7 @@ else:
         json.dump({"AccountTag": r["account_tag"], "TunnelSecret": secreto, "TunnelID": tid}, f)
     print(f"Túnel {NOMBRE} creado: {tid}")
 
-open(f"{C}/nomcolab.yml", "w").write(f"""# Cloudflare Tunnel de NOM (lo genera 4-CODIGO/servidor-propio/tunel.sh)
+open(f"{C}/nom.yml", "w").write(f"""# Cloudflare Tunnel de NOM (lo genera 4-CODIGO/servidor-propio/tunel.sh)
 tunnel: {tid}
 credentials-file: {C}/{tid}.json
 metrics: 127.0.0.1:20241
@@ -63,5 +63,5 @@ for nombre in (DOMINIO, "www." + DOMINIO):
     else: api("POST", f"/zones/{zona}/dns_records", reg)
     print(f"DNS: {nombre} -> {destino}")
 P
-cloudflared --config "$C/nomcolab.yml" tunnel ingress validate
+cloudflared --config "$C/nom.yml" tunnel ingress validate
 echo "Listo: https://$DOMINIO"

@@ -16,7 +16,7 @@ Se distribuye con la esperanza de que sea útil, pero **sin ninguna garantía**.
 versión modificada, debe ir con su código fuente y bajo la misma licencia.
 
 [Texto completo de la GPL-3.0](archivo:legal/licencias/GPL-3.0.txt) ·
-[Código fuente en GitHub](https://github.com/TruTruMaster/NOM-COLAB)
+[Código fuente en GitHub](https://github.com/TruTruMaster/NOM)
 
 ## Bibliotecas y fuentes de terceros
 
@@ -24,7 +24,6 @@ versión modificada, debe ir con su código fuente y bajo la misma licencia.
 |---|---|---|
 | Spring Boot | El servidor | Apache-2.0 |
 | H2 Database | La base de cuentas en el servidor propio | MPL-2.0 (o EPL-1.0) |
-| Microsoft JDBC Driver for SQL Server | La base en Azure | MIT |
 | qrcode-generator (Kazuhiko Arase) | Dibujar los códigos QR | MIT |
 | jsQR (Cosmo Wolfe) | Leer QR con la cámara | Apache-2.0 |
 | Íconos Lucide | Los íconos | ISC (partes MIT, de Feather) |

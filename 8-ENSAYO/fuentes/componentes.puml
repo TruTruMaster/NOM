@@ -1,0 +1,54 @@
+@startuml
+skinparam monochrome true
+skinparam shadowing false
+skinparam dpi 220
+skinparam defaultFontName Arial
+skinparam defaultFontSize 15
+skinparam nodesep 18
+skinparam ranksep 30
+skinparam padding 2
+skinparam componentStyle uml2
+left to right direction
+
+node "Dispositivo del usuario\n(navegador o app Android)" {
+  [Interfaz\n(editores)] as UI
+  [Motor CRDT\n(cliente)] as CRDTc
+  [Cola sin conexión] as Cola
+}
+
+node "Servidor NOM\n(computadora o teléfono del salón)" {
+  () "HTTP" as IHTTP
+  () "SSE" as ISSE
+  () "UDP" as IUDP
+  [API REST] as API
+  [Canal en tiempo real] as SSE
+  [Descubrimiento] as UDP
+  [Motor CRDT\n(servidor)] as CRDTs
+  [Sincronización\nentre servidores] as Sync
+  database "H2\n(cuentas)" as H2
+  folder "Documentos\n(JSON)" as JSON
+}
+
+node "Servidor NOM en Internet\n(Raspberry Pi)" {
+  () "HTTP " as IHTTP2
+  [API REST] as API2
+  database "H2\n(cuentas)" as SQL
+}
+
+UI --> CRDTc
+CRDTc --> Cola
+CRDTc ..> IHTTP
+CRDTc ..> ISSE
+UI ..> IUDP
+IHTTP -- API
+ISSE -- SSE
+IUDP -- UDP
+API --> CRDTs
+API --> H2
+SSE --> CRDTs
+CRDTs --> JSON
+Sync --> CRDTs
+Sync ..> IHTTP2
+IHTTP2 -- API2
+API2 --> SQL
+@enduml

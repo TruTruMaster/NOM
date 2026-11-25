@@ -8,7 +8,7 @@ que lo que tardaba más de una hora tarda lo que la prueba más larga. Corre en 
   python pruebas/regresion.py --carriles 6    # cuántas pruebas a la vez (por omisión: según los núcleos)
   python pruebas/regresion.py --solo ayuda,red   # solo esas
 
-Necesita el jar compilado (app/target/nom-colab.jar) y la interfaz en app/src/main/resources/static (se sirve en
+Necesita el jar compilado (app/target/nom.jar) y la interfaz en app/src/main/resources/static (se sirve en
 vivo). Los registros quedan en ~/.cache/nom-pruebas/registros/<fecha>/ y el resumen en resumen.txt de esa carpeta.
 """
 import argparse, os, shutil, socket, subprocess, sys, tempfile, threading, time, urllib.request
@@ -23,7 +23,7 @@ WIN = os.name == "nt"
 PY = str(CACHE / "venv" / ("Scripts/python.exe" if WIN else "bin/python"))
 if not Path(PY).exists(): PY = sys.executable
 JAVA = os.environ.get("JAVA") or shutil.which("java") or "java"
-JAR = CODIGO / "app" / "target" / "nom-colab.jar"
+JAR = CODIGO / "app" / "target" / "nom.jar"
 STATIC = CODIGO / "app" / "src" / "main" / "resources" / "static"
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(CACHE / "navegadores"))
 

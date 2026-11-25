@@ -113,8 +113,7 @@ public final class Buscadores {
         String org = base + "/#organizacion";
         return "{\"@context\":\"https://schema.org\",\"@graph\":["
                 + "{\"@type\":\"WebSite\",\"@id\":\"" + base + "/#sitio\",\"url\":\"" + base + "/\",\"name\":\"" + NOMBRE + "\","
-                // (el nombre de antes, para que también se encuentre así)
-                + "\"alternateName\":[\"NOM-COLAB\",\"NOMCOLAB\",\"NOM COLAB\",\"nomcolab\"],"
+                + "\"alternateName\":[\"nom\"],"
                 + "\"description\":" + json(RESUMEN_INICIO) + ",\"inLanguage\":\"es\",\"publisher\":{\"@id\":\"" + org + "\"}},"
                 + "{\"@type\":\"Organization\",\"@id\":\"" + org + "\",\"name\":\"" + NOMBRE + "\",\"url\":\"" + base + "/\","
                 + "\"logo\":{\"@type\":\"ImageObject\",\"url\":\"" + base + "/img/icono-512.png\",\"width\":512,\"height\":512},"

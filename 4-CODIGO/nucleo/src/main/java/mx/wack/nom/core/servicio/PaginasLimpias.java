@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
  *
  * Los archivos del sitio usan enlaces relativos que terminan en index.html porque la app Android
  * los abre desde sus archivos (file://), donde una carpeta no se puede abrir. Al servirlos por la
- * red (la computadora, la Raspberry, Azure o el telefono que comparte), cada enlace relativo se
+ * red (la computadora, la Raspberry o el telefono que comparte), cada enlace relativo se
  * cambia por su direccion completa y sin index.html. Asi la pagina se puede mostrar en una
  * direccion sin diagonal final y sin nombre de archivo, y sus hojas de estilo, scripts e imagenes
  * siguen cargando.

@@ -49,7 +49,7 @@ public class ManejoErrores {
 
     @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
     public ResponseEntity<Map<String, Object>> noExiste() {
-        // Archivo inexistente (p. ej. el robots*.txt con el que Azure sondea el sitio): 404, no 500.
+        // Archivo inexistente (p. ej. un robots*.txt con el que algún servicio sondea el sitio): 404, no 500.
         return ResponseEntity.status(HttpStatus.NOT_FOUND).contentType(JSON).body(Map.of("error", "No existe"));
     }
 

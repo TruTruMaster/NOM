@@ -11,7 +11,7 @@ Necesitan un servidor encendido (por defecto `http://localhost:8099`, o el de `N
 cd 4-CODIGO/app
 NOM_PUERTO=8099 NOM_DATOS=~/nom-datos-pruebas \
 SPRING_WEB_RESOURCES_STATIC_LOCATIONS=file:$PWD/src/main/resources/static/ \
-java -jar target/nom-colab.jar &
+java -jar target/nom.jar &
 cd ..
 pruebas/interfaz/correr.sh            # todas
 pruebas/interfaz/correr.sh ~/salida prueba_citas

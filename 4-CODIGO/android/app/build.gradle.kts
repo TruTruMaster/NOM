@@ -13,8 +13,8 @@ android {
         // Requerimientos de software: Android 7 (API 24) en adelante.
         minSdk = 24
         targetSdk = 37
-        versionCode = 41
-        versionName = "0.22.2"
+        versionCode = 42
+        versionName = "0.23.0"
     }
 
     buildTypes {

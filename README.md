@@ -7,7 +7,7 @@ en Android. Hasta **50 personas conectadas a la vez** por espacio.
 - **En Internet:** **https://www.nom.qd.je** (también responde en https://nomcolab.dpdns.org, el
   nombre de antes; las cuentas son las mismas).
 - **App de Android:** la última versión siempre en
-  [Releases](https://github.com/TruTruMaster/NOM-COLAB/releases/latest) (`NOM-COLAB.apk`). Cada
+  [Releases](https://github.com/TruTruMaster/NOM/releases/latest) (`NOM.apk`). Cada
   versión trae su SHA-256 y la huella del certificado de firma, para comprobar que es la original.
 - **Sin Internet:** una computadora (o un teléfono) del salón comparte en el mismo Wi-Fi.
 
@@ -15,7 +15,7 @@ WACK
 
 > **Si lo bajaste de GitHub:** las carpetas `2-PAGINA-Servidor/` y `3-APP-Android/` no vienen (son
 > programas ya compilados). El APK está en Releases; el servidor se compila con
-> `cd 4-CODIGO/app && mvn package` y se arranca con `java -jar target/nom-colab.jar` (ver
+> `cd 4-CODIGO/app && mvn package` y se arranca con `java -jar target/nom.jar` (ver
 > `4-CODIGO/README.md`).
 
 ### In English
@@ -31,16 +31,14 @@ Documentation and the code comments are in Spanish.
 
 | Carpeta | Qué es | Qué hacer |
 |---|---|---|
-| **`ENTREGA/`** | **Los PDF para entregar:** el documento del módulo web (base de datos + Azure + seguridad con roles) el plan de pruebas `5IM7_WACK_PP.pdf`, la presentación `5IM7_WACK_Presentacion.pdf` y la especificación de casos de uso `5IM7_WACK_Casos_de_Uso` (.docx y .pdf) | Entregarlos |
+| **`ENTREGA/`** | **Los PDF para entregar:** el plan de pruebas `5IM7_WACK_PP.pdf`, la presentación `5IM7_WACK_Presentacion.pdf` y la especificación de casos de uso `5IM7_WACK_Casos_de_Uso` (.docx y .pdf) | Entregarlos |
 | `1-ENTREGA-Diagramas-de-Actividades/` | **PDF para entregar** (y el mismo en .docx), las 7 imágenes sueltas y los editables de draw.io | Entregar `Diagrama de Actividades NOM.pdf` |
 | `2-PAGINA-Servidor/` | La página completa (servidor + interfaz), **con Java incluido** | Windows: doble clic en `INICIAR-Windows.bat` · Linux: `./INICIAR-Linux.sh` |
-| `3-APP-Android/` | `NOM-COLAB.apk` (Android 7 en adelante) | Pasarla al celular e instalarla |
+| `3-APP-Android/` | `NOM.apk` (Android 7 en adelante) | Pasarla al celular e instalarla |
 | `4-CODIGO/` | Todo el código fuente, diagramas UML y documentación | Para revisar o seguir desarrollando |
-| `5-DOCUMENTO-MODULO/` | Fuentes del PDF del módulo: `fuentes/modulo.html`, sus imágenes y `fuentes/imprimir.py`, que lo vuelve a generar en `ENTREGA/` | Solo si se cambia el documento |
 | `6-PLAN-DE-PRUEBAS/` | Fuentes del plan de pruebas: `fuentes/plan.html`, `fuentes/imprimir.py` (lo genera en `ENTREGA/5IM7_WACK_PP.pdf`), `fuentes/evidencias.py` (toma las capturas de evidencia), `fuentes/casos_integracion.py`, `fuentes/casos_permisos.py`, `fuentes/prueba_limites.py` y `registros/` con la salida de cada suite | Solo si se cambia el plan |
 | `7-PRESENTACION/` | Fuentes de la presentación del proyecto y de la especificación de casos de uso: `fuentes/casos.py` (los textos), `fuentes/generar_casos.py` (arma el Word sobre el formato vacío), `fuentes/presentacion.py` (arma el PDF de 20 diapositivas) y `fuentes/capturas.py` (toma las capturas de la app que usa la presentación); los dos dejan su resultado en `ENTREGA/` | Solo si se cambia la presentación o un caso de uso |
-| `8-ENSAYO/` | Fuentes del ensayo «NOM-COLAB sí es un sistema distribuido»: `fuentes/ensayo.html` (las dos versiones en un solo texto) y `fuentes/imprimir.py`, que deja en `ENTREGA/` `5IM7_WACK_Ensayo.pdf` (4 páginas con portada) y `5IM7_WACK_Ensayo_portada_aparte.pdf` (portada + 4) | Solo si se cambia el ensayo |
-| `CREDENCIALES-AZURE.txt` | Contraseñas de la base de Azure (administrador y usuarios con rol) y cuentas de prueba. **Privado** | No compartir ni subir |
+| `8-ENSAYO/` | Fuentes del ensayo individual «NOM como sistema distribuido»: `fuentes/generar.py` arma el Word y el PDF de las dos versiones en `ENTREGA/` (`Ensayo_Rodriguez_Esparza`: 4 páginas con portada; `..._portada_aparte`: portada + 4) y `fuentes/componentes.puml` es el diagrama de componentes (PlantUML) | Solo si se cambia el ensayo |
 | `LOG.md` | Diario de todo lo que se hizo, día por día (es historia: lo viejo puede ya no ser cierto; lo vigente está en `CAMBIOS.md` y en la ayuda) | — |
 | `CAMBIOS.md` | Las versiones y lo que cambió en cada una, en corto | — |
 
@@ -53,17 +51,7 @@ documentos de NOM, comprimidos y cifrados. Respaldo diario en la Pi (14 días) y
 otra computadora del equipo (30 días). Cómo se administra, los respaldos y la instalación:
 `4-CODIGO/docs/SERVIDOR-PROPIO.md`.
 
-## En Internet: Azure (para la demostración del módulo)
-
-**https://nomcolab-wack.azurewebsites.net** — el módulo de cuentas conectado a Azure SQL
-Database, con seguridad con roles: en la base (la página entra con un usuario con rol, sin poder
-tocar las tablas) y en cada espacio (Propietario / Puede editar / Solo lectura). Cómo se subió y
-cómo hacer la demo: `4-CODIGO/docs/DESPLIEGUE-AZURE.md`. **Normalmente está apagado** para no gastar
-el crédito: se prende antes de presentar (la primera entrada tras un rato sin uso tarda ~1 min
-porque el plan gratuito se duerme) y se apaga al terminar.
-
-Azure, la Raspberry y un servidor en el salón son independientes (cada uno tiene sus cuentas y
-documentos).
+La Raspberry y un servidor en el salón son independientes (cada uno tiene sus cuentas y documentos).
 
 ## Usarlo en 3 pasos
 
@@ -77,7 +65,7 @@ documentos).
      `Desde la red: http://192.168.1.20:8080`.
 2. **En las demás computadoras** de la misma red: abrir esa dirección en el
    navegador. También funciona en el navegador del celular.
-3. **En Android:** instalar `NOM-COLAB.apk` (permite "instalar apps de origen
+3. **En Android:** instalar `NOM.apk` (permite "instalar apps de origen
    desconocido" si lo pide). Con el celular en el **mismo Wi-Fi**, la app
    encuentra el servidor con **Buscar en este Wi-Fi** (o con el QR); si hay varios, eliges uno. Si
    la red bloquea el descubrimiento, escribe la dirección (`192.168.1.20:8080`).

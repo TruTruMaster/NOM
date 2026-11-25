@@ -13,7 +13,7 @@ import mx.wack.nom.core.servicio.CifradoReposo;
 /**
  * Fase 14, parte D.1: lo que se hace ANTES de arrancar Spring para el cifrado en reposo.
  *
- *  - La llave: NOM_LLAVE_REPOSO (base64, p. ej. en la configuracion de Azure) o el archivo
+ *  - La llave: NOM_LLAVE_REPOSO (base64, en una variable de entorno) o el archivo
  *    reposo.key en la carpeta de llaves (NOM_LLAVES, o "<datos>-llaves" al lado de los datos: nunca
  *    adentro, asi no viaja en los respaldos). Un servidor nuevo la crea solo.
  *  - Si los datos ya estan cifrados y falta la llave, o la llave no es la de estos datos, el servidor
@@ -68,7 +68,7 @@ public final class ArranqueCifrado {
             }
         }
         cifrado = c;
-        // La base H2 (si es la de la computadora o la Raspberry; Azure usa su propia base).
+        // La base H2 (la de la computadora o la Raspberry).
         if (env("SPRING_DATASOURCE_URL", null) == null) {
             String clave = hex(c.derivar("h2"));
             Path db = d.resolve("nom-db.mv.db");
@@ -88,7 +88,7 @@ public final class ArranqueCifrado {
         }
         if (!Files.exists(canario)) {
             Path tmp = d.resolve(CANARIO + ".tmp");
-            byte[] cuerpo = "{\"v\":1,\"nom\":\"NOM-COLAB\"}".getBytes(StandardCharsets.UTF_8);
+            byte[] cuerpo = "{\"v\":1,\"nom\":\"NOM\"}".getBytes(StandardCharsets.UTF_8);
             Files.write(tmp, c.cifrar(cuerpo, false, cuerpo.length, CANARIO));
             Files.move(tmp, canario, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         }

@@ -37,7 +37,7 @@ public final class Respaldo {
         if (!datos.isDirectory()) return null;
         String hoy = new SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(new Date());
         File dir = carpeta(filesDir);
-        File f = new File(dir, "nom-colab-" + hoy + ".zip");
+        File f = new File(dir, "nom-" + hoy + ".zip");
         if (f.isFile()) return f;
         try {
             hacer(datos, f);
@@ -56,7 +56,7 @@ public final class Respaldo {
         File datos = new File(filesDir, "servidor");
         if (!datos.isDirectory()) throw new IOException("Este teléfono todavía no tiene datos de servidor");
         String t = new SimpleDateFormat("yyyy-MM-dd-HHmm", Locale.ROOT).format(new Date());
-        File f = new File(carpeta(filesDir), "nom-colab-" + t + ".zip");
+        File f = new File(carpeta(filesDir), "nom-" + t + ".zip");
         hacer(datos, f);
         limpiar(carpeta(filesDir));
         return f;
@@ -93,7 +93,7 @@ public final class Respaldo {
 
     /** Se quedan los 7 más nuevos. */
     private static void limpiar(File dir) {
-        File[] l = dir.listFiles((d, n) -> n.startsWith("nom-colab-") && n.endsWith(".zip"));
+        File[] l = dir.listFiles((d, n) -> n.startsWith("nom-") && n.endsWith(".zip"));
         if (l == null || l.length <= CONSERVAR) return;
         Arrays.sort(l, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
         for (int i = CONSERVAR; i < l.length; i++) l[i].delete();
@@ -102,7 +102,7 @@ public final class Respaldo {
     /** [{nombre, bytes, fecha}] de los respaldos guardados, del más nuevo al más viejo. */
     public static String lista(File filesDir) {
         JSONArray a = new JSONArray();
-        File[] l = carpeta(filesDir).listFiles((d, n) -> n.startsWith("nom-colab-") && n.endsWith(".zip"));
+        File[] l = carpeta(filesDir).listFiles((d, n) -> n.startsWith("nom-") && n.endsWith(".zip"));
         if (l != null) {
             Arrays.sort(l, (x, y) -> Long.compare(y.lastModified(), x.lastModified()));
             for (File f : l) {

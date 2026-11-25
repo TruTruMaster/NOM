@@ -15,7 +15,7 @@
   /** La nube de NOM (la Raspberry): donde viven las cuentas. Su nombre es www.nom.qd.je (también
    *  responde como nomcolab.dpdns.org, el de antes). La página abierta con cualquiera de sus nombres le
    *  habla con ese mismo nombre (cada nombre guarda aparte en el navegador); la app usa el principal. */
-  const NUBE = /^(www\.)?nom\.qd\.je$|(^|\.)nomcolab\.dpdns\.org$/.test(location.hostname) ? location.origin : api().NUBE_PRINCIPAL;
+  const NUBE = /^(www\.)?nom\.qd\.je$|(^|\.)nom\.dpdns\.org$/.test(location.hostname) ? location.origin : api().NUBE_PRINCIPAL;
   NOM.NUBE = NUBE;
   /** Alias, invitados y cuentas que llegaron con un pase: no tienen contraseña aquí. */
   NOM.sinContrasena = (u) => !!(u && (u.invitado || u.alias || u.nube || u.retirada));

@@ -14,7 +14,7 @@ suf = "".join(random.choice(string.ascii_lowercase) for _ in range(5))
 
 
 def r(m, u, b=None, t=None):
-    h = {"Content-Type": "application/json", "User-Agent": "NOM-COLAB-pruebas/1.0"}
+    h = {"Content-Type": "application/json", "User-Agent": "NOM-pruebas/1.0"}
     if t: h["Authorization"] = "Bearer " + t
     q = urllib.request.Request(B + u, method=m, data=json.dumps(b).encode() if b is not None else None, headers=h)
     try:

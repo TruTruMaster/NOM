@@ -8,7 +8,7 @@ participant "VistaLogin" as V <<web>>
 participant "ControladorCuentas" as C <<api>>
 participant "ServicioCuentas" as S
 participant "RepositorioUsuarios" as R
-database "Azure SQL\n(usuario, sesion)" as BD
+database "H2\n(usuario, sesion)" as BD
 participant "u : Usuario" as U
 participant "ServicioEspacios" as SE
 

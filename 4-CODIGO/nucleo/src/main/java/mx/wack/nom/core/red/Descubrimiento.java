@@ -188,6 +188,6 @@ public class Descubrimiento {
 
     public boolean udpActivo() { return socket != null; }
 
-    /** false en la nube (Azure): ahi no hay red local que anunciar ni descubrir. */
+    /** false en la nube: ahi no hay red local que anunciar ni descubrir. */
     public boolean lanActiva() { return activo; }
 }

@@ -11,9 +11,9 @@ import java.util.Map;
 public final class Atajos {
 
     /** La app de Android de la ultima version publicada (la sirve la red de GitHub, no el servidor). */
-    public static final String APK = "https://github.com/TruTruMaster/NOM-COLAB/releases/latest/download/NOM-COLAB.apk";
+    public static final String APK = "https://github.com/TruTruMaster/NOM/releases/latest/download/NOM.apk";
     /** El codigo fuente. */
-    public static final String CODIGO = "https://github.com/TruTruMaster/NOM-COLAB";
+    public static final String CODIGO = "https://github.com/TruTruMaster/NOM";
 
     private static final Map<String, String> DESTINOS = Map.of("/app", APK, "/apk", APK, "/codigo", CODIGO);
 

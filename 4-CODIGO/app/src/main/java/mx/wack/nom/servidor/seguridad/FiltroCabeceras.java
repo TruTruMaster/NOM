@@ -36,17 +36,16 @@ public class FiltroCabeceras extends OncePerRequestFilter {
         res.setHeader("X-Content-Type-Options", "nosniff");
         res.setHeader("X-Frame-Options", "SAMEORIGIN");
         res.setHeader("Referrer-Policy", "no-referrer");
+        res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+        res.setHeader("Cross-Origin-Resource-Policy", "same-site");
         res.setHeader("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), payment=()");
         if (!req.getRequestURI().startsWith("/api/")) res.setHeader("Content-Security-Policy", CSP);
         // Los datos de la API nunca se guardan en la caché del navegador: ahí quedarían en claro (lo del
         // equipo vive cifrado en la bóveda) y, sin red, el navegador podría dar una copia vieja como si
         // fuera la del servidor (Firefox lo hacía al recargar sin conexión).
         else res.setHeader("Cache-Control", "no-store");
-        // Fase 14: la ayuda de la Raspberry se deja encontrar en buscadores; la de Azure no (es de adorno).
-        String host = req.getHeader("Host");
-        if (host != null && host.toLowerCase(java.util.Locale.ROOT).contains("azurewebsites.net")) res.setHeader("X-Robots-Tag", "noindex");
         // Las direcciones de un solo uso (unirse a un espacio, ver una proyección) no van en los buscadores.
-        else if (req.getRequestURI().startsWith("/unirse") || req.getRequestURI().startsWith("/proyectar")) res.setHeader("X-Robots-Tag", "noindex");
+        if (req.getRequestURI().startsWith("/unirse") || req.getRequestURI().startsWith("/proyectar")) res.setHeader("X-Robots-Tag", "noindex");
         if ("https".equalsIgnoreCase(req.getHeader("X-Forwarded-Proto")) || req.isSecure())
             res.setHeader("Strict-Transport-Security", "max-age=15552000");
         cadena.doFilter(req, res);

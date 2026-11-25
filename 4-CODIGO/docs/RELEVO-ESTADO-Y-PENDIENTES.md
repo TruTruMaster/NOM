@@ -298,7 +298,7 @@ la sección 8), «como un ingeniero muy cuidadoso que busca incongruencias entre
 | Word, texto oculto (`w:vanish`) y elevado/bajado (`w:position`) | No se leían: NOM **mostraba lo oculto** («ESTO NO SE VE» de w01) | Se leen, se dibujan y se escriben; al parchar uno importado antes no se quitan |
 | `--peligro` (editor.js, formatos.js) | La variable no existe en `nom.css`: en tema oscuro el rojo de respaldo no contrasta | `--error` |
 | `ServicioFuentes.AGENTE` | Decía «proyecto escolar» (contra lo decidido el 17-nov) | «NOM/1.0 (sin fines de lucro)» |
-| `azure/nomcolab local up` | Encendía el túnel de la laptop, que es **el mismo** de la Pi (869abbea…): Cloudflare habría repartido a la gente entre dos servidores con datos distintos | No lo enciende si la nube contesta desde otro equipo |
+| `servidor-propio/nomcolab local up` | Encendía el túnel de la laptop, que es **el mismo** de la Pi (869abbea…): Cloudflare habría repartido a la gente entre dos servidores con datos distintos | No lo enciende si la nube contesta desde otro equipo |
 | `prueba_funciones.py` | Buscaba el menú viejo «Desvanecer»: la sección del lienzo se cortaba ahí (no corrían presentador ni .pptx) | Usa el panel nuevo y revisa `transOffice:` |
 | Id del servidor (`NodoLocal`, `NodoTelefono`) | Era al azar en cada arranque: la app guarda los alias de cada espacio con ese id, así que tras reiniciar el servidor (la Pi, `nomcolab-pi actualizar`, el teléfono que se apaga) a quien entró con alias le tocaba uno nuevo; la sincronía lo usa para no copiarse a sí misma | Se guarda: `<datos>-llaves/nodo.id` en la computadora, `nodo-servidor.id` en la carpeta privada de la app. 17.7 |
 

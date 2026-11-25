@@ -31,7 +31,7 @@ def empacar(destino):
                 if f.is_file() and not any(x in s.replace("\\", "/") for x in salta): t.add(f, arcname=como + "/" + str(f.relative_to(p)).replace("\\", "/"))
         for d in ("4-CODIGO/app/src", "4-CODIGO/nucleo", "4-CODIGO/pruebas", "4-CODIGO/ayuda", "4-CODIGO/herramientas", "6-PLAN-DE-PRUEBAS/fuentes"):
             agregar(RAIZ / d, "NOM/" + d)
-        t.add(CODIGO / "app/target/nom-colab.jar", arcname="NOM/4-CODIGO/app/target/nom-colab.jar")
+        t.add(CODIGO / "app/target/nom.jar", arcname="NOM/4-CODIGO/app/target/nom.jar")
         for d in ("corpus", "corpus-web", "corpus-reales", "openxml-bin"):
             if (CACHE / d).exists(): agregar(CACHE / d, ".cache/nom-pruebas/" + d)
         for nombre in ("t03-todo-powerpoint.pptx", "w16-numlineas.docx", "w16-numlineas.pdf", "w09-informe.docx", "p13-presentacion.pptx"):

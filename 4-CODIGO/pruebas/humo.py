@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Prueba de humo contra un servidor ya publicado (Azure, la Raspberry o el del salón): cuentas,
+"""Prueba de humo contra un servidor ya publicado (la Raspberry o el del salón): cuentas,
 espacio, roles, los cuatro tipos de documento, escribir, leer, versiones, canal en vivo, chat,
 almacenamiento, descargar mis datos, pase firmado. Crea 3 cuentas `humo_…` y las BORRA al final.
 
-    NOM_BASE=https://nomcolab-wack.azurewebsites.net python3 pruebas/humo.py
+    NOM_BASE=https://www.nom.qd.je python3 pruebas/humo.py
     NOM_BASE=https://nomcolab.dpdns.org python3 pruebas/humo.py
 """
 import json,urllib.request,os,random,string,time,base64,sys
@@ -61,8 +61,8 @@ class _SinSeguir(urllib.request.HTTPRedirectHandler):
 def destino(u):
     try: urllib.request.build_opener(_SinSeguir).open(urllib.request.Request(B+u,headers=dict(AG)),timeout=30); return 200,""
     except urllib.error.HTTPError as e: return e.code,e.headers.get("Location") or ""
-at=destino("/app"); ok(f"atajo /app ({at[0]})",at[0]==302 and at[1].endswith("/releases/latest/download/NOM-COLAB.apk"))
-at=destino("/codigo"); ok(f"atajo /codigo ({at[0]})",at[0]==302 and at[1]=="https://github.com/TruTruMaster/NOM-COLAB")
+at=destino("/app"); ok(f"atajo /app ({at[0]})",at[0]==302 and at[1].endswith("/releases/latest/download/NOM.apk"))
+at=destino("/codigo"); ok(f"atajo /codigo ({at[0]})",at[0]==302 and at[1]=="https://github.com/TruTruMaster/NOM")
 ok("borrar doc a papelera",r("DELETE",f"/api/documentos/{d}",t=tk["a"])[0]==200)
 for n in ("a","b","c"):
     ok(f"borrar cuenta {n}",r("POST","/api/cuentas/eliminar",{"contrasena":CL,"confirmacion":"BORRAR"},tk[n])[0]==200)

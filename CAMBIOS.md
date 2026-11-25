@@ -2,6 +2,15 @@
 
 Lo que cambió en cada versión, en corto (es la página «Novedades» de la ayuda; la escribe `4-CODIGO/ayuda/generar.py`). El diario completo, día por día, está en `LOG.md`.
 
+## 0.23.0 — noviembre de 2026
+
+- **Ahora sí, solo NOM:** lo que descargas (tus datos, los reportes y la app de Android, `NOM.apk`) ya se llama NOM, y
+  el código está en [github.com/TruTruMaster/NOM](https://github.com/TruTruMaster/NOM). Los enlaces de antes siguen
+  funcionando.
+- **Una sola nube:** la copia de demostración que estaba en otro proveedor ya no existe; la nube de NOM es solo
+  www.nom.qd.je. El aviso de privacidad lo dice.
+- **Más protección en el navegador:** la página se aísla mejor de otros sitios.
+
 ## 0.22.2 — noviembre de 2026
 
 - **Direcciones cortas:** `nom.qd.je` lleva a la página con su candado, `nom.qd.je/app` baja la app de Android y
@@ -193,7 +202,7 @@ Lo que cambió en cada versión, en corto (es la página «Novedades» de la ayu
 - **Accesibilidad:** el alto contraste del sistema cambia los colores de la interfaz, «reducir
   movimiento» del sistema se respeta siempre y, si usas una extensión de colores, puedes dejarla
   actuar en **Ajustes**.
-- **Privacidad, más clara:** qué puede ver Cloudflare, dónde guarda sus datos la versión en Azure y un
+- **Privacidad, más clara:** qué puede ver Cloudflare, dónde se guardan los datos y un
   canal privado para pedir lo de tus datos.
 - **App de Android:** cada versión publica su SHA-256 y la huella del certificado con que se firma.
 - **Arreglos de una revisión completa:** el código para dejar entrar sin cuenta ya dice que se entra con un

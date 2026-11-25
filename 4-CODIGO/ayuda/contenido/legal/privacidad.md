@@ -3,7 +3,7 @@ titulo: Aviso de privacidad integral
 descripcion: Qué datos personales trata NOM, para qué, cómo los protege y cómo ejercer tus derechos.
 orden: 10
 aplica: Navegador, App Android, Teléfono que comparte
-actualizado: 2026-11-22
+actualizado: 2026-11-25
 version: 2026-11-13
 ---
 !> Este texto se redactó con base en la Ley Federal de Protección de Datos Personales en Posesión de los Particulares publicada en el Diario Oficial de la Federación el 20 de marzo de 2025 (en vigor desde el 21 de marzo de 2025). Todavía no lo ha revisado un abogado.
@@ -15,7 +15,7 @@ opera NOM. Domicilio para oír y recibir notificaciones: **Mar Mediterráneo 227
 cualquier trámite sobre tus datos también puedes usar el medio de contacto de la sección
 [Cómo ejercer tus derechos](#derechos).
 
-Este aviso aplica a la nube de NOM ([www.nom.qd.je](https://www.nom.qd.je), también en [nomcolab.dpdns.org](https://nomcolab.dpdns.org)), a la versión en Azure y a
+Este aviso aplica a la nube de NOM ([www.nom.qd.je](https://www.nom.qd.je), también en [nomcolab.dpdns.org](https://nomcolab.dpdns.org)) y a
 la app de Android. Una computadora o un teléfono que comparte en un salón **lo opera quien lo
 enciende** (una escuela, una oficina o cualquier persona): es esa persona quien responde por lo que se guarda
 en su equipo.
@@ -57,15 +57,12 @@ No compartimos tus datos con nadie para sus propios fines. Por la forma en que f
 servicio, estos proveedores procesan el tráfico o guardan datos por nosotros:
 
 - **Cloudflare** (el túnel por el que se llega a la nube): ahí termina el HTTPS de tu navegador y desde ahí sigue cifrado por el túnel hasta el servidor. Por eso Cloudflare ve la dirección IP y **podría ver el contenido** de lo que no va en un espacio cifrado de extremo a extremo; no lo usa para nada más.
-- **Microsoft Azure**, solo si usas la versión en Azure.
 - **GitHub**, cuando descargas la app de Android.
 
 ## 5. Dónde están y cuánto tiempo {#conservacion}
 
 - La nube es una computadora pequeña (Raspberry Pi) del equipo, en México. Los respaldos diarios se
   guardan **14 días** en ella y una copia en una computadora del equipo (30 días).
-- La **versión en Azure** (solo si la usas) guarda sus datos en un centro de datos de Microsoft en **Estados Unidos**
-  (región «West US»). Hoy está apagada; si se enciende, este aviso lo dirá.
 - Tus datos se guardan **mientras exista tu cuenta**. Al borrarla, se borran del servidor en ese
   momento y de los respaldos cuando estos se borran solos (a más tardar en 14 días; 30 en la copia).
 - Lo que está en tu equipo se queda hasta que lo borres.
@@ -123,4 +120,5 @@ No usamos cookies. Lo que guardamos en tu navegador está en [Cookies y almacena
 
 Si cambiamos este aviso, se publica aquí con su nueva fecha y, la próxima vez que entres, la app te
 pide **leerlo y aceptarlo** antes de seguir. Versión vigente: 13 de noviembre de 2026. El 22 de
-noviembre de 2026 se agregó el domicilio del responsable; no cambia qué datos tratamos ni para qué.
+noviembre de 2026 se agregó el domicilio del responsable y el 25 de noviembre se quitó la copia de
+demostración que estaba en otro proveedor (ya no existe y sus datos se borraron); ninguno de los dos cambia qué datos tratamos ni para qué.

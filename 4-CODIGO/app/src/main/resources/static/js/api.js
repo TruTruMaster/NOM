@@ -10,7 +10,7 @@
   // mismo servidor, con las mismas cuentas. Para la app son un solo lugar y se guarda el principal; así
   // un QR hecho con el nombre de antes no la cambia de servidor ni cierra la sesión.
   const NUBE_PRINCIPAL = "https://www.nom.qd.je";
-  const NOMBRES_NUBE = /^https?:\/\/((www\.)?nom\.qd\.je|(www\.)?nomcolab\.dpdns\.org)(:443)?\/?$/i;
+  const NOMBRES_NUBE = /^https?:\/\/((www\.)?nom\.qd\.je|(www\.)?nom\.dpdns\.org)(:443)?\/?$/i;
   const normal = (u) => (NOMBRES_NUBE.test(String(u || "")) ? NUBE_PRINCIPAL : u);
   if (empaquetada) {
     // (una vez: lo guardado con el nombre de antes pasa al principal)
@@ -31,7 +31,7 @@
       url = String(url || "").trim().replace(/\/+$/, "");
       if (url && !/^https?:\/\//i.test(url)) {
         // Un equipo de la red (IP, localhost, nombre.local) va por http y el puerto 8080;
-        // un dominio de Internet (p. ej. la versión publicada en Azure) va por https.
+        // un dominio de Internet (p. ej. www.nom.qd.je) va por https.
         const host = url.split(/[/:]/)[0].toLowerCase();
         const enLaRed = /^\d+(\.\d+){3}$/.test(host) || host === "localhost" || !host.includes(".") || host.endsWith(".local");
         url = (enLaRed ? "http://" : "https://") + url;

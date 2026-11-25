@@ -15,7 +15,7 @@ NOM lo hace **WACK**, un equipo de desarrollo de la Ciudad de México, desde 202
 
 Es **software libre** bajo la Licencia Pública General de GNU, versión 3 (GPL-3.0): puedes usarlo,
 estudiarlo, cambiarlo y compartirlo. Está en
-[github.com/TruTruMaster/NOM-COLAB](https://github.com/TruTruMaster/NOM-COLAB). Las licencias de
+[github.com/TruTruMaster/NOM](https://github.com/TruTruMaster/NOM). Las licencias de
 las bibliotecas y fuentes están en [Licencias](legal:licencias).
 
 ## Contacto

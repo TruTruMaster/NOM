@@ -94,7 +94,7 @@
       const r = { reporte: "NOM · contenido reportado", fecha: new Date().toISOString(), espacio: esp.nombre, cifrado: !!esp.e2e,
         mensaje: { autor: m.usuario, hora: new Date(m.t).toISOString(), texto: m.texto, adjunto: m.adjunto ? m.adjunto.nombre : null },
         contexto: mensajes.slice(Math.max(0, i - 5), i).map((x) => ({ autor: x.usuario, hora: new Date(x.t).toISOString(), texto: x.texto })) };
-      NOM.formatos.descargar("reporte-nom-colab.json", "application/json", JSON.stringify(r, null, 2));
+      NOM.formatos.descargar("reporte-nom.json", "application/json", JSON.stringify(r, null, 2));
       NOM.ayuda("legal/denuncias");
     }
 
