@@ -857,6 +857,8 @@
     }
     const buscarContenido = NOM.debounce(async () => {
       if (busqueda.length < 3) return;
+      // (en un espacio cifrado el servidor no puede buscar dentro: tampoco se le manda lo que se busca)
+      if (NOM.e2e && NOM.e2e.espacioCifrado && NOM.e2e.espacioCifrado(id)) return;
       const n = ++consulta, q = busqueda;
       try {
         const r = await api.get(`/api/espacios/${id}/buscar?q=${encodeURIComponent(q)}`);

@@ -388,7 +388,7 @@
       return `<article class="inv-res"><b>${esc(fu.titulo || "Sin título")}</b><small class="suave">${esc([quienes(fu), anioDe(fu), fu.revista || fu.editorial].filter(Boolean).join(" · "))}${x.agregadoPor ? " · guardó " + esc(x.agregadoPor) : ""}</small>
         ${x.fragmento ? `<p>${esc(x.fragmento)}</p>` : ""}
         <div class="fila" style="flex-wrap:wrap">${r.donde === "biblioteca" && x.largo ? `<button class="btn chico" data-leer="${i}">${ico("book-open", "ico-s")} Leer</button>` : ""}<button class="btn chico" data-agregar="${i}">${ico("book-marked", "ico-s")} A mis fuentes</button>
-        ${r.donde !== "biblioteca" && !panel.ed.local ? `<button class="btn chico" data-guardar="${i}" data-micro="Guardar en la biblioteca|Así el equipo la encuentra aunque no haya Internet.">${ico("library", "ico-s")} Biblioteca</button>` : ""}</div></article>`;
+        ${r.donde !== "biblioteca" && !panel.ed.local && !enCifrado(panel.ed) ? `<button class="btn chico" data-guardar="${i}" data-micro="Guardar en la biblioteca|Así el equipo la encuentra aunque no haya Internet.">${ico("library", "ico-s")} Biblioteca</button>` : ""}</div></article>`;
     }).join("");
     res.onclick = async (e) => {
       const ed = panel.ed, b = e.target.closest("button");
@@ -411,6 +411,8 @@
     };
   }
   const pintarPestanas = () => { if (panel) { const p = panel.pestana; pintar(); panel.pestana = p; } };
+  /** En un espacio cifrado de extremo a extremo no hay biblioteca compartida (el servidor la guardaría legible). */
+  const enCifrado = (ed) => !!(ed && ed.espacio && NOM.e2e && NOM.e2e.espacioCifrado && NOM.e2e.espacioCifrado(ed.espacio.id));
   async function guardarEnBiblioteca(ed, fuente, texto) {
     try { await api().post(`/api/espacios/${encodeURIComponent(ed.espacio.id)}/biblioteca`, { fuente, texto }); aviso("Guardada en la biblioteca del espacio", { tipo: "ok" }); }
     catch (e) { aviso(e.message, { tipo: "error" }); }
@@ -422,7 +424,7 @@
     const parrafos = String(L.texto || "").split(/\n+/).map((x) => x.trim()).filter(Boolean);
     c.innerHTML = `<div class="inv-lectura"><button class="btn chico" data-volver>${ico("chevron-left", "ico-s")} Resultados</button>
       <h4>${esc(f.titulo || "")}</h4><p class="suave chico">${apaHtml(f)}</p>
-      <div class="fila" style="flex-wrap:wrap;gap:6px"><button class="btn chico" data-agregar>${ico("book-marked", "ico-s")} A mis fuentes</button>${!L.deBiblioteca && !ed.local ? `<button class="btn chico" data-guardar>${ico("library", "ico-s")} Guardar con su texto</button>` : ""}</div>
+      <div class="fila" style="flex-wrap:wrap;gap:6px"><button class="btn chico" data-agregar>${ico("book-marked", "ico-s")} A mis fuentes</button>${!L.deBiblioteca && !ed.local && !enCifrado(ed) ? `<button class="btn chico" data-guardar>${ico("library", "ico-s")} Guardar con su texto</button>` : ""}</div>
       <p class="inv-pista">${ico("text-select", "ico-s")} Elige un pedazo del texto y toca <b>Hacer ficha</b>.</p>
       <div class="inv-texto" data-texto>${parrafos.map((p) => esEncabezadoWiki(p) ? `<h5>${esc(p.replace(/=/g, "").trim())}</h5>` : `<p>${esc(p)}</p>`).join("") || '<p class="suave">Sin texto.</p>'}</div>
       <button class="btn primario inv-hacer-ficha" data-ficha hidden>${ico("notebook-pen", "ico-s")} Hacer ficha</button></div>`;

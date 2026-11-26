@@ -816,6 +816,8 @@ public class ServicioFuentes {
     public synchronized Map<String, Object> guardarEnBiblioteca(Usuario u, String espacioId, Map<String, Object> cuerpo) {
         mx.wack.nom.core.modelo.Espacio e = espacios.requerir(espacioId);
         espacios.exigir(e, u, Permiso.EDICION);
+        // En un espacio cifrado de extremo a extremo el servidor no guarda nada legible: ahí no hay biblioteca compartida.
+        if (e.e2e) throw ErrorNom.invalido("En un espacio cifrado la biblioteca del espacio no está disponible: guarda la fuente en tu documento", null);
         ServicioDocumentos q = cuota;
         if (q != null) q.revisarCuotaDe(e);
         Map<String, Object> f = limpiarFuente(cuerpo == null ? null : cuerpo.get("fuente"));

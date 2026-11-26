@@ -13,7 +13,7 @@
       const PELIGRO = /<(\/?)(meta|script|object|embed|base|iframe)(?=[\s/>])/gi;
       const SCRIPT_OK = /^\/(?:js\/vendor\/(?:jsQR|mediabunny\.min|qrcode)\.js|js\/guiones-[a-z0-9-]+\.js|sw\.js)$/;
       trustedTypes.createPolicy("default", {
-        createHTML: (s) => { const t = String(s); return PELIGRO.test(t) ? t.replace(PELIGRO, "<$1x-$2") : t; },
+        createHTML: (s) => String(s).replace(PELIGRO, "<$1x-$2"),
         createScriptURL: (u) => {
           const s = String(u);
           if (location.protocol === "file:") {
