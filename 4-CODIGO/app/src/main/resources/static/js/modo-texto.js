@@ -463,7 +463,8 @@
     if (a.u) h = `<u>${h}</u>`;
     if (a.i) h = `<i>${h}</i>`;
     if (a.b) h = `<b>${h}</b>`;
-    if (a.enlace) h = `<a href="${esc(a.enlace)}">${h}</a>`;
+    // (solo enlaces a páginas web, correo y marcadores del documento)
+    if (a.enlace && /^(https?:\/\/|mailto:|#)/i.test(String(a.enlace))) h = `<a href="${esc(a.enlace)}">${h}</a>`;
     if (a.sug) h = `<span class="wd-sug" data-sug="${esc(JSON.stringify(a.sug))}" style="--c:${esc(a.sug.c || "#1D7A4C")}" title="${esc("Sugerencia de " + (a.sug.n || ""))}">${h}</span>`;
     if (a.sugBorrar) h = `<span class="wd-sugb" data-sugb="${esc(JSON.stringify(a.sugBorrar))}" style="--c:${esc(a.sugBorrar.c || "#C2372B")}" title="${esc((a.sugBorrar.n || "") + " propone borrarlo")}">${h}</span>`;
     return h;

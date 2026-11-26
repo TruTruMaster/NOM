@@ -334,6 +334,9 @@ public class MainActivity extends Activity {
         if (u == null) return;
         String s = u.toString();
         if (!s.startsWith("https://") || s.length() > 2000) return;
+        // Solo los enlaces que declara el manifiesto.
+        String host = u.getHost() == null ? "" : u.getHost().toLowerCase(java.util.Locale.ROOT), camino = u.getPath() == null ? "" : u.getPath();
+        if (!(host.equals("www.nom.qd.je") || host.equals("nom.qd.je") || host.equals("nomcolab.dpdns.org")) || !(camino.equals("/unirse") || camino.equals("/proyectar"))) return;
         if (abierta) web.evaluateJavascript("window.NOM && NOM.union && NOM.union.usar(" + org.json.JSONObject.quote(s) + ")", null);
         else enlacePendiente = s;
     }
@@ -411,8 +414,20 @@ public class MainActivity extends Activity {
         super.onDestroy();
     }
 
+    /**
+     * El nombre con que se guarda un archivo: viene de la página (el nombre de un documento, que pone cualquiera que lo
+     * edite), así que no puede llevar carpetas («../»), caracteres de control ni empezar con punto.
+     */
+    static String nombreSeguro(String nombre) {
+        String n = nombre == null ? "" : nombre.replaceAll("[\\p{Cntrl}/\\\\:*?\"<>|]", "_").replaceAll("^[.\\s]+", "").trim();
+        if (n.length() > 150) n = n.substring(n.length() - 150);
+        return n.isEmpty() ? "NOM" : n;
+    }
+
     /** Guarda un archivo en Descargas (Android 10+ con MediaStore; antes, en la carpeta de la app). */
     private void aDescargas(String nombre, String mime, InputStream datos) throws Exception {
+        nombre = nombreSeguro(nombre);
+        if (mime == null || !mime.matches("[a-z]+/[A-Za-z0-9.+_-]{1,100}")) mime = "application/octet-stream";
         try (InputStream in = datos) {
             OutputStream salida;
             if (Build.VERSION.SDK_INT >= 29) {
@@ -665,7 +680,7 @@ public class MainActivity extends Activity {
         public void guardarArchivo(String nombre, String mime, String base64) {
             try {
                 aDescargas(nombre, mime, new java.io.ByteArrayInputStream(Base64.decode(base64, Base64.DEFAULT)));
-                runOnUiThread(() -> Toast.makeText(MainActivity.this, "Guardado en Descargas: " + nombre, Toast.LENGTH_LONG).show());
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, "Guardado en Descargas: " + nombreSeguro(nombre), Toast.LENGTH_LONG).show());
             } catch (Exception e) {
                 runOnUiThread(() -> Toast.makeText(MainActivity.this, "No se pudo guardar el archivo", Toast.LENGTH_LONG).show());
             }

@@ -5,10 +5,22 @@
   "use strict";
   // Los objetos base de JavaScript quedan cerrados: nada les agrega propiedades nuevas (lo que ya tienen no cambia).
   try { [Object.prototype, Array.prototype, Function.prototype, String.prototype, Number.prototype, Boolean.prototype].forEach((o) => Object.preventExtensions(o)); } catch (e) { /* navegador sin esto */ }
+  // Todo lo que se pinta como HTML pasa por aquí (la política de contenido de la página lo exige con Trusted Types): las
+  // etiquetas <meta> no llegan a la página y solo se cargan programas de este mismo sitio. Un navegador que no conoce
+  // Trusted Types sigue igual.
+  try {
+    if (window.trustedTypes && trustedTypes.createPolicy && !trustedTypes.defaultPolicy) {
+      const META = /<(\/?)meta(?=[\s/>])/gi;
+      trustedTypes.createPolicy("default", {
+        createHTML: (s) => { const t = String(s); return /<\/?meta[\s/>]/i.test(t) ? t.replace(META, "<$1x-meta") : t; },
+        createScriptURL: (u) => { if (new URL(String(u), location.href).origin === location.origin) return String(u); throw new TypeError("Solo programas de este sitio"); },
+      });
+    }
+  } catch (e) { /* ya había una */ }
   const NOM = (window.NOM = window.NOM || {});
   // Versión de esta interfaz. Tienen que ir a la par de nucleo/.../core/Version.java y del APK:
   // INTERFAZ sube cuando cambia el formato de los documentos o lo que la interfaz sabe leer.
-  NOM.VERSION = "0.23.3";
+  NOM.VERSION = "0.23.4";
   NOM.INTERFAZ = 27;
   /** Versión vigente de los Términos y del Aviso de privacidad (Version.LEGAL en el servidor). */
   NOM.LEGAL = "2026-11-13";

@@ -147,12 +147,15 @@ final class ServidorHttp {
     /** Una línea de la petición; hasta: para cuándo tiene que haber llegado (una conexión que manda de a poco no se queda). */
     private static String linea(InputStream in, long hasta) throws IOException {
         ByteArrayOutputStream b = new ByteArrayOutputStream(128);
-        int c;
-        while ((c = in.read()) != -1) {
+        int c = in.read();
+        // Desde el primer byte, la línea entera tiene 20 s (antes solo se revisaba cada 64 bytes y la primera línea no
+        // tenía plazo).
+        if (hasta == Long.MAX_VALUE) hasta = System.currentTimeMillis() + 20_000;
+        for (; c != -1; c = in.read()) {
             if (c == '\n') break;
             if (c != '\r') b.write(c);
             if (b.size() > 16 * 1024) throw new IOException("Línea demasiado larga");
-            if ((b.size() & 63) == 0 && System.currentTimeMillis() > hasta) throw new IOException("Petición demasiado lenta");
+            if (System.currentTimeMillis() > hasta) throw new IOException("Petición demasiado lenta");
         }
         if (c == -1 && b.size() == 0) return null;
         return b.toString("UTF-8");
@@ -163,8 +166,15 @@ final class ServidorHttp {
     }
 
     private static Peticion leer(InputStream in) throws IOException {
-        String inicio = linea(in);
-        while (inicio != null && inicio.isEmpty()) inicio = linea(in);
+        // (la espera entre peticiones de una misma conexión la corta el SO_TIMEOUT; una vez que empieza a llegar algo,
+        // toda la petición tiene 20 s: una conexión que manda un byte cada tanto no ocupa un lugar para siempre)
+        long hasta0 = Long.MAX_VALUE;
+        String inicio = linea(in, hasta0);
+        int vacias = 0;
+        while (inicio != null && inicio.isEmpty()) {
+            if (++vacias > 8) throw new IOException("Petición no válida");
+            inicio = linea(in, System.currentTimeMillis() + 20_000);
+        }
         if (inicio == null) return null;
         String[] partes = inicio.split(" ");
         if (partes.length < 3) throw new IOException("Petición no válida");
@@ -204,7 +214,10 @@ final class ServidorHttp {
                 ByteArrayOutputStream b = new ByteArrayOutputStream(Math.min(n, 64 * 1024));
                 byte[] buf = new byte[Math.min(Math.max(n, 1), 64 * 1024)];
                 int leido = 0;
+                // (el cuerpo también con plazo: 20 s y uno más por cada MB que dice traer)
+                long hastaCuerpo = System.currentTimeMillis() + 20_000 + (n >> 20) * 1_000L;
                 while (leido < n) {
+                    if (System.currentTimeMillis() > hastaCuerpo) throw new IOException("Petición demasiado lenta");
                     int k = in.read(buf, 0, Math.min(buf.length, n - leido));
                     if (k < 0) throw new IOException("Cuerpo incompleto");
                     b.write(buf, 0, k);
@@ -243,6 +256,11 @@ final class ServidorHttp {
     private boolean atender(Peticion p, InputStream in, OutputStream out, Socket sock) throws IOException {
         boolean mantener = p.mantener();
         String cors = cors(p.cabecera("origin"));
+        // Solo se atienden IPs, localhost y nombres de la red local (ver Hosts).
+        if (!mx.wack.nom.core.servicio.Hosts.permitido(p.cabecera("host"), java.util.Set.of())) {
+            responder(out, 421, "application/json;charset=UTF-8", Json.YO.escribir(Map.of("error", "Este teléfono no atiende ese nombre")), false, cors);
+            return false;
+        }
         if ("OPTIONS".equals(p.metodo)) {
             responder(out, 204, null, null, mantener, cors);
             return mantener;
@@ -343,7 +361,7 @@ final class ServidorHttp {
         }
         int punto = ruta.lastIndexOf('.');
         String tipo = TIPOS.getOrDefault(punto < 0 ? "" : ruta.substring(punto + 1).toLowerCase(Locale.ROOT), "application/octet-stream");
-        responder(out, 200, tipo, "HEAD".equals(p.metodo) ? new byte[0] : datos, mantener, null);
+        responder(out, 200, tipo, "HEAD".equals(p.metodo) ? new byte[0] : datos, mantener, null, ruta.equals("index.html") ? CSP_PRINCIPAL : CSP);
     }
 
     private static String razon(int c) {
@@ -357,6 +375,7 @@ final class ServidorHttp {
             case 404: return "Not Found";
             case 409: return "Conflict";
             case 413: return "Payload Too Large";
+            case 421: return "Misdirected Request";
             case 423: return "Locked";
             case 429: return "Too Many Requests";
             default: return c >= 500 ? "Internal Server Error" : "OK";
@@ -389,8 +408,16 @@ final class ServidorHttp {
             + "connect-src 'self' https: http:; worker-src 'self'; manifest-src 'self'; object-src 'none'; "
             + "base-uri 'self'; form-action 'self'; frame-ancestors 'self'\r\n";
 
+    /** La de la página principal: además, todo HTML pasa por la política «default» de js/nucleo.js (Trusted Types). */
+    static final String CSP_PRINCIPAL = CSP.replace("\r\n", "; require-trusted-types-for 'script'; trusted-types default\r\n");
+
     /** cors: las cabeceras CORS de una respuesta de la API (cors(origen)), o null para la página. */
     private static void responder(OutputStream out, int codigo, String tipo, byte[] cuerpo, boolean mantener, String cors) throws IOException {
+        responder(out, codigo, tipo, cuerpo, mantener, cors, CSP);
+    }
+
+    /** csp: la política de contenido de una página (CSP, o CSP_PRINCIPAL para la de la app); la API no la lleva. */
+    private static void responder(OutputStream out, int codigo, String tipo, byte[] cuerpo, boolean mantener, String cors, String csp) throws IOException {
         StringBuilder h = new StringBuilder("HTTP/1.1 ").append(codigo).append(' ').append(razon(codigo)).append("\r\n");
         if (tipo != null) h.append("Content-Type: ").append(tipo).append("\r\n");
         h.append("Content-Length: ").append(cuerpo == null ? 0 : cuerpo.length).append("\r\n");
@@ -398,7 +425,7 @@ final class ServidorHttp {
         h.append(cors != null ? "Cache-Control: no-store\r\n" : "Cache-Control: no-cache\r\n");
         h.append(SEGURAS);
         // "cors" marca las respuestas de la API; lo demás es la página y lleva la política de contenido.
-        h.append(cors != null ? cors : CSP);
+        h.append(cors != null ? cors : csp);
         h.append(mantener ? "Connection: keep-alive\r\n" : "Connection: close\r\n");
         h.append("\r\n");
         out.write(h.toString().getBytes(StandardCharsets.UTF_8));

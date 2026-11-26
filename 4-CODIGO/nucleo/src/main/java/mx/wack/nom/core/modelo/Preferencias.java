@@ -20,7 +20,8 @@ public class Preferencias {
             throw new IllegalArgumentException("El autoguardado debe estar entre 1 y 60 minutos");
         if (versionesConservar < 5 || versionesConservar > 200)
             throw new IllegalArgumentException("Se conservan entre 5 y 200 versiones");
-        if (!tema.matches("auto|claro|oscuro")) throw new IllegalArgumentException("Tema no valido");
-        if (!calidad.matches("alta|baja")) throw new IllegalArgumentException("Calidad no valida");
+        if (tema == null || !tema.matches("auto|claro|oscuro")) throw new IllegalArgumentException("Tema no valido");
+        if (calidad == null || !calidad.matches("alta|baja")) throw new IllegalArgumentException("Calidad no valida");
+        if (idioma == null || !idioma.matches("[a-z]{2}(-[A-Z]{2})?")) throw new IllegalArgumentException("Idioma no valido");
     }
 }

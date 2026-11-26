@@ -138,7 +138,7 @@ public class Difusor {
         }
         exigirLugar(x -> x.proyector == null && u.id.equals(x.usuarioId), MAX_CANALES_CUENTA,
                 "Tienes demasiadas pestañas o equipos abiertos a la vez: cierra alguno e intenta de nuevo");
-        Suscriptor s = new Suscriptor(canal, u, token, espacioId, docId, cliente == null ? "" : cliente);
+        Suscriptor s = new Suscriptor(canal, u, token, espacioId, docId, clienteValido(cliente));
         subs.add(s);
         canal.alCerrar(() -> { s.muerto = true; quitar(s); });
         enviar(s, "hola", Map.of("ok", true));
@@ -218,15 +218,41 @@ public class Difusor {
         }
     }
 
-    public void actualizarPresencia(String docId, String cliente, String bloque, String modo, Map<String, Object> cursor) {
+    /** El identificador de una pestaña (lo pone la página: «d1a2b3c-x9y8»): letras, números y . _ : - (hasta 64). */
+    public static String clienteValido(String cliente) {
+        return cliente != null && cliente.matches("[A-Za-z0-9_.:-]{1,64}") ? cliente : "";
+    }
+
+    /** Lo que se reparte de un texto que manda la página (bloque, modo, partes del cursor): corto, o nada. */
+    private static String corto(Object o, int max, String patron) {
+        return o instanceof String t && t.length() <= max && t.matches(patron) ? t : null;
+    }
+
+    /** Presencia de un canal de usuarioId (solo los suyos: nadie mueve el cursor de otra persona). */
+    private final Topes topes = new Topes();
+
+    public void actualizarPresencia(String usuarioId, String docId, String cliente, String bloque, String modo, Map<String, Object> cursor) {
+        String c = clienteValido(cliente);
+        if (usuarioId == null || c.isEmpty()) return;
+        // (cada aviso se reparte a todos los canales del documento: la página manda unos pocos por segundo)
+        topes.exigir("p|" + usuarioId, 900, "Demasiados avisos de presencia");
+        String b = corto(bloque, 64, "[^\\p{Cntrl}]+"), m = corto(modo, 24, "[A-Za-z_-]+");
+        Map<String, Object> cur = null;
+        if (cursor != null) {
+            Object a = cursor.get("a"), f = cursor.get("f");
+            String ca = a == null ? "" : corto(a, 200, "[^\\p{Cntrl}]*"), cf = f == null ? "" : corto(f, 200, "[^\\p{Cntrl}]*");
+            if (ca != null && cf != null) { cur = new LinkedHashMap<>(); cur.put("a", ca); cur.put("f", cf); }
+        }
+        boolean cambio = false;
         for (Suscriptor s : subs) {
-            if (docId.equals(s.docId) && s.cliente.equals(cliente)) {
-                s.bloque = bloque;
-                s.modo = modo;
-                s.cursor = cursor != null && cursor.size() <= 4 ? cursor : null;
+            if (docId.equals(s.docId) && usuarioId.equals(s.usuarioId) && s.cliente.equals(c)) {
+                s.bloque = b;
+                s.modo = m;
+                s.cursor = cur;
+                cambio = true;
             }
         }
-        presencia(docId);
+        if (cambio) presencia(docId);
     }
 
     private void presencia(String docId) {

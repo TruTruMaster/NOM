@@ -928,7 +928,7 @@
             { texto: "Guardar como plantilla del espacio", icono: "copy", fn: () => comoPlantilla(doc) },
           ] : []),
         ] : []),
-        ...(otros.length ? [{ texto: edita ? "Mover a otro espacio…" : "Copiar a otro de mis espacios…", icono: "folder-input", fn: () => menuOtroEspacio(ancla, doc, otros, edita) }] : []),
+        ...(otros.length ? [{ texto: dueno ? "Mover a otro espacio…" : "Copiar a otro de mis espacios…", icono: "folder-input", fn: () => menuOtroEspacio(ancla, doc, otros, dueno) }] : []),
         ...(dueno ? [
           "-",
           { texto: doc.enlaceVer ? "Enlace para ver (activo)…" : "Enlace para ver sin cuenta…", icono: "link-2", fn: () => enlaceVer(doc) },

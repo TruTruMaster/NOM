@@ -26,6 +26,9 @@ public class ServicioChat {
     public static final int MAX_MENSAJES = 2000;
     public static final int MAX_TEXTO = 8000;
     public static final int MAX_ADJUNTO = 2 * 1024 * 1024 * 4 / 3 + 1024;   // 2 MB en base64
+    /** Lo más que ocupan los textos del chat de un espacio (se reescribe completo con cada mensaje): se van los más viejos. */
+    static final long MAX_BYTES_CHAT = 4L * 1024 * 1024;
+    private final Topes topes = new Topes();
 
     private final RepositorioEspacios repo;
     private final ServicioEspacios espacios;
@@ -66,6 +69,8 @@ public class ServicioChat {
     public synchronized Map<String, Object> enviar(Usuario u, String espacioId, Map<String, Object> c) {
         Espacio e = espacios.requerir(espacioId);
         espacios.exigir(e, u, Permiso.LECTURA);
+        topes.exigir("u|" + u.id, 30, "Muchos mensajes seguidos: espera un momento");
+        topes.exigir("e|" + espacioId, 120, "Hay muchos mensajes a la vez en este espacio: espera un momento");
         Object texto = c.get("texto");
         Object adj = c.get("adjunto");
         String t = texto == null ? "" : String.valueOf(texto);
@@ -100,8 +105,11 @@ public class ServicioChat {
         if (c.get("docId") instanceof String doc && doc.matches("[A-Za-z0-9_-]{4,40}")) m.put("docId", doc);
         List<Map<String, Object>> l = new ArrayList<>(repo.chat(espacioId));
         l.add(m);
-        while (l.size() > MAX_MENSAJES) {
+        long total = 0;
+        for (Map<String, Object> x : l) total += String.valueOf(x.get("texto")).length() + 200;
+        while (l.size() > MAX_MENSAJES || (total > MAX_BYTES_CHAT && l.size() > 1)) {
             Map<String, Object> viejo = l.remove(0);
+            total -= String.valueOf(viejo.get("texto")).length() + 200;
             if (viejo.get("adjunto") != null) repo.guardarAnexoEspacio(espacioId, "chat-" + viejo.get("id"), null);
         }
         repo.guardarChat(espacioId, l);

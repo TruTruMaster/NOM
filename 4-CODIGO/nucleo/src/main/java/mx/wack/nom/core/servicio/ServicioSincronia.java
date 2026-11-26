@@ -200,9 +200,12 @@ public class ServicioSincronia {
     public Map<String, Object> configurar(Usuario u, String espacioId, String servidor, String usuario, String contrasena, String alcance) {
         Espacio e = espacios.requerir(espacioId);
         espacios.exigir(e, u, Permiso.PROPIETARIO);
+        topes.exigir("conf|" + u.id, 10, "Muchos intentos de conectar seguidos: espera un minuto");
         String base = normalizar(servidor);
+        if (base.length() > 200) throw ErrorNom.invalido("Esa dirección es demasiado larga", "servidor");
         if (usuario == null || usuario.isBlank() || contrasena == null || contrasena.isEmpty())
             throw ErrorNom.invalido("Escribe tu usuario y tu contraseña de allá", "usuario");
+        if (usuario.trim().length() > 64 || contrasena.length() > 1024) throw ErrorNom.invalido("Usuario o contraseña demasiado largos", "usuario");
         String alc = EQUIPO.equals(alcance) || RED.equals(alcance) ? alcance : INTERNET;
         ALCANCE.set(alc);
         long ini = System.currentTimeMillis();
@@ -213,7 +216,8 @@ public class ServicioSincronia {
                 throw ErrorNom.invalido("En esa dirección no hay un NOM", "servidor");
             if (String.valueOf(mi.get("servidor")).equals(nodo.id())) throw ErrorNom.invalido("Esa dirección es este mismo NOM", "servidor");
             Map<String, Object> ses = (Map<String, Object>) pedir("POST", base + "/api/cuentas/sesion", null, Map.of("nombre", usuario.trim(), "contrasena", contrasena));
-            String token = String.valueOf(ses.get("token"));
+            String token = String.valueOf(ses == null ? null : ses.get("token"));
+            if (!token.matches("[A-Za-z0-9_-]{16,128}")) throw ErrorNom.invalido("El otro NOM respondió algo que no se entiende", "servidor");
             // Un espacio con el mismo nombre (si ya existe y lo puedo editar) o uno nuevo.
             String remoto = null;
             for (Object o : (List<Object>) pedir("GET", base + "/api/espacios", token, null)) {
@@ -221,6 +225,7 @@ public class ServicioSincronia {
                 if (e.nombre.equalsIgnoreCase(String.valueOf(x.get("nombre"))) && !"LECTURA".equals(String.valueOf(x.get("permiso")))) { remoto = String.valueOf(x.get("id")); break; }
             }
             if (remoto == null) remoto = String.valueOf(((Map<String, Object>) pedir("POST", base + "/api/espacios", token, Map.of("nombre", e.nombre))).get("id"));
+            if (!remoto.matches("[A-Za-z0-9_-]{1,64}")) throw ErrorNom.invalido("El otro NOM respondió algo que no se entiende", "servidor");
             Espacio.Sincronia s = new Espacio.Sincronia();
             s.servidor = base;
             s.usuario = usuario.trim();
@@ -242,10 +247,14 @@ public class ServicioSincronia {
         return sincronizarEspacio(e, Math.max(10_000, ini + MAX_MS_ESPERA - System.currentTimeMillis()));
     }
 
+    private final Topes topes = new Topes();
+
     public Map<String, Object> sincronizar(Usuario u, String espacioId) {
         Espacio e = espacios.requerir(espacioId);
         espacios.exigir(e, u, Permiso.PROPIETARIO);
         if (e.sincronia == null) throw ErrorNom.invalido("Este espacio no tiene copia en otro NOM", null);
+        // «Copiar ahora» trae y manda todo el espacio: unas pocas veces por minuto (la copia sola va cada 5 minutos).
+        topes.exigir(espacioId, 6, "Se acaba de copiar este espacio: espera unos segundos");
         return sincronizarEspacio(e, MAX_MS_ESPERA);
     }
 
@@ -353,7 +362,7 @@ public class ServicioSincronia {
             if (remotos == null) remotos = List.of();
             for (Object o : remotos) {
                 if (porId.size() >= MAX_DOCS_REMOTOS) break;
-                if (o instanceof Map<?, ?> x0) { Map<String, Object> x = (Map<String, Object>) x0; porId.put(String.valueOf(x.get("id")), x); }
+                if (o instanceof Map<?, ?> x0 && String.valueOf(x0.get("id")).matches("[A-Za-z0-9_-]{1,64}")) { Map<String, Object> x = (Map<String, Object>) x0; porId.put(String.valueOf(x.get("id")), x); }
             }
             Set<String> emparejados = new HashSet<>(s.docs.values());
             // Documentos nuevos de alla: se crean aqui.
@@ -436,7 +445,7 @@ public class ServicioSincronia {
                 Object doc = abierto.get("documento");
                 s.remotos.put(rid, doc instanceof Map<?, ?> dm && dm.get("modificado") instanceof Number n ? n.longValue() : remMod);
                 // La base para la proxima vez: lo que alla tiene ahora (ya con lo de aqui).
-                s.bases.put(d.id, vector((Map<String, Object>) abierto.get("estado")));
+                s.bases.put(d.id, ServicioDocumentos.baseAcotada(vector((Map<String, Object>) abierto.get("estado"))));
             }
             s.ultima = System.currentTimeMillis();
             s.estado = "ok";
@@ -456,6 +465,7 @@ public class ServicioSincronia {
             ALCANCE.remove();
             HASTA.remove();
         }
+        if (s.error != null) s.error = Textos.cortar(Textos.limpio(s.error), 300);
         espacios.guardar(e);
         r.put("estado", s.estado);
         r.put("error", s.error);
@@ -523,6 +533,7 @@ public class ServicioSincronia {
                 }
             }
         }
+        ops.sort(java.util.Comparator.comparingLong(Operacion::t));
         return ops;
     }
 
@@ -563,12 +574,14 @@ public class ServicioSincronia {
         if (repo == null || estado == null) return;
         Set<String> refs = new java.util.TreeSet<>();
         refsEn(estado, refs);
+        Espacio esp = espacios.requerir(aqui);
         for (String h : refs) {
             if (repo.existe(aqui, h)) continue;
+            documentos.revisarCuotaDe(esp);
             try {
                 byte[] b = pedirBytes("GET", base + "/api/espacios/" + rem + "/binarios/" + h, tok, null);
                 // (se guarda solo si llegó lo que dice su huella)
-                if (b != null && b.length > 0 && ServicioBinarios.huellaDe(b).equals(h)) repo.guardar(aqui, h, b);
+                if (b != null && b.length > 0 && ServicioBinarios.huellaDe(b).equals(h)) { repo.guardar(aqui, h, b); documentos.olvidarUso(esp.propietarioId); }
             } catch (ErrorRemoto ex) { if (ex.codigo != 404) throw ex; }
         }
     }

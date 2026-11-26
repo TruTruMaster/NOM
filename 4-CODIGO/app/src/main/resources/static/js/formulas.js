@@ -789,7 +789,13 @@
   // «derrama» a la derecha y abajo (el evaluador); si una de esas celdas tiene algo, da #DESBORDAMIENTO!.
   const colsDe = (v) => (Array.isArray(v) ? v.cols || 1 : 1);
   const filasDe = (v) => (Array.isArray(v) ? Math.ceil(v.length / colsDe(v)) : 1);
+  /** Lo más que arman entre todas las fórmulas de un cálculo de la hoja (elementos de matrices); lo que pasa del tope da
+      #NUM! (Excel también se detiene, por memoria). */
+  const MAX_ELEMENTOS_CALCULO = 30000000;
+  let elementosCalculo = 0;
   function matriz(filas, cols, fn) {
+    elementosCalculo += Math.max(0, filas * cols);
+    if (elementosCalculo > MAX_ELEMENTOS_CALCULO) throw E("#NUM!");
     const out = new Array(filas * cols);
     out.cols = cols;
     for (let r = 0; r < filas; r++) for (let c = 0; c < cols; c++) out[r * cols + c] = fn(r, c);
@@ -2553,6 +2559,7 @@
    */
   function evaluador(obtener, opc) {
     opc = opc || {};
+    elementosCalculo = 0;
     const nueva = (o, nombre) => ({ obtener: o.obtener, filas: o.filas || 0, cols: o.cols || 0, cache: new Map(), nombre,
       formulas: o.formulas || null, sinDerrame: !!o.sinDerrame, combinada: o.combinada || null, derrames: new Map(), meta: new Set(), duenos: new Map(), cand: null });
     const actual = nueva({ obtener, filas: opc.filas, cols: opc.cols, formulas: opc.formulas, sinDerrame: opc.sinDerrame, combinada: opc.combinada }, opc.nombre || "");
@@ -3044,7 +3051,7 @@
     const abierta = (c, f) => { valorEn(actual, c, f); return actual.derrames.get(c + "," + f) || null; };
     return {
       valor: (c, f) => valorEn(actual, c, f),
-      limpiar: () => { actual.cache.clear(); actual.derrames.clear(); actual.meta.clear(); actual.duenos.clear(); actual.cand = null; otras.clear(); },
+      limpiar: () => { elementosCalculo = 0; actual.cache.clear(); actual.derrames.clear(); actual.meta.clear(); actual.duenos.clear(); actual.cand = null; otras.clear(); },
       // una fórmula que no está en ninguna celda, como si estuviera en (c, f): la de una regla de formato condicional
       calcular: (crudo, c, f) => { try { const v = calcular(crudo, actual, { c, f }); return Array.isArray(v) ? v[0] : v; } catch (e) { return e instanceof ErrorF ? e : E("#VALOR!"); } },
       // lo mismo, pero una matriz entera (Evaluar fórmula)

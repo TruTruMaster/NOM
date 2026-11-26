@@ -72,12 +72,12 @@ public final class Origen {
             InetAddress a = remota == null ? null : InetAddress.getByName(remota);
             local = a == null || a.isLoopbackAddress();
         } catch (Exception e) { local = false; }
-        if (!local) return remota;
+        if (!local) return agrupar(remota);
         // El nombre corto (nom.qd.je) llega por Vercel, que reenvia a la nube por Cloudflare: la
         // direccion de la persona viene en X-Real-IP, y solo se cree si trae la clave que Vercel
         // agrega en cada peticion (NOM_PROXY_SECRETO; Vercel reemplaza la que mande cualquiera).
         String ip = deVercel(req);
-        if (ip != null) return ip;
+        if (ip != null) return agrupar(ip);
         // CF-Connecting-IP la pone Cloudflare, que entra por el túnel de este mismo equipo.
         String r = req.getHeader("CF-Connecting-IP");
         if (r == null || r.isBlank()) {
@@ -88,6 +88,25 @@ public final class Origen {
             if (r != null && r.trim().matches("\\d+(\\.\\d+){3}:\\d+")) r = r.trim().substring(0, r.trim().lastIndexOf(':'));
         }
         if (r == null || r.isBlank()) return null;
-        return r.trim();
+        return agrupar(r.trim());
+    }
+
+    /**
+     * Para los topes (contraseñas, registros, códigos), una IPv6 de Internet cuenta por su red /64 (la que tiene cada
+     * casa o servidor). Las IPv4, las de la red local (fc00::/7, fe80::/10) y lo que no es una IP se quedan como llegan.
+     */
+    static String agrupar(String ip) {
+        if (ip == null || ip.indexOf(':') < 0 || !ip.matches("[0-9a-fA-F:.]{2,45}")) return ip;
+        try {
+            InetAddress a = InetAddress.getByName(ip);
+            byte[] b = a.getAddress();
+            if (!(a instanceof java.net.Inet6Address)) return a.getHostAddress();   // ::ffff:a.b.c.d → a.b.c.d
+            if (a.isLoopbackAddress() || a.isLinkLocalAddress() || a.isAnyLocalAddress() || (b[0] & 0xfe) == 0xfc) return ip;
+            return String.format(java.util.Locale.ROOT, "%x:%x:%x:%x::/64",
+                    ((b[0] & 255) << 8) | (b[1] & 255), ((b[2] & 255) << 8) | (b[3] & 255),
+                    ((b[4] & 255) << 8) | (b[5] & 255), ((b[6] & 255) << 8) | (b[7] & 255));
+        } catch (Exception e) {
+            return ip;
+        }
     }
 }

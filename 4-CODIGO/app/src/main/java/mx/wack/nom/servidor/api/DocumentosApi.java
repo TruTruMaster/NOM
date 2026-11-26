@@ -177,7 +177,8 @@ public class DocumentosApi {
                                          @RequestBody Presencia p) {
         // 3.4 Al cerrar el documento, el cliente lo avisa: ahí termina su visita.
         if (Boolean.TRUE.equals(p.salir())) { documentos.salir(u, id, p.cliente()); return Map.of("ok", true); }
-        difusor.actualizarPresencia(id, p.cliente(), p.bloque(), p.modo(), p.cursor());
+        documentos.permiso(u, documentos.requerir(id), Permiso.LECTURA);
+        difusor.actualizarPresencia(u.id, id, p.cliente(), p.bloque(), p.modo(), p.cursor());
         return Map.of("ok", true);
     }
 

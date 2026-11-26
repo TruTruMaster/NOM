@@ -139,15 +139,19 @@
   /** Relleno, borde y adornos de una figura ya resueltos (los usa también exportar). */
   function estiloFigura(b) {
     const f = b.figura || "rect", lineal = esLinea(f);
-    const relleno = lineal || b.relleno === false ? null : b.color || "#E7E5EE";
-    const ancho = lineal ? (b.bordeAncho || 3) : +b.bordeAncho || (CON_CONTORNO.has(f) ? 2 : 0);
-    const trazo = ancho ? b.borde || (lineal ? "#4A4854" : "#2B2A33") : null;
+    const relleno = lineal || b.relleno === false ? null : colorSeguro(b.color, "#E7E5EE");
+    const ancho = lineal ? (+b.bordeAncho || 3) : +b.bordeAncho || (CON_CONTORNO.has(f) ? 2 : 0);
+    const trazo = ancho ? colorSeguro(b.borde, lineal ? "#4A4854" : "#2B2A33") : null;
     return { f, lineal, relleno, ancho, trazo, radio: b.radio != null ? +b.radio : f === "rect" ? 14 : f === "burbuja" ? 14 : 0, estilo: b.bordeEstilo || "solido",
       prst: b.prst && NOM.geomOffice && NOM.geomOffice.tiene(b.prst) ? b.prst : null, av: b.av || null,
       // forma libre de Office (custGeom) y relleno con degradado o imagen (los de PowerPoint)
       cust: b.cust && Array.isArray(b.cust.p) && NOM.geomOffice ? b.cust : null, pintura: !lineal && b.relleno !== false && pinturaValida(b.pintura) ? b.pintura : null, id: b.id };
   }
   const COLOR_SVG = /^(#[0-9A-Fa-f]{6}|rgba\(\d+,\d+,\d+,[\d.]+\))$/;
+  /** Un color que puede ir dentro de un atributo o de un estilo (lo que trae un documento o un archivo de Office se
+      revisa antes). */
+  const COLOR_CSS = /^(#[0-9A-Fa-f]{3,8}|(rgba?|hsla?)\([\d\s.,%+-]+\)|[A-Za-z]{1,30}|var\(--[\w-]{1,40}\))$/;
+  const colorSeguro = (v, def) => (typeof v === "string" && COLOR_CSS.test(v.trim()) ? v.trim() : def);
   function pinturaValida(pt) {
     if (!pt || typeof pt !== "object") return false;
     if (pt.tipo === "img") return typeof pt.src === "string" && (/^(data:image\/|blob:|\/api\/)/.test(pt.src) || !!(NOM.binarios && NOM.binarios.esRef(pt.src)));
@@ -193,7 +197,7 @@
   }
   /** Línea o conector de Office: en píxeles de verdad (sin estirar el trazo), de esquina a esquina, con sus puntas. */
   function svgLineaOffice(b) {
-    const w = Math.max(0, +b.w || 0), h = Math.max(0, +b.h || 0), ancho = Math.max(0.1, +b.bordeAncho || 1), color = b.borde || "#000000";
+    const w = Math.max(0, +b.w || 0), h = Math.max(0, +b.h || 0), ancho = Math.max(0.1, +b.bordeAncho || 1), color = colorSeguro(b.borde, "#000000");
     const tz = NOM.geomOffice.trazos(b.prst || "line", Math.max(w, 0.01), Math.max(h, 0.01), b.av) || [{ d: `M0,0L${n2(w)},${n2(h)}`, contorno: true }];
     const dash = b.bordeEstilo === "guiones" ? ` stroke-dasharray="${n2(ancho * 4)} ${n2(ancho * 3)}"` : b.bordeEstilo === "puntos" ? ` stroke-dasharray="${n2(ancho)} ${n2(ancho)}"` : "";
     const voltear = b.volteoH || b.volteoV ? ` transform="translate(${b.volteoH ? n2(w) : 0} ${b.volteoV ? n2(h) : 0}) scale(${b.volteoH ? -1 : 1} ${b.volteoV ? -1 : 1})"` : "";
@@ -381,7 +385,7 @@
   function imagenLibre(b) {
     const s = [], marco = [];
     if (b.radio && !b.mascara) marco.push(`border-radius:${+b.radio}px`);
-    if (b.bordeAncho && !b.mascara) marco.push(`border:${+b.bordeAncho}px ${b.bordeEstilo === "guiones" ? "dashed" : b.bordeEstilo === "puntos" ? "dotted" : "solid"} ${b.borde || "#2B2A33"}`);
+    if (b.bordeAncho && !b.mascara) marco.push(`border:${+b.bordeAncho}px ${b.bordeEstilo === "guiones" ? "dashed" : b.bordeEstilo === "puntos" ? "dotted" : "solid"} ${colorSeguro(b.borde, "#2B2A33")}`);
     if (b.mascara && b.w && b.h) marco.push(`clip-path:path('${ruta(b.mascara, b.w, b.h, 18)}')`);
     const f = b.filtros || {};
     const fl = [f.brillo != null && +f.brillo !== 100 ? `brightness(${+f.brillo}%)` : "", f.contraste != null && +f.contraste !== 100 ? `contrast(${+f.contraste}%)` : "",

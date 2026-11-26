@@ -135,6 +135,14 @@ public class Descubrimiento {
 
     private static String texto(Object o) { return o == null ? "" : String.valueOf(o); }
 
+    /** Equipos distintos que se recuerdan a la vez. */
+    static final int MAX_ANUNCIANTES = 64;
+
+    private static String corto(Object o, int max) {
+        String t = texto(o);
+        return t.length() > max ? "" : t;
+    }
+
     @SuppressWarnings("unchecked")
     private void escuchar() {
         byte[] buf = new byte[16 * 1024];
@@ -146,19 +154,25 @@ public class Descubrimiento {
                 if (!(leido instanceof Map)) continue;
                 Map<String, Object> n = (Map<String, Object>) leido;
                 if (!(n.get("nom") instanceof Number) || ((Number) n.get("nom")).intValue() != 1) continue;
-                String servidor = texto(n.get("servidor"));
-                if (nodo.id().equals(servidor)) continue;
+                String servidor = corto(n.get("servidor"), 64);
+                if (servidor.isEmpty() || nodo.id().equals(servidor)) continue;
+                // Cualquiera en la red puede mandar anuncios: se guardan pocos y acotados (y lo viejo se va al llegar más).
+                long ahora0 = System.currentTimeMillis();
+                if (remotos.size() >= MAX_ANUNCIANTES) remotos.values().removeIf(a -> ahora0 - a.visto > CADUCA_MS);
+                if (remotos.size() >= MAX_ANUNCIANTES && !remotos.containsKey(servidor)) continue;
                 List<Map<String, Object>> lista = new ArrayList<>();
                 if (n.get("espacios") instanceof List) {
                     for (Object o : (List<Object>) n.get("espacios")) {
+                        if (lista.size() >= 50) break;
                         if (!(o instanceof Map)) continue;
                         Map<String, Object> e = (Map<String, Object>) o;
-                        lista.add(Map.of("id", texto(e.get("id")), "nombre", texto(e.get("nombre")),
-                                "propietario", texto(e.get("propietario")), "color", texto(e.get("color"))));
+                        lista.add(Map.of("id", corto(e.get("id"), 64), "nombre", corto(e.get("nombre"), 600),
+                                "propietario", corto(e.get("propietario"), 64), "color", corto(e.get("color"), 16)));
                     }
                 }
                 int puerto = n.get("puerto") instanceof Number ? ((Number) n.get("puerto")).intValue() : 8080;
-                remotos.put(servidor, new Anuncio(texto(n.get("equipo")), p.getAddress().getHostAddress(), puerto, lista,
+                if (puerto < 1 || puerto > 65535) continue;
+                remotos.put(servidor, new Anuncio(corto(n.get("equipo"), 64), p.getAddress().getHostAddress(), puerto, lista,
                         System.currentTimeMillis()));
             } catch (Exception e) {
                 if (!corriendo) return;

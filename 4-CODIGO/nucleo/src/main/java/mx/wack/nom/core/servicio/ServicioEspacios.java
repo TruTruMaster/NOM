@@ -428,6 +428,11 @@ public class ServicioEspacios {
         // Se olvidan los que ya no sirven desde hace mas de una semana; maximo 30 por espacio.
         e.enlaces.removeIf(x -> !x.vigente(ahora) && ahora - x.caduca > 7L * 86_400_000L);
         if (e.enlaces.stream().filter(x -> x.vigente(ahora)).count() >= 30) throw ErrorNom.invalido("Hay demasiados códigos de invitación vigentes: anula alguno", null);
+        // Los que ya no sirven (anulados o vencidos) se guardan un tiempo para verlos en la lista, pero no sin fin: van en
+        // espacios.json, que comparten todos, y cada código que alguien escribe los recorre.
+        for (int i = 0; e.enlaces.size() >= 100 && i < e.enlaces.size(); ) {
+            if (!e.enlaces.get(i).vigente(ahora)) e.enlaces.remove(i); else i++;
+        }
         Espacio.EnlaceUnion x = new Espacio.EnlaceUnion();
         String c;
         do { c = cuentas.codigo(8); } while (buscarEnlace(c) != null);

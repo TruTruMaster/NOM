@@ -939,7 +939,7 @@
       const otros = (NOM.app.espacios || []).filter((x) => x.id !== ed.espacio.id && x.permiso !== "LECTURA");
       const ancla = (ev && ev.currentTarget) || $("[data-a=mas]", vista);
       NOM.menu(ancla, [
-        ...(ed.soloLectura ? [] : [{ titulo: "Mover a…" }, ...otros.map((x) => ({ texto: x.nombre, icono: "folder-input", fn: async () => {
+        ...(!ed.esPropietario ? [] : [{ titulo: "Mover a…" }, ...otros.map((x) => ({ texto: x.nombre, icono: "folder-input", fn: async () => {
           if (!(await confirmar("Mover a otro espacio", `El documento pasará a ${x.nombre}: lo verán sus miembros y dejará de estar en ${ed.espacio.nombre}.`, { si: "Mover" }))) return;
           try { await api.put(`/api/documentos/${docId}/espacio`, { espacioId: x.id }); aviso(`Movido a ${x.nombre}`, { tipo: "ok" }); window.dispatchEvent(new HashChangeEvent("hashchange")); } catch (e) { aviso(e.message, { tipo: "error" }); }
         } })), "-"]),

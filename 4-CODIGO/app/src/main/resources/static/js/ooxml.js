@@ -31,6 +31,34 @@
    * Arma un .zip. Cada archivo: { nombre, datos (texto o bytes) }. Los XML van comprimidos
    * (DEFLATE propio, compresion.js); las imágenes, que ya vienen comprimidas, se guardan tal cual.
    */
+  /**
+   * Relaciones externas de lo que se descarga: se quedan las páginas web, el correo y las rutas de una unidad local; una
+   * plantilla de otro sitio, una ruta de red u otro esquema pasa a «about:blank». Un archivo sin nada de eso sale igual,
+   * byte por byte.
+   */
+  function destinoPeligroso(tipo, destino) {
+    const d = String(destino || "").trim(), t = String(tipo || "");
+    if (/^(https?:\/\/|mailto:)/i.test(d)) return /\/attachedTemplate$/i.test(t);
+    if (/^file:\/\/\/[A-Za-z]:[\\/]/i.test(d) || /^[A-Za-z]:[\\/]/.test(d)) return false;   // una unidad local
+    return true;   // UNC, file://equipo, esquemas que abren programas, rutas relativas raras
+  }
+  function relsSeguras(datos) {
+    const texto = typeof datos === "string" ? datos : new TextDecoder().decode(datos);
+    if (!/TargetMode\s*=\s*["']External/i.test(texto)) return datos;
+    let doc;
+    try { doc = new DOMParser().parseFromString(texto, "application/xml"); } catch (e) { return datos; }
+    if (!doc || doc.getElementsByTagName("parsererror").length) return datos;
+    let cambio = false;
+    for (const r of Array.from(doc.getElementsByTagNameNS("*", "Relationship"))) {
+      if (r.getAttribute("TargetMode") !== "External") continue;
+      if (destinoPeligroso(r.getAttribute("Type"), r.getAttribute("Target"))) { r.setAttribute("Target", "about:blank"); cambio = true; }
+    }
+    if (!cambio) return datos;
+    const t = new XMLSerializer().serializeToString(doc);
+    const xml = /^<\?xml/.test(t) ? t : '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' + t;
+    return typeof datos === "string" ? xml : enc.encode(xml);
+  }
+
   function zip(archivos, opc) {
     const partes = [], centrales = [];
     let off = 0;
@@ -38,7 +66,8 @@
       const nombre = enc.encode(a.nombre);
       // Parte que llegó dañada del archivo original: va tal cual venía (comprimida, con su CRC y su tamaño).
       const cr = a.crudo;
-      const datos = cr ? { length: cr.tam } : typeof a.datos === "string" ? enc.encode(a.datos) : a.datos, crc = cr ? cr.crc : crc32(datos);
+      const limpio = !cr && /\.rels$/i.test(a.nombre) && a.datos != null ? relsSeguras(a.datos) : a.datos;
+      const datos = cr ? { length: cr.tam } : typeof limpio === "string" ? enc.encode(limpio) : limpio, crc = cr ? cr.crc : crc32(datos);
       let cuerpo = cr ? cr.datos : datos, metodo = cr ? 8 : 0;
       if (!cr && datos.length > 40 && !a.sinComprimir) {
         // Lo que ya viene comprimido (fotos) se prueba rápido: algunos PNG mal comprimidos todavía bajan bastante.

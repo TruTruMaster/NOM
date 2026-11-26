@@ -121,9 +121,21 @@
   }
   api.equipoViejo = equipoViejo;
 
+  /**
+   * Una ruta de la API armada con datos (un id que vino en la dirección, en un documento o en un mensaje) se queda en la
+   * ruta que se armó: sin partes «.» o «..» (tampoco escritas «%2e»), «%2f» ni «\\».
+   */
+  function exigirRuta(ruta) {
+    const camino = String(ruta).split(/[?#]/)[0];
+    if (!camino.startsWith("/api/") || /\\|%2f|%5c|%00/i.test(camino) || /(^|\/)(\.|%2e){1,2}(\/|$)/i.test(camino))
+      throw new ErrorApi(400, { error: "Esa dirección no es válida" });
+  }
+  api.exigirRuta = exigirRuta;
+
   /** Petición JSON con tiempo límite. Lanza ErrorApi (estado 0 = sin red). */
   api.pedir = async function (metodo, ruta, cuerpo, opc) {
     opc = opc || {};
+    exigirRuta(ruta);
     const base = api.servidor();
     if (empaquetada && !base) throw new ErrorApi(0, { error: "Primero elige dónde trabaja tu equipo" });
     const cab = { Accept: "application/json" };
@@ -134,7 +146,7 @@
       try { cuerpo = await NOM.e2e.alEnviar(metodo, ruta, cuerpo); }
       catch (e) { throw new ErrorApi(e.estado === 0 ? 0 : 400, { error: e.message }); }
     }
-    const tok = api.token();
+    const tok = opc.sinSesion ? null : api.token();
     if (tok) cab.Authorization = "Bearer " + tok;
     // (las llaves «_…» del cuerpo son de este equipo, como _llaveDoc: no salen. Las de DENTRO de los datos sí: antes se
     // quitaban todas y un documento perdía lo que la importación guarda así, como el color «_c» de una animación.)
@@ -187,6 +199,7 @@
    */
   api.binario = async function (metodo, ruta, bytes, opc) {
     opc = opc || {};
+    exigirRuta(ruta);
     const base = api.servidor();
     if (empaquetada && !base) throw new ErrorApi(0, { error: "Primero elige dónde trabaja tu equipo" });
     const ctl = new AbortController();
@@ -217,6 +230,7 @@
    */
   const sinBoletos = new Set();
   async function direccionCanal(ruta, cliente) {
+    exigirRuta(ruta);
     const base = api.servidor(), fin = "&cliente=" + encodeURIComponent(cliente || "");
     // La pantalla del proyector se abre con su código, sin sesión: no lleva boleto ni token.
     if (!api.token() || ruta.startsWith("/api/proyeccion/")) return base + ruta + "?" + fin.slice(1);

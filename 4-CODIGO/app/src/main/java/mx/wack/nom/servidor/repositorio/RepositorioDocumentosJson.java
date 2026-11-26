@@ -104,20 +104,30 @@ public class RepositorioDocumentosJson implements RepositorioDocumentos {
         almacen.escribir("docs/" + docId + "/versiones.json", h);
     }
 
+    /** Lo más que mide la bitácora de un documento: al pasar, se queda con lo más nuevo (ver AlmacenJson.recortarLineas). */
+    static final long MAX_BITACORA = 16L * 1024 * 1024;
+
     @Override public void anotarActividad(String docId, Map<String, Object> entrada) {
         // D.1: cada linea va cifrada por separado (asi se sigue agregando sin reescribir el archivo).
-        synchronized (this) { almacen.agregarLinea("docs/" + docId + "/actividad.jsonl", almacen.json().writeValueAsString(entrada)); }
+        String ruta = "docs/" + docId + "/actividad.jsonl";
+        synchronized (this) {
+            almacen.agregarLinea(ruta, almacen.json().writeValueAsString(entrada));
+            almacen.recortarLineas(ruta, MAX_BITACORA);
+        }
     }
 
     @Override public List<Map<String, Object>> actividad(String docId, int max) {
-        List<String> lineas = almacen.lineas("docs/" + docId + "/actividad.jsonl");
+        // (desde el final: solo lo que se pide)
+        List<String> lineas = almacen.ultimasLineas("docs/" + docId + "/actividad.jsonl", max);
         List<Map<String, Object>> r = new ArrayList<>();
-        for (int i = lineas.size() - 1; i >= 0 && r.size() < max; i--) {
+        for (int i = lineas.size() - 1; i >= 0; i--) {
             if (lineas.get(i).isBlank()) continue;
             r.add(almacen.json().readValue(lineas.get(i), new TypeReference<LinkedHashMap<String, Object>>() { }));
         }
         return r;
     }
+
+    @Override public long bytesActividad(String docId) { return almacen.tamano("docs/" + docId + "/actividad.jsonl"); }
 
     @Override public synchronized Map<String, Map<String, Object>> visitas(String docId) {
         return almacen.leer("docs/" + docId + "/visitas.json", new TypeReference<LinkedHashMap<String, Map<String, Object>>>() { }, new LinkedHashMap<>());

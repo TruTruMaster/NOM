@@ -2,6 +2,18 @@
 
 Lo que cambió en cada versión, en corto (es la página «Novedades» de la ayuda; la escribe `4-CODIGO/ayuda/generar.py`). El diario completo, día por día, está en `LOG.md`.
 
+## 0.23.4 — noviembre de 2026
+
+- **Mover documentos:** sacar un documento de un espacio para llevarlo a otro ahora es cosa del propietario del espacio
+  (como borrarlo para siempre). Quien edita puede hacer una copia en otro de sus espacios.
+- **Enlaces dentro de los documentos:** solo se abren enlaces de páginas web y de correo.
+- **Archivos de Office que descargas:** NOM quita de ellos las referencias a plantillas o carpetas de otros equipos.
+- **Versiones guardadas a mano:** si no cambió nada desde la última, no se guarda otra igual.
+- **Servidor más firme:** topes nuevos para lo que más le cuesta al servidor (buscar, el chat, la copia en otro
+  servidor y los cambios muy grandes), y la bitácora de cada documento ya no crece sin fin.
+- **Hojas de cálculo:** una hoja con fórmulas que arman matrices enormes ya no congela el navegador (da #NUM!).
+- **App de Android:** los archivos se guardan en Descargas con un nombre limpio.
+
 ## 0.23.3 — noviembre de 2026
 
 - **Wi-Fi con página de inicio de sesión:** si la red de la escuela contesta con su propia página en lugar de NOM, tus

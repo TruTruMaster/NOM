@@ -128,6 +128,72 @@ public class AlmacenJson {
         }
     }
 
+    /**
+     * Las últimas `max` líneas de una bitácora (de la más vieja a la más nueva), ya descifradas, leyendo el archivo desde
+     * el final: abrir un documento ya no lee (ni descifra) toda su bitácora.
+     */
+    public java.util.List<String> ultimasLineas(String relativa, int max) {
+        Path p = ruta(relativa);
+        if (max <= 0 || !Files.exists(p)) return java.util.List.of();
+        java.util.ArrayDeque<String> r = new java.util.ArrayDeque<>();
+        try (java.io.RandomAccessFile f = new java.io.RandomAccessFile(p.toFile(), "r")) {
+            long pos = f.length();
+            java.io.ByteArrayOutputStream resto = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[64 * 1024];
+            while (pos > 0 && r.size() < max) {
+                int n = (int) Math.min(buf.length, pos);
+                pos -= n;
+                f.seek(pos);
+                f.readFully(buf, 0, n);
+                byte[] trozo = new byte[n + resto.size()];
+                System.arraycopy(buf, 0, trozo, 0, n);
+                System.arraycopy(resto.toByteArray(), 0, trozo, n, resto.size());
+                int fin = trozo.length;
+                for (int i = trozo.length - 1; i >= 0 && r.size() < max; i--) {
+                    if (trozo[i] != '\n') continue;
+                    String linea = new String(trozo, i + 1, fin - i - 1, java.nio.charset.StandardCharsets.UTF_8);
+                    if (!linea.isBlank()) r.addFirst(cifrado.descifrarLinea(linea.strip(), relativa));
+                    fin = i;
+                }
+                resto.reset();
+                if (r.size() < max) resto.write(trozo, 0, fin);
+                if (resto.size() > 64L * 1024 * 1024) throw new IOException("Línea demasiado larga en " + relativa);
+            }
+            if (pos == 0 && r.size() < max && resto.size() > 0) {
+                String linea = resto.toString(java.nio.charset.StandardCharsets.UTF_8);
+                if (!linea.isBlank()) r.addFirst(cifrado.descifrarLinea(linea.strip(), relativa));
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        return new java.util.ArrayList<>(r);
+    }
+
+    /**
+     * Si una bitácora pasa de maxBytes, se queda con sus líneas más nuevas (las que caben en la mitad): una bitácora no
+     * crece sin fin (está en la misma tarjeta que todo lo demás).
+     */
+    public synchronized void recortarLineas(String relativa, long maxBytes) {
+        Path p = ruta(relativa);
+        try {
+            if (!Files.exists(p) || Files.size(p) <= maxBytes) return;
+            long quedan = maxBytes / 2;
+            byte[] todo;
+            try (java.io.RandomAccessFile f = new java.io.RandomAccessFile(p.toFile(), "r")) {
+                long ini = Math.max(0, f.length() - quedan);
+                todo = new byte[(int) (f.length() - ini)];
+                f.seek(ini);
+                f.readFully(todo);
+            }
+            int corte = 0;
+            while (corte < todo.length && todo[corte] != '\n') corte++;   // (sin la primera línea, que quedó partida)
+            byte[] nuevo = java.util.Arrays.copyOfRange(todo, Math.min(todo.length, corte + 1), todo.length);
+            reemplazar(p, nuevo);
+        } catch (IOException e) {
+            log.warn("No se pudo recortar {}: {}", relativa, e.getMessage());
+        }
+    }
+
     public Path raiz() { return raiz; }
 
     /** La ruta de un archivo de datos; nunca fuera de la carpeta de datos (un nombre con «..» no sale de ella). */

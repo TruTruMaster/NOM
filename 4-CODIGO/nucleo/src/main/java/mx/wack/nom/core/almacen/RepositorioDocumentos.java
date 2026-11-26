@@ -34,6 +34,9 @@ public interface RepositorioDocumentos {
     /** Las ultimas 'max' entradas de la bitacora, de la mas nueva a la mas vieja. */
     List<Map<String, Object>> actividad(String docId, int max);
 
+    /** Lo que ocupa la bitácora de un documento (cuenta en la cuota del propietario del espacio). */
+    default long bytesActividad(String docId) { return 0; }
+
     /** Ultima vez que cada persona abrio el documento: usuarioId -> { t, reloj }. */
     Map<String, Map<String, Object>> visitas(String docId);
     void guardarVisita(String docId, String usuarioId, Map<String, Object> visita);

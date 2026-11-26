@@ -616,7 +616,8 @@
       const anterior = api.servidor();
       api.fijarServidor(dir);
       try {
-        const info = await api.get("/api/red/info", undefined, { ms: 4000 });
+        // (a un servidor que apenas se prueba no se le manda la sesión de ningún otro)
+        const info = await api.get("/api/red/info", undefined, { ms: 4000, sinSesion: true });
         if (info.nom !== 1) throw new Error();
         NOM.aviso("Conectado con " + (info.equipo || dir), { tipo: "ok" });
         if (NOM.revisarVersion) NOM.revisarVersion(info);

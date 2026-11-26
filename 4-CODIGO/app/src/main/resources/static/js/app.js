@@ -192,6 +192,8 @@
     document.title = "NOM";
     const h = location.hash || "#/";
     let m;
+    // Un id que llega en la dirección (un enlace que alguien mandó) solo puede ser un id: nada de «../» ni «%2F».
+    const idValido = (x) => /^[A-Za-z0-9_-]{1,64}$/.test(x);
     // Unirse con un código o QR (2.1) y la pantalla del proyector (5.5): con o sin cuenta.
     // 8.5 Ver un solo documento con el enlace que creó el propietario: sin cuenta.
     if ((m = h.match(/^#\/ver\/([^/?]+)/))) { await montar(NOM.vistaVer.abrir(raiz, decodeURIComponent(m[1]))); return; }
@@ -222,9 +224,13 @@
       return;
     }
     if ((m = h.match(/^#\/doc\/([^/?]+)/))) {
-      await montar(NOM.editor.abrir(raiz, decodeURIComponent(m[1]), { vigente }));
+      let id = "";
+      try { id = decodeURIComponent(m[1]); } catch (e) { id = ""; }
+      if (!idValido(id)) { location.hash = "#/"; return; }
+      await montar(NOM.editor.abrir(raiz, id, { vigente }));
       return;
     }
+    if ((m = h.match(/^#\/espacio\/([^/?]+)/)) && !idValido((() => { try { return decodeURIComponent(m[1]); } catch (e) { return ""; } })())) { location.hash = "#/"; return; }
     if ((m = h.match(/^#\/espacio\/([^/?]+)/))) {
       const v = cascaron("espacio", (app.espacios.find((e) => e.id === m[1]) || {}).nombre);
       app.fijarFab(null);

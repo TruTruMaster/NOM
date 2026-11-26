@@ -77,8 +77,8 @@ public class PublicoApi {
 
     /** Con sesion: la cuenta abierta entra al espacio con el permiso del enlace. */
     @PostMapping("/api/enlaces/{codigo}/entrar")
-    public Map<String, Object> entrar(@RequestAttribute(FiltroSesion.ATRIBUTO) Usuario u, @PathVariable String codigo) {
-        return espacios.entrarConEnlace(u, codigo);
+    public Map<String, Object> entrar(@RequestAttribute(FiltroSesion.ATRIBUTO) Usuario u, @PathVariable String codigo, jakarta.servlet.http.HttpServletRequest req) {
+        return conTope(req, () -> espacios.entrarConEnlace(u, codigo));
     }
 
     @PostMapping("/api/recibos/verificar")

@@ -31,6 +31,13 @@ public class FiltroCabeceras extends OncePerRequestFilter {
             + "connect-src 'self' https: http:; worker-src 'self'; manifest-src 'self'; object-src 'none'; "
             + "base-uri 'self'; form-action 'self'; frame-ancestors 'self'";
 
+    /** En la página de la app: todo HTML pasa por la política «default» de js/nucleo.js (Trusted Types). */
+    static final String TIPOS_SEGUROS = "; require-trusted-types-for 'script'; trusted-types default";
+
+    static boolean paginaPrincipal(String ruta) {
+        return "/".equals(ruta) || "/index.html".equals(ruta) || "/unirse".equals(ruta) || "/proyectar".equals(ruta);
+    }
+
     /** ¿El navegador ve esta página en un origen de confianza (https o este mismo equipo)? */
     static boolean confiable(HttpServletRequest req) {
         if ("https".equalsIgnoreCase(req.getHeader("X-Forwarded-Proto")) || req.isSecure()) return true;
@@ -52,7 +59,7 @@ public class FiltroCabeceras extends OncePerRequestFilter {
         if (confiable(req)) res.setHeader("Cross-Origin-Opener-Policy", mudanza ? "unsafe-none" : "same-origin");
         res.setHeader("Cross-Origin-Resource-Policy", "same-site");
         res.setHeader("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), payment=()");
-        if (!req.getRequestURI().startsWith("/api/")) res.setHeader("Content-Security-Policy", CSP);
+        if (!req.getRequestURI().startsWith("/api/")) res.setHeader("Content-Security-Policy", paginaPrincipal(req.getRequestURI()) ? CSP + TIPOS_SEGUROS : CSP);
         // Los datos de la API nunca se guardan en la caché del navegador: ahí quedarían en claro (lo del
         // equipo vive cifrado en la bóveda) y, sin red, el navegador podría dar una copia vieja como si
         // fuera la del servidor (Firefox lo hacía al recargar sin conexión).

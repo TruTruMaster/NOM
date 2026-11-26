@@ -225,7 +225,7 @@ public class ServicioDocumentos {
         for (Espacio e : espacios.todos()) {
             if (!propietarioId.equals(e.propietarioId)) continue;
             for (Documento d : repo.delEspacio(e.id)) {
-                total += repo.bytesEstado(d.id);
+                total += repo.bytesEstado(d.id) + repo.bytesActividad(d.id);
                 for (Version v : repo.historial(d.id)) total += v.bytes;
             }
             total += bytesChat.applyAsLong(e.id);
@@ -250,7 +250,7 @@ public class ServicioDocumentos {
             long b = 0;
             int n = 0;
             for (Documento d : repo.delEspacio(e.id)) {
-                b += repo.bytesEstado(d.id);
+                b += repo.bytesEstado(d.id) + repo.bytesActividad(d.id);
                 for (Version v : repo.historial(d.id)) b += v.bytes;
                 n++;
             }
@@ -278,9 +278,12 @@ public class ServicioDocumentos {
         return r;
     }
 
-    private void revisarCuota(Espacio e) {
+    private void revisarCuota(Espacio e) { revisarCuota(e, 1.0); }
+
+    /** factor: cuánto de la cuota se deja usar (los documentos chicos se siguen editando hasta 1.5 veces la cuota). */
+    private void revisarCuota(Espacio e, double factor) {
         if (cuotaBytes <= 0) return;
-        if (usoDe(e.propietarioId) >= cuotaBytes)
+        if (usoDe(e.propietarioId) >= (long) (cuotaBytes * factor))
             throw new ErrorNom(ErrorNom.LLENO, "El propietario del espacio ya usó todo su espacio en la nube ("
                     + (cuotaBytes / (1024 * 1024)) + " MB). Liberen versiones viejas o borren documentos.", null,
                     Map.of("cuota", cuotaBytes));
@@ -341,11 +344,18 @@ public class ServicioDocumentos {
     }
 
     private Documento crearNuevo(Usuario u, String espacioId, String nombre, String modo, List<Operacion> iniciales, String llave) {
+        return crearNuevo(u, espacioId, nombre, modo, iniciales, llave, 0);
+    }
+
+    /** relojBase: el reloj del documento del que es copia (una rama), para el tope del reloj de lo que trae. */
+    private Documento crearNuevo(Usuario u, String espacioId, String nombre, String modo, List<Operacion> iniciales, String llave, long relojBase) {
         Espacio e = espacios.requerir(espacioId);
         espacios.exigir(e, u, Permiso.EDICION);
         revisarCuota(e);
         if (e.e2e && (llave == null || llave.isBlank() || !ServicioEspacios.cifrado(nombre)))
             throw ErrorNom.invalido("Este espacio está cifrado de extremo a extremo: crea el documento desde una app actualizada", null);
+        // (la llave va en los metadatos, que se guardan junto con los de todos los documentos: corta, como la del espacio)
+        if (e.e2e && llave.length() > 4000) throw ErrorNom.invalido("La llave del documento no es válida", "llave");
         if (!e.e2e) nombre = Textos.limpio(nombre);
         nombre = nombre == null || nombre.isBlank() ? "Documento sin título" : nombre.trim();
         if (nombre.length() > (e.e2e ? 600 : 120)) throw ErrorNom.invalido("Máximo 120 caracteres", "nombre");
@@ -380,10 +390,11 @@ public class ServicioDocumentos {
         if (iniciales != null) {
             exigirTamanoEnvio(iniciales, Integer.MAX_VALUE);
             long peso = 0;
-            for (Operacion op : iniciales) peso += pesoAprox(op.campos()) + pesoAprox(op.s()) + 64;
+            for (Operacion op : iniciales) if (op != null) peso += pesoAprox(op.campos()) + pesoAprox(op.s()) + 64;
             if (peso > MAX_BYTES_ESTADO)
                 throw new ErrorNom(ErrorNom.LLENO, "El documento superaría el tamaño máximo (25 MB). Lo último se queda en este equipo: divide el contenido en varios documentos.", null, Map.of("tope", MAX_BYTES_ESTADO));
-            for (Operacion op : iniciales) if (op.valida()) mot.fusionar(est, op);
+            long limite = limiteReloj(Math.max(est.reloj, relojBase), iniciales, HOLGURA_REPLICA);
+            for (Operacion op : iniciales) if (op != null && op.valida() && relojValido(op, limite)) mot.fusionar(est, op);
         }
         sincronizarMeta(d, est);
         repo.guardarEstado(d.id, est);
@@ -506,6 +517,18 @@ public class ServicioDocumentos {
         }
         if (ops == null || ops.isEmpty()) return Map.of("aplicadas", 0);
         exigirTamanoEnvio(ops, MAX_OPS_ENVIO);
+        // Lo que cuesta aplicar cambios (con partes asignadas, cada uno recorre el texto): un tope de tiempo de procesador
+        // por cuenta. Escribir normalmente gasta milisegundos; la página reintenta sola si llega aquí.
+        topes.exigirTiempo("ops|" + u.id, 15_000, "El servidor está ocupado con tus cambios: se enviarán en un momento");
+        long inicioCpu = System.nanoTime();
+        try { return aplicarConTiempo(u, docId, d, e, p, ops, cliente, dispositivo); }
+        finally { topes.gastar("ops|" + u.id, (System.nanoTime() - inicioCpu) / 1_000_000); }
+    }
+
+    private Map<String, Object> aplicarConTiempo(Usuario u, String docId, Documento d, Espacio e, Permiso p, List<Operacion> ops, String cliente, String dispositivo) {
+        // (los dos van a la bitácora y a todos los canales del documento: cortos y limpios)
+        cliente = Difusor.clienteValido(cliente);
+        dispositivo = dispositivo == null ? null : Textos.cortar(Textos.limpio(dispositivo), 40);
         boolean propietario = p == Permiso.PROPIETARIO;
         List<Operacion> aplicadas = new ArrayList<>();
         List<String[]> conMencion = new ArrayList<>();
@@ -515,19 +538,21 @@ public class ServicioDocumentos {
         Map<String, Object> paraProy = null;
         synchronized (candado(docId)) {
             est = repo.estado(docId);
-            if (repo.bytesEstado(docId) > 64 * 1024) revisarCuota(e);
+            // (un documento chico se sigue editando aunque la cuenta llegue a su cuota, pero no sin fin)
+            revisarCuota(e, repo.bytesEstado(docId) > 64 * 1024 ? 1.0 : 1.5);
             // Tope por documento ANTES de aplicar nada: lo guardado + lo que crecio sin guardar + lo que llega.
             // (Antes se media solo lo ya escrito a disco, despues de aplicar: un envio grande de una vez pasaba.)
             long entrante = 0;
-            for (Operacion op : ops) entrante += pesoAprox(op.campos()) + pesoAprox(op.s()) + 64;
+            for (Operacion op : ops) if (op != null) entrante += pesoAprox(op.campos()) + pesoAprox(op.s()) + 64;
             long previsto = repo.bytesEstadoReal(docId) + crecidoSinGuardar.getOrDefault(docId, 0L) + entrante;
             if (previsto > MAX_BYTES_ESTADO)
                 throw new ErrorNom(ErrorNom.LLENO, "El documento superaría el tamaño máximo (25 MB). Lo último se queda en este equipo: divide el contenido en varios documentos.", null, Map.of("tope", MAX_BYTES_ESTADO));
             MotorCRDT mot = motor(docId);
             Set<String> descartados = new HashSet<>();
+            long limite = limiteReloj(est.reloj, ops, HOLGURA_RELOJ);
             for (Operacion op : ops) {
                 op = sinCambioDeTipo(op);
-                if (op == null || !op.valida()) continue;
+                if (op == null || !op.valida() || !relojValido(op, limite)) continue;
                 // 3.5 y 5.4: partes con dueno y plantilla del maestro. El propietario del espacio siempre puede.
                 String no = propietario ? null : candadoDe(u, est, op, descartados);
                 if (no != null) {
@@ -755,7 +780,38 @@ public class ServicioDocumentos {
     /** Lo más que puede abarcar, sumando, lo que llega en un mismo envío (operaciones de mostrar/ocultar y de formato). */
     static final long MAX_ALCANCE_ENVIO = 20_000_000L;
     /** Operaciones por envío al documento abierto (la página manda de 300 en 300). */
-    static final int MAX_OPS_ENVIO = 5_000;
+    static final int MAX_OPS_ENVIO = 1_000;
+
+    /**
+     * El reloj de Lamport de un documento avanza en cada envío a lo más lo que traen sus operaciones (una unidad por
+     * operación y una por letra insertada) más esta holgura (lo que una pestaña sin conexión pudo adelantarse con cambios
+     * que ya no están).
+     */
+    static final long HOLGURA_RELOJ = 10_000_000L;
+    /** La holgura para lo que llega como copia completa (crear con operaciones, una rama, otro servidor). */
+    static final long HOLGURA_REPLICA = 1_000_000_000L;
+    /** Ningún reloj pasa de aquí (la página usa números de JavaScript, exactos hasta 2^53). */
+    static final long MAX_RELOJ = 1L << 50;
+
+    /** El último reloj que usa una operación (un texto insertado usa uno por letra). */
+    static long finDe(Operacion op) {
+        long fin = op.t();
+        if (op.esSecuencia() && "i".equals(op.s().get("k")) && op.s().get("e") == null && op.s().get("x") instanceof String x)
+            fin += Math.max(0, x.codePointCount(0, x.length()) - 1);
+        return fin;
+    }
+
+    /** Hasta dónde puede llegar el reloj del documento con este envío. */
+    static long limiteReloj(long relojActual, List<Operacion> ops, long holgura) {
+        long l = Math.max(0, relojActual) + holgura;
+        for (Operacion op : ops) if (op != null && op.t() > 0 && op.t() <= MAX_RELOJ) l += 1 + Math.max(0, finDe(op) - op.t());
+        return l < 0 || l > MAX_RELOJ ? MAX_RELOJ : l;
+    }
+
+    /** ¿La operación cabe en el reloj permitido? */
+    static boolean relojValido(Operacion op, long limite) {
+        return op.t() > 0 && op.t() <= limite && finDe(op) <= limite;
+    }
 
     static void exigirTamanoEnvio(List<Operacion> ops, int maxOps) {
         if (ops == null) return;
@@ -931,8 +987,17 @@ public class ServicioDocumentos {
     public Version guardarVersion(Usuario u, String docId, String etiqueta) {
         Documento d = requerir(docId);
         permiso(u, d, Permiso.EDICION);
+        revisarCuota(espacios.requerir(d.espacioId));
+        String et = etiqueta == null || etiqueta.isBlank() ? "Guardado manual" : Textos.cortar(Textos.limpio(etiqueta).trim(), 120);
         synchronized (candado(docId)) {
-            return nuevaVersion(d, repo.estado(docId), u, etiqueta == null || etiqueta.isBlank() ? "Guardado manual" : etiqueta.trim());
+            // Sin cambios desde la última versión y con la misma etiqueta (o sin etiqueta): se da esa (cada versión es una
+            // foto completa del documento).
+            if (!d.pendienteVersion && d.version > 0) {
+                List<Version> h = repo.historial(docId);
+                Version ult = h.isEmpty() ? null : h.get(h.size() - 1);
+                if (ult != null && ult.numero == d.version && (etiqueta == null || etiqueta.isBlank() || et.equals(ult.etiqueta))) return ult;
+            }
+            return nuevaVersion(d, repo.estado(docId), u, et);
         }
     }
 
@@ -1277,6 +1342,7 @@ public class ServicioDocumentos {
     }
 
     public Map<String, Object> moverProyeccion(Usuario u, String docId, String pagina, int paso) {
+        if (pagina != null && (pagina.length() > 64 || !pagina.matches("[A-Za-z0-9_.:-]+"))) throw ErrorNom.invalido("Diapositiva no válida", "pagina");
         Proyeccion p = proyeccionDe(docId, u.id);
         if (p == null) { iniciarProyeccion(u, docId); p = proyeccionDe(docId, u.id); }
         boolean otra = pagina != null && !pagina.equals(p.pagina);
@@ -1652,13 +1718,15 @@ public class ServicioDocumentos {
     public Documento mover(Usuario u, String docId, String espacioDestino) {
         Documento d = requerir(docId);
         Permiso p = permiso(u, d, Permiso.EDICION);
+        // Sacar un documento de su espacio es cosa del propietario del espacio (como borrarlo para siempre); quien edita
+        // puede hacer una copia.
+        if (p != Permiso.PROPIETARIO)
+            throw ErrorNom.prohibido("Solo el propietario del espacio saca un documento de él. Puedes hacer una copia en otro de tus espacios.");
         Espacio destino = espacios.requerir(espacioDestino == null ? "" : espacioDestino);
         Permiso enDestino = espacios.exigir(destino, u, Permiso.EDICION);
         if (destino.id.equals(d.espacioId)) return vistaPara(d, u, p);
         if (destino.e2e || espacios.requerir(d.espacioId).e2e)
             throw ErrorNom.invalido("Un documento cifrado de extremo a extremo no se mueve a otro espacio (ni uno normal a uno cifrado)", null);
-        if ((d.protegido || d.entregaLimite > 0) && p != Permiso.PROPIETARIO)
-            throw ErrorNom.prohibido("Solo el propietario del espacio mueve un documento protegido o con fecha de entrega");
         revisarCuota(destino);
         // sus binarios (los del estado y los de sus versiones: restaurar una versión vieja también tiene que verse) van al
         // espacio nuevo antes de moverlo; en el de antes se quedan hasta que la limpieza vea que ya nadie los usa
@@ -1768,10 +1836,23 @@ public class ServicioDocumentos {
     }
 
     /** Busca en el nombre y en el contenido de los documentos del espacio (sin acentos ni mayusculas). */
+    private final Topes topes = new Topes();
+    /** Búsquedas a la vez en todo el servidor (cada una arma el texto de todos los documentos del espacio). */
+    private final java.util.concurrent.Semaphore busquedas = new java.util.concurrent.Semaphore(2, true);
+
     public List<Map<String, Object>> buscar(Usuario u, String espacioId, String q) {
         espacios.exigir(espacios.requerir(espacioId), u, Permiso.LECTURA);
-        String aguja = normal(q == null ? "" : q.trim().replaceAll("\\s+", " "));
-        if (aguja.length() < 2) return List.of();
+        String aguja0 = normal(q == null ? "" : q.trim().replaceAll("\\s+", " "));
+        if (aguja0.length() < 2) return List.of();
+        topes.exigir("buscar|" + u.id, 40, "Muchas búsquedas seguidas: espera un momento");
+        boolean turno;
+        try { turno = busquedas.tryAcquire(10, java.util.concurrent.TimeUnit.SECONDS); }
+        catch (InterruptedException e) { Thread.currentThread().interrupt(); turno = false; }
+        if (!turno) throw new ErrorNom(ErrorNom.DEMASIADOS, "El servidor está buscando mucho a la vez: intenta en un momento");
+        try { return buscarConTurno(espacioId, aguja0); } finally { busquedas.release(); }
+    }
+
+    private List<Map<String, Object>> buscarConTurno(String espacioId, String aguja) {
         if (aguja.length() > 80) aguja = aguja.substring(0, 80);
         List<Map<String, Object>> r = new ArrayList<>();
         for (Documento d : repo.delEspacio(espacioId)) {
@@ -1862,13 +1943,33 @@ public class ServicioDocumentos {
             d.enlaceVer = cifrado.token();
             repo.guardar(d);
         }
+        indiceVer().put(d.enlaceVer, d.id);
         return Map.of("enlace", d.enlaceVer);
+    }
+
+    /** enlace para ver → documento (sin recorrer todos los documentos de todos en cada petición sin sesión). */
+    private volatile Map<String, String> indiceVer;
+
+    private Map<String, String> indiceVer() {
+        Map<String, String> m = indiceVer;
+        if (m == null) {
+            synchronized (this) {
+                m = indiceVer;
+                if (m == null) {
+                    m = new ConcurrentHashMap<>();
+                    for (Espacio e : espacios.todos()) for (Documento x : repo.delEspacio(e.id)) if (x.enlaceVer != null) m.put(x.enlaceVer, x.id);
+                    indiceVer = m;
+                }
+            }
+        }
+        return m;
     }
 
     /** Quitar el enlace: quien lo tenga ya no puede abrirlo. */
     public Map<String, Object> quitarEnlaceVer(Usuario u, String docId) {
         Documento d = requerir(docId);
         permiso(u, d, Permiso.PROPIETARIO);
+        if (d.enlaceVer != null) indiceVer().remove(d.enlaceVer);
         d.enlaceVer = null;
         repo.guardar(d);
         return Map.of("ok", true);
@@ -1878,13 +1979,10 @@ public class ServicioDocumentos {
     /** El documento de un enlace para ver (o error si ya no sirve). */
     public Documento docDeEnlaceVer(String token) {
         Documento d = null;
-        if (token != null && token.length() >= 20) {
-            for (Espacio e : espacios.todos()) {
-                for (Documento x : repo.delEspacio(e.id)) {
-                    if (x.enlaceVer != null && x.eliminado <= 0 && java.security.MessageDigest.isEqual(x.enlaceVer.getBytes(java.nio.charset.StandardCharsets.UTF_8), token.getBytes(java.nio.charset.StandardCharsets.UTF_8))) { d = x; break; }
-                }
-                if (d != null) break;
-            }
+        if (token != null && token.length() >= 20 && token.length() <= 64) {
+            String id = indiceVer().get(token);
+            d = id == null ? null : repo.porId(id).filter(x -> x.eliminado <= 0 && x.enlaceVer != null
+                    && java.security.MessageDigest.isEqual(x.enlaceVer.getBytes(java.nio.charset.StandardCharsets.UTF_8), token.getBytes(java.nio.charset.StandardCharsets.UTF_8))).orElse(null);
         }
         if (d == null) throw new ErrorNom(ErrorNom.NO_EXISTE, "Este enlace ya no sirve: el propietario lo quitó o el documento ya no existe");
         return d;
@@ -1898,13 +1996,24 @@ public class ServicioDocumentos {
     /** ¿Lo que se le muestra a quien mira (con el enlace o en el proyector: sin el original de Office, comentarios ni
         notas) usa ese binario? */
     public boolean muestraBinario(Documento d, boolean proyeccion, String huella) {
+        // Lo que ve quien mira se calcula una vez por versión del documento.
+        String k = d.id + (proyeccion ? "|p" : "|v");
+        long mod = d.modificado, reloj;
+        EstadoDocumento est;
+        synchronized (candado(d.id)) { est = repo.estado(d.id); reloj = est.reloj; }
+        Object[] c = refsVisibles.get(k);
+        if (c != null && (long) c[0] == mod && (long) c[1] == reloj) return ((Set<?>) c[2]).contains(huella);
         EstadoDocumento copia;
         synchronized (candado(d.id)) { copia = repo.estado(d.id).copia(); }
         paraMirar(copia, !proyeccion);
         Set<String> s = new HashSet<>();
         refsBinarios(copia, s);
+        if (refsVisibles.size() > 2_000) refsVisibles.clear();
+        refsVisibles.put(k, new Object[] { mod, reloj, s });
         return s.contains(huella);
     }
+
+    private final Map<String, Object[]> refsVisibles = new ConcurrentHashMap<>();
 
     /** Las huellas de los binarios que usan los documentos del espacio: su estado, sus versiones y la papelera. */
     public Set<String> binariosUsados(String espacioId) {
@@ -2032,7 +2141,10 @@ public class ServicioDocumentos {
                 : nombre.trim();
         // (un nombre cifrado de extremo a extremo no se recorta: se rompería)
         if (!ServicioEspacios.cifrado(n)) n = Textos.cortar(Textos.limpio(n), 120);
-        Documento d = crear(u, e.id, n, original.modo == null ? "TEXTO" : original.modo.name(), ops, original.llave);
+        // (la rama es copia del original: su reloj se acota contra el del original)
+        long relojOriginal;
+        synchronized (candado(original.id)) { relojOriginal = repo.estado(original.id).reloj; }
+        Documento d = crearNuevo(u, e.id, n, original.modo == null ? "TEXTO" : original.modo.name(), ops, original.llave, relojOriginal);
         // La copia trae el nombre del original con su reloj: el de la rama va encima.
         renombrar(u, d.id, n);
         d = repo.porId(d.id).orElseThrow();
@@ -2041,8 +2153,8 @@ public class ServicioDocumentos {
         long ahora = System.currentTimeMillis();
         if (!recuperado) {
             d.ramaDe = original.id;
-            d.ramaBase = base == null ? new LinkedHashMap<>() : new LinkedHashMap<>(base);
-            d.ramaNodos = nodos == null ? new ArrayList<>() : new ArrayList<>(nodos.subList(0, Math.min(nodos.size(), 200)));
+            d.ramaBase = baseAcotada(base);
+            d.ramaNodos = nodosAcotados(nodos);
             d.ramaAutorId = u.id;
             d.ramaAutor = u.nombre;
             d.ramaCreada = ahora;
@@ -2053,7 +2165,14 @@ public class ServicioDocumentos {
         repo.guardar(d);
         if (propios != null && !propios.isEmpty()) {
             List<Map<String, Object>> l = new ArrayList<>();
-            for (Operacion op : propios) { if (op != null && l.size() < 20_000) l.add(opAMapa(op)); }
+            // (es solo un registro de lo propio, fuera de la cuota: acotado)
+            long peso = 0;
+            for (Operacion op : propios) {
+                if (op == null) continue;
+                peso += pesoAprox(op.campos()) + pesoAprox(op.s()) + 64;
+                if (l.size() >= 20_000 || peso > 2_000_000) break;
+                l.add(opAMapa(op));
+            }
             Map<String, Object> anexo = new LinkedHashMap<>();
             anexo.put("propios", l);
             anexo.put("creada", ahora);
@@ -2075,6 +2194,34 @@ public class ServicioDocumentos {
             difusor.avisarDocumento(original.id, "rama", Map.of("accion", "creada", "id", d.id, "nombre", d.nombre, "autor", u.nombre));
         }
         return conRamas(vistaPara(d, u, p));
+    }
+
+    /**
+     * La base y los nodos de una rama van en los metadatos, que se guardan junto con los de TODOS los documentos (cada
+     * cambio de cualquiera reescribe ese archivo): se guardan acotados. Si a una base le faltan nodos, la fusión solo
+     * marca de más lo que pudo cambiar (nada se pierde).
+     */
+    static final int MAX_NODOS_BASE = 512;
+
+    static Map<String, Long> baseAcotada(Map<String, Long> base) {
+        Map<String, Long> r = new LinkedHashMap<>();
+        if (base == null) return r;
+        for (Map.Entry<String, Long> x : base.entrySet()) {
+            if (r.size() >= MAX_NODOS_BASE) break;
+            Object v = x.getValue();
+            if (x.getKey() != null && x.getKey().matches("[A-Za-z0-9_.:-]{1,64}") && v instanceof Number num && num.longValue() >= 0 && num.longValue() <= MAX_RELOJ)
+                r.put(x.getKey(), num.longValue());
+        }
+        return r;
+    }
+
+    static List<String> nodosAcotados(List<String> nodos) {
+        List<String> r = new ArrayList<>();
+        if (nodos != null) for (Object x : nodos) {
+            if (r.size() >= 200) break;
+            if (x instanceof String t && t.matches("[A-Za-z0-9_.:-]{1,64}")) r.add(t);
+        }
+        return r;
     }
 
     private int ramasAbiertas(Documento d) {
@@ -2116,6 +2263,9 @@ public class ServicioDocumentos {
 
     /** Aplica muchas operaciones en lotes (el servidor acepta hasta 300 por envio). */
     private Map<String, Object> aplicarEnLotes(Usuario u, String docId, List<Operacion> ops, String cliente, String dispositivo) {
+        // En orden de reloj: cada lote adelanta el reloj del documento solo lo que trae (ver limiteReloj).
+        ops = new ArrayList<>(ops);
+        ops.sort(java.util.Comparator.comparingLong(Operacion::t));
         int aplicadas = 0, rechazadas = 0;
         String motivo = null;
         for (int i = 0; i < ops.size(); i += 300) {
@@ -2223,15 +2373,24 @@ public class ServicioDocumentos {
     public int fusionarExterno(String docId, List<Operacion> ops, String quien) {
         exigirTamanoEnvio(ops, Integer.MAX_VALUE);
         Documento d = requerir(docId);
+        // Lo que llega de otro servidor cuenta igual que lo de aquí: la cuota del propietario y el tope por documento.
+        revisarCuota(espacios.requerir(d.espacioId));
         List<Operacion> aplicadas = new ArrayList<>();
         synchronized (candado(docId)) {
             EstadoDocumento est = repo.estado(docId);
             MotorCRDT mot = motor(docId);
+            long limite = limiteReloj(est.reloj, ops, HOLGURA_REPLICA);
+            long base = repo.bytesEstadoReal(docId) + crecidoSinGuardar.getOrDefault(docId, 0L), crecido = 0;
             for (Operacion op : ops) {
+                if (base + crecido > MAX_BYTES_ESTADO) break;
                 op = sinCambioDeTipo(op);
-                if (op != null && op.valida() && !mot.fusionar(est, op).isEmpty()) aplicadas.add(op);
+                if (op != null && op.valida() && relojValido(op, limite) && !mot.fusionar(est, op).isEmpty()) {
+                    aplicadas.add(op);
+                    crecido += pesoAprox(op.campos()) + pesoAprox(op.s()) + 64;
+                }
             }
             if (!aplicadas.isEmpty()) {
+                crecidoSinGuardar.merge(docId, crecido, Long::sum);
                 d.modificado = System.currentTimeMillis();
                 d.pendienteVersion = true;
                 if (sincronizarMeta(d, est)) difusor.avisarEspacio(d.espacioId, "documentos", Map.of("accion", "actualizado", "id", d.id));
@@ -2288,9 +2447,8 @@ public class ServicioDocumentos {
         for (Object o : filas == null ? List.<Object>of() : filas.subList(0, Math.min(filas.size(), 500))) {
             if (!(o instanceof Map<?, ?> m)) continue;
             Map<String, Object> f = (Map<String, Object>) m;
-            String uid = String.valueOf(f.get("usuarioId"));
-            String nombre = String.valueOf(f.getOrDefault("usuario", "Alguien"));
-            if (nombre.length() > 40) nombre = nombre.substring(0, 40);
+            String uid = Textos.cortar(Textos.limpio(String.valueOf(f.get("usuarioId"))), 24);
+            String nombre = Textos.cortar(Textos.limpio(String.valueOf(f.getOrDefault("usuario", "Alguien"))), 40);
             // A nombre de una cuenta de aquí solo si es quien sube o si sube el propietario del espacio (el que
             // sincroniza su teléfono): un editor no puede escribir filas a nombre de otra persona, que irían a su
             // recibo de proceso y a sus aportes.
@@ -2307,15 +2465,38 @@ public class ServicioDocumentos {
             a.put("cliente", "externo");
             a.put("dispositivo", "Teléfono que comparte (" + origen + ")");
             for (String k : List.of("operaciones", "escritas", "borradas", "tecleadas", "pegadas", "citadas")) a.put(k, Math.max(0, num(f.get(k))));
-            a.put("bloques", f.get("bloques") instanceof List<?> l ? l.subList(0, Math.min(l.size(), 12)) : List.of());
-            a.put("campos", f.get("campos") instanceof List<?> l ? l.subList(0, Math.min(l.size(), 12)) : List.of());
-            a.put("pegados", f.get("pegados") instanceof List<?> l ? l.subList(0, Math.min(l.size(), 100)) : List.of());
+            // (cada elemento acotado: la fila va tal cual a la bitácora del documento)
+            a.put("bloques", textosCortos(f.get("bloques"), 12, 64));
+            a.put("campos", textosCortos(f.get("campos"), 12, 200));
+            a.put("pegados", pegadosLimpios(f.get("pegados")));
             a.put("externo", true);
             a.put("via", origen);
             repo.anotarActividad(docId, a);
             n++;
         }
         return Map.of("anotadas", n);
+    }
+
+    private static List<String> textosCortos(Object o, int max, int largo) {
+        List<String> r = new ArrayList<>();
+        if (o instanceof List<?> l) for (Object x : l) {
+            if (r.size() >= max) break;
+            if (x instanceof String t && t.length() <= largo) r.add(t);
+        }
+        return r;
+    }
+
+    private static List<Map<String, Object>> pegadosLimpios(Object o) {
+        List<Map<String, Object>> r = new ArrayList<>();
+        if (o instanceof List<?> l) for (Object x : l) {
+            if (r.size() >= 100) break;
+            if (!(x instanceof Map<?, ?> m)) continue;
+            Map<String, Object> pg = new LinkedHashMap<>();
+            pg.put("t", Math.max(0, num(m.get("t"))));
+            pg.put("letras", Math.max(0, num(m.get("letras"))));
+            r.add(pg);
+        }
+        return r;
     }
 
     /** Documento nuevo que llego de otro servidor (lo crea el propietario del espacio). */

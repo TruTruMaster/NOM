@@ -53,7 +53,8 @@ public class RedApi {
     /** CU-15 Descubrir espacios en la LAN. */
     @GetMapping("/descubrir")
     public Map<String, Object> descubrir() {
-        List<EspacioRemoto> lista = descubrimiento.buscarEnLan();
+        // En la nube no hay red local: no hay espacios que anunciar.
+        List<EspacioRemoto> lista = descubrimiento.lanActiva() ? descubrimiento.buscarEnLan() : List.of();
         return Map.of("espacios", lista, "udp", descubrimiento.udpActivo(), "sinRed", !nodo.enRedLocal() || nodo.direcciones().isEmpty());
     }
 }

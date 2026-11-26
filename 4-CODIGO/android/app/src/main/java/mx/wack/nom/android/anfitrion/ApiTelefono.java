@@ -497,7 +497,8 @@ final class ApiTelefono {
             Map<String, Object> cursor = c.get("cursor") instanceof Map ? (Map<String, Object>) c.get("cursor") : null;
             // 3.4 Al cerrar el documento, el cliente lo avisa: ahí termina su visita.
             if (Boolean.TRUE.equals(c.get("salir"))) { documentos.salir(u, x.group(1), texto(c, "cliente")); return ok(Map.of("ok", true)); }
-            difusor.actualizarPresencia(x.group(1), texto(c, "cliente"), texto(c, "bloque"), texto(c, "modo"), cursor);
+            documentos.permiso(u, documentos.requerir(x.group(1)), Permiso.LECTURA);
+            difusor.actualizarPresencia(u.id, x.group(1), texto(c, "cliente"), texto(c, "bloque"), texto(c, "modo"), cursor);
             return ok(Map.of("ok", true));
         }
         if ((x = coincide("/api/documentos/" + ID + "/proteccion", r)) != null && m.equals("PUT")) {
