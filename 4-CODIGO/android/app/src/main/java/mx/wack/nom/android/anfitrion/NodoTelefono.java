@@ -63,7 +63,7 @@ final class NodoTelefono implements Nodo {
         try {
             for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
                 if (!ni.isUp() || ni.isLoopback()) continue;
-                String n = ni.getName().toLowerCase();
+                String n = ni.getName().toLowerCase(java.util.Locale.ROOT);
                 // Datos móviles (rmnet, ccmni…) no sirven para la red local.
                 if (n.startsWith("rmnet") || n.startsWith("ccmni") || n.startsWith("dummy") || n.startsWith("tun")) continue;
                 for (InetAddress a : Collections.list(ni.getInetAddresses())) {

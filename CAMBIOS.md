@@ -2,6 +2,23 @@
 
 Lo que cambió en cada versión, en corto (es la página «Novedades» de la ayuda; la escribe `4-CODIGO/ayuda/generar.py`). El diario completo, día por día, está en `LOG.md`.
 
+## 0.23.2 — noviembre de 2026
+
+- **Archivos enormes:** si eliges una foto o un archivo de Office demasiado grande, NOM te dice al momento cuánto pesa y
+  cuál es el máximo, en lugar de quedarse pensando. Si en la app de Android la página se cierra por falta de memoria,
+  se vuelve a abrir sola y lo que faltaba enviar sigue guardado en tu equipo.
+- **Muchos archivos a la vez:** cuando todo un salón sube imágenes o importa presentaciones al mismo tiempo, el servidor
+  los recibe por turnos y ninguno se pierde.
+- **Cerrar la sesión en todos lados:** al cambiar la contraseña, recuperarla o borrar la cuenta, las otras pestañas y
+  equipos dejan de recibir cambios en vivo y piden entrar otra vez.
+- **Nombres limpios:** los nombres de espacios, documentos, carpetas y escuela ya no guardan caracteres invisibles que
+  cambian cómo se ven, y un emoji al final de un nombre largo ya no se corta a la mitad. El nombre largo de una rama
+  en un espacio cifrado ya no se daña.
+- **Teléfonos en otro idioma:** la hora en el nombre de una rama sale con números normales aunque el teléfono que
+  comparte esté en árabe, persa u otro idioma con sus propios números.
+- **Aviso de privacidad más claro:** ahora dice qué cuenta el recibo de tu trabajo, que tus
+  llaves de cifrado viajan cifradas, y qué otros sitios ven tu dirección IP. No cambia qué datos tratamos ni para qué.
+
 ## 0.23.1 — noviembre de 2026
 
 - **Una sola dirección:** NOM solo se usa en **www.nom.qd.je**. Si abres en el navegador la dirección de antes, te

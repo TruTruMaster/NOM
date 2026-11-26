@@ -329,7 +329,7 @@ final class ApiTelefono {
         if ((x = coincide("/api/espacios/" + ID + "/eventos", r)) != null && m.equals("GET")) {
             String id = x.group(1), cliente = p.consulta.getOrDefault("cliente", "");
             espacios.exigir(espacios.requerir(id), u, Permiso.LECTURA);
-            return Respuesta.sse(canal -> difusor.suscribir(u, id, null, cliente, canal));
+            return Respuesta.sse(canal -> difusor.suscribir(u, token, id, null, cliente, canal));
         }
         if ((x = coincide("/api/espacios/" + ID + "/conexion", r)) != null && m.equals("PUT"))
             return ok(espacios.conexion(u, x.group(1), Boolean.TRUE.equals(cuerpo(p).get("activa"))));
@@ -489,7 +489,7 @@ final class ApiTelefono {
             String id = x.group(1), cliente = p.consulta.getOrDefault("cliente", "");
             Documento d = documentos.requerir(id);
             documentos.permiso(u, d, Permiso.LECTURA);
-            return Respuesta.sse(canal -> difusor.suscribir(u, d.espacioId, id, cliente, canal));
+            return Respuesta.sse(canal -> difusor.suscribir(u, token, d.espacioId, id, cliente, canal));
         }
         if ((x = coincide("/api/documentos/" + ID + "/presencia", r)) != null && m.equals("POST")) {
             Map<String, Object> c = cuerpo(p);

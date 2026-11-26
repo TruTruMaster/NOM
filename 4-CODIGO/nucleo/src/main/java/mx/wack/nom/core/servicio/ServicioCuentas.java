@@ -333,6 +333,8 @@ public class ServicioCuentas {
             throw ErrorNom.invalido("Usa de 3 a 24 letras, números, punto, guion o guion bajo, sin espacios", "nombre");
         if (contrasena.length() < 8)
             throw ErrorNom.invalido("La contraseña necesita al menos 8 caracteres", "contrasena");
+        empresa = empresa == null ? null : Textos.limpio(empresa).trim();
+        if (empresa != null && empresa.length() > 80) throw ErrorNom.invalido("La escuela, empresa o equipo admite hasta 80 caracteres", "empresa");
         if (repo.porNombre(nombre).isPresent())
             throw new ErrorNom(ErrorNom.CONFLICTO, "El nombre ya está en uso", "nombre");
         anotarRegistro(origen, equipo, System.currentTimeMillis());
@@ -341,7 +343,7 @@ public class ServicioCuentas {
         u.id = cifrado.id();
         u.nombre = nombre;
         u.nombreClave = nombre.toLowerCase(Locale.ROOT);
-        u.empresa = empresa == null || empresa.isBlank() ? null : empresa.trim();
+        u.empresa = empresa == null || empresa.isEmpty() ? null : empresa;
         u.sal = cifrado.nuevaSal();
         u.hashContrasena = cifrado.hash(contrasena.toCharArray(), u.sal);
         u.creado = System.currentTimeMillis();

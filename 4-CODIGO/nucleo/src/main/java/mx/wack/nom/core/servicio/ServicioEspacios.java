@@ -230,7 +230,7 @@ public class ServicioEspacios {
         if (u.esInvitado()) throw ErrorNom.prohibido(u.alias ? "Un alias solo trabaja en el espacio al que entró. Para tener espacios propios, entra con tu cuenta cuando tengas Internet."
                 : "Las cuentas de invitado no crean espacios. Crea una cuenta para tener los tuyos.");
         if (u.retirada) throw ErrorNom.prohibido("Esta cuenta ya no se usa en este equipo");
-        nombre = nombre == null ? "" : nombre.trim();
+        nombre = nombre == null ? "" : Textos.limpio(nombre).trim();
         if (nombre.isEmpty()) throw ErrorNom.invalido("Ponle un nombre al espacio", "nombre");
         if (nombre.length() > 60) throw ErrorNom.invalido("Máximo 60 caracteres", "nombre");
         String clave = nombre.toLowerCase(Locale.ROOT);
@@ -252,6 +252,7 @@ public class ServicioEspacios {
         Espacio e = requerir(id);
         exigir(e, u, Permiso.PROPIETARIO);
         nombre = nombre == null ? "" : nombre.trim();
+        if (!e.e2e) nombre = Textos.limpio(nombre).trim();
         if (e.e2e && !cifrado(nombre)) throw ErrorNom.invalido("El nombre de un espacio cifrado se cifra en tu equipo (actualiza la app)", "nombre");
         if (nombre.isEmpty() || nombre.length() > (e.e2e ? 600 : 60)) throw ErrorNom.invalido("Escribe un nombre de 1 a 60 caracteres", "nombre");
         e.nombre = nombre;

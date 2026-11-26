@@ -83,6 +83,7 @@ public class ServicioChat {
             Object datos = a.get("datos");
             if (!(datos instanceof String d) || d.isEmpty()) throw ErrorNom.invalido("El archivo llegó vacío", "adjunto");
             if (e.e2e && !ServicioEspacios.cifrado(d)) throw ErrorNom.invalido("En un espacio cifrado los archivos se cifran en tu equipo (actualiza la app)", "adjunto");
+            if (!(e.e2e ? base64(d, 4, true) : base64(d, 0, false))) throw ErrorNom.invalido("El archivo llegó dañado: vuelve a adjuntarlo", "adjunto");
             // Cifrado, el archivo crece un tercio más (base64 del base64 cifrado).
             if (d.length() > (e.e2e ? MAX_ADJUNTO / 3 * 4 + 256 : MAX_ADJUNTO)) throw new ErrorNom(ErrorNom.LLENO, "El archivo pasa de 2 MB: compártelo como documento del espacio", null, Map.of("tope", 2 * 1024 * 1024));
             ServicioDocumentos q = cuota;
@@ -110,9 +111,22 @@ public class ServicioChat {
         return m;
     }
 
+    /** ¿Es texto en base64 (desde `desde`)? Normal: A-Z, a-z, 0-9, + y / con hasta dos = al final; para URL: - y _ sin =. */
+    static boolean base64(String d, int desde, boolean url) {
+        int n = d.length(), fin = n;
+        if (!url) while (fin > desde && n - fin < 2 && d.charAt(fin - 1) == '=') fin--;
+        for (int i = desde; i < fin; i++) {
+            char c = d.charAt(i);
+            boolean ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+                    || (url ? c == '-' || c == '_' : c == '+' || c == '/');
+            if (!ok) return false;
+        }
+        return true;
+    }
+
     private static String recorta(Object o, int max) {
         String s = o == null ? "" : String.valueOf(o);
-        return s.length() > max ? s.substring(0, max) : s;
+        return Textos.cortar(Textos.limpio(s), max);
     }
 
     /** El contenido de un adjunto (base64, cifrado si el espacio lo esta). */

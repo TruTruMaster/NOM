@@ -60,6 +60,8 @@ public class Configuracion {
                                                  Difusor difusor, Cifrado cifrado, NodoLocal nodo,
                                                  @Value("${nom.cuota.mb:0}") long cuotaMb) {
         ServicioDocumentos s = new ServicioDocumentos(repo, espacios, cuentas, difusor, cifrado, nodo);
+        // Los canales en vivo cuya sesión ya terminó se cierran en el latido (cada 20 s).
+        difusor.revisarSesionesCon(token -> cuentas.usuarioDeToken(token).isPresent());
         // En la nube cada cuenta tiene un limite (NOM_CUOTA_MB); en la red local, 0 = sin limite.
         s.fijarCuota(cuotaMb * 1024 * 1024);
         return s;

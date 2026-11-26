@@ -80,6 +80,12 @@ public class ServicioBinarios {
         return h;
     }
 
+    /** Lo que se revisa antes de recibir los bytes de un binario: el espacio, el permiso y la huella. */
+    public void exigirSubir(Usuario u, String espacioId, String huella) {
+        espacios.exigir(espacios.requerir(espacioId), u, Permiso.EDICION);
+        validar(huella);
+    }
+
     /** Subir un binario. Si ya estaba, no se vuelve a guardar. */
     public Map<String, Object> subir(Usuario u, String espacioId, String huella, byte[] datos) {
         Espacio e = espacios.requerir(espacioId);

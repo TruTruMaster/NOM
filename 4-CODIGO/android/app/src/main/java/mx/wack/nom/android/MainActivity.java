@@ -92,6 +92,10 @@ public class MainActivity extends Activity {
     private volatile boolean limpiarHistoria;
 
     private WebView web;
+    /** El WebView ya se destruyó (su página se cerró sola y se va a abrir otro): no se destruye dos veces. */
+    private boolean webDestruida;
+    /** Cuándo se cerraron solas las últimas páginas (para no abrirla otra vez sin fin si se cierra al cargar). */
+    private static final java.util.ArrayDeque<Long> paginasCaidas = new java.util.ArrayDeque<>();
     private ValueCallback<Uri[]> alElegir;
     /** La cámara que pidió la página (escanear un QR) mientras Android pregunta el permiso. */
     private PermissionRequest pedidoCamara;
@@ -143,6 +147,25 @@ public class MainActivity extends Activity {
                     limpiarHistoria = false;
                     v.clearHistory();
                 }
+            }
+
+            /**
+             * La página se cerró sola (se quedó sin memoria, p. ej. con un archivo enorme, o Android la cerró para
+             * liberar memoria). Sin esto Android cierra toda la app. Se quita el WebView y la actividad se abre de nuevo;
+             * lo que faltaba enviar sigue guardado en el equipo. Si se cae tres veces en un minuto, se cierra la ventana.
+             */
+            @Override
+            public boolean onRenderProcessGone(WebView v, android.webkit.RenderProcessGoneDetail detalle) {
+                long ahora = android.os.SystemClock.elapsedRealtime();
+                synchronized (paginasCaidas) {
+                    while (!paginasCaidas.isEmpty() && ahora - paginasCaidas.peekFirst() > 60_000) paginasCaidas.pollFirst();
+                    paginasCaidas.addLast(ahora);
+                }
+                if (v.getParent() instanceof android.view.ViewGroup padre) padre.removeView(v);
+                if (v == web && !webDestruida) { webDestruida = true; v.destroy(); }
+                else if (v != web) v.destroy();
+                if (paginasCaidas.size() >= 3) finish(); else recreate();
+                return true;
             }
         });
         web.setWebChromeClient(new WebChromeClient() {
@@ -320,11 +343,17 @@ public class MainActivity extends Activity {
         raiz.setOnApplyWindowInsetsListener((v, insets) -> {
             int arriba, abajo, izq, der;
             if (Build.VERSION.SDK_INT >= 30) {
-                android.graphics.Insets i = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.ime());
+                // (también la muesca o la cámara en la pantalla: con el teléfono acostado quedan a un lado)
+                android.graphics.Insets i = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.ime() | WindowInsets.Type.displayCutout());
                 arriba = i.top; abajo = i.bottom; izq = i.left; der = i.right;
             } else {
                 arriba = insets.getSystemWindowInsetTop(); abajo = insets.getSystemWindowInsetBottom();
                 izq = insets.getSystemWindowInsetLeft(); der = insets.getSystemWindowInsetRight();
+                if (Build.VERSION.SDK_INT >= 28 && insets.getDisplayCutout() != null) {
+                    android.view.DisplayCutout m = insets.getDisplayCutout();
+                    arriba = Math.max(arriba, m.getSafeInsetTop()); abajo = Math.max(abajo, m.getSafeInsetBottom());
+                    izq = Math.max(izq, m.getSafeInsetLeft()); der = Math.max(der, m.getSafeInsetRight());
+                }
             }
             v.setPadding(izq, arriba, der, abajo);
             return insets;
@@ -378,7 +407,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
-        web.destroy();
+        if (!webDestruida) { webDestruida = true; web.destroy(); }
         super.onDestroy();
     }
 

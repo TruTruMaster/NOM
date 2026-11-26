@@ -31,6 +31,8 @@ en su equipo.
 | Intentos fallidos y bloqueos | Proteger tu cuenta contra quien adivina contraseñas | Servidor |
 | Sesiones abiertas (identificador y vencimiento) | Mantenerte dentro sin escribir la contraseña cada vez | Servidor y tu equipo |
 | Espacios, permisos, enlaces de invitación, documentos, versiones, comentarios, avisos, chat y bitácora de actividad (quién cambió qué, cuándo y desde qué tipo de dispositivo) | Dar el servicio: guardar y compartir tu trabajo con tu equipo | Servidor |
+| Cuántas letras tecleaste, pegaste y citaste en cada documento, la hora y el tamaño de cada pegado grande (nunca el texto pegado) y cuándo abriste cada documento por última vez | El [recibo de tu trabajo](ayuda:espacios/recibo), el mapa de aportes y el aviso de qué cambió desde tu última visita. **El propietario del espacio ve el recibo de cada persona** | Servidor |
+| Tus llaves de cifrado de extremo a extremo (la pública, y la privada cifrada con tu contraseña y con tu código de recuperación) | Abrir tus espacios cifrados desde cualquier equipo; el servidor no puede usarlas | Servidor y tu equipo |
 | Alias al azar y la huella de la llave de tu equipo | Que vuelvas a ser el mismo alias en un teléfono que comparte | El teléfono que comparte |
 | Ramas (qué tenías al volver la conexión) | No perder lo que editaste sin Internet | Servidor |
 | La dirección IP de tu conexión | Limitar intentos de contraseña y cuentas nuevas | **Solo en memoria**, se olvida sola; no se escribe en disco ni en la bitácora |
@@ -58,6 +60,12 @@ servicio, estos proveedores procesan el tráfico o guardan datos por nosotros:
 
 - **Cloudflare** (el túnel por el que se llega a la nube): ahí termina el HTTPS de tu navegador y desde ahí sigue cifrado por el túnel hasta el servidor. Por eso Cloudflare ve la dirección IP y **podría ver el contenido** de lo que no va en un espacio cifrado de extremo a extremo; no lo usa para nada más.
 - **GitHub**, cuando descargas la app de Android.
+- **DigitalPlat**, que administra el nombre nom.qd.je: si escribes la dirección sin «www», su redirección ve tu dirección IP.
+
+Además, cuando usas **Investigar** o citas una página web, el servidor de NOM consulta Wikipedia, Open Library, Crossref,
+Wikidata o la página que quieres citar con lo que buscaste: esos sitios ven la dirección del servidor, no la tuya. Y si
+un documento trae una **imagen que está en otro sitio**, tu navegador la pide a ese sitio al abrir el documento, y ese
+sitio ve tu dirección IP.
 
 ## 5. Dónde están y cuánto tiempo {#conservacion}
 
@@ -121,4 +129,6 @@ No usamos cookies. Lo que guardamos en tu navegador está en [Cookies y almacena
 Si cambiamos este aviso, se publica aquí con su nueva fecha y, la próxima vez que entres, la app te
 pide **leerlo y aceptarlo** antes de seguir. Versión vigente: 13 de noviembre de 2026. El 22 de
 noviembre de 2026 se agregó el domicilio del responsable y el 25 de noviembre se quitó la copia de
-demostración que estaba en otro proveedor (ya no existe y sus datos se borraron); ninguno de los dos cambia qué datos tratamos ni para qué.
+demostración que estaba en otro proveedor (ya no existe y sus datos se borraron); ninguno de los dos cambia qué datos tratamos ni para qué. Ese mismo día se detallaron en este aviso datos y
+proveedores que ya se usaban y no estaban escritos con claridad (lo que cuenta el recibo de tu trabajo, tus llaves de
+cifrado, la redirección de nom.qd.je y los sitios que se consultan al investigar o al abrir una imagen de otro sitio).

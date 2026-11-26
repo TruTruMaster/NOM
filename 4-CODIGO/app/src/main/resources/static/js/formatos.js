@@ -685,6 +685,8 @@ ${formas.join("\n")}
     }
     if (!IMPORTABLES.includes(ext)) throw new Error(`Formato no soportado. Puedes importar: ${IMPORTABLES.join(", ")}`);
     if (ext === ".docx" || ext === ".xlsx" || ext === ".pptx") {
+      // (el tamaño se revisa antes de leerlo: un archivo enorme no debe cargarse completo en la memoria del equipo)
+      if (archivo.size > 60 * 1024 * 1024) throw new Error("El archivo pesa más de 60 MB");
       // (un archivo de Office con contraseña: se abre con ella y después se importa como cualquier otro)
       archivo = await abrirSiCifrado(archivo, opc);
       const r = ext === ".docx" ? await importarDocx(archivo, nombre) : ext === ".xlsx" ? await importarXlsx(archivo, nombre) : await importarPptx(archivo, nombre);
@@ -811,29 +813,45 @@ ${formas.join("\n")}
     return { nombre, modo: "PRESENTACION", ops: conOrigen("pptx", nombre, "PRESENTACION", ops, r.archivo), aviso: avisoSinOrigen(r.aviso, r.archivo) };
   }
 
+  /** Lo más grande que se inserta como imagen: por peso y por tamaño en píxeles (lo que ocupa abierta en memoria). */
+  const MAX_IMAGEN_BYTES = 50 * 1024 * 1024, MAX_IMAGEN_PIXELES = 120e6;
+
   /** Imagen local -> data URL comprimida (máx. 1600 px, JPEG 0.85) para no inflar el documento. */
   function imagenADataUrl(archivo) {
     return new Promise((ok, mal) => {
       if (!/^image\//.test(archivo.type)) return mal(new Error("Elige una imagen (PNG, JPG, GIF, WebP)"));
-      const lector = new FileReader();
-      lector.onerror = () => mal(new Error("No se pudo leer la imagen"));
-      lector.onload = () => {
-        const img = new Image();
-        // 8.3 Los GIF se guardan tal cual (si se pasan por el canvas, dejan de moverse).
-        const gif = archivo.type === "image/gif" && archivo.size <= 4 * 1024 * 1024;
-        img.onload = () => {
-          if (gif) { ok({ src: lector.result, w: img.width, h: img.height }); return; }
+      // (antes de leerla: una foto enorme llenaría la memoria del celular y cerraría la página)
+      if (archivo.size > MAX_IMAGEN_BYTES) return mal(new Error(`La imagen pesa ${Math.round(archivo.size / 1048576)} MB y el máximo es 50 MB: redúcela antes de insertarla`));
+      // 8.3 Los GIF se guardan tal cual (si se pasan por el canvas, dejan de moverse).
+      const gif = archivo.type === "image/gif" && archivo.size <= 4 * 1024 * 1024;
+      // Se abre desde el archivo (sin copiarla a texto antes) y se reduce en un lienzo.
+      const url = URL.createObjectURL(archivo);
+      const img = new Image();
+      img.onload = () => {
+        if (img.width * img.height > MAX_IMAGEN_PIXELES) {
+          URL.revokeObjectURL(url);
+          return mal(new Error(`La imagen mide ${img.width} × ${img.height} píxeles; el máximo es 120 megapíxeles: redúcela antes de insertarla`));
+        }
+        if (gif) {
+          URL.revokeObjectURL(url);
+          const lector = new FileReader();
+          lector.onerror = () => mal(new Error("No se pudo leer la imagen"));
+          lector.onload = () => ok({ src: lector.result, w: img.width, h: img.height });
+          lector.readAsDataURL(archivo);
+          return;
+        }
+        try {
           const k = Math.min(1, 1600 / Math.max(img.width, img.height));
           const cv = document.createElement("canvas");
-          cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
+          cv.width = Math.max(1, Math.round(img.width * k)); cv.height = Math.max(1, Math.round(img.height * k));
           cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
           const png = archivo.type === "image/png" && cv.width * cv.height < 400000;
           ok({ src: cv.toDataURL(png ? "image/png" : "image/jpeg", 0.85), w: cv.width, h: cv.height });
-        };
-        img.onerror = () => mal(new Error("La imagen está dañada"));
-        img.src = lector.result;
+        } catch (e) { mal(new Error("No se pudo preparar la imagen")); }
+        finally { URL.revokeObjectURL(url); }
       };
-      lector.readAsDataURL(archivo);
+      img.onerror = () => { URL.revokeObjectURL(url); mal(new Error("La imagen está dañada o su formato no se puede abrir aquí")); };
+      img.src = url;
     });
   }
 

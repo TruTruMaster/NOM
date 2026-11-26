@@ -346,6 +346,7 @@ public class ServicioDocumentos {
         revisarCuota(e);
         if (e.e2e && (llave == null || llave.isBlank() || !ServicioEspacios.cifrado(nombre)))
             throw ErrorNom.invalido("Este espacio está cifrado de extremo a extremo: crea el documento desde una app actualizada", null);
+        if (!e.e2e) nombre = Textos.limpio(nombre);
         nombre = nombre == null || nombre.isBlank() ? "Documento sin título" : nombre.trim();
         if (nombre.length() > (e.e2e ? 600 : 120)) throw ErrorNom.invalido("Máximo 120 caracteres", "nombre");
         ModoEditor m;
@@ -797,7 +798,7 @@ public class ServicioDocumentos {
         boolean cambio = false;
         Object nombre = est.valor(Operacion.DOC, "nombre");
         if (nombre instanceof String s && !s.isBlank() && !s.equals(d.nombre)) {
-            d.nombre = s.length() > 120 && !ServicioEspacios.cifrado(s) ? s.substring(0, 120) : s.length() > 600 ? s.substring(0, 600) : s;
+            d.nombre = ServicioEspacios.cifrado(s) ? Textos.cortar(s, 600) : Textos.cortar(Textos.limpio(s), 120);
             cambio = true;
         }
         Object modo = d.modo == null ? est.valor(Operacion.DOC, "modo") : null;
@@ -1561,6 +1562,7 @@ public class ServicioDocumentos {
 
     private static String nombreValido(String nombre) {
         nombre = nombre == null ? "" : nombre.trim();
+        if (!ServicioEspacios.cifrado(nombre)) nombre = Textos.limpio(nombre).trim();
         if (nombre.isEmpty()) throw ErrorNom.invalido("Escribe un nombre", "nombre");
         if (nombre.length() > (ServicioEspacios.cifrado(nombre) ? 600 : 120)) throw ErrorNom.invalido("Máximo 120 caracteres", "nombre");
         return nombre;
@@ -1610,7 +1612,7 @@ public class ServicioDocumentos {
             throw ErrorNom.invalido("En un espacio cifrado, el nombre de la copia se cifra en tu equipo (actualiza la app)", "nombre");
         String nuevo = nombre == null || nombre.isBlank()
                 ? (comoPlantilla || origen.plantilla ? origen.nombre : "Copia de " + origen.nombre) : nombre.trim();
-        if (nuevo.length() > 120 && !ServicioEspacios.cifrado(nuevo)) nuevo = nuevo.substring(0, 120);
+        if (!ServicioEspacios.cifrado(nuevo)) nuevo = Textos.cortar(Textos.limpio(nuevo), 120);
         EstadoDocumento est;
         synchronized (candado(docId)) { est = repo.estado(docId).copia(); }
         // lo que el documento tiene en el almacén de binarios (imágenes, el Office original) va también al otro espacio
@@ -1682,7 +1684,7 @@ public class ServicioDocumentos {
 
     private static String carpetaValida(String c) {
         if (c == null) return null;
-        c = c.trim().replaceAll("\\s+", " ");
+        c = Textos.limpio(c).trim().replaceAll("\\s+", " ");
         if (c.isEmpty()) return null;
         if (c.length() > 60) throw ErrorNom.invalido("El nombre de la carpeta es muy largo (máximo 60)", "carpeta");
         return c;
@@ -1841,7 +1843,7 @@ public class ServicioDocumentos {
                     aviso.put("comentario", c[0]);
                     aviso.put("por", autor.nombre);
                     aviso.put("color", autor.color);
-                    aviso.put("texto", c[1].length() > 160 ? c[1].substring(0, 159) + "…" : c[1]);
+                    aviso.put("texto", c[1].length() > 160 ? Textos.cortar(c[1], 159) + "…" : c[1]);
                     espacios.agregarAviso(e.id, uid, aviso);
                     difusor.avisarUsuario(uid, "aviso", aviso);
                     break;
@@ -1982,7 +1984,7 @@ public class ServicioDocumentos {
     private static String fechaCorta(long ms) {
         java.time.ZonedDateTime z = java.time.Instant.ofEpochMilli(ms <= 0 ? System.currentTimeMillis() : ms).atZone(java.time.ZoneId.of("America/Mexico_City"));
         String[] meses = { "ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic" };
-        return z.getDayOfMonth() + " " + meses[z.getMonthValue() - 1] + " " + String.format("%02d:%02d", z.getHour(), z.getMinute());
+        return z.getDayOfMonth() + " " + meses[z.getMonthValue() - 1] + " " + String.format(java.util.Locale.ROOT, "%02d:%02d", z.getHour(), z.getMinute());
     }
 
     /** «Informe final — rama de Ana (sin conexión, 13 nov 10:42)» y sus variantes. */
@@ -1994,7 +1996,7 @@ public class ServicioDocumentos {
             default -> " — rama de " + autor + " (sin conexión, " + fechaCorta(desde) + ")";
         };
         String n = base + fin;
-        return n.length() > 120 ? base.substring(0, Math.max(1, 120 - fin.length())) + fin : n;
+        return n.length() > 120 ? Textos.cortar(base, Math.max(1, 120 - fin.length())) + fin : n;
     }
 
     private static Map<String, Object> opAMapa(Operacion op) {
@@ -2026,9 +2028,10 @@ public class ServicioDocumentos {
         if (e.e2e && (nombre == null || !ServicioEspacios.cifrado(nombre.trim())))
             throw ErrorNom.invalido("En un espacio cifrado el nombre de la rama se cifra en el equipo", "nombre");
         String n = nombre == null || nombre.isBlank()
-                ? (recuperado ? (original.nombre.length() > 105 ? original.nombre.substring(0, 105) : original.nombre) + " (recuperado)" : nombreRama(original.nombre, u.nombre, desde, m))
+                ? (recuperado ? Textos.cortar(original.nombre, 105) + " (recuperado)" : nombreRama(original.nombre, u.nombre, desde, m))
                 : nombre.trim();
-        if (n.length() > 120) n = n.substring(0, 120);
+        // (un nombre cifrado de extremo a extremo no se recorta: se rompería)
+        if (!ServicioEspacios.cifrado(n)) n = Textos.cortar(Textos.limpio(n), 120);
         Documento d = crear(u, e.id, n, original.modo == null ? "TEXTO" : original.modo.name(), ops, original.llave);
         // La copia trae el nombre del original con su reloj: el de la rama va encima.
         renombrar(u, d.id, n);

@@ -516,7 +516,7 @@ public class ServicioFuentes {
         Object issued = it.get("issued") instanceof Map<?, ?> m ? m.get("date-parts") : null;
         if (issued instanceof List<?> dp && !dp.isEmpty() && dp.get(0) instanceof List<?> p && !p.isEmpty() && p.get(0) != null) {
             poner(f, "anio", String.valueOf(((Number) p.get(0)).intValue()));
-            if (p.size() >= 3) f.put("fecha", String.format("%04d-%02d-%02d", ((Number) p.get(0)).intValue(), ((Number) p.get(1)).intValue(), ((Number) p.get(2)).intValue()));
+            if (p.size() >= 3) f.put("fecha", String.format(java.util.Locale.ROOT, "%04d-%02d-%02d", ((Number) p.get(0)).intValue(), ((Number) p.get(1)).intValue(), ((Number) p.get(2)).intValue()));
         }
         String cont = texto(it.get("container-title"));
         if ("capitulo".equals(f.get("tipo"))) poner(f, "capitulo", cont); else poner(f, "revista", cont);

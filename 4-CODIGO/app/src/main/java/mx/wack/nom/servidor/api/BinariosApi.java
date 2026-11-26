@@ -41,12 +41,27 @@ public class BinariosApi {
     public Map<String, Object> subir(@RequestAttribute(FiltroSesion.ATRIBUTO) Usuario u, @PathVariable String id, @PathVariable String huella,
                                      HttpServletRequest req) throws IOException {
         long max = binarios.maxBytes();
-        if (req.getContentLengthLong() > max) throw new ErrorNom(ErrorNom.LLENO, "El archivo pasa de " + (max / (1024 * 1024)) + " MB", null, Map.of("tope", max));
-        // (se lee hasta un byte más del tope: si llega más, es que pasa)
-        byte[] datos = req.getInputStream().readNBytes((int) Math.min(max + 1, Integer.MAX_VALUE - 16));
-        if (datos.length > max) throw new ErrorNom(ErrorNom.LLENO, "El archivo pasa de " + (max / (1024 * 1024)) + " MB", null, Map.of("tope", max));
-        return binarios.subir(u, id, huella, datos);
+        long largo = req.getContentLengthLong();
+        if (largo > max) throw new ErrorNom(ErrorNom.LLENO, "El archivo pasa de " + (max / (1024 * 1024)) + " MB", null, Map.of("tope", max));
+        // Antes de recibir nada: que el espacio exista, que quien sube pueda editar ahí y que la huella sea válida.
+        binarios.exigirSubir(u, id, huella);
+        // Lo que se recibe a la vez cabe en la memoria del servidor: si hay mucho en camino, se espera turno.
+        int kb = (int) Math.min(TURNOS_KB, ((largo >= 0 ? largo : max) + 1023) >> 10);
+        boolean turno;
+        try { turno = TURNOS.tryAcquire(Math.max(1, kb), 60, java.util.concurrent.TimeUnit.SECONDS); }
+        catch (InterruptedException e) { Thread.currentThread().interrupt(); turno = false; }
+        if (!turno) throw new ErrorNom(503, "El servidor está recibiendo muchos archivos a la vez: se volverá a intentar en un momento");
+        try {
+            // (se lee hasta un byte más del tope: si llega más, es que pasa)
+            byte[] datos = req.getInputStream().readNBytes((int) Math.min(max + 1, Integer.MAX_VALUE - 16));
+            if (datos.length > max) throw new ErrorNom(ErrorNom.LLENO, "El archivo pasa de " + (max / (1024 * 1024)) + " MB", null, Map.of("tope", max));
+            return binarios.subir(u, id, huella, datos);
+        } finally { TURNOS.release(Math.max(1, kb)); }
     }
+
+    /** Lo que se puede estar recibiendo de archivos a la vez (en KB): la sexta parte de la memoria, y al menos 64 MB. */
+    private static final int TURNOS_KB = (int) (Math.max(64L << 20, Runtime.getRuntime().maxMemory() / 6) >> 10);
+    private static final java.util.concurrent.Semaphore TURNOS = new java.util.concurrent.Semaphore(TURNOS_KB, true);
 
     @GetMapping("/api/espacios/{id}/binarios/{huella}")
     public ResponseEntity<byte[]> bajar(@RequestAttribute(FiltroSesion.ATRIBUTO) Usuario u, @PathVariable String id, @PathVariable String huella) {

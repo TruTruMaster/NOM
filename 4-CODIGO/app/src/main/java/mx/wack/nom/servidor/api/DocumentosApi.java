@@ -164,11 +164,11 @@ public class DocumentosApi {
 
     @GetMapping(value = "/{id}/eventos", produces = "text/event-stream")
     public SseEmitter eventos(@RequestAttribute(FiltroSesion.ATRIBUTO) Usuario u, @PathVariable String id,
-                              @RequestParam(defaultValue = "") String cliente) {
+                              @RequestParam(defaultValue = "") String cliente, jakarta.servlet.http.HttpServletRequest req) {
         Documento d = documentos.requerir(id);
         documentos.permiso(u, d, Permiso.LECTURA);
         CanalSse canal = new CanalSse();
-        difusor.suscribir(u, d.espacioId, id, cliente, canal);
+        difusor.suscribir(u, (String) req.getAttribute("nom.token"), d.espacioId, id, cliente, canal);
         return canal.emisor;
     }
 

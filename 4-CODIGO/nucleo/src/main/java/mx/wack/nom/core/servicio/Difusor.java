@@ -34,12 +34,15 @@ public class Difusor {
         final String proyector;
         /** De una pantalla de proyeccion: quien presenta (si pierde el acceso, la pantalla se cierra). */
         final String presentador;
+        /** La sesión con la que se abrió el canal (null en las pantallas de proyección): ver latido(). */
+        final String token;
         volatile String bloque;
         volatile String modo;
         volatile Map<String, Object> cursor;
 
-        Suscriptor(Canal c, Usuario u, String espacioId, String docId, String cliente) {
+        Suscriptor(Canal c, Usuario u, String token, String espacioId, String docId, String cliente) {
             this.canal = c;
+            this.token = token;
             this.usuarioId = u.id;
             this.nombre = u.nombre;
             this.color = u.color;
@@ -60,6 +63,7 @@ public class Difusor {
             this.cliente = "proyector-" + codigo;
             this.proyector = codigo;
             this.presentador = presentador;
+            this.token = null;
         }
     }
 
@@ -96,6 +100,12 @@ public class Difusor {
 
     /** Abre el canal de un cliente en un espacio (y, si edita, en un documento). */
     public void suscribir(Usuario u, String espacioId, String docId, String cliente, Canal canal) {
+        suscribir(u, null, espacioId, docId, cliente, canal);
+    }
+
+    /** Igual, con la sesión que lo abre: si esa sesión se cierra (salir, cambiar la contraseña, borrar la cuenta), el
+        canal se cierra en el siguiente latido. */
+    public void suscribir(Usuario u, String token, String espacioId, String docId, String cliente, Canal canal) {
         Set<String> conectados = usuariosEn(espacioId);
         if (!conectados.contains(u.id) && conectados.size() >= maxUsuarios) {
             throw new ErrorNom(ErrorNom.CONFLICTO, "El espacio está lleno: ya hay " + maxUsuarios
@@ -103,22 +113,23 @@ public class Difusor {
         }
         exigirLugar(x -> x.proyector == null && u.id.equals(x.usuarioId), MAX_CANALES_CUENTA,
                 "Tienes demasiadas pestañas o equipos abiertos a la vez: cierra alguno e intenta de nuevo");
-        Suscriptor s = new Suscriptor(canal, u, espacioId, docId, cliente == null ? "" : cliente);
+        Suscriptor s = new Suscriptor(canal, u, token, espacioId, docId, cliente == null ? "" : cliente);
         subs.add(s);
-        Runnable fuera = () -> {
-            if (subs.remove(s)) {
-                if (docId != null) presencia(docId);
-                avisarEspacio(espacioId, "conectados", Map.of("usuarios", conectadosPublico(espacioId)));
-                java.util.function.BiConsumer<String, String> f = alSalirDeDocumento;
-                if (docId != null && f != null) {
-                    try { f.accept(docId, u.id); } catch (RuntimeException ex) { /* la visita es solo informativa */ }
-                }
-            }
-        };
-        canal.alCerrar(fuera);
+        canal.alCerrar(() -> quitar(s));
         enviar(s, "hola", Map.of("ok", true));
         if (docId != null) presencia(docId);
         avisarEspacio(espacioId, "conectados", Map.of("usuarios", conectadosPublico(espacioId)));
+    }
+
+    /** Quien se va (cerró la pestaña o se cerró su canal): sale de la lista y los demás lo ven (una sola vez). */
+    private void quitar(Suscriptor s) {
+        if (!subs.remove(s)) return;
+        if (s.docId != null) presencia(s.docId);
+        avisarEspacio(s.espacioId, "conectados", Map.of("usuarios", conectadosPublico(s.espacioId)));
+        java.util.function.BiConsumer<String, String> f = alSalirDeDocumento;
+        if (s.docId != null && f != null) {
+            try { f.accept(s.docId, s.usuarioId); } catch (RuntimeException ex) { /* la visita es solo informativa */ }
+        }
     }
 
     /** Una pantalla de proyeccion para un documento (5.5). */
@@ -258,6 +269,11 @@ public class Difusor {
         }
     }
 
+    private static boolean sigueAbierta(java.util.function.Predicate<String> vigente, String token) {
+        // (si no se puede revisar, p. ej. la base tarda, el canal se queda: se revisa otra vez en el siguiente latido)
+        try { return vigente.test(token); } catch (RuntimeException e) { return true; }
+    }
+
     private void enviar(Suscriptor s, String evento, Object datos) {
         try {
             s.canal.enviar(evento, datos);
@@ -266,9 +282,26 @@ public class Difusor {
         }
     }
 
-    /** Latido: mantiene vivas las conexiones a traves de proxies y detecta clientes muertos. */
+    /** Cómo saber si una sesión sigue abierta (lo pone quien sirve la API; sin esto no se revisa). */
+    private volatile java.util.function.Predicate<String> sesionVigente;
+
+    public void revisarSesionesCon(java.util.function.Predicate<String> vigente) { this.sesionVigente = vigente; }
+
+    /**
+     * Latido: mantiene vivas las conexiones a traves de proxies y detecta clientes muertos. Además cierra los canales
+     * cuya sesión ya terminó (salió, cambió la contraseña en otro equipo o borró la cuenta); la página, al cerrarse el
+     * canal, pregunta y pide entrar otra vez.
+     */
     public void latido() {
+        java.util.function.Predicate<String> vigente = sesionVigente;
+        Map<String, Boolean> revisadas = new java.util.HashMap<>();
         for (Suscriptor s : subs) {
+            if (vigente != null && s.token != null && s.proyector == null
+                    && !revisadas.computeIfAbsent(s.token, t -> sigueAbierta(vigente, t))) {
+                try { s.canal.cerrar(); } catch (RuntimeException ignorado) { /* ya estaba cerrado */ }
+                quitar(s);
+                continue;
+            }
             try {
                 s.canal.latido();
             } catch (IOException | IllegalStateException ex) {

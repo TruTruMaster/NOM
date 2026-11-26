@@ -63,11 +63,18 @@
       try {
         const r = await api().get(`/api/espacios/${esp.id}/chat/${m.id}/adjunto`, undefined, { ms: 30000 });
         const mime = m.adjunto.mime || "application/octet-stream";
-        if (m.adjunto.tipo === "imagen" && /^image\//.test(mime)) {
+        // Se comprueba que el archivo llegó completo (base64) y la imagen se arma como elemento.
+        const datos = r && typeof r.datos === "string" ? r.datos : "";
+        if (!/^[A-Za-z0-9+/]*={0,2}$/.test(datos)) throw new Error("El archivo llegó dañado y no se puede abrir");
+        if (m.adjunto.tipo === "imagen" && /^image\/[a-z0-9.+-]+$/i.test(mime)) {
           const caja = $(`[data-img="${m.id}"]`, lista);
-          caja.innerHTML = `<img class="chat-img" alt="${esc(m.adjunto.nombre || "Imagen")}" src="data:${esc(mime)};base64,${r.datos}">`;
+          const img = document.createElement("img");
+          img.className = "chat-img";
+          img.alt = m.adjunto.nombre || "Imagen";
+          img.src = "data:" + mime + ";base64," + datos;
+          caja.replaceChildren(img);
         } else {
-          const bytes = Uint8Array.from(atob(r.datos), (c) => c.charCodeAt(0));
+          const bytes = Uint8Array.from(atob(datos), (c) => c.charCodeAt(0));
           NOM.formatos.descargarBytes(m.adjunto.nombre || "archivo", mime, bytes);
         }
       } catch (e) { aviso(e.message, { tipo: "error" }); }
