@@ -31,13 +31,20 @@ cobertura por archivo). Aquí va lo que cambia para quien usa NOM y cómo seguir
 | Descubrimiento UDP acotado; en la nube no se listan espacios | `Descubrimiento`, `RedApi` |
 | App de Android: nombres de archivo limpios al guardar; enlaces solo de los dominios del manifiesto | `MainActivity` |
 
-Pruebas: JUnit 41/41 (8 nuevas: `ProteccionesTest`, `FiltroRutasTest`, `OrigenTest`, `BitacoraTest`). En vivo
-(www.nom.qd.je, 0.23.4): `humo.py` 36/36, los cuatro nombres del túnel responden, las direcciones raras dan 400 y la
-página trae Trusted Types. Resultados de la interfaz: ver §2.
+Pruebas: JUnit 42/42 (nuevas: `ProteccionesTest`, `FiltroRutasTest`, `OrigenTest`, `BitacoraTest`). En vivo
+(www.nom.qd.je, 0.23.4, con Trusted Types activo en la página): `humo.py` 36/36, `prueba_funciones` 202/202,
+`prueba_e2e` 33/33, `prueba_sin_internet` 32/32, `prueba_ayuda` 24/24, comprobaciones de los arreglos 9/9
+(`trabajo/26nov/vivo_arreglos.py`, cuentas desechables borradas al terminar); los cuatro nombres del túnel responden,
+las direcciones raras dan 400 y un nombre ajeno da 421 (probado en la Pi contra 127.0.0.1).
 
-## 2. Publicación
+## 2. Publicación (26-nov)
 
-- Pi: 0.23.4 publicada (respaldo previo `datos-2026-11-26_091000`). Ver §3 para lo que falta.
+- Pi: 0.23.4, tres despliegues el mismo día con `nom pi actualizar` (respaldos previos `datos-2026-11-26_091000` y
+  siguientes); el último con todo lo de este relevo.
+- GitHub: `main` hasta el commit de este relevo; release `v0.23.4` con `NOM.apk` y `NOM-COLAB.apk` (SHA-256
+  `5dc604ea…`, misma llave `2ef146f6…`); `www.nom.qd.je/app` ya baja ese archivo. IndexNow 200 (76 direcciones).
+- La regresión de Windows no se corrió: levanta NOM en un servidor local y la orden del 25-nov es probar solo contra el
+  sitio real (lo de Office se probó con las suites en vivo). Falta instalar la 0.23.4 en el A55.
 
 ## 3. Cómo seguir / lo que falta
 
