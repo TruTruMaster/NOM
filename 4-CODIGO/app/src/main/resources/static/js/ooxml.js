@@ -42,6 +42,9 @@
     if (/^file:\/\/\/[A-Za-z]:[\\/]/i.test(d) || /^[A-Za-z]:[\\/]/.test(d)) return false;   // una unidad local
     return true;   // UNC, file://equipo, esquemas que abren programas, rutas relativas raras
   }
+  /** El nivel de una lista en Word: un número de 0 a 8 (lo que diga el documento no se escribe tal cual en el XML). */
+  const nivelLista = (v) => Math.max(0, Math.min(8, Math.floor(+v || 0)));
+
   function relsSeguras(datos) {
     const texto = typeof datos === "string" ? datos : new TextDecoder().decode(datos);
     if (!/TargetMode\s*=\s*["']External/i.test(texto)) return datos;
@@ -1525,24 +1528,24 @@
       if (pa.viudas != null && pa.viudas !== "" && !+pa.viudas) ppr += '<w:widowControl w:val="0"/>';
       if (U && U.numId && (pa.lista === "vinetas" || pa.lista === "numeros")) {
         // sigue la lista del archivo original (misma numeración que sus vecinos)
-        ppr += `<w:numPr><w:ilvl w:val="${pa.nivel || 0}"/><w:numId w:val="${U.numId}"/></w:numPr>`;
+        ppr += `<w:numPr><w:ilvl w:val="${nivelLista(pa.nivel)}"/><w:numId w:val="${U.numId}"/></w:numPr>`;
       } else if (U && U.ppr != null && (pa.lista === "vinetas" || pa.lista === "numeros")) {
         // sale el w:pPr del archivo original, con su numeración: no hace falta una lista nueva (antes se
         // agregaba a numbering.xml una definición que nadie usaba)
       } else if (pa.lista === "vinetas") {
         if (!numActual || numActual.tipo !== "v" + (pa.vineta || "")) numActual = { tipo: "v" + (pa.vineta || ""), id: nuevaInstancia("v" + (pa.vineta || "•")) };
-        ppr += `<w:numPr><w:ilvl w:val="${pa.nivel || 0}"/><w:numId w:val="${numActual.id}"/></w:numPr>`;
+        ppr += `<w:numPr><w:ilvl w:val="${nivelLista(pa.nivel)}"/><w:numId w:val="${numActual.id}"/></w:numPr>`;
       } else if (pa.lista === "numeros") {
         const clave = "n" + (pa.numfmt || "1.");
         const inicio = pa.inicio != null && pa.inicio !== "" ? +pa.inicio : null;
         if (pa.continuar && numAnterior && !numActual) numActual = numAnterior;
         if (!numActual || numActual.tipo !== clave || inicio != null) numActual = { tipo: clave, id: nuevaInstancia(clave, inicio != null ? inicio : 1) };
-        ppr += `<w:numPr><w:ilvl w:val="${pa.nivel || 0}"/><w:numId w:val="${numActual.id}"/></w:numPr>`;
+        ppr += `<w:numPr><w:ilvl w:val="${nivelLista(pa.nivel)}"/><w:numId w:val="${numActual.id}"/></w:numPr>`;
       } else if (pa.lista !== "tareas") { if (numActual) numAnterior = numActual; numActual = null; }
       // «Suprimir números de línea» (orden del esquema: después de la numeración, antes de los bordes)
       if (pa.sinNumLin) ppr += "<w:suppressLineNumbers/>";
       const cm = (v) => Math.round((+v || 0) * CMT);
-      if (pa.lista === "tareas") ppr += `<w:ind w:left="${360 * ((pa.nivel || 0) + 1)}" w:hanging="360"/>`;
+      if (pa.lista === "tareas") ppr += `<w:ind w:left="${360 * (nivelLista(pa.nivel) + 1)}" w:hanging="360"/>`;
       else if (!pa.lista && (pa.sangria || pa.sangiz || pa.sangder || pa.primera != null || pa.francesa)) {
         const izq = (pa.sangria || 0) * 720 + cm(pa.sangiz) + cm(pa.francesa);
         ppr += `<w:ind w:left="${izq}"${pa.sangder ? ` w:right="${cm(pa.sangder)}"` : ""}${+pa.francesa ? ` w:hanging="${cm(pa.francesa)}"` : pa.primera != null ? ` w:firstLine="${cm(pa.primera)}"` : ""}/>`;
@@ -5760,7 +5763,7 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
             if (e.f === "final") { rellenoCol = e.trazo || "#2B2A33"; partes = [Object.assign({}, partes[0], { relleno: null }), partes[1]]; }
             if (cm) {
               const cp = compartimentosPptx(b, e, opcT);
-              partes = partes.concat(cp.lineas.map((y) => ({ d: `M0,${y} H${b.w}`, relleno: null, trazo: e.trazo })));
+              partes = partes.concat(cp.lineas.map((y) => ({ d: `M0,${+y || 0} H${+b.w || 0}`, relleno: null, trazo: e.trazo })));
               cuerpo = cp.parrafos;
               cuerpoPr = `<a:bodyPr anchor="t" wrap="square" lIns="${E(10 * k)}" tIns="${E(6 * k)}" rIns="${E(10 * k)}" bIns="0"><a:noAutofit/></a:bodyPr>`;
             } else if (e.f === "actor") cuerpoPr = '<a:bodyPr anchor="b" wrap="none" lIns="0" tIns="0" rIns="0" bIns="0"><a:noAutofit/></a:bodyPr>';

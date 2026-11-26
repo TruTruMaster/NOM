@@ -127,7 +127,7 @@
     cuerpo.innerHTML = `
       <div class="caja col" style="padding:16px 18px;gap:10px">
         <div class="fila-e" style="flex-wrap:wrap;gap:8px"><div><div style="font-size:26px;font-weight:700">${esc(bytes(a.uso))}${a.cuota > 0 ? ` <span class="suave" style="font-size:16px;font-weight:600">de ${esc(bytes(a.cuota))}</span>` : ""}</div>
-          <div class="suave chico" style="font-weight:500">${a.cuota > 0 ? (libre > 0 ? "Te quedan " + esc(bytes(libre)) : "Ya no queda espacio") : "Este servidor no pone límite por cuenta"} · ${a.documentos} documento${a.documentos === 1 ? "" : "s"} en ${a.espacios.length} espacio${a.espacios.length === 1 ? "" : "s"} tuyo${a.espacios.length === 1 ? "" : "s"}</div></div>
+          <div class="suave chico" style="font-weight:500">${a.cuota > 0 ? (libre > 0 ? "Te quedan " + esc(bytes(libre)) : "Ya no queda espacio") : "Este servidor no pone límite por cuenta"} · ${+a.documentos || 0} documento${a.documentos === 1 ? "" : "s"} en ${(a.espacios || []).length} espacio${a.espacios.length === 1 ? "" : "s"} tuyo${a.espacios.length === 1 ? "" : "s"}</div></div>
           <span class="chip ${claseUso(a)}">${ico("cloud", "ico-s")} ${esc(nombreServidor())}</span></div>
         ${a.cuota > 0 ? `<div class="barra-uso"><i style="width:${Math.min(100, Math.max(1, (a.uso / a.cuota) * 100))}%"></i></div>` : ""}
         ${a.cuota > 0 && a.uso >= a.cuota ? `<div class="alerta error">${ico("triangle-alert")}<span>Lleno: los cambios nuevos se quedan en cada equipo hasta que liberes espacio.</span></div>` : ""}
@@ -140,7 +140,7 @@
       <div><span class="etiqueta">Tus espacios</span>
       <div class="lista" style="margin-top:8px">${a.espacios.slice().sort((x, y) => y.bytes - x.bytes).map((e) => `
         <button type="button" class="lista-item" data-esp="${esc(e.id)}" style="text-align:left;width:100%;flex-wrap:wrap">
-          <span class="crece"><b>${esc(e.nombre)}</b><small>${esc(bytes(e.bytes))} · ${e.documentos} documento${e.documentos === 1 ? "" : "s"} y su historial</small>
+          <span class="crece"><b>${esc(e.nombre)}</b><small>${esc(bytes(e.bytes))} · ${+e.documentos || 0} documento${e.documentos === 1 ? "" : "s"} y su historial</small>
             <span class="barra-uso" style="margin-top:6px"><i style="width:${Math.max(2, (e.bytes / max) * 100)}%"></i></span></span>${ico("chevron-right")}
         </button>`).join("") || `<p class="suave" style="font-weight:400">Todavía no tienes espacios propios: lo que guardes en un espacio tuyo aparecerá aquí.</p>`}</div></div>
       ${a.espacios.length ? `<p class="suave chico" style="font-weight:400">${ico("info", "ico-s")} Para liberar espacio, abre un espacio: ahí puedes borrar versiones antiguas y vaciar su papelera.</p>` : ""}`;
@@ -178,13 +178,13 @@
       <div class="fila-e">
         <span class="icono-espacio" style="background:${esc(e.color)};--c:${esc(e.color)}">${inicial(e.nombre)}</span>
         <span class="fila">${e.conexion ? `<span class="chip ok" data-micro="Visible en el Wi-Fi|Quienes estén en el mismo Wi-Fi pueden encontrarlo."><span class="punto vivo"></span>En el Wi-Fi</span>` : ""}
-        ${e.solicitudes ? `<span class="chip aviso">${e.solicitudes} solicitud${e.solicitudes > 1 ? "es" : ""}</span>` : ""}
+        ${e.solicitudes ? `<span class="chip aviso">${+e.solicitudes || 0} solicitud${e.solicitudes > 1 ? "es" : ""}</span>` : ""}
         ${e.avisos ? `<span class="chip acento" data-micro="Menciones|Te mencionaron en comentarios de este espacio.">${ico("at-sign", "ico-s")} ${e.avisos}</span>` : ""}</span>
       </div>
       <div><div class="titulo recorta">${esc(e.nombre)}</div><div class="suave chico" style="font-weight:500">${esc(PERMISOS[e.permiso] || "")}${e.permiso !== "PROPIETARIO" ? " · de " + esc(e.propietario) : ""}</div></div>
       <div class="meta">
-        <span>${ico("file-text", "ico-s")} ${e.documentos}</span>
-        <span>${ico("users", "ico-s")} ${e.miembros}</span>
+        <span>${ico("file-text", "ico-s")} ${+e.documentos || 0}</span>
+        <span>${ico("users", "ico-s")} ${+e.miembros || 0}</span>
         <span>${ico("clock", "ico-s")} ${esc(haceCuanto(e.actividad))}</span>
         ${con.length ? `<span class="avatares" style="margin-left:auto">${con.map((u) => avatar(u)).join("")}</span>` : ""}
       </div>
@@ -798,7 +798,7 @@
         x.enlaceVer ? `<span class="chip chico" data-micro="Con enlace para ver|Cualquiera con el enlace lo ve, sin cuenta.">${ico("link-2", "ico-s")} Enlace</span>` : "",
         // Fase 13, parte B: ramas de lo editado sin Internet.
         x.ramaDe && x.ramaEstado === "abierta" ? `<span class="chip chico acento" data-micro="Rama|Lo que ${esc(x.ramaAutor || "alguien")} editó sin conexión mientras otros cambiaban el original. Ábrela para compararla y fusionarla.">${ico("git-branch", "ico-s")} Rama</span>` : "",
-        x.ramasAbiertas ? `<span class="chip chico aviso" data-micro="Ramas|Versiones de este documento que alguien editó sin conexión. Ábrelo para verlas.">${ico("git-branch", "ico-s")} Ramas (${x.ramasAbiertas})</span>` : "",
+        x.ramasAbiertas ? `<span class="chip chico aviso" data-micro="Ramas|Versiones de este documento que alguien editó sin conexión. Ábrelo para verlas.">${ico("git-branch", "ico-s")} Ramas (${+x.ramasAbiertas || 0})</span>` : "",
       ].filter(Boolean).join("");
       return c ? `<span class="meta">${c}</span>` : "";
     }
@@ -1013,7 +1013,7 @@
       const pie = html(`<div style="display:contents">${dueno ? `<button class="btn peligro" type="button" data-vaciar>${ico("trash-2")} Vaciar la papelera</button>` : ""}<span class="crece"></span><button class="btn" type="button" data-cerrar>Cerrar</button></div>`);
       const h = hoja({ titulo: "Papelera", icono: "trash-2", cuerpo, pie });
       const pintar = () => {
-        $("[data-l]", cuerpo).innerHTML = l.length ? l.map((x) => `<div class="lista-item" data-id="${esc(x.id)}">${ico(MODOS[x.modo] ? MODOS[x.modo].icono : "file-text")}<span class="crece"><b>${esc(x.nombre)}</b><small>${esc(x.eliminadoPor || "")} · ${esc(haceCuanto(x.eliminado))} · se borra en ${x.dias} día${x.dias === 1 ? "" : "s"}</small></span>
+        $("[data-l]", cuerpo).innerHTML = l.length ? l.map((x) => `<div class="lista-item" data-id="${esc(x.id)}">${ico(MODOS[x.modo] ? MODOS[x.modo].icono : "file-text")}<span class="crece"><b>${esc(x.nombre)}</b><small>${esc(x.eliminadoPor || "")} · ${esc(haceCuanto(x.eliminado))} · se borra en ${+x.dias || 0} día${x.dias === 1 ? "" : "s"}</small></span>
           <button class="btn chico" data-r>${ico("archive-restore", "ico-s")} Restaurar</button>${dueno ? `<button class="icono-btn" data-b aria-label="Borrar para siempre" data-micro="Borrar para siempre">${ico("x")}</button>` : ""}</div>`).join("")
           : `<div class="vacio" style="padding:20px"><div class="burbuja">${ico("trash")}</div><h3>La papelera está vacía</h3></div>`;
         const v = $("[data-vaciar]", pie); if (v) v.disabled = !l.length;
@@ -1043,7 +1043,7 @@
     function pintarAvisos() {
       const c = $("[data-avisos]", cont);
       if (!c) return;
-      c.innerHTML = d.avisos ? `<button class="btn primario-suave" data-a="avisos" data-micro="Avisos|Menciones en comentarios y ramas de lo editado sin conexión.">${ico("at-sign")} Avisos <span class="insignia">${d.avisos}</span></button>` : "";
+      c.innerHTML = d.avisos ? `<button class="btn primario-suave" data-a="avisos" data-micro="Avisos|Menciones en comentarios y ramas de lo editado sin conexión.">${ico("at-sign")} Avisos <span class="insignia">${+d.avisos || 0}</span></button>` : "";
       const b = $("[data-a=avisos]", c);
       if (b) b.onclick = () => menciones();
     }

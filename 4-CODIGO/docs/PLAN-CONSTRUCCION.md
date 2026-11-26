@@ -798,6 +798,9 @@ para Investigar y Wikidata.
 
 ## Orden recomendado para la siguiente sesión
 
+**Desde el 26 de noviembre de 2026:** empezar por `docs/RELEVO-26NOV.md` (0.23.4: revisión completa de la red y de la
+app; lo que falta de la revisión archivo por archivo). Lo de paridad sigue en `RELEVO-21NOV.md`.
+
 **Desde el 25 de noviembre de 2026 (noche):** empezar por `docs/RELEVO-25NOV-NOCHE.md` (revisión completa antes de la
 entrega del 27-nov: 0.23.2, entregables con Word real y lo que decide el dueño). Lo de paridad sigue en `RELEVO-21NOV.md`.
 

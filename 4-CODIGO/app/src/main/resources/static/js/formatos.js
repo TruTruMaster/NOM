@@ -114,7 +114,7 @@
     ps.forEach((p) => {
       const pa = p.pa;
       const cont = p.tramos.map((t) => (t.e ? objetoHtml(t.e, ps) : NOM.textoRico.envolver(t.x, t.a || {}))).join("") || "<br>";
-      const st = [pa.alin ? `text-align:${{ centro: "center", der: "right", just: "justify" }[pa.alin]}` : "", pa.sangria && !pa.lista ? `margin-left:${pa.sangria * 36}pt` : "", pa.interlineado ? `line-height:${pa.interlineado}` : "",
+      const st = [pa.alin ? `text-align:${{ centro: "center", der: "right", just: "justify" }[pa.alin]}` : "", +pa.sangria && !pa.lista ? `margin-left:${+pa.sangria * 36}pt` : "", +pa.interlineado ? `line-height:${+pa.interlineado}` : "",
         !pa.lista && (+pa.sangiz || +pa.francesa) ? `padding-left:${(+pa.sangiz || 0) + (+pa.francesa || 0)}cm` : "", !pa.lista && +pa.sangder ? `padding-right:${+pa.sangder}cm` : "",
         !pa.lista && (pa.primera != null || +pa.francesa) ? `text-indent:${(+pa.primera || 0) - (+pa.francesa || 0)}cm` : "",
         NOM.textoRico && NOM.textoRico.cssBorde ? NOM.textoRico.cssBorde(pa.borde) : "", /^#[0-9a-f]{6}$/i.test(pa.sombra || "") ? `background-color:${pa.sombra}` : "", +pa.lineaPt ? `line-height:${+pa.lineaPt}pt` : "", pa.dir === "rtl" ? "direction:rtl" : ""].filter(Boolean).join(";");
@@ -122,7 +122,7 @@
       if (pa.lista) {
         const tag = pa.lista === "numeros" ? "ol" : "ul";
         if (lista !== tag) { cerrar(); h += `<${tag}>`; lista = tag; }
-        h += `<li${pa.nivel ? ` style="margin-left:${pa.nivel * 18}pt"` : ""}>${pa.lista === "tareas" ? (pa.hecho ? "☑ " : "☐ ") : ""}${cont}</li>\n`;
+        h += `<li${+pa.nivel ? ` style="margin-left:${+pa.nivel * 18}pt"` : ""}>${pa.lista === "tareas" ? (pa.hecho ? "☑ " : "☐ ") : ""}${cont}</li>\n`;
         return;
       }
       cerrar();
@@ -144,7 +144,7 @@ ${h}</body></html>`;
       if (!s.trim()) return s;
       if (a.b && a.i) s = `***${s}***`; else if (a.b) s = `**${s}**`; else if (a.i) s = `*${s}*`;
       if (a.s) s = `~~${s}~~`;
-      if (a.enlace) s = `[${s}](${a.enlace})`;
+      if (a.enlace && /^(https?:\/\/|mailto:|#)/i.test(String(a.enlace))) s = `[${s}](${String(a.enlace).replace(/[()\s]/g, encodeURIComponent)})`;
       return s;
     };
     const out = [];
@@ -181,14 +181,17 @@ ${h}</body></html>`;
     return out.join("\n\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
   }
 
+  /** El HTML de un cuadro, con solo lo que se permite en un cuadro (el limpiador de las diapositivas). */
+  const htmlLimpio = (h) => (NOM.diapo && NOM.diapo.htmlRico ? NOM.diapo.htmlRico(h || "") : NOM.esc(String(h || "").replace(/<[^>]*>/g, " ")));
+
   function aHtml(doc, nombre) {
     if (esTexto(doc)) return aHtmlTexto(doc, nombre);
     const partes = ordenados(doc).map((b) => {
       if (b.tipo === "texto") {
         const tag = { h1: "h1", h2: "h2", cita: "blockquote" }[b.estilo] || "p";
-        if (b.estilo === "lista") return `<ul><li>${b.html || ""}</li></ul>`;
-        if (b.estilo === "tarea") return `<p>${b.hecho ? "☑" : "☐"} ${b.html || ""}</p>`;
-        return `<${tag}>${b.html || ""}</${tag}>`;
+        if (b.estilo === "lista") return `<ul><li>${htmlLimpio(b.html)}</li></ul>`;
+        if (b.estilo === "tarea") return `<p>${b.hecho ? "☑" : "☐"} ${htmlLimpio(b.html)}</p>`;
+        return `<${tag}>${htmlLimpio(b.html)}</${tag}>`;
       }
       if (b.tipo === "tabla") {
         // (las imágenes que flotan sobre una hoja de Excel van después de su tabla)

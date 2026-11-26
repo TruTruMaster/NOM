@@ -109,8 +109,10 @@ final class ApiTelefono {
         String token = null;
         String cab = p.cabecera("authorization");
         if (cab != null && cab.startsWith("Bearer ")) token = cab.substring(7).trim();
-        if (token == null && p.consulta.get("boleto") != null) token = cuentas.canjearBoleto(p.consulta.get("boleto")).orElse(null);
-        if (token == null) token = p.consulta.get("token");
+        // (en la dirección, solo el canal en vivo, que no puede mandar cabeceras; igual que FiltroSesion)
+        boolean canal = "GET".equals(p.metodo) && p.ruta.matches("^/api/(espacios|documentos)/[^/]+/eventos$");
+        if (token == null && canal && p.consulta.get("boleto") != null) token = cuentas.canjearBoleto(p.consulta.get("boleto")).orElse(null);
+        if (token == null && canal) token = p.consulta.get("token");
         if (token == null || token.isBlank()) throw new ErrorNom(ErrorNom.SIN_SESION, "Inicia sesion para continuar");
         return token;
     }
