@@ -719,6 +719,12 @@ public class ServicioCuentas {
         if (token != null) repo.borrarSesion(token);
     }
 
+    /** ¿La sesión sigue abierta? (una sola consulta: la usa el latido de los canales en vivo). */
+    public boolean sesionVigente(String token) {
+        long ahora = System.currentTimeMillis();
+        return token != null && repo.sesion(token).filter(s -> s.vigente(ahora)).isPresent();
+    }
+
     public Optional<Usuario> usuarioDeToken(String token) {
         long ahora = System.currentTimeMillis();
         return repo.sesion(token).filter(s -> s.vigente(ahora)).flatMap(s -> repo.porId(s.usuarioId));

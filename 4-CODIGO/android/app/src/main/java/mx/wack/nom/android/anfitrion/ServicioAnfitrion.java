@@ -129,7 +129,7 @@ public class ServicioAnfitrion extends Service {
         Difusor difusor = new Difusor(Difusor.MAX_PERSONAS);
         ServicioCuentas cuentas = new ServicioCuentas(usuarios, cifrado, 5, 15, 72);
         // Los canales en vivo cuya sesión ya terminó se cierran en el latido (cada 20 s).
-        difusor.revisarSesionesCon(token -> cuentas.usuarioDeToken(token).isPresent());
+        difusor.revisarSesionesCon(cuentas::sesionVigente);
         // Fase 13: en el teléfono que comparte no hay cuentas con contraseña. Las de antes se retiran
         // (conservan su nombre como autor); se entra con alias o con la cuenta de la nube (pase).
         cuentas.retirarCuentasConContrasena();

@@ -269,6 +269,27 @@ public class Difusor {
         }
     }
 
+    /** Sesiones que se revisan en un latido, como mucho, y el tiempo que se les da (comparten el hilo con el guardado). */
+    static final int MAX_REVISIONES = 300;
+    static final long MAX_REVISION_NS = 200_000_000L;
+
+    /**
+     * De las sesiones con canales abiertos, las que ya terminaron. Si son más de MAX_REVISIONES se revisan algunas al
+     * azar (las demás, en los latidos siguientes) y nunca más de MAX_REVISION_NS: el latido no detiene el guardado.
+     */
+    private Set<String> sesionesTerminadas(java.util.function.Predicate<String> vigente) {
+        List<String> tokens = new java.util.ArrayList<>(subs.stream()
+                .filter(s -> s.proyector == null && s.token != null).map(s -> s.token).collect(Collectors.toSet()));
+        if (tokens.size() > MAX_REVISIONES) { java.util.Collections.shuffle(tokens); tokens = tokens.subList(0, MAX_REVISIONES); }
+        long fin = System.nanoTime() + MAX_REVISION_NS;
+        Set<String> r = new java.util.HashSet<>();
+        for (String t : tokens) {
+            if (System.nanoTime() > fin) break;
+            if (!sigueAbierta(vigente, t)) r.add(t);
+        }
+        return r;
+    }
+
     private static boolean sigueAbierta(java.util.function.Predicate<String> vigente, String token) {
         // (si no se puede revisar, p. ej. la base tarda, el canal se queda: se revisa otra vez en el siguiente latido)
         try { return vigente.test(token); } catch (RuntimeException e) { return true; }
@@ -294,10 +315,9 @@ public class Difusor {
      */
     public void latido() {
         java.util.function.Predicate<String> vigente = sesionVigente;
-        Map<String, Boolean> revisadas = new java.util.HashMap<>();
+        Set<String> terminadas = vigente == null ? Set.of() : sesionesTerminadas(vigente);
         for (Suscriptor s : subs) {
-            if (vigente != null && s.token != null && s.proyector == null
-                    && !revisadas.computeIfAbsent(s.token, t -> sigueAbierta(vigente, t))) {
+            if (s.token != null && s.proyector == null && terminadas.contains(s.token)) {
                 try { s.canal.cerrar(); } catch (RuntimeException ignorado) { /* ya estaba cerrado */ }
                 quitar(s);
                 continue;
