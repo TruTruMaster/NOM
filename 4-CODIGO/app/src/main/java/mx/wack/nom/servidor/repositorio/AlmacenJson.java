@@ -46,7 +46,7 @@ public class AlmacenJson {
             .build();
 
     public AlmacenJson(@Value("${nom.datos}") String carpeta) throws IOException {
-        this.raiz = Path.of(carpeta).toAbsolutePath();
+        this.raiz = Path.of(carpeta).toAbsolutePath().normalize();
         Files.createDirectories(raiz);
         if (cifrado.activo()) migrarACifrado();
     }
@@ -130,7 +130,12 @@ public class AlmacenJson {
 
     public Path raiz() { return raiz; }
 
-    public Path ruta(String relativa) { return raiz.resolve(relativa); }
+    /** La ruta de un archivo de datos; nunca fuera de la carpeta de datos (un nombre con «..» no sale de ella). */
+    public Path ruta(String relativa) {
+        Path p = raiz.resolve(relativa).normalize();
+        if (!p.startsWith(raiz)) throw new IllegalArgumentException("Ruta de datos no válida");
+        return p;
+    }
 
     private static Path respaldo(Path p, int i) { return p.resolveSibling(p.getFileName() + ".resp" + i); }
 

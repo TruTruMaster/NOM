@@ -39,6 +39,12 @@ public class Difusor {
         volatile String bloque;
         volatile String modo;
         volatile Map<String, Object> cursor;
+        /** Lo que falta mandarle, en orden (ver encolar); quién lo está mandando y desde cuándo escribe. */
+        final java.util.concurrent.ConcurrentLinkedQueue<Object[]> fila = new java.util.concurrent.ConcurrentLinkedQueue<>();
+        final java.util.concurrent.atomic.AtomicInteger enFila = new java.util.concurrent.atomic.AtomicInteger();
+        final java.util.concurrent.atomic.AtomicBoolean vaciando = new java.util.concurrent.atomic.AtomicBoolean();
+        volatile long escribiendoDesde;
+        volatile boolean muerto;
 
         Suscriptor(Canal c, Usuario u, String token, String espacioId, String docId, String cliente) {
             this.canal = c;
@@ -94,9 +100,28 @@ public class Difusor {
                 .map(s -> s.usuarioId).collect(Collectors.toSet());
     }
 
-    public Difusor(int maxUsuarios) {
+    public Difusor(int maxUsuarios) { this(maxUsuarios, 8); }
+
+    /**
+     * hilos: cuántos hilos mandan lo de los canales (0 = se manda en el mismo hilo de quien avisa; solo para pruebas).
+     * Cada canal tiene su propia fila: si alguien deja de leer (se cerró la tapa de la laptop, el celular perdió el
+     * Wi-Fi), solo se atora su fila; los demás siguen recibiendo, quien escribe no espera y el guardado tampoco.
+     */
+    public Difusor(int maxUsuarios, int hilos) {
         this.maxUsuarios = maxUsuarios;
+        this.envios = hilos <= 0 ? null : java.util.concurrent.Executors.newFixedThreadPool(hilos, r -> {
+            Thread t = new Thread(r, "nom-envios");
+            t.setDaemon(true);
+            return t;
+        });
     }
+
+    private final java.util.concurrent.ExecutorService envios;
+    /** Lo más que se le junta a un canal sin leer; y lo más que puede tardar una escritura atorada. Después, se cierra
+        (la página vuelve a conectarse y recarga lo que le faltó). */
+    static final int MAX_FILA = 400;
+    static volatile long MAX_ESCRITURA_MS = 30_000L;
+    private static final Object LATIDO = new Object(), CERRAR = new Object();
 
     /** Abre el canal de un cliente en un espacio (y, si edita, en un documento). */
     public void suscribir(Usuario u, String espacioId, String docId, String cliente, Canal canal) {
@@ -115,7 +140,7 @@ public class Difusor {
                 "Tienes demasiadas pestañas o equipos abiertos a la vez: cierra alguno e intenta de nuevo");
         Suscriptor s = new Suscriptor(canal, u, token, espacioId, docId, cliente == null ? "" : cliente);
         subs.add(s);
-        canal.alCerrar(() -> quitar(s));
+        canal.alCerrar(() -> { s.muerto = true; quitar(s); });
         enviar(s, "hola", Map.of("ok", true));
         if (docId != null) presencia(docId);
         avisarEspacio(espacioId, "conectados", Map.of("usuarios", conectadosPublico(espacioId)));
@@ -137,7 +162,7 @@ public class Difusor {
         exigirLugar(x -> codigo.equals(x.proyector), MAX_PROYECTORES, "Ya hay demasiadas pantallas siguiendo esta presentación");
         Suscriptor s = new Suscriptor(canal, espacioId, docId, codigo, presentador);
         subs.add(s);
-        canal.alCerrar(() -> subs.remove(s));
+        canal.alCerrar(() -> { s.muerto = true; subs.remove(s); });
         enviar(s, "hola", Map.of("ok", true));
     }
 
@@ -250,7 +275,7 @@ public class Difusor {
             if (s.proyector != null || sinAcceso.test(s.usuarioId)) {
                 // (como expulsar: al cerrarse, el canal sale de la lista y se avisa la presencia)
                 enviar(s, s.proyector != null ? "fin" : "expulsado", Map.of("motivo", "Este documento se movió a un espacio en el que no estás"));
-                try { s.canal.cerrar(); } catch (RuntimeException ignorado) { /* ya estaba cerrado */ }
+                cerrarEnOrden(s);
             }
         }
     }
@@ -261,10 +286,10 @@ public class Difusor {
             if (!s.espacioId.equals(espacioId)) continue;
             if (s.proyector == null && s.usuarioId.equals(usuarioId)) {
                 enviar(s, "expulsado", Map.of("motivo", "El propietario retiró tu acceso a este espacio"));
-                s.canal.cerrar();
+                cerrarEnOrden(s);
             } else if (s.proyector != null && usuarioId.equals(s.presentador)) {
                 enviar(s, "fin", Map.of("ok", true));
-                s.canal.cerrar();
+                cerrarEnOrden(s);
             }
         }
     }
@@ -295,12 +320,71 @@ public class Difusor {
         try { return vigente.test(token); } catch (RuntimeException e) { return true; }
     }
 
-    private void enviar(Suscriptor s, String evento, Object datos) {
+    private void enviar(Suscriptor s, String evento, Object datos) { encolar(s, new Object[] { evento, datos }); }
+
+    /** Se cierra el canal después de mandarle lo que ya tenía en su fila (p. ej. el aviso de por qué se cierra). */
+    private void cerrarEnOrden(Suscriptor s) { encolar(s, new Object[] { CERRAR, null }); }
+
+    /** A la fila del canal; un hilo de envío la vacía en orden. Si la fila ya está llena, el canal no está leyendo: se corta. */
+    private void encolar(Suscriptor s, Object[] x) {
+        if (s.muerto) return;
+        if (envios == null) { entregar(s, x); return; }
+        if (s.enFila.incrementAndGet() > MAX_FILA) { s.enFila.decrementAndGet(); cortar(s); return; }
+        s.fila.add(x);
+        programarVaciado(s);
+    }
+
+    private void programarVaciado(Suscriptor s) {
+        if (!s.vaciando.compareAndSet(false, true)) return;
+        try { envios.execute(() -> vaciar(s)); }
+        catch (java.util.concurrent.RejectedExecutionException e) { s.vaciando.set(false); }
+    }
+
+    private void vaciar(Suscriptor s) {
         try {
-            s.canal.enviar(evento, datos);
-        } catch (IOException | IllegalStateException ex) {
-            subs.remove(s);
+            Object[] x;
+            while (!s.muerto && (x = s.fila.poll()) != null) {
+                s.enFila.decrementAndGet();
+                if (!entregar(s, x)) break;
+            }
+            if (s.muerto) { s.fila.clear(); s.enFila.set(0); }
+        } finally {
+            s.vaciando.set(false);
+            if (!s.muerto && !s.fila.isEmpty()) programarVaciado(s);
         }
+    }
+
+    /** Escribe en el canal (en el hilo de envío). false si el canal ya no sirve: sale de la lista. */
+    private boolean entregar(Suscriptor s, Object[] x) {
+        if (x[0] == CERRAR) {
+            s.muerto = true;
+            try { s.canal.cerrar(); } catch (RuntimeException ignorado) { /* ya estaba cerrado */ }
+            return false;
+        }
+        s.escribiendoDesde = System.currentTimeMillis();
+        try {
+            if (x[0] == LATIDO) s.canal.latido(); else s.canal.enviar((String) x[0], x[1]);
+            return true;
+        } catch (IOException | RuntimeException ex) {
+            s.muerto = true;
+            quitar(s);
+            return false;
+        } finally {
+            s.escribiendoDesde = 0;
+        }
+    }
+
+    /**
+     * Un canal que no lee (su fila se llenó o lleva mucho escribiendo una sola cosa): sale de la lista y de la presencia
+     * ya, y se cierra desde un hilo de envío (cerrarlo puede esperar a que termine la escritura atorada).
+     */
+    private void cortar(Suscriptor s) {
+        if (s.muerto) return;
+        s.muerto = true;
+        quitar(s);
+        Runnable cerrar = () -> { try { s.canal.cerrar(); } catch (RuntimeException ignorado) { /* ya estaba cerrado */ } };
+        if (envios == null) cerrar.run();
+        else try { envios.execute(cerrar); } catch (java.util.concurrent.RejectedExecutionException e) { cerrar.run(); }
     }
 
     /** Cómo saber si una sesión sigue abierta (lo pone quien sirve la API; sin esto no se revisa). */
@@ -316,17 +400,15 @@ public class Difusor {
     public void latido() {
         java.util.function.Predicate<String> vigente = sesionVigente;
         Set<String> terminadas = vigente == null ? Set.of() : sesionesTerminadas(vigente);
+        long ahora = System.currentTimeMillis();
         for (Suscriptor s : subs) {
             if (s.token != null && s.proyector == null && terminadas.contains(s.token)) {
-                try { s.canal.cerrar(); } catch (RuntimeException ignorado) { /* ya estaba cerrado */ }
-                quitar(s);
+                cortar(s);
                 continue;
             }
-            try {
-                s.canal.latido();
-            } catch (IOException | IllegalStateException ex) {
-                subs.remove(s);
-            }
+            long desde = s.escribiendoDesde;
+            if (desde > 0 && ahora - desde > MAX_ESCRITURA_MS) { cortar(s); continue; }
+            encolar(s, new Object[] { LATIDO, null });
         }
     }
 }

@@ -136,9 +136,21 @@
       await idbPut(Object.assign({}, reg, { pendiente: 0 }));
       return true;
     } catch (e) {
-      if (e && (e.estado === 404 || e.estado === 405)) hayAlmacen = false;
+      const est = e && e.estado;
+      // (una ruta que no existe es un servidor de antes, sin almacén; un 404 con su propio mensaje es que el espacio ya no está)
+      if (est === 405 || (est === 404 && (!e.message || /^No existe/.test(e.message)))) hayAlmacen = false;
+      else if (est === 413) {
+        // Demasiado grande para el servidor: nunca entrará. Se queda en este equipo y no se vuelve a mandar.
+        await idbPut(Object.assign({}, reg, { pendiente: 0, rechazado: est }));
+      } else reintentarLuego();
       return false;
     }
+  }
+  /** Lo que no subió por algo pasajero (sin red, servidor ocupado): otra vez en 30-60 s, con azar para no llegar todos juntos. */
+  let reintentoT = null;
+  function reintentarLuego() {
+    if (reintentoT) return;
+    reintentoT = setTimeout(() => { reintentoT = null; subirPendientes(); }, 30000 + Math.random() * 30000);
   }
   let subiendo = null;
   /** Sube lo que quedó pendiente (sin red, o la app se cerró a la mitad). */
@@ -418,6 +430,8 @@
       if (v && v.charCodeAt(0) === 100 && NOM.emf && NOM.emf.esDatos(v)) el.setAttribute(a, NOM.emf.paraVer(v));
     }
   }
+  /** Cuántas veces se ha reintentado cada imagen que no se pudo mostrar todavía. */
+  const intentos = new WeakMap();
   function resolverEl(el) {
     if (!el || el.nodeType !== 1 || !el.getAttribute) return;
     metaEl(el);
@@ -434,6 +448,12 @@
         if (!v2 || v2.indexOf(PRE) < 0) return;
         const c2 = cambiarEn(v2);
         if (c2.r !== v2) el.setAttribute(a, c2.r);
+        // Todavía no se pudo (en un espacio cifrado la llave del documento puede llegar después que la página, o la red
+        // tardó): otra vez en un rato, mientras la imagen siga en pantalla.
+        if (c2.falta && el.isConnected) {
+          const n = (intentos.get(el) || 0) + 1;
+          if (n <= 6) { intentos.set(el, n); setTimeout(() => { if (el.isConnected) resolverEl(el); }, 1000 * 2 ** (n - 1)); }
+        }
       });
     }
   }

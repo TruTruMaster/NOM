@@ -87,7 +87,7 @@ def main():
         total = max(total, len(re.findall(r'(?:"[A-ZÑ0-9.]+"|\b[A-ZÑ][A-ZÑ0-9.]*):\s*\["', open(os.path.join(STATIC, "js", "formulas.js"), encoding="utf-8").read().split("const FIRMAS = {")[1].split("\n  };")[0])))
         check(f"la referencia de fórmulas trae todas las funciones ({total})", n == total, [n, total])
         # lo legal y security.txt sin sesión
-        st = urllib.request.urlopen(N.B + "/.well-known/security.txt").read().decode()
+        st = urllib.request.urlopen(urllib.request.Request(N.B + "/.well-known/security.txt", headers={"User-Agent": "NOM-pruebas/1.0"})).read().decode()
         check("security.txt con contacto y vencimiento", "Contact:" in st and "Expires:" in st, st[:120])
         p.goto(N.B + "/legal/privacidad")
         t = p.evaluate("() => document.body.innerText")

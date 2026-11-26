@@ -384,7 +384,7 @@
     };
 
     // ------------------------------------------------------------ canal en tiempo real
-    let caido = sinRed, canal = null, colaE2E = Promise.resolve();
+    let caido = sinRed, canal = null, colaE2E = Promise.resolve(), pausado = false;
     ed.e2e = !!datos.e2e;
     if (!enLocal) canal = api.eventos(`/api/documentos/${docId}/eventos`, doc.nodo, {
       hola: async () => {
@@ -405,11 +405,20 @@
           if (!doc.pendientes.length && NOM.ramas) NOM.ramas.soltar(docId);
           if (resumen && resumen.length) NOM.reconexion.mostrar(ed, resumen);
           else aviso("Volvió la conexión. Enviando tus cambios…", { tipo: "ok" });
+        } else if (pausado) {
+          // (la pestaña estuvo oculta y su canal se pausó: se trae lo que cambiaron los demás mientras tanto, sin avisos)
+          try {
+            const r = await api.get(`/api/documentos/${docId}`);
+            doc.fusionarEstado(r.estado);
+            if (r.permiso !== ed.permiso) cambiarPermiso(r.permiso);
+          } catch (e) { /* siguiente intento */ }
         }
+        pausado = false;
         doc.reanudar();
         enviarPresencia();
       },
       caido: () => { caido = true; doc.marcarSinRed(); pintarEstado("sin-red", doc.pendientes.length); },
+      pausa: () => { pausado = true; },
       // Fase 15: en un espacio cifrado lo que llega se descifra aquí, en el mismo orden en que llegó.
       ops: (x) => { if (datos.e2e && NOM.e2e) colaE2E = colaE2E.then(() => NOM.e2e.descifrarEnVivo(docId, x.ops)).then((o) => ed.recibir(o)).catch((e) => console.error(e)); else ed.recibir(x.ops); },
       presencia: (x) => { ed.presencia = x.usuarios; ed.pintarPresencia(); },

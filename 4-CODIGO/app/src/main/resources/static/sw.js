@@ -2,7 +2,7 @@
    Red primero (el servidor siempre tiene la versión más nueva) y, si no responde en 3 s o no hay
    red, la copia guardada. La API (/api/...) nunca se guarda: los documentos sin red viven en la
    bóveda cifrada de cada cuenta. Al cambiar VERSION se descarta la caché anterior. */
-const VERSION = "nom-0.23.2";
+const VERSION = "nom-0.23.3";
 const BASE = [
   "./", "index.html", "manifest.webmanifest",
   "css/nom.css", "css/editor.css", "css/fuentes.css", "css/fuentes-office.css",
@@ -26,7 +26,8 @@ const BASE = [
 ];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(BASE)).then(() => self.skipWaiting()));
+  // (cache: "reload": la versión nueva se guarda del servidor, nunca de la caché del navegador, que Cloudflare alarga)
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(BASE.map((u) => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (e) => {
@@ -44,7 +45,9 @@ self.addEventListener("fetch", (e) => {
     let listo = false;
     const usar = (r) => { if (!listo) { listo = true; resolver(r); } };
     const espera = setTimeout(() => guardada(p).then((r) => { if (r && r.ok) usar(r); }), 3000);
-    fetch(p).then((r) => {
+    // (siempre se pregunta al servidor si cambió: si no, contesta 304 sin mandar el archivo otra vez)
+    // (una navegación no se puede copiar con otras opciones: esa va tal cual; el HTML ya llega con no-cache)
+    fetch(p.mode === "navigate" ? p : new Request(p, { cache: "no-cache" })).then((r) => {
       clearTimeout(espera);
       if (r && r.ok) { const c = r.clone(); caches.open(VERSION).then((k) => k.put(p, c)).catch(() => {}); usar(r); }
       else guardada(p).then((g) => usar(g && g.ok ? g : r));

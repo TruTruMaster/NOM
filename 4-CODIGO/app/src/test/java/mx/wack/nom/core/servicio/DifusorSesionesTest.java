@@ -35,7 +35,7 @@ class DifusorSesionesTest {
 
     @Test
     void cierraSoloLosCanalesDeSesionesTerminadas() {
-        Difusor d = new Difusor(50);
+        Difusor d = new Difusor(50, 0);
         Set<String> abiertas = ConcurrentHashMap.newKeySet();
         abiertas.add("sesion-ana");
         d.revisarSesionesCon(abiertas::contains);
@@ -59,7 +59,7 @@ class DifusorSesionesTest {
 
     @Test
     void siNoSePuedeRevisarElCanalSeQueda() {
-        Difusor d = new Difusor(50);
+        Difusor d = new Difusor(50, 0);
         d.revisarSesionesCon(t -> { throw new IllegalStateException("la base no contesta"); });
         CanalPrueba c = new CanalPrueba();
         d.suscribir(usuario("ana"), "sesion-ana", "esp", null, "c1", c);
@@ -69,7 +69,7 @@ class DifusorSesionesTest {
 
     @Test
     void conMuchasSesionesSeRevisaUnaParteEnCadaLatido() {
-        Difusor d = new Difusor(50);
+        Difusor d = new Difusor(50, 0);
         List<String> revisadas = new ArrayList<>();
         d.revisarSesionesCon(t -> { revisadas.add(t); return true; });
         for (int i = 0; i < Difusor.MAX_REVISIONES + 50; i++)

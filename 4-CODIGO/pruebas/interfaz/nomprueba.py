@@ -1,7 +1,7 @@
-"""Ayudas para probar NOM en local (puerto 8099) con Playwright."""
+"""Ayudas para probar NOM con Playwright; por omisión contra el sitio real (orden del dueño del 25-nov-2026)."""
 import json, os, time, urllib.request, random, string
 from playwright.sync_api import sync_playwright
-B = os.environ.get("NOM_BASE", "http://localhost:8099")
+B = os.environ.get("NOM_BASE", "https://www.nom.qd.je")   # sitio real por omisión (orden del dueño, 25-nov)
 CL = "Clave-Segura-123"
 def api(m, u, b=None, t=None):
     # Un nombre de cliente propio: Cloudflare (la Raspberry detrás del túnel) rechaza el de urllib (error 1010).
@@ -18,9 +18,21 @@ def esperar_servidor():
         try: urllib.request.urlopen(urllib.request.Request(B + "/api/red/info", headers={"User-Agent": "NOM-pruebas/1.0"}), timeout=2); return True
         except Exception: time.sleep(1)
     return False
+# Las pruebas van contra el sitio real (orden del dueño): cada cuenta que se crea se borra al terminar.
+CREADAS = []
+def _borrar_creadas():
+    for n in CREADAS:
+        try:
+            s, r = api("POST", "/api/cuentas/sesion", {"nombre": n, "contrasena": CL})
+            if s == 200: api("POST", "/api/cuentas/eliminar", {"contrasena": CL}, r["token"])
+        except Exception: pass
+import atexit
+atexit.register(_borrar_creadas)
 def cuenta(nombre=None):
     nombre = nombre or "p" + "".join(random.choice(string.ascii_lowercase) for _ in range(7))
-    api("POST", "/api/cuentas/registro", {"nombre": nombre, "contrasena": CL, "acepto": "2026-11-13"})
+    # (con un identificador de equipo al azar: el tope de cuentas nuevas por red no se gasta con las pruebas)
+    equipo = "".join(random.choice(string.ascii_letters + string.digits) for _ in range(24))
+    if api("POST", "/api/cuentas/registro", {"nombre": nombre, "contrasena": CL, "acepto": "2026-11-13", "equipo": equipo})[0] == 201: CREADAS.append(nombre)
     s = api("POST", "/api/cuentas/sesion", {"nombre": nombre, "contrasena": CL})[1]
     return {"nombre": nombre, "token": s["token"], "id": s["usuario"]["id"]}
 def espacio(tok, nombre="Pruebas"):

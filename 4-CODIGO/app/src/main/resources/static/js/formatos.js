@@ -228,7 +228,10 @@ ${partes}
   function aCsv(doc, pagina) {
     const t = doc.deLaPagina(pagina).find((b) => b.tipo === "tabla") || doc.vivos().find((b) => b.tipo === "tabla");
     if (!t) return null;
-    return celdasDe(t).map((r) => r.map((v) => (/[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v)).join(",")).join("\r\n") + "\r\n";
+    // Un texto que empieza con = + - @ (o tabulador) Excel lo toma como fórmula al abrir el CSV: va con un apóstrofo
+    // delante (como recomienda OWASP), salvo que sea un número como -5 o +3.2.
+    const seguro = (v) => (/^[=+\-@\t\r]/.test(v) && !/^[+-]?\d[\d.,]*(e[+-]?\d+)?%?$/i.test(v) ? "'" + v : v);
+    return celdasDe(t).map((r) => r.map((v0) => { const v = seguro(String(v0 == null ? "" : v0)); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(",")).join("\r\n") + "\r\n";
   }
 
   const n1 = (v) => Math.round(v * 10) / 10;

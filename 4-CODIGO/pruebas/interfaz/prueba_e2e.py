@@ -130,8 +130,19 @@ def main():
             def imagen_visible(pg):
                 return pg.evaluate("() => [...document.querySelectorAll('img')].some((i) => (i.getAttribute('src') || '').startsWith('blob:') && i.naturalWidth > 100)")
             check("Ana ve la imagen (descifrada en su equipo)", esperar(lambda: imagen_visible(A.p), 20), "")
+            if os.environ.get("NOM_DEPURAR"):
+                B.p.on("console", lambda m: print("   [B consola]", m.type, m.text[:200], flush=True))
+                B.p.on("response", lambda r: print("   [B]", r.status, r.url.replace(N.B, "")[:110], flush=True) if "/binarios/" in r.url else None)
+                B.p.on("requestfailed", lambda r: print("   [B falló]", r.url.replace(N.B, "")[:110], r.failure, flush=True))
             B.p.goto(N.B + "/#/doc/" + dimg); B.p.wait_for_selector(".ed-herramientas", timeout=15000)
             check("Beto también la ve (la baja cifrada y la descifra con la llave del documento)", esperar(lambda: imagen_visible(B.p), 25), "")
+            if os.environ.get("NOM_DEPURAR"):
+                print("   [B diagnóstico]", B.p.evaluate("""async () => {
+                  const ed = NOM.editorActual; const refs = ed ? [...NOM.binarios.refsDoc(ed.doc)] : [];
+                  const out = { editor: !!ed, refs: refs.map(r => r.slice(0, 20)), imgs: [...document.querySelectorAll('img')].map(i => (i.getAttribute('src') || '').slice(0, 40) + ' w=' + i.naturalWidth) };
+                  for (const r of refs) { try { const b = await NOM.binarios.bytes(r); out.bytes = b && b.length; } catch (e) { out.error = String(e && e.message || e); } }
+                  try { out.llave = !!(await NOM.e2e.llaveDocTexto(ed.doc.id)); } catch (e) { out.llaveError = String(e.message); }
+                  return out; }"""), flush=True)
             env = (N.api("POST", f"/api/documentos/{dimg}/enlace-ver", {}, a["token"])[1] or {}).get("enlace", "")
             llave_doc = A.p.evaluate(f"() => NOM.e2e.llaveDocTexto('{dimg}')")
             V = otro(A)
@@ -149,7 +160,9 @@ def main():
         check("el QR de un espacio cifrado lleva la llave después del #", frag.startswith("#k="), frag[:10])
         Cn = otro(A)
         try:
-            Cn.p.goto(N.B + "/unirse?c=" + enl["codigo"] + frag); Cn.p.wait_for_timeout(1500)
+            Cn.p.goto(N.B + "/unirse?c=" + enl["codigo"] + frag)
+            try: Cn.p.wait_for_function("() => document.body.innerText.includes('Proyecto secreto')", timeout=20000)
+            except Exception: pass
             check("quien llega con el QR ve el nombre del espacio", "Proyecto secreto" in Cn.p.evaluate("() => document.body.innerText"), Cn.p.evaluate("() => document.body.innerText")[:200])
             Cn.p.click("[data-alias]"); Cn.p.wait_for_timeout(2500)
             Cn.p.goto(N.B + "/#/doc/" + d); Cn.p.wait_for_selector(".ed-herramientas", timeout=15000); Cn.p.wait_for_timeout(1000)

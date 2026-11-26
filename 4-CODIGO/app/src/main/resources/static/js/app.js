@@ -171,6 +171,8 @@
     try { await rutaInterna(); } finally { fin(); }
   }
   async function rutaInterna() {
+    // Con sesión o trabajando sin cuenta, lo de este equipo no es desechable (ver NOM.pedirPersistencia).
+    if (api.token() || (NOM.local && NOM.local.activo())) NOM.pedirPersistencia(false);
     // La portada que trae index.html (para buscadores y mientras carga) se va con la primera pantalla.
     const fija = raiz.querySelector(".portada-fija");
     if (fija) fija.remove();

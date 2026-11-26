@@ -78,7 +78,11 @@
     // un sitio guarda cosas, las peticiones pueden esperar varios segundos, y eso no debe pasar justo al
     // entrar. Lo que guarda sirve para la siguiente visita, así que no hay prisa.
     if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && window.isSecureContext && !api().empaquetada) {
-      const registrar = () => navigator.serviceWorker.register("sw.js").catch((e) => console.warn("Sin service worker:", e && e.message));
+      // (sin red, el navegador no puede bajar sw.js y lo marca como error: se espera a que vuelva)
+      const registrar = () => {
+        if (navigator.onLine === false) { addEventListener("online", registrar, { once: true }); return; }
+        navigator.serviceWorker.register("sw.js").catch((e) => console.warn("Sin service worker:", e && e.message));
+      };
       navigator.serviceWorker.getRegistration().then((r) => {
         if (r) return registrar();   // ya estaba: solo se actualiza
         setTimeout(() => (window.requestIdleCallback ? requestIdleCallback(registrar, { timeout: 10000 }) : registrar()), 20000);

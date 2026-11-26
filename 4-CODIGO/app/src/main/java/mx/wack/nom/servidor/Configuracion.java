@@ -29,7 +29,7 @@ public class Configuracion {
     public Cifrado cifrado() { return new Cifrado(); }
 
     @Bean
-    public Difusor difusor(@Value("${nom.espacio.max-usuarios}") int maxUsuarios) { return new Difusor(maxUsuarios); }
+    public Difusor difusor(@Value("${nom.espacio.max-usuarios}") int maxUsuarios) { return new Difusor(maxUsuarios, 32); }
 
     @Bean
     public ServicioCuentas servicioCuentas(RepositorioUsuarios repo, Cifrado cifrado,

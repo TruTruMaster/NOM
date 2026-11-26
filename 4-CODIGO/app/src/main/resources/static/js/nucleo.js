@@ -8,7 +8,7 @@
   const NOM = (window.NOM = window.NOM || {});
   // Versión de esta interfaz. Tienen que ir a la par de nucleo/.../core/Version.java y del APK:
   // INTERFAZ sube cuando cambia el formato de los documentos o lo que la interfaz sabe leer.
-  NOM.VERSION = "0.23.2";
+  NOM.VERSION = "0.23.3";
   NOM.INTERFAZ = 27;
   /** Versión vigente de los Términos y del Aviso de privacidad (Version.LEGAL en el servidor). */
   NOM.LEGAL = "2026-11-13";
@@ -109,6 +109,21 @@
   const leer = (k, def) => { try { const v = localStorage.getItem(k); return v == null ? def : JSON.parse(v); } catch (e) { return def; } };
   const guardar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } };
   const quitar = (k) => { try { localStorage.removeItem(k); } catch (e) { /* almacenamiento no disponible */ } };
+  /**
+   * Que el navegador no borre lo guardado en este equipo (copias, cambios sin enviar, documentos sin cuenta) cuando le
+   * falte espacio: por omisión lo trata como desechable. Chrome, Edge, Safari y la app lo dan sin preguntar; Firefox
+   * pregunta, así que ahí solo se pide cuando importa (puedePreguntar: hay cambios que solo están aquí).
+   */
+  let persistenciaPedida = false;
+  const pedirPersistencia = (puedePreguntar) => {
+    try {
+      const s = navigator.storage;
+      if (persistenciaPedida || !s || !s.persist || !s.persisted) return;
+      if (/Firefox\//.test(navigator.userAgent) && !puedePreguntar) return;
+      persistenciaPedida = true;
+      s.persisted().then((ya) => ya || s.persist()).catch(() => {});
+    } catch (e) { /* sin almacenamiento */ }
+  };
 
   const MODOS = {
     TEXTO: { nombre: "Texto", plural: "Textos", icono: "file-text", micro: "Documento de texto: párrafos, títulos y listas." },
@@ -471,7 +486,7 @@
   Object.assign(NOM, { aplicarLetra, copiarTexto, copiarConAviso, etiquetaEquipo, paleta, COLORES,
     enApp, aqui,
     esc, $, $$, ico, html, debounce, throttle, haceCuanto, bytes, iniciales, avatar, sobreColor, idCorto,
-    avisoNuevo, leer, guardar, quitar, MODOS, miniatura, aviso, hoja, confirmar, cerrarHoja: () => hojaActual && hojaActual.cerrar(true), hayHoja: () => !!hojaActual,
+    avisoNuevo, leer, guardar, quitar, pedirPersistencia, MODOS, miniatura, aviso, hoja, confirmar, cerrarHoja: () => hojaActual && hojaActual.cerrar(true), hayHoja: () => !!hojaActual,
     /** Tecla Atrás del teléfono: cierra lo que esté encima (menú, ruedita, ventana) y dice si cerró algo. */
     atras: () => {
       if (menuActual) { cerrarMenu(); return true; }

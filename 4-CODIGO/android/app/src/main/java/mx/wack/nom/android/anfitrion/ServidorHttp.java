@@ -414,7 +414,8 @@ final class ServidorHttp {
         private final Socket sock;
         private final List<Runnable> alCerrar = new ArrayList<>();
         private final String cors;
-        private boolean empezo, cerrado;
+        private boolean empezo;
+        private volatile boolean cerrado;
 
         CanalSocket(OutputStream out, Socket sock, String cors) {
             this.out = out;
@@ -446,9 +447,10 @@ final class ServidorHttp {
 
         @Override public void latido() throws IOException { escribir(":latido\n\n"); }
 
+        /** Sin el candado de escribir: si una escritura está atorada (alguien dejó de leer), cerrar el socket la corta. */
         @Override public void cerrar() {
             List<Runnable> avisar;
-            synchronized (this) {
+            synchronized (alCerrar) {
                 if (cerrado) return;
                 cerrado = true;
                 avisar = new ArrayList<>(alCerrar);
@@ -459,6 +461,6 @@ final class ServidorHttp {
             }
         }
 
-        @Override public synchronized void alCerrar(Runnable r) { alCerrar.add(r); }
+        @Override public void alCerrar(Runnable r) { synchronized (alCerrar) { alCerrar.add(r); } }
     }
 }

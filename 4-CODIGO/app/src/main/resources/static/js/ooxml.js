@@ -3,6 +3,8 @@
    Un archivo OOXML es un .zip de XML; aquí se arma comprimido, sin librerías (compresion.js). */
 (function () {
   "use strict";
+  /** Un texto que viene del archivo o del documento, para usarlo dentro de una expresión regular tal cual. */
+  const reEsc = (t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   /**
    * Un símbolo de Word (w:sym): con la fuente Symbol, su letra en Unicode (F06B → κ, como la dibuja Word; js/emf.js);
    * con otra fuente, el carácter tal cual. (Antes quedaba la letra latina —«knbernaw» en lugar de «κνβερναω»— y al
@@ -754,7 +756,7 @@
       const objetoDe = (u) => (e) => {
         if (!e.oe || (e.tipo !== "objeto" && (!e.ref || !igualQueAlImportar(e.ref)))) return null;
         const k = String(e.oe).lastIndexOf(":"), nombre = String(e.oe).slice(0, k), ord = +String(e.oe).slice(k + 1);
-        const re = new RegExp("<(?:\\w+:)?" + nombre + "(?=[\\s/>])", "g");
+        const re = new RegExp("<(?:\\w+:)?" + reEsc(nombre) + "(?=[\\s/>])", "g");
         re.lastIndex = u.i;
         let m, n = -1;
         while ((m = re.exec(xd)) && m.index < u.f) { if (++n === ord) break; }
@@ -1430,7 +1432,7 @@
         if (faltan.size) {
           let defs = "";
           faltan.forEach((idNuevo, id) => {
-            const m = new RegExp('<w:style [^>]*w:styleId="' + id + '">[\\s\\S]*?</w:style>').exec(E.estilos);
+            const m = new RegExp('<w:style [^>]*w:styleId="' + reEsc(id) + '">[\\s\\S]*?</w:style>').exec(E.estilos);
             if (m) defs += m[0].replace('w:styleId="' + id + '"', 'w:styleId="' + idNuevo + '"').replace(/<w:(basedOn|next) w:val="Normal"\/>/g, `<w:$1 w:val="${normal}"/>`);
           });
           if (estMod) { const k = estMod.lastIndexOf("</w:styles>"); if (k > 0) pq.pon(estRuta, estMod.slice(0, k) + defs + estMod.slice(k)); }
@@ -3716,7 +3718,7 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
       },
       extension(ext, ct) {
         let t = P.texto(CTN) || "";
-        if (new RegExp('<Default\\b[^>]*Extension\\s*=\\s*["\']' + ext + '["\']', "i").test(t)) return;
+        if (new RegExp('<Default\\b[^>]*Extension\\s*=\\s*["\']' + reEsc(ext) + '["\']', "i").test(t)) return;
         const k = t.indexOf(">", t.indexOf("<Types")) + 1;
         P.pon(CTN, t.slice(0, k) + `<Default Extension="${ext}" ContentType="${ct}"/>` + t.slice(k));
       },
@@ -3788,7 +3790,7 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
     const O = NOM.origen, raiz = O.hijosXml(xml).find((h) => O.local(h.n) === "styleSheet");
     if (!raiz) throw new Error("styles.xml sin raíz");
     const pref = raiz.n.includes(":") ? raiz.n.split(":")[0] + ":" : "";
-    const sinPref = (s) => (pref ? s.replace(new RegExp("<(/?)" + pref, "g"), "<$1") : s);
+    const sinPref = (s) => (pref ? s.replace(new RegExp("<(/?)" + reEsc(pref), "g"), "<$1") : s);
     const hs = O.hijosXml(xml, raiz.ci, raiz.cf), sec = (n) => hs.find((h) => O.local(h.n) === n) || null;
     const dentro = (s) => (s ? O.hijosXml(xml, s.ci, s.cf) : []);
     const fuentes = dentro(sec("fonts")).map((h) => sinPref(xml.slice(h.ci, h.cf)));

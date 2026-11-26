@@ -153,10 +153,18 @@
     } finally {
       clearTimeout(t);
     }
-    marcarRed(true);
     let datos = null;
     const texto = await r.text();
-    if (texto) { try { datos = JSON.parse(texto); } catch (e) { datos = null; } }
+    if (texto) {
+      try { datos = JSON.parse(texto); }
+      catch (e) {
+        datos = null;
+        // Contestó algo que no es NOM (el Wi-Fi que pide iniciar sesión, un proxy): como sin red, así nada se da por
+        // enviado ni por guardado (la cola lo vuelve a mandar cuando de verdad haya red).
+        if (r.ok) { marcarRed(false); throw new ErrorApi(0, { error: "La red respondió con una página que no es de NOM (¿el Wi-Fi pide iniciar sesión?)" }); }
+      }
+    }
+    marcarRed(true);
     if (!r.ok) {
       const err = new ErrorApi(r.status, datos);
       if (r.status === 401 && !opc.sin401) api.alExpirar && api.alExpirar(err);
@@ -224,28 +232,50 @@
     return base + ruta + "?token=" + encodeURIComponent(api.token() || "") + fin;
   }
 
+  /** Una pestaña oculta más de este tiempo pausa su canal en vivo (ver api.eventos). */
+  const PAUSA_OCULTA_MS = 60000;
   api.eventos = function (ruta, cliente, manejadores) {
-    let es, cerrado = false, reintento = 1000, timer, abierto = 0;
-    const reintentar = () => { timer = setTimeout(abrir, reintento); reintento = Math.min(reintento * 2, 4000); };
+    let es, cerrado = false, reintento = 1000, timer, abierto = 0, pausado = false, tPausa = null;
+    // (con algo de azar: si el servidor se reinicia, no se reconectan todos en el mismo instante)
+    const reintentar = () => { timer = setTimeout(abrir, Math.round(reintento * (0.75 + Math.random() * 0.5))); reintento = Math.min(reintento * 2, 4000); };
+    // En una pestaña oculta más de un minuto el canal se pausa: no ocupa una de las 6 conexiones que el navegador abre por
+    // servidor (en la red del salón se comparten entre TODAS las pestañas) ni recursos del servidor. Al volver se abre de
+    // nuevo y la vista recarga lo que pasó mientras tanto (manejador «pausa»).
+    const alVisibilidad = () => {
+      if (cerrado) return;
+      if (document.visibilityState === "hidden") {
+        clearTimeout(tPausa);
+        tPausa = setTimeout(() => {
+          if (cerrado || pausado || document.visibilityState !== "hidden") return;
+          pausado = true; clearTimeout(timer); abierto = 0;
+          if (es) { es.close(); es = null; }
+          manejadores.pausa && manejadores.pausa();
+        }, PAUSA_OCULTA_MS);
+      } else {
+        clearTimeout(tPausa);
+        if (pausado) { pausado = false; reintento = 1000; abrir(); }
+      }
+    };
+    if (!ruta.startsWith("/api/proyeccion/")) document.addEventListener("visibilitychange", alVisibilidad);
     const abrir = async () => {
       let url;
       try { url = await direccionCanal(ruta, cliente); }
       catch (e) {
-        if (cerrado) return;
+        if (cerrado || pausado) return;
         // Sin boleto no hay canal: sesión vencida (se avisa) o red caída (se reintenta).
         if (e.estado === 401) { cerrado = true; api.alExpirar && api.alExpirar(e); return; }
         manejadores.caido && manejadores.caido();
         return reintentar();
       }
-      if (cerrado) return;
+      if (cerrado || pausado) return;
       es = new EventSource(url);
       es.addEventListener("hola", (e) => { reintento = 1000; abierto = Date.now(); marcarRed(true); manejadores.hola && manejadores.hola(JSON.parse(e.data)); });
       Object.keys(manejadores).forEach((ev) => {
-        if (ev === "hola" || ev === "caido") return;
+        if (ev === "hola" || ev === "caido" || ev === "pausa") return;
         es.addEventListener(ev, (e) => { try { manejadores[ev](JSON.parse(e.data)); } catch (x) { console.error(x); } });
       });
       es.onerror = () => {
-        if (cerrado) return;
+        if (cerrado || pausado) return;
         es.close();
         // Un canal que llevaba un buen rato abierto y se corta suele ser el reenvío del nombre corto
         // (Vercel corta toda conexión a los 2 minutos): se vuelve a abrir de inmediato, sin avisar.
@@ -254,7 +284,7 @@
         abierto = 0;
         manejadores.caido && manejadores.caido();
         // Puede ser red caída, sesión vencida o espacio lleno: se pregunta al servidor qué pasó.
-        sondear().finally(() => { if (!cerrado) reintentar(); });
+        sondear().finally(() => { if (!cerrado && !pausado) reintentar(); });
       };
     };
     async function sondear() {
@@ -279,7 +309,7 @@
       }
     }
     abrir();
-    return { cerrar() { cerrado = true; clearTimeout(timer); es && es.close(); } };
+    return { cerrar() { cerrado = true; clearTimeout(timer); clearTimeout(tPausa); document.removeEventListener("visibilitychange", alVisibilidad); es && es.close(); } };
   };
 
   // ------------------------------------------------------------ estado de la red

@@ -375,6 +375,8 @@
           }
         }
         const r = await NOM.api.post(`/api/documentos/${this.id}/ops`, { cliente: this.nodo, ops: lote, dispositivo: NOM.api.dispositivo }, { ms: 12000 });
+        // Solo un acuse de NOM dice que llegó (siempre trae «aplicadas»); sin él, los cambios se quedan en la cola.
+        if (!r || typeof r.aplicadas !== "number") throw new NOM.api.ErrorApi(0, null);
         // DEF-46: el envío salió bien, así que el corte terminó: hasta aquí se suelta la marca de «sin conexión».
         if (NOM.ramas && !this.opc.local && !this.opc.soloMemoria && NOM.ramas.marca(this.id)) NOM.ramas.soltar(this.id);
         // 3.5: partes con dueño. El servidor no aplicó esas operaciones; el editor vuelve a cargar.
@@ -433,6 +435,8 @@
     reanudar() { this.detenido = false; this.espera = 0; this._programar(); }
     marcarSinRed() {
       this.sinRed = true;
+      // Con cambios que solo están en este equipo: que el navegador no los borre si le falta espacio (en Firefox lo pregunta).
+      if (this.pendientes.length && NOM.pedirPersistencia) NOM.pedirPersistencia(true);
       // Fase 13, parte B: la base (lo que se tenía de cada nodo) para saber después si otros cambiaron algo.
       if (NOM.ramas && !this.opc.local && !this.opc.soloMemoria) NOM.ramas.marcar(this.id, this.estado, { meta: this.opc.meta });
       // 6.3: desde aquí, lo que cambien los demás se compara con lo que yo cambie sin conexión.

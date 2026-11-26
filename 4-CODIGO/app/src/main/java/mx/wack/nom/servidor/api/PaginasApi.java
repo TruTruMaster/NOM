@@ -68,20 +68,20 @@ public class PaginasApi {
         html = Buscadores.cabecera(html, Buscadores.base(req), "");
         String etiqueta = "\"" + Integer.toHexString(html.hashCode()) + "\"";
         if (new ServletWebRequest(req).checkNotModified(etiqueta)) return ResponseEntity.status(HttpStatus.NOT_MODIFIED).eTag(etiqueta).build();
-        return ResponseEntity.ok().contentType(HTML).eTag(etiqueta).cacheControl(org.springframework.http.CacheControl.noCache()).body(html);
+        return ResponseEntity.ok().contentType(HTML).eTag(etiqueta).cacheControl(org.springframework.http.CacheControl.noCache().noTransform()).body(html);
     }
 
     // robots.txt y sitemap.xml cambian con NOM_CANONICO: sin esto Cloudflare los guardaba 4 horas.
     @GetMapping(value = "/robots.txt", produces = "text/plain;charset=UTF-8")
     public ResponseEntity<String> robots(HttpServletRequest req) {
-        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noCache()).body(Buscadores.robots(Buscadores.base(req)));
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noCache().noTransform()).body(Buscadores.robots(Buscadores.base(req)));
     }
 
     @GetMapping(value = "/sitemap.xml", produces = "application/xml;charset=UTF-8")
     public ResponseEntity<String> sitemap(HttpServletRequest req) throws IOException {
         String escrito = leer("sitemap.xml");
         if (escrito == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noCache()).body(Buscadores.sitemap(escrito, Buscadores.base(req)));
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noCache().noTransform()).body(Buscadores.sitemap(escrito, Buscadores.base(req)));
     }
 
     // security.txt con la direccion principal (antes decia siempre la de dpdns aunque se entrara por otro nombre)
@@ -89,7 +89,7 @@ public class PaginasApi {
     public ResponseEntity<String> seguridad(HttpServletRequest req) throws IOException {
         String escrito = leer(".well-known/security.txt");
         if (escrito == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noCache()).body(escrito.replace(Buscadores.ESCRITA + "/", Buscadores.base(req) + "/"));
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noCache().noTransform()).body(escrito.replace(Buscadores.ESCRITA + "/", Buscadores.base(req) + "/"));
     }
 
     /** Un archivo de static/ (o de donde digan las ubicaciones configuradas) como texto; null si no esta. */
@@ -113,9 +113,9 @@ public class PaginasApi {
             html = PaginasLimpias.limpiar(html, pagina);
             // La busqueda de la ayuda no es una pagina para los buscadores (robots.txt tampoco la deja leer).
             if (!pagina.equals("ayuda/buscar")) html = Buscadores.cabecera(html, Buscadores.base(req), pagina);
-            return ResponseEntity.ok().contentType(HTML).body(html);
+            return ResponseEntity.ok().contentType(HTML).cacheControl(org.springframework.http.CacheControl.noCache().noTransform()).body(html);
         }
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).contentType(HTML)
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).contentType(HTML).cacheControl(org.springframework.http.CacheControl.noCache().noTransform())
                 .body("<!doctype html><html lang=\"es\"><meta charset=\"utf-8\"><title>No existe</title><p>Esa página no existe. <a href=\"/ayuda\">Ir a la ayuda</a></p></html>");
     }
 

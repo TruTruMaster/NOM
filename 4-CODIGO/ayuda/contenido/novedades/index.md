@@ -4,8 +4,20 @@ descripcion: Qué cambió en cada versión, en palabras sencillas.
 orden: 1
 aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-25
-version: 0.23.2
+version: 0.23.3
 ---
+## 0.23.3 — noviembre de 2026
+
+- **Wi-Fi con página de inicio de sesión:** si la red de la escuela contesta con su propia página en lugar de NOM, tus
+  cambios ya no se dan por enviados: se quedan en tu equipo y se mandan cuando la red de verdad funciona.
+- **Lo guardado en tu equipo se conserva:** NOM le pide al navegador que no borre tus copias ni tus cambios sin enviar
+  cuando le falte espacio (Firefox te lo pregunta solo cuando tienes cambios que aún no se envían).
+- **Muchas pestañas en la red del salón:** una pestaña que lleva más de un minuto oculta deja de ocupar conexión y, al
+  volver, se pone al día sola. Así ya no se traba la página con varias pestañas abiertas.
+- **Si alguien pierde la red:** el servidor deja de esperarle y los demás siguen recibiendo los cambios al instante.
+- **Al reconectarse:** cada equipo espera un tiempo un poco distinto, para que el servidor no reciba a todos de golpe.
+- **Exportar a CSV:** un texto que empieza con «=» se exporta como texto, para que Excel no lo ejecute como fórmula.
+
 ## 0.23.2 — noviembre de 2026
 
 - **Archivos enormes:** si eliges una foto o un archivo de Office demasiado grande, NOM te dice al momento cuánto pesa y
