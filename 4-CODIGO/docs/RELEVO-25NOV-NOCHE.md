@@ -68,3 +68,36 @@ registrarse dos veces, borrar la cuenta y volver…). Esta sesión hizo y **publ
 - Errores de la página: hoy no se recogen; si se agrega, va en el aviso de privacidad.
 - Cloudflare → Security Center → Security Insights (gratis, en el panel) revisa la zona cada semana: verlo de vez en
   cuando.
+
+## 6. Segunda vuelta (25/26-nov): conexión, robustez y documentos. **0.23.3 publicada**
+
+Pedido del dueño: conexión (su preocupación principal), robustez, optimización y dos documentos. Orden nueva del
+dueño: **toda prueba va contra el sitio real** (CLAUDE.md y `prompt.md` ya lo dicen; `nomprueba.py` apunta a
+www.nom.qd.je por omisión y borra sus cuentas al terminar).
+
+| Qué | Dónde | Probado en vivo |
+|---|---|---|
+| Wi-Fi con página de inicio de sesión: los cambios ya no se dan por enviados | `api.js`, `crdt.js` | `vivo_ui.py`: no llegan mientras tanto, llegan al volver |
+| Muchas pestañas en la red del salón (HTTP/1.1, 6 conexiones) | `api.js`: canal pausado en pestañas ocultas > 1 min; `editor.js` se pone al día | Chromium `--disable-http2`: se atoraba; ahora responde y se pone al día |
+| Un equipo que deja de leer ya no detiene a los demás | `Difusor` (fila por canal, hilos de envío), Tomcat `connection-timeout=20s`, `CanalSocket` | JUnit `DifusorFilasTest` |
+| Reconexión con espera al azar; subidas que se reintentan en 30-60 s (413: no) | `api.js`, `binarios.js` | — |
+| Pedir que el navegador conserve lo guardado | `nucleo.js` `pedirPersistencia`, `app.js`, `crdt.js` | — |
+| Cloudflare metía su script de estadísticas en el HTML | `Cache-Control: no-transform` (`PaginasApi`, `application.properties`) | ya no aparece; consola limpia |
+| JS viejo tras publicar (Cloudflare alarga la caché a 4 h) | `sw.js`: instalar con `reload`, servir con `no-cache` | — |
+| Imagen de un espacio cifrado que no salía en el equipo de otro | `binarios.js`: reintentos mientras siga en pantalla | `prueba_e2e` 33/33 |
+| Exportar CSV: textos que empiezan con «=» van como texto | `formatos.js` | — |
+| Expresiones con datos del archivo, escapadas | `ooxml.js` `reEsc` | — |
+| La carpeta de datos no se puede dejar | `AlmacenJson.ruta` | JUnit 33/33 |
+| Registro del service worker sin red: espera a que vuelva | `cola.js` | `prueba_sin_internet` 32/32 |
+| **Documentos técnicos** | `9-DOCUMENTOS-TECNICOS/fuentes/generar.py` → `ENTREGA/5IM7_WACK_Arquitectura` (MVC, DAO, Spring Boot y tecnologías, 9 págs.) y `5IM7_WACK_Sistemas_Distribuidos` (7 págs.), PDF con Word | sin rastros ni rayas |
+
+En vivo (www.nom.qd.je, 0.23.3): `humo.py` 36/36, `vivo_api.py` 51/52 (la que falla es artificial: un cuerpo
+anunciado de 10 GB sin datos, que Cloudflare corta), `vivo_ui.py` 13/13, `prueba_funciones` 202/202,
+`prueba_sin_internet` 32/32, `prueba_e2e` 33/33, `prueba_ayuda` 24/24, app en el emulador contra el sitio real 15/15.
+JUnit 33/33. `seguridad.py` no se corrió contra producción (necesita topes de prueba y dejaría la red con 429).
+
+**Para el dueño (Cloudflare):** Caching → Configuration → *Browser Cache TTL* → «Respect Existing Headers» (hoy
+reescribe los estáticos a 4 h). Web Analytics ya no se inyecta; si no lo usan, apagarlo en el panel.
+
+**Optimización pendiente (después del 27-nov):** cargar los editores y los lectores de Office solo cuando se usan
+(primera visita 1.3 MB); Spring Boot 4.2.0 ya salió (4.1.3 es la última de su línea).
