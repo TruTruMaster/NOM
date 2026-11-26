@@ -91,6 +91,18 @@ public class Difusor {
 
     public void alSalirDeDocumento(java.util.function.BiConsumer<String, String> f) { this.alSalirDeDocumento = f; }
 
+    /** ¿Quien tiene este canal solo puede ver en el espacio (espacioId, usuarioId)? Esas personas reciben lo mismo que
+        una pantalla de proyección: lo visible, sin comentarios, notas ni el original de Office. */
+    private volatile java.util.function.BiPredicate<String, String> soloMira = (e, u) -> false;
+
+    public void quienSoloMira(java.util.function.BiPredicate<String, String> f) { this.soloMira = f; }
+
+    private boolean mira(Suscriptor s) {
+        if (s.proyector != null) return true;
+        try { return soloMira.test(s.espacioId, s.usuarioId); }
+        catch (RuntimeException e) { return true; }   // (sin poder saberlo, la copia limpia)
+    }
+
     /** Quienes tienen abierto un documento ahora (sin contar proyectores). */
     public Set<String> usuariosEnDocumento(String docId) { return usuariosEnDocumento(docId, null); }
 
@@ -203,19 +215,21 @@ public class Difusor {
         return false;
     }
 
-    /** ¿Hay alguna pantalla de proyección siguiendo este documento? */
-    public boolean hayProyectores(String docId) {
-        for (Suscriptor s : subs) if (s.proyector != null && docId.equals(s.docId)) return true;
+    /** ¿Alguien que solo mira (una pantalla de proyección o quien solo puede ver) tiene abierto este documento? */
+    public boolean hayMirones(String docId) {
+        for (Suscriptor s : subs) if (docId.equals(s.docId) && mira(s)) return true;
         return false;
     }
 
-    /** Igual, con lo que pueden ver las pantallas de proyección (sin comentarios ni notas; null: nada). */
-    public void ops(String docId, Object datos, Object paraProyectores) {
+    /** Igual, con lo que puede ver quien solo mira (sin comentarios ni notas; null: nada). Si algo borrado vuelve a
+        verse, a quien solo mira no le llega en el lote: se le pide que vuelva a cargar su copia limpia. */
+    public void ops(String docId, Object datos, Object paraMirones) {
         for (Suscriptor s : subs) {
             if (!docId.equals(s.docId)) continue;
-            if (s.proyector == null) enviar(s, "ops", datos);
-            else if (paraProyectores instanceof Map<?, ?> m && Boolean.TRUE.equals(m.get("recargar"))) enviar(s, "version", Map.of("ok", true));
-            else if (paraProyectores != null) enviar(s, "ops", paraProyectores);
+            if (!mira(s)) enviar(s, "ops", datos);
+            else if (paraMirones instanceof Map<?, ?> m && Boolean.TRUE.equals(m.get("recargar")))
+                enviar(s, s.proyector != null ? "version" : "recargar", Map.of("ok", true));
+            else if (paraMirones != null) enviar(s, "ops", paraMirones);
         }
     }
 

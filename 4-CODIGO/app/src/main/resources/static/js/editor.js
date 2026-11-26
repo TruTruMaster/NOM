@@ -49,6 +49,9 @@
     ed.destino = enLocal && datos.documento && datos.documento.destino ? { id: datos.documento.destino, nombre: datos.documento.destinoNombre } : null;
     // El propietario del espacio (aunque haya pasado la fecha de entrega, él sigue editando).
     ed.esPropietario = !enLocal && ((datos.espacio || {}).miPermiso || datos.permiso) === "PROPIETARIO";
+    // «Solo puede ver» en el espacio: el servidor le manda la copia limpia (sin lo borrado ni los comentarios) y no le
+    // enseña las versiones, así que tampoco se le ofrecen.
+    ed.soloVer = !enLocal && (datos.espacio || {}).miPermiso === "LECTURA";
     ed.entrega = datos.entrega || null;
     ed.protegido = !!(datos.documento && datos.documento.protegido);
     ed.visita = datos.visita || null;
@@ -211,8 +214,8 @@
           <span class="avatares solo-escritorio" data-presencia></span>
           <span class="estado-sync" data-sync role="status" aria-live="polite"></span>
           <button class="icono-btn solo-escritorio" data-a="paleta" aria-label="Buscar o ir a" data-micro="Buscar o ir a|Documentos, espacios y acciones.|Ctrl K">${ico("search")}</button>
-          <button class="icono-btn" ${enLocal ? "hidden" : ""} data-a="comentarios" aria-label="Comentarios" data-micro="Comentarios|Comentarios y sugerencias del documento. Funcionan aunque no haya Internet.">${ico("message-square")}</button>
-          <button class="icono-btn solo-escritorio" ${enLocal ? "hidden" : ""} data-a="historial" aria-label="Historial de versiones" data-micro="Historial de versiones|Consulta y restaura versiones anteriores.">${ico("history")}</button>
+          <button class="icono-btn" ${enLocal || ed.soloVer ? "hidden" : ""} data-a="comentarios" aria-label="Comentarios" data-micro="Comentarios|Comentarios y sugerencias del documento. Funcionan aunque no haya Internet.">${ico("message-square")}</button>
+          <button class="icono-btn solo-escritorio" ${enLocal || ed.soloVer ? "hidden" : ""} data-a="historial" aria-label="Historial de versiones" data-micro="Historial de versiones|Consulta y restaura versiones anteriores.">${ico("history")}</button>
           <button class="icono-btn" data-a="mas" aria-label="Más opciones" data-micro="Más opciones|Exportar, guardar versión, enfoque y más.">${ico("more-horizontal")}</button>
         </header>
         <div class="ed-herramientas" role="toolbar" aria-label="Herramientas" data-herr></div>
@@ -384,6 +387,13 @@
     };
 
     // ------------------------------------------------------------ canal en tiempo real
+    // Lo que llega del servidor al volver la conexión. Quien solo puede ver lo reemplaza: su copia limpia trae lo
+    // borrado como espacios, y al juntarla con una nueva, lo que volvió a verse se quedaría en blanco.
+    function ponerEstado(est) {
+      if (!ed.soloVer) { doc.fusionarEstado(est); return; }
+      doc.reemplazarEstado(est);
+      if (!ed.previa) montar(ed.modo, true);
+    }
     let caido = sinRed, canal = null, colaE2E = Promise.resolve(), pausado = false;
     ed.e2e = !!datos.e2e;
     if (!enLocal) canal = api.eventos(`/api/documentos/${docId}/eventos`, doc.nodo, {
@@ -394,7 +404,7 @@
           try {
             const r = await api.get(`/api/documentos/${docId}`);
             const desde = doc.relojDesconexion, mios = (doc.enviadasSinRed || []).concat(doc.pendientes);
-            doc.fusionarEstado(r.estado);
+            ponerEstado(r.estado);
             if (desde != null && mios.length) resumen = NOM.reconexion ? NOM.reconexion.calcular(ed, r.estado, desde, mios) : null;
             if (r.permiso !== ed.permiso) cambiarPermiso(r.permiso);
           } catch (e) { /* siguiente intento */ }
@@ -409,7 +419,7 @@
           // (la pestaña estuvo oculta y su canal se pausó: se trae lo que cambiaron los demás mientras tanto, sin avisos)
           try {
             const r = await api.get(`/api/documentos/${docId}`);
-            doc.fusionarEstado(r.estado);
+            ponerEstado(r.estado);
             if (r.permiso !== ed.permiso) cambiarPermiso(r.permiso);
           } catch (e) { /* siguiente intento */ }
         }
@@ -423,8 +433,15 @@
       ops: (x) => { if (datos.e2e && NOM.e2e) colaE2E = colaE2E.then(() => NOM.e2e.descifrarEnVivo(docId, x.ops)).then((o) => ed.recibir(o)).catch((e) => console.error(e)); else ed.recibir(x.ops); },
       presencia: (x) => { ed.presencia = x.usuarios; ed.pintarPresencia(); },
       version: (x) => aviso(`${x.autor} restauró la versión ${x.desde}. Ya estás viendo el documento restaurado.`, { tipo: "info", ms: 6000 }),
+      // Quien solo puede ver: algo borrado volvió a verse (deshacer, restaurar) y su copia limpia no lo tiene.
+      recargar: () => recargarCopia(),
       guardado: (x) => { ultimoGuardado = x.numero; pintarEstado(doc.estadoSync, doc.pendientes.length); },
-      permiso: (x) => { if (x.usuarioId === (api.usuario() || {}).id) cambiarPermiso(x.permiso); },
+      permiso: (x) => {
+        if (x.usuarioId !== (api.usuario() || {}).id) return;
+        // Pasar de «Solo puede ver» a editar (o al revés) cambia la copia que manda el servidor: se vuelve a abrir.
+        if (x.permiso !== "NINGUNO" && (x.permiso === "LECTURA") !== ed.soloVer) { window.dispatchEvent(new HashChangeEvent("hashchange")); return; }
+        cambiarPermiso(x.permiso);
+      },
       eliminado: () => documentoEliminado(),
       // 8.5 Lo movieron a otro espacio: se vuelve a abrir (ahora con los miembros de allá).
       movido: (x) => { aviso(`${x.por} movió este documento a ${x.espacio}`, { tipo: "info", ms: 5000 }); setTimeout(() => window.dispatchEvent(new HashChangeEvent("hashchange")), 400); },
@@ -499,6 +516,23 @@
       };
     }
 
+
+    // Quien solo puede ver vuelve a pedir su copia limpia (varios avisos seguidos se juntan en una sola carga).
+    let copiaEnCurso = false, copiaOtraVez = false;
+    async function recargarCopia() {
+      if (copiaEnCurso) { copiaOtraVez = true; return; }
+      copiaEnCurso = true;
+      try {
+        do {
+          copiaOtraVez = false;
+          try {
+            const d = await api.get(`/api/documentos/${docId}`);
+            doc.reemplazarEstado(d.estado);
+            if (!ed.previa) montar(ed.modo, true);
+          } catch (e) { /* se queda como está hasta el siguiente aviso o al reabrir */ }
+        } while (copiaOtraVez);
+      } finally { copiaEnCurso = false; }
+    }
 
     // ------------------------------------------------------------ 3.5 cambios que el servidor no aceptó
     let recargando = false;
@@ -886,7 +920,7 @@
       } },
     ] : [
       ...(ed.soloLectura ? [] : [{ texto: "Guardar versión", icono: "save", atajo: "Ctrl+S", fn: guardarVersion }]),
-      { texto: "Historial y actividad", icono: "history", fn: historial },
+      ...(ed.soloVer ? [] : [{ texto: "Historial y actividad", icono: "history", fn: historial }]),
       descargarOffice,
       { texto: "Descargar en otro formato (PDF y más)…", icono: "file-down", fn: exportar },
       ...(ed.permisoLectura || tipo === "DIAGRAMA" ? [] : [{ texto: "Proteger (como en Office)…", icono: "lock", fn: dialogoProteger }, { texto: "Comprobar accesibilidad", icono: "accessibility", fn: () => NOM.accesibilidad && NOM.accesibilidad.abrir(ed) }]),
@@ -955,14 +989,14 @@
     // Acciones de este documento para la paleta de comandos (Ctrl+K).
     ed.acciones = () => [
       ...(ed.soloLectura || enLocal ? [] : [{ texto: "Guardar versión", icono: "save", atajo: "Ctrl S", fn: guardarVersion, claves: "guardar" }]),
-      ...(enLocal ? [] : [{ texto: "Historial y actividad", icono: "history", fn: historial, claves: "versiones restaurar" }]),
+      ...(enLocal || ed.soloVer ? [] : [{ texto: "Historial y actividad", icono: "history", fn: historial, claves: "versiones restaurar" }]),
       Object.assign({ claves: "exportar office" }, descargarOffice),
       { texto: "Descargar en otro formato (PDF y más)…", icono: "file-down", fn: exportar, claves: "pdf html descargar exportar" },
       { texto: "Modo enfoque", icono: "scan-eye", atajo: "Ctrl .", fn: () => enfoque(true), claves: "concentrar pantalla completa" },
       { texto: "Comprobar accesibilidad", icono: "accessibility", fn: () => NOM.accesibilidad && NOM.accesibilidad.abrir(ed), claves: "accesibilidad revisar texto alternativo contraste lector de pantalla titulos" },
       ...(enLocal ? [] : [{ texto: "Compartir espacio", icono: "share-2", fn: () => NOM.vistaEspacios.accesos(ed.espacio), claves: "invitar accesos" }]),
       ...(enLocal ? [] : [{ texto: "Recibo de mi trabajo", icono: "shield-check", fn: () => NOM.recibo.mostrar(ed), claves: "prueba autoria tecleado pegado hash" }]),
-      ...(enLocal ? [] : [{ texto: "Comentarios", icono: "message-square", fn: () => NOM.comentarios && NOM.comentarios.abrir(ed), claves: "notas sugerencias revisar" }]),
+      ...(enLocal || ed.soloVer ? [] : [{ texto: "Comentarios", icono: "message-square", fn: () => NOM.comentarios && NOM.comentarios.abrir(ed), claves: "notas sugerencias revisar" }]),
       ...(ed.cambiosVisita ? [{ texto: ed.resaltando ? "Quitar el resaltado de cambios" : "Resaltar lo que cambió desde mi última visita", icono: "highlighter", fn: () => resaltarCambios(!ed.resaltando), claves: "cambios nuevo visita" }] : []),
       ...(ed.esPropietario ? [
         { texto: ed.protegido ? "Quitar la protección contra el borrado" : "Proteger contra el borrado", icono: "lock", fn: () => proteger(!ed.protegido), claves: "no borrar proteger" },

@@ -63,7 +63,15 @@ public class ServicioDocumentos {
         this.cifrado = cifrado;
         this.nodo = nodo;
         difusor.alSalirDeDocumento(this::finDeVisita);
+        difusor.quienSoloMira((espacioId, usuarioId) -> soloMira(espacios.requerir(espacioId), usuarioId));
     }
+
+    /**
+     * ¿Esta persona tiene «Solo puede ver» en el espacio? Recibe la misma copia limpia que el enlace para ver (sin lo
+     * borrado, comentarios, notas ni el original de Office) y no ve las versiones. Cuenta su papel en el espacio, no la
+     * fecha de entrega: quien editaba sigue recibiendo su trabajo completo aunque ya no pueda cambiarlo.
+     */
+    private static boolean soloMira(Espacio e, String usuarioId) { return e.permisoDe(usuarioId) == Permiso.LECTURA; }
 
     /** 3.4 La visita dura mientras la persona tiene el documento abierto: al salir se anota la hora,
         asi lo que otros escribieron mientras lo veia en vivo no sale como "cambios desde tu visita". */
@@ -444,7 +452,7 @@ public class ServicioDocumentos {
         long reloj;
         synchronized (candado(docId)) {
             EstadoDocumento est = repo.estado(docId);
-            r.put("estado", est.copia());
+            r.put("estado", soloMira(e, u.id) ? paraMirar(est.copia(), false) : est.copia());
             reloj = est.reloj;
         }
         if (d.entregaLimite > 0) r.put("entrega", entregaInfo(d, p));
@@ -583,7 +591,7 @@ public class ServicioDocumentos {
                 if (cambioMeta) repo.guardar(d);
                 anotar(docId, u, cliente, dispositivo, aplicadas);
                 conMencion.addAll(comentariosConMencion(est, aplicadas));
-                if (difusor.hayProyectores(docId)) paraProy = paraProyectores(est, aplicadas, cliente);
+                if (difusor.hayMirones(docId)) paraProy = paraProyectores(est, aplicadas, cliente);
                 if (cambioMeta) {
                     difusor.avisarEspacio(d.espacioId, "documentos", Map.of("accion", "actualizado", "id", d.id));
                 }
@@ -1004,6 +1012,7 @@ public class ServicioDocumentos {
     public List<Version> historial(Usuario u, String docId) {
         Documento d = requerir(docId);
         permiso(u, d, Permiso.LECTURA);
+        sinVersionesParaQuienMira(u, d);
         List<Version> h = new ArrayList<>(repo.historial(docId));
         java.util.Collections.reverse(h);
         return h;
@@ -1012,9 +1021,16 @@ public class ServicioDocumentos {
     public Map<String, Map<String, Object>> foto(Usuario u, String docId, int numero) {
         Documento d = requerir(docId);
         permiso(u, d, Permiso.LECTURA);
+        sinVersionesParaQuienMira(u, d);
         Map<String, Map<String, Object>> f = repo.fotoVersion(docId, numero);
         if (f == null) throw ErrorNom.noEncontrado("La versión " + numero);
         return f;
+    }
+
+    /** Cada versión es una foto completa (con lo que después se borró): quien solo puede ver no las consulta. */
+    private void sinVersionesParaQuienMira(Usuario u, Documento d) {
+        if (soloMira(espacios.requerir(d.espacioId), u.id))
+            throw ErrorNom.prohibido("Quien solo puede ver no consulta las versiones del documento");
     }
 
     public Version guardarVersion(Usuario u, String docId, String etiqueta) {
@@ -1460,7 +1476,7 @@ public class ServicioDocumentos {
     private static boolean campoPrivado(String k) { return k.startsWith("nota:") || k.startsWith("dueno:"); }
 
     /**
-     * La parte de un lote que puede ver una pantalla de proyección (5.5): sin comentarios, sin notas del orador, sin
+     * La parte de un lote que puede ver una pantalla de proyección (5.5) o quien solo puede ver: sin comentarios, sin notas del orador, sin
      * dueños de partes y sin el archivo de Office original (que trae sus propios comentarios y notas). null si no queda nada.
      */
     private static Map<String, Object> paraProyectores(EstadoDocumento est, List<Operacion> ops, String cliente) {
@@ -1749,6 +1765,8 @@ public class ServicioDocumentos {
         }
         EstadoDocumento est;
         synchronized (candado(docId)) { est = repo.estado(docId).copia(); }
+        // quien solo puede ver copia lo mismo que ve (sin lo borrado ni lo privado)
+        if (soloMira(eo, u.id)) paraMirar(est, false);
         // lo que el documento tiene en el almacén de binarios (imágenes, el Office original) va también al otro espacio
         if (!destinoId.equals(origen.espacioId)) {
             Set<String> bins = new HashSet<>();

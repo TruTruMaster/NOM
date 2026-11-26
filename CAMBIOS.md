@@ -2,6 +2,12 @@
 
 Lo que cambió en cada versión, en corto (es la página «Novedades» de la ayuda; la escribe `4-CODIGO/ayuda/generar.py`). El diario completo, día por día, está en `LOG.md`.
 
+## 0.23.6 — noviembre de 2026
+
+- **«Solo puede ver» dentro de un espacio:** quien solo puede ver recibe lo mismo que el enlace para ver: lo que se ve
+  en el documento, sin lo borrado, los comentarios, las notas del orador ni el historial de versiones (como en Google
+  Docs). Si alguien deshace un borrado mientras lo ve, su copia se vuelve a cargar sola. Quien edita no nota cambios.
+
 ## 0.23.5 — noviembre de 2026
 
 - **Enlace para ver y pantalla de proyección:** quien solo mira recibe únicamente lo que se ve en el documento.
