@@ -31,6 +31,9 @@ public class FiltroTamano extends OncePerRequestFilter {
     static final long MAX = Math.min(PRESUPUESTO, Math.max(1, Long.parseLong(System.getenv().getOrDefault("NOM_MAX_CUERPO_MB", "32"))) << 20);
     /** Tope para comprobar un recibo (sin sesión). */
     static final long MAX_RECIBO = Math.min(MAX, 2L << 20);
+    /** Cuentas y enlaces (entrar, registrarse, alias, pases, llaves, preferencias): siempre algo chico, como en el teléfono.
+        Sin esto, un envío enorme sin sesión ocupaba los turnos de los envíos grandes de los demás. */
+    static final long MAX_CHICO = 256 * 1024;
     /** Solo la subida de un binario lleva su propio tope y turno en BinariosApi. */
     private static final java.util.regex.Pattern SUBIR_BINARIO = java.util.regex.Pattern.compile("^/api/espacios/[^/]+/binarios/[0-9a-f]{64}$");
     /** Lo chico no espera turno. */
@@ -44,9 +47,10 @@ public class FiltroTamano extends OncePerRequestFilter {
             cadena.doFilter(req, res);
             return;
         }
-        long limite = "/api/recibos/verificar".equals(ruta) ? MAX_RECIBO : MAX;
+        long limite = "/api/recibos/verificar".equals(ruta) ? MAX_RECIBO
+                : ruta.startsWith("/api/cuentas/") || ruta.startsWith("/api/enlaces/") ? Math.min(MAX, MAX_CHICO) : MAX;
         long largo = req.getContentLengthLong();
-        if (largo > limite) { responder(res, 413, "Lo que se mandó pasa de " + (limite >> 20) + " MB"); return; }
+        if (largo > limite) { responder(res, 413, "Lo que se mandó pasa de " + (limite >= 1L << 20 ? (limite >> 20) + " MB" : (limite >> 10) + " KB")); return; }
         boolean conCuerpo = largo > CHICO || (largo < 0 && (req.getHeader("Transfer-Encoding") != null));
         if (!conCuerpo) { cadena.doFilter(largo >= 0 ? req : new Contado(req, limite), res); return; }
         int kb = (int) (((largo < 0 ? limite : largo) + 1023) >> 10);

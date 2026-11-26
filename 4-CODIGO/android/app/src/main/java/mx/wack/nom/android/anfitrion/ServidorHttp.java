@@ -133,7 +133,10 @@ final class ServidorHttp {
                 throw new mx.wack.nom.core.servicio.ErrorNom(mx.wack.nom.core.servicio.ErrorNom.DEMASIADOS, "El servidor está ocupado, intenta en un momento");
             }
             try {
-                byte[] datos = new byte[largoCuerpo];
+                // (se guarda lo que de verdad llega, no lo que dice que traerá: un «Content-Length» grande sin cuerpo no
+                // aparta memoria)
+                java.io.ByteArrayOutputStream datos = new java.io.ByteArrayOutputStream(Math.min(largoCuerpo, 64 * 1024));
+                byte[] buf = new byte[Math.min(64 * 1024, Math.max(1, largoCuerpo))];
                 int leido = 0;
                 // (el cuerpo también con plazo: 20 s y uno más por cada MB que dice traer)
                 long hastaCuerpo = System.currentTimeMillis() + 20_000 + (largoCuerpo >> 20) * 1_000L;
@@ -142,14 +145,15 @@ final class ServidorHttp {
                         falloLectura = true;
                         throw new mx.wack.nom.core.servicio.ErrorNom(408, "La petición tardó demasiado");
                     }
-                    int k = entrada.read(datos, leido, Math.min(64 * 1024, largoCuerpo - leido));
+                    int k = entrada.read(buf, 0, Math.min(buf.length, largoCuerpo - leido));
                     if (k < 0) {
                         falloLectura = true;
                         throw new mx.wack.nom.core.servicio.ErrorNom(400, "Cuerpo incompleto");
                     }
+                    datos.write(buf, 0, k);
                     leido += k;
                 }
-                cuerpo = datos;
+                cuerpo = datos.toByteArray();
                 cuerpoConsumido = true;
                 return cuerpo;
             } catch (IOException e) {
@@ -162,6 +166,14 @@ final class ServidorHttp {
 
         /** El cuerpo como JSON (mapa, lista…), o null si vino vacío. */
         Object json(int maxBytes) {
+            // Como en el servidor de la nube: un cuerpo JSON tiene que decir que lo es. Una página de otro sitio puede
+            // mandar «text/plain» sin que el navegador pregunte antes (CORS), y con eso gastaría intentos y topes.
+            String largo = cabecera("content-length"), tipo = cabecera("content-type");
+            if (largo != null && !"0".equals(largo.trim())
+                    && (tipo == null || !tipo.trim().toLowerCase(java.util.Locale.ROOT).startsWith("application/json"))) {
+                falloLectura = true;   // (el cuerpo no se lee: la conexión se cierra)
+                throw new mx.wack.nom.core.servicio.ErrorNom(415, "Tipo de contenido no aceptado");
+            }
             byte[] b = leerCuerpo(maxBytes);
             if (b.length == 0) return null;
             String t = new String(b, StandardCharsets.UTF_8).trim();

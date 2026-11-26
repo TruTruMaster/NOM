@@ -69,8 +69,8 @@ public class PublicoApi {
 
     /** 8.5 Ver un solo documento con el enlace que creo el propietario (sin cuenta, solo lectura). */
     @GetMapping("/api/ver/{token}")
-    public Map<String, Object> ver(@PathVariable String token) {
-        return documentos.verPublico(token);
+    public Map<String, Object> ver(@PathVariable String token, jakarta.servlet.http.HttpServletRequest req) {
+        return conTope(req, () -> documentos.verPublico(token));
     }
 
     @GetMapping("/api/proyeccion/{codigo}")

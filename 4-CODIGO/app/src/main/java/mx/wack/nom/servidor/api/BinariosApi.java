@@ -80,7 +80,9 @@ public class BinariosApi {
     }
 
     @GetMapping("/api/ver/{token}/binarios/{huella}")
-    public ResponseEntity<byte[]> ver(@PathVariable String token, @PathVariable String huella) {
+    public ResponseEntity<byte[]> ver(@PathVariable String token, @PathVariable String huella, HttpServletRequest req) {
+        // (como la proyección y el teléfono: el tope cuenta solo enlaces que no existen)
+        topes.conTopeNoExiste(mx.wack.nom.servidor.seguridad.Origen.de(req), () -> { binarios.exigirCodigoPublico("ver", token); return null; });
         return conCache(binarios.bajarPublico("ver", token, huella), huella);
     }
 
