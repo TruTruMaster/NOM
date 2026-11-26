@@ -34,6 +34,11 @@ import mx.wack.nom.core.servicio.ServicioPases;
 final class ApiTelefono {
     private static final Bitacora log = Bitacora.de(ApiTelefono.class);
     private static final String ID = "([^/]+)";
+    private static final int MAX_PEQUENO = 256 * 1024;
+    private static final int MAX_RECIBO = 2 * 1024 * 1024;
+    private static final int MAX_MEDIANO = 12 * 1024 * 1024;
+    private static final int MAX_GRANDE = 25 * 1024 * 1024;
+    private static final int MAX_BINARIO = 40 * 1024 * 1024;
 
     private final ServicioCuentas cuentas;
     private final ServicioEspacios espacios;
@@ -46,11 +51,14 @@ final class ApiTelefono {
     private final ServicioPases pases;
     private final mx.wack.nom.core.servicio.ServicioChat chat;
     private final mx.wack.nom.core.servicio.ServicioBinarios binarios;
+    private final String llaveDueno;
+    private final mx.wack.nom.core.servicio.Topes topes = new mx.wack.nom.core.servicio.Topes();
 
     ApiTelefono(ServicioCuentas cuentas, ServicioEspacios espacios, ServicioDocumentos documentos, Difusor difusor,
                 Descubrimiento descubrimiento, Nodo nodo, ServicioSincronia sincronia, ServicioFuentes fuentes, ServicioPases pases,
-                mx.wack.nom.core.servicio.ServicioBinarios binarios) {
+                mx.wack.nom.core.servicio.ServicioBinarios binarios, String llaveDueno) {
         this.binarios = binarios;
+        this.llaveDueno = llaveDueno;
         this.fuentes = fuentes;
         this.pases = pases;
         this.chat = new mx.wack.nom.core.servicio.ServicioChat(espacios.repositorio(), espacios, difusor, new mx.wack.nom.core.servicio.Cifrado());
@@ -70,9 +78,11 @@ final class ApiTelefono {
 
     private static Respuesta creado(Object cuerpo) { return Respuesta.json(201, cuerpo); }
 
+    private static Map<String, Object> cuerpo(Peticion p) { return cuerpo(p, MAX_PEQUENO); }
+
     @SuppressWarnings("unchecked")
-    private static Map<String, Object> cuerpo(Peticion p) {
-        Object o = p.json();
+    private static Map<String, Object> cuerpo(Peticion p, int maxBytes) {
+        Object o = p.json(maxBytes);
         return o instanceof Map ? (Map<String, Object>) o : new LinkedHashMap<>();
     }
 
@@ -96,7 +106,12 @@ final class ApiTelefono {
             if (x.extra != null) c.put("detalle", x.extra);
             return Respuesta.json(x.estado, c);
         }
-        if (e instanceof IllegalArgumentException) return Respuesta.json(400, Map.of("error", String.valueOf(e.getMessage())));
+        if (e instanceof IllegalArgumentException) {
+            StackTraceElement[] st = e.getStackTrace();
+            boolean propio = st.length > 0 && st[0].getClassName().startsWith("mx.wack.nom.");
+            String msg = propio && e.getMessage() != null ? e.getMessage() : "La petición no es válida";
+            return Respuesta.json(400, Map.of("error", msg));
+        }
         log.error("Error no controlado", e);
         return Respuesta.json(500, Map.of("error", "Ocurrio un error inesperado. Intenta de nuevo."));
     }
@@ -190,6 +205,7 @@ final class ApiTelefono {
     private Respuesta aliasDelDueno(Peticion p) {
         if (p.origen != null) throw ErrorNom.prohibido("Desde otro equipo se entra con el código o el QR de un espacio");
         String llave = texto(cuerpo(p), "llave");
+        if (!LlaveDueno.coincide(llaveDueno, llave)) throw ErrorNom.prohibido("La llave de este teléfono no coincide");
         Usuario dueno = cuentas.duenoDelTelefono().orElse(null);
         Sesion s = dueno == null ? cuentas.crearAlias(null, llave, true) : cuentas.entrarAlias(dueno.id, llave, null);
         Usuario u = cuentas.porId(s.usuarioId).orElseThrow();
@@ -236,23 +252,48 @@ final class ApiTelefono {
         }
         if (r.equals("/api/cuentas/pase/llave") && m.equals("GET")) return Respuesta.json(404, Map.of("error", "El teléfono no firma pases"));
         if ((x = coincide("/api/enlaces/" + ID + "/alias", r)) != null && m.equals("POST")) {
-            Map<String, Object> c = cuerpo(p);
-            return ok(espacios.entrarConAlias(x.group(1), texto(c, "id"), texto(c, "llave"), p.origen));
+            final String codigo = x.group(1);
+            return ok(topes.conTopeNoExiste(p.origen, () -> {
+                Map<String, Object> c = cuerpo(p);
+                return espacios.entrarConAlias(codigo, texto(c, "id"), texto(c, "llave"), p.origen);
+            }));
         }
         // Enlaces para unirse (QR), recibos y proyeccion: sin sesion (como en ConfigWeb).
-        if ((x = coincide("/api/enlaces/" + ID, r)) != null && m.equals("GET")) return ok(espacios.infoEnlace(x.group(1)));
-        if ((x = coincide("/api/enlaces/" + ID + "/invitado", r)) != null && m.equals("POST"))
-            return ok(espacios.entrarComoInvitado(x.group(1), texto(cuerpo(p), "apodo"), p.origen));
-        if (r.equals("/api/recibos/verificar") && m.equals("POST")) return ok(documentos.verificarRecibo(cuerpo(p)));
-        if ((x = coincide("/api/proyeccion/" + ID, r)) != null && m.equals("GET")) return ok(documentos.verProyeccion(x.group(1)));
+        if ((x = coincide("/api/enlaces/" + ID, r)) != null && m.equals("GET")) {
+            final String codigo = x.group(1);
+            return ok(topes.conTopeNoExiste(p.origen, () -> espacios.infoEnlace(codigo)));
+        }
+        if ((x = coincide("/api/enlaces/" + ID + "/invitado", r)) != null && m.equals("POST")) {
+            final String codigo = x.group(1);
+            return ok(topes.conTopeNoExiste(p.origen, () -> espacios.entrarComoInvitado(codigo, texto(cuerpo(p), "apodo"), p.origen)));
+        }
+        if (r.equals("/api/recibos/verificar") && m.equals("POST")) return ok(documentos.verificarRecibo(cuerpo(p, MAX_RECIBO)));
+        if ((x = coincide("/api/proyeccion/" + ID, r)) != null && m.equals("GET")) {
+            final String codigo = x.group(1);
+            return ok(topes.conTopeNoExiste(p.origen, () -> documentos.verProyeccion(codigo)));
+        }
         // 8.5 Ver un solo documento con su enlace (sin cuenta).
-        if ((x = coincide("/api/ver/" + ID, r)) != null && m.equals("GET")) return ok(documentos.verPublico(x.group(1)));
+        if ((x = coincide("/api/ver/" + ID, r)) != null && m.equals("GET")) {
+            final String codigo = x.group(1);
+            return ok(topes.conTopeNoExiste(p.origen, () -> documentos.verPublico(codigo)));
+        }
         // Almacén de binarios sin sesión: solo lo que usa el documento del enlace para ver o del proyector.
-        if ((x = coincide("/api/ver/" + ID + "/binarios/" + ID, r)) != null && m.equals("GET")) return Respuesta.bytes(binarios.bajarPublico("ver", x.group(1), x.group(2)));
-        if ((x = coincide("/api/proyeccion/" + ID + "/binarios/" + ID, r)) != null && m.equals("GET")) return Respuesta.bytes(binarios.bajarPublico("proyeccion", x.group(1), x.group(2)));
+        if ((x = coincide("/api/ver/" + ID + "/binarios/" + ID, r)) != null && m.equals("GET")) {
+            final String codigo = x.group(1), huella = x.group(2);
+            topes.conTopeNoExiste(p.origen, () -> { binarios.exigirCodigoPublico("ver", codigo); return null; });
+            return Respuesta.bytes(binarios.bajarPublico("ver", codigo, huella));
+        }
+        if ((x = coincide("/api/proyeccion/" + ID + "/binarios/" + ID, r)) != null && m.equals("GET")) {
+            final String codigo = x.group(1), huella = x.group(2);
+            topes.conTopeNoExiste(p.origen, () -> { binarios.exigirCodigoPublico("proyeccion", codigo); return null; });
+            return Respuesta.bytes(binarios.bajarPublico("proyeccion", codigo, huella));
+        }
         if ((x = coincide("/api/proyeccion/" + ID + "/eventos", r)) != null && m.equals("GET")) {
-            String codigo = x.group(1);
-            return Respuesta.sse(canal -> documentos.suscribirProyeccion(codigo, canal));
+            final String codigo = x.group(1), origen = p.origen;
+            return Respuesta.sse(canal -> topes.conTopeNoExiste(origen, () -> {
+                documentos.suscribirProyeccion(codigo, canal);
+                return null;
+            }));
         }
         if (r.equals("/api/cuentas/sesion")) {
             if (m.equals("POST")) return sinCuentas();
@@ -268,7 +309,7 @@ final class ApiTelefono {
 
         // ---- almacén de binarios (imágenes y el Office original de cada documento, aparte del documento)
         if ((x = coincide("/api/espacios/" + ID + "/binarios/faltan", r)) != null && m.equals("POST")) {
-            Object hs = cuerpo(p).get("huellas");
+            Object hs = cuerpo(p, MAX_RECIBO).get("huellas");
             List<String> lista = new java.util.ArrayList<>();
             if (hs instanceof List) for (Object o : (List<?>) hs) lista.add(String.valueOf(o));
             Map<String, Object> rf = new LinkedHashMap<>();
@@ -277,7 +318,10 @@ final class ApiTelefono {
             return ok(rf);
         }
         if ((x = coincide("/api/espacios/" + ID + "/binarios/" + ID, r)) != null) {
-            if (m.equals("PUT")) return ok(binarios.subir(u, x.group(1), x.group(2), p.cuerpo));
+            if (m.equals("PUT")) {
+                binarios.exigirSubir(u, x.group(1), x.group(2));
+                return ok(binarios.subir(u, x.group(1), x.group(2), p.leerCuerpo(MAX_BINARIO)));
+            }
             if (m.equals("GET")) return Respuesta.bytes(binarios.bajar(u, x.group(1), x.group(2)));
         }
 
@@ -306,7 +350,10 @@ final class ApiTelefono {
             return ok(cuentas.guardarPreferencias(u, c == null ? null : Json.aObjeto(c, Preferencias.class)));
         }
         if (r.equals("/api/cuentas/recuperacion") && m.equals("POST")) return ok(Map.of("recuperacion", cuentas.nuevoCodigoRecuperacion(u)));
-        if ((x = coincide("/api/enlaces/" + ID + "/entrar", r)) != null && m.equals("POST")) return ok(espacios.entrarConEnlace(u, x.group(1)));
+        if ((x = coincide("/api/enlaces/" + ID + "/entrar", r)) != null && m.equals("POST")) {
+            final String codigo = x.group(1);
+            return ok(topes.conTopeNoExiste(p.origen, () -> espacios.entrarConEnlace(u, codigo)));
+        }
 
         // ---- espacios
         if (r.equals("/api/espacios")) {
@@ -364,7 +411,8 @@ final class ApiTelefono {
         if ((x = coincide("/api/espacios/" + ID + "/sincronia", r)) != null) {
             if (m.equals("PUT")) {
                 Map<String, Object> c = cuerpo(p);
-                return ok(sincronia.configurar(u, x.group(1), texto(c, "servidor"), texto(c, "usuario"), texto(c, "contrasena")));
+                String alcance = p.origen == null ? ServicioSincronia.RED : ServicioSincronia.alcanceDe(p.origen);
+                return ok(sincronia.configurar(u, x.group(1), texto(c, "servidor"), texto(c, "usuario"), texto(c, "contrasena"), alcance));
             }
             if (m.equals("POST")) return ok(sincronia.sincronizar(u, x.group(1)));
             if (m.equals("DELETE")) return ok(sincronia.quitar(u, x.group(1)));
@@ -389,7 +437,7 @@ final class ApiTelefono {
         if ((x = coincide("/api/fuentes/datos/" + ID, r)) != null && m.equals("GET")) return ok(fuentes.wikidata(u, x.group(1)));
         if ((x = coincide("/api/espacios/" + ID + "/biblioteca", r)) != null) {
             if (m.equals("GET")) { String q = p.consulta.getOrDefault("q", ""); return ok(q.isBlank() ? fuentes.biblioteca(u, x.group(1)) : fuentes.buscarEnBiblioteca(u, x.group(1), q)); }
-            if (m.equals("POST")) return ok(fuentes.guardarEnBiblioteca(u, x.group(1), cuerpo(p)));
+            if (m.equals("POST")) return ok(fuentes.guardarEnBiblioteca(u, x.group(1), cuerpo(p, MAX_MEDIANO)));
         }
         if ((x = coincide("/api/espacios/" + ID + "/biblioteca/" + ID, r)) != null) {
             if (m.equals("GET")) return ok(fuentes.deBiblioteca(u, x.group(1), x.group(2)));
@@ -401,8 +449,14 @@ final class ApiTelefono {
             if (m.equals("PUT")) { Map<String, Object> c = cuerpo(p); return ok(espacios.darLlave(u, x.group(1), texto(c, "usuario"), texto(c, "llave"))); }
         }
         if ((x = coincide("/api/espacios/" + ID + "/chat", r)) != null) {
-            if (m.equals("GET")) return ok(chat.mensajes(u, x.group(1), largo(p.consulta.containsKey("desde") ? Long.valueOf(p.consulta.get("desde")) : 0L)));
-            if (m.equals("POST")) return ok(chat.enviar(u, x.group(1), cuerpo(p)));
+            if (m.equals("GET")) {
+                long desde = 0L;
+                if (p.consulta.containsKey("desde")) {
+                    try { desde = Long.parseLong(p.consulta.get("desde")); } catch (NumberFormatException e) { throw ErrorNom.invalido("Parámetro desde no válido", "desde"); }
+                }
+                return ok(chat.mensajes(u, x.group(1), desde));
+            }
+            if (m.equals("POST")) return ok(chat.enviar(u, x.group(1), cuerpo(p, MAX_MEDIANO)));
         }
         if ((x = coincide("/api/espacios/" + ID + "/chat/" + ID + "/adjunto", r)) != null && m.equals("GET")) return ok(chat.adjunto(u, x.group(1), x.group(2)));
         if ((x = coincide("/api/espacios/" + ID + "/chat/" + ID, r)) != null && m.equals("DELETE")) return ok(chat.borrar(u, x.group(1), x.group(2)));
@@ -421,7 +475,7 @@ final class ApiTelefono {
         if ((x = coincide("/api/espacios/" + ID + "/documentos", r)) != null) {
             if (m.equals("GET")) return ok(documentos.listar(u, x.group(1)));
             if (m.equals("POST")) {
-                Map<String, Object> c = cuerpo(p);
+                Map<String, Object> c = cuerpo(p, MAX_GRANDE);
                 Documento d = documentos.crear(u, x.group(1), texto(c, "nombre"), texto(c, "modo"), Json.operaciones(c.get("ops")), texto(c, "llave"), texto(c, "clave"));
                 return creado(d);
             }
@@ -437,24 +491,24 @@ final class ApiTelefono {
         }
         // ---- fase 13, parte B: ramas de lo editado sin Internet
         if ((x = coincide("/api/documentos/" + ID + "/cambios-desde", r)) != null && m.equals("POST")) {
-            Map<String, Object> c = cuerpo(p);
+            Map<String, Object> c = cuerpo(p, MAX_RECIBO);
             return ok(documentos.cambiosDesdeBase(u, x.group(1), base(c.get("base")), lista(c.get("nodos")), largo(c.get("desde"))));
         }
         if ((x = coincide("/api/documentos/" + ID + "/ramas", r)) != null) {
             if (m.equals("GET")) return ok(documentos.ramas(u, x.group(1)));
             if (m.equals("POST")) {
-                Map<String, Object> c = cuerpo(p);
+                Map<String, Object> c = cuerpo(p, MAX_GRANDE);
                 return creado(documentos.crearRama(u, x.group(1), texto(c, "nombre"), Json.operaciones(c.get("ops")), base(c.get("base")),
                         lista(c.get("nodos")), Json.operaciones(c.get("propios")), texto(c, "motivo"), largo(c.get("desde"))));
             }
         }
         if ((x = coincide("/api/documentos/" + ID + "/actividad-externa", r)) != null && m.equals("POST")) {
-            Map<String, Object> c = cuerpo(p);
+            Map<String, Object> c = cuerpo(p, MAX_GRANDE);
             Object f = c.get("filas");
             return ok(documentos.actividadExterna(u, x.group(1), f instanceof java.util.List ? new java.util.ArrayList<Object>((java.util.List<?>) f) : null, texto(c, "via")));
         }
         if ((x = coincide("/api/documentos/" + ID + "/fusionar", r)) != null && m.equals("POST")) {
-            Object e = cuerpo(p).get("elecciones");
+            Object e = cuerpo(p, MAX_RECIBO).get("elecciones");
             Map<String, String> el = new LinkedHashMap<>();
             if (e instanceof Map) for (Map.Entry<?, ?> en : ((Map<?, ?>) e).entrySet()) el.put(String.valueOf(en.getKey()), String.valueOf(en.getValue()));
             return ok(documentos.fusionarRama(u, x.group(1), el));
@@ -482,7 +536,7 @@ final class ApiTelefono {
             if (m.equals("DELETE")) return ok(documentos.quitarEnlaceVer(u, x.group(1)));
         }
         if ((x = coincide("/api/documentos/" + ID + "/ops", r)) != null && m.equals("POST")) {
-            Map<String, Object> c = cuerpo(p);
+            Map<String, Object> c = cuerpo(p, MAX_GRANDE);
             return ok(documentos.aplicar(u, x.group(1), Json.operaciones(c.get("ops")), texto(c, "cliente"), texto(c, "dispositivo")));
         }
         if ((x = coincide("/api/documentos/" + ID + "/actividad", r)) != null && m.equals("GET"))
@@ -522,14 +576,14 @@ final class ApiTelefono {
             if (m.equals("DELETE")) { documentos.terminarProyeccion(u, x.group(1)); return ok(Map.of("ok", true)); }
         }
         if ((x = coincide("/api/documentos/" + ID + "/proyeccion/marcas", r)) != null && m.equals("PUT"))
-            return ok(documentos.marcarProyeccion(u, x.group(1), cuerpo(p)));
+            return ok(documentos.marcarProyeccion(u, x.group(1), cuerpo(p, MAX_RECIBO)));
         if ((x = coincide("/api/documentos/" + ID + "/versiones", r)) != null) {
             if (m.equals("GET")) return ok(documentos.historial(u, x.group(1)));
             if (m.equals("POST")) return ok(documentos.guardarVersion(u, x.group(1), texto(cuerpo(p), "etiqueta")));
         }
-        if ((x = coincide("/api/documentos/" + ID + "/versiones/(\\d+)", r)) != null && m.equals("GET"))
+        if ((x = coincide("/api/documentos/" + ID + "/versiones/(\\d{1,9})", r)) != null && m.equals("GET"))
             return ok(documentos.foto(u, x.group(1), Integer.parseInt(x.group(2))));
-        if ((x = coincide("/api/documentos/" + ID + "/versiones/(\\d+)/restaurar", r)) != null && m.equals("POST"))
+        if ((x = coincide("/api/documentos/" + ID + "/versiones/(\\d{1,9})/restaurar", r)) != null && m.equals("POST"))
             return ok(documentos.restaurar(u, x.group(1), Integer.parseInt(x.group(2))));
 
         // ---- red

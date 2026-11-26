@@ -26,9 +26,14 @@ contesta() { wget -q -O /dev/null -T "${1:-5}" "http://127.0.0.1:$P/api/red/info
 esperar() { i=0; until contesta 3; do i=$((i + 1)); [ $i -ge "${1:-90}" ] && return 1; sleep 1; done; return 0; }
 respaldo() {
   f=$VAR/respaldos/datos-$(date +%Y-%m-%d_%H%M%S).tar.gz
-  tar -czf "$f.n" -C $VAR datos && mv "$f.n" "$f" || { rm -f "$f.n"; echo "respaldo: falló"; return 1; }
+  (umask 027 && tar -czf "$f.n" -C $VAR datos) && mv "$f.n" "$f" || { rm -f "$f.n"; echo "respaldo: falló"; return 1; }
   chown root:adm "$f"; chmod 640 "$f"
-  ls -1t $VAR/respaldos/datos-2*.tar.gz 2>/dev/null | tail -n +15 | xargs -r rm -f
+  n=0
+  for x in $(ls -1t "$VAR/respaldos"/datos-2*.tar.gz 2>/dev/null); do
+    case "$x" in "$VAR/respaldos"/datos-2[0-9][0-9][0-9]-*.tar.gz)
+      n=$((n + 1)); [ $n -gt 14 ] && rm -f -- "$x" ;;
+    esac
+  done
   echo "respaldo: $f ($(du -h "$f" | cut -f1))"
 }
 estado() {
@@ -55,27 +60,29 @@ case "${1:-estado}" in
   prender) s6-rc -u change nom && { esperar 90 && echo "prendido: contesta" || { echo "no contesta tras 90 s"; exit 1; }; } ;;
   respaldo) respaldo ;;
   actualizar)
-    [ -f $NUEVO ] && ! [ -L $NUEVO ] || { echo "actualizar: no hay $NUEVO"; exit 1; }
-    [ "$(wc -c < $NUEVO)" -gt 1000000 ] && unzip -tq $NUEVO >/dev/null 2>&1 \
-      || { echo "actualizar: $NUEVO no es un jar completo"; exit 1; }
-    if [ -f $JAR ] && cmp -s $NUEVO $JAR; then rm -f $NUEVO; echo "actualizar: ya estaba esa versión"; exit 0; fi
-    respaldo || exit 1
+    [ -f "$NUEVO" ] && ! [ -L "$NUEVO" ] || { echo "actualizar: no hay $NUEVO"; exit 1; }
+    rm -f "$JAR.n"
+    cp -P -- "$NUEVO" "$JAR.n" && chown root:root "$JAR.n" && chmod 600 "$JAR.n" || { rm -f "$JAR.n"; echo "actualizar: no se pudo copiar"; exit 1; }
+    ! [ -L "$JAR.n" ] && [ -f "$JAR.n" ] && [ "$(wc -c < "$JAR.n")" -gt 1000000 ] && unzip -tq "$JAR.n" >/dev/null 2>&1 \
+      || { rm -f "$JAR.n"; echo "actualizar: $NUEVO no es un jar completo"; exit 1; }
+    if [ -f "$JAR" ] && cmp -s "$JAR.n" "$JAR"; then rm -f "$JAR.n" "$NUEVO"; echo "actualizar: ya estaba esa versión"; exit 0; fi
+    respaldo || { rm -f "$JAR.n"; exit 1; }
     s6-svc -wD -T 40000 -d $RUN/nom-servidor
-    [ -f $JAR ] && cp -p $JAR $JAR.anterior
-    cp $NUEVO $JAR.n && chown root:root $JAR.n && chmod 644 $JAR.n && mv $JAR.n $JAR
+    [ -f "$JAR" ] && cp -p "$JAR" "$JAR.anterior"
+    chmod 644 "$JAR.n" && mv "$JAR.n" "$JAR"
     s6-svc -u $RUN/nom-servidor
-    if esperar 120; then rm -f $NUEVO; echo "actualizar: versión nueva funcionando"; estado
+    if esperar 120; then rm -f "$NUEVO"; echo "actualizar: versión nueva funcionando"; estado
     else
       echo "actualizar: la versión nueva no contestó; regreso a la anterior"
       s6-svc -wD -T 40000 -d $RUN/nom-servidor
-      [ -f $JAR.anterior ] && cp -p $JAR.anterior $JAR
+      [ -f "$JAR.anterior" ] && cp -p "$JAR.anterior" "$JAR"
       s6-svc -u $RUN/nom-servidor
       esperar 120 && echo "actualizar: la anterior contesta" || echo "actualizar: tampoco contesta la anterior (nom-pi bitacora)"
       exit 1
     fi ;;
   llave)
     f=$VAR/datos-llaves/reposo.key
-    [ -r "$f" ] || { echo "llave: todavía no hay (la crea el servidor al arrancar con cifrado)"; exit 1; }
+    [ -f "$f" ] && ! [ -L "$f" ] && [ -r "$f" ] || { echo "llave: todavía no hay (la crea el servidor al arrancar con cifrado)"; exit 1; }
     echo "Llave del cifrado en reposo (base64). Guárdala en un lugar seguro, separada de los respaldos:"
     cat "$f" ;;
   dominio)

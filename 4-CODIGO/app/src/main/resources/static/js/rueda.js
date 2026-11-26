@@ -67,7 +67,7 @@
           const a = -Math.PI / 2 + (i * Math.PI * 2) / n, rm = (R + RI) / 2;
           return `<button class="rueda-item ${it.off ? "off" : ""} ${it.marcado ? "marcado" : ""}" role="menuitem" data-i="${i}" tabindex="-1" ${it.off ? 'aria-disabled="true"' : ""}
             style="--i:${i};left:${(rm * Math.cos(a)).toFixed(1)}px;top:${(rm * Math.sin(a)).toFixed(1)}px" aria-label="${esc(it.texto)}">
-            ${it.color ? `<span class="rueda-muestra" style="background:${esc(it.color)}"></span>` : ico(it.icono || "circle")}
+            ${it.color ? `<span class="rueda-muestra" style="background:${NOM.colorCss(it.color, "#5A5D6B")}"></span>` : ico(it.icono || "circle")}
             <small>${esc(it.corto || it.texto)}</small>${it.sub ? `<i class="rueda-mas"></i>` : ""}</button>`;
         }).join("")}
         <div class="rueda-centro">${opc.padre ? ico("chevron-left", "ico-s") : ""}<span data-etq>${esc(opc.titulo || "Elige")}</span></div>

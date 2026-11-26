@@ -4,8 +4,17 @@ descripcion: Qué cambió en cada versión, en palabras sencillas.
 orden: 1
 aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-26
-version: 0.23.4
+version: 0.23.5
 ---
+## 0.23.5 — noviembre de 2026
+
+- **Enlace para ver y pantalla de proyección:** quien solo mira recibe únicamente lo que se ve en el documento.
+- **Servidor más firme:** más revisiones en lo que llega a la página, al servidor y al teléfono que comparte, y la
+  sesión de cada servidor se guarda por separado.
+- **Investigar:** NOM no lee páginas de la red donde está el propio servidor.
+- **Proyección en el salón:** una imagen que todavía no termina de subirse ya no cuenta como un intento fallido.
+- **Al cerrar sesión o cambiar de servidor:** se olvidan también las llaves y las imágenes guardadas de la sesión anterior.
+
 ## 0.23.4 — noviembre de 2026
 
 - **Mover documentos:** sacar un documento de un espacio para llevarlo a otro ahora es cosa del propietario del espacio

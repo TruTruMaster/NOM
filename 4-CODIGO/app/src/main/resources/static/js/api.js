@@ -10,7 +10,7 @@
   // mismo servidor, con las mismas cuentas. Para la app son un solo lugar y se guarda el principal; así
   // un QR hecho con el nombre de antes no la cambia de servidor ni cierra la sesión.
   const NUBE_PRINCIPAL = "https://www.nom.qd.je";
-  const NOMBRES_NUBE = /^https?:\/\/((www\.)?nom\.qd\.je|(www\.)?nom\.dpdns\.org)(:443)?\/?$/i;
+  const NOMBRES_NUBE = /^https?:\/\/((www\.)?nom\.qd\.je|(www\.)?nomcolab\.dpdns\.org)(:443)?\/?$/i;
   const normal = (u) => (NOMBRES_NUBE.test(String(u || "")) ? NUBE_PRINCIPAL : u);
   if (empaquetada) {
     // (una vez: lo guardado con el nombre de antes pasa al principal)
@@ -20,6 +20,23 @@
       ["nom.sesionNube", "nom.infoServidor"].forEach((k) => { const g = NOM.leer(k, null); if (g && g.servidor && normal(g.servidor) !== g.servidor) NOM.guardar(k, Object.assign(g, { servidor: normal(g.servidor) })); });
     } catch (e) { /* sin almacenamiento */ }
   }
+  function normalizarBase(url) {
+    url = String(url || "").trim().replace(/\/+$/, "");
+    if (!url) return "";
+    if (!/^https?:\/\//i.test(url)) {
+      const host = url.split(/[/:]/)[0].toLowerCase();
+      const enLaRed = /^\d+(\.\d+){3}$/.test(host) || host === "localhost" || !host.includes(".") || host.endsWith(".local");
+      url = (enLaRed ? "http://" : "https://") + url;
+      if (enLaRed && !/:\d+$/.test(url.replace(/^https?:\/\//, ""))) url += ":8080";
+    }
+    try {
+      const u = new URL(url);
+      if ((u.protocol !== "http:" && u.protocol !== "https:") || u.username || u.password) return "";
+      return normal(u.origin);
+    } catch (e) {
+      return "";
+    }
+  }
   const api = {
     empaquetada,
     NUBE_PRINCIPAL,
@@ -28,16 +45,7 @@
     esNube(u) { return NOMBRES_NUBE.test(String(u || "")); },
     servidor() { return empaquetada ? (normal(NOM.leer("nom.servidor", "") || "") || "") : ""; },
     fijarServidor(url) {
-      url = String(url || "").trim().replace(/\/+$/, "");
-      if (url && !/^https?:\/\//i.test(url)) {
-        // Un equipo de la red (IP, localhost, nombre.local) va por http y el puerto 8080;
-        // un dominio de Internet (p. ej. www.nom.qd.je) va por https.
-        const host = url.split(/[/:]/)[0].toLowerCase();
-        const enLaRed = /^\d+(\.\d+){3}$/.test(host) || host === "localhost" || !host.includes(".") || host.endsWith(".local");
-        url = (enLaRed ? "http://" : "https://") + url;
-        if (enLaRed && !/:\d+$/.test(url.replace(/^https?:\/\//, ""))) url += ":8080";
-      }
-      url = normal(url);
+      url = normalizarBase(url);
       NOM.guardar("nom.servidor", url);
       return url;
     },
@@ -45,10 +53,11 @@
     usuario() { return NOM.leer("nom.usuario", null); },
     fijarSesion(token, usuario) {
       NOM.guardar("nom.token", token); NOM.guardar("nom.usuario", usuario);
+      NOM.guardar("nom.tokenServidor", api.servidor() || location.origin);
       if (NOM.boveda) NOM.boveda.recordarSesion(token, usuario);   // copia que sobrevive a un cierre de golpe
     },
     limpiarSesion() {
-      NOM.quitar("nom.token"); NOM.quitar("nom.usuario");
+      NOM.quitar("nom.token"); NOM.quitar("nom.usuario"); NOM.quitar("nom.tokenServidor");
       if (NOM.boveda) NOM.boveda.soltarSesion();
     },
     /** Clave de localStorage de la cuenta actual: las copias y los cambios pendientes de una cuenta
@@ -127,16 +136,26 @@
    */
   function exigirRuta(ruta) {
     const camino = String(ruta).split(/[?#]/)[0];
-    if (!camino.startsWith("/api/") || /\\|%2f|%5c|%00/i.test(camino) || /(^|\/)(\.|%2e){1,2}(\/|$)/i.test(camino))
+    if (!camino.startsWith("/api/") || /[\x00-\x1f\x7f;\\]|\/\/|%2f|%5c|%00/i.test(camino) || /(^|\/)(\.|%2e){1,2}(\/|$)/i.test(camino))
       throw new ErrorApi(400, { error: "Esa dirección no es válida" });
   }
   api.exigirRuta = exigirRuta;
+
+  function tokenPara(base, ruta, sinSesion) {
+    if (sinSesion || ruta.startsWith("/api/proyeccion/") || ruta.startsWith("/api/ver/")) return null;
+    const tok = api.token();
+    if (!tok) return null;
+    const de = NOM.leer("nom.tokenServidor", "");
+    const destino = base || location.origin;
+    if (de && !api.mismoServidor(de, destino)) return null;
+    return tok;
+  }
 
   /** Petición JSON con tiempo límite. Lanza ErrorApi (estado 0 = sin red). */
   api.pedir = async function (metodo, ruta, cuerpo, opc) {
     opc = opc || {};
     exigirRuta(ruta);
-    const base = api.servidor();
+    const base = opc.servidor !== undefined ? normalizarBase(opc.servidor) : api.servidor();
     if (empaquetada && !base) throw new ErrorApi(0, { error: "Primero elige dónde trabaja tu equipo" });
     const cab = { Accept: "application/json" };
     if (cuerpo !== undefined) cab["Content-Type"] = "application/json";
@@ -146,7 +165,7 @@
       try { cuerpo = await NOM.e2e.alEnviar(metodo, ruta, cuerpo); }
       catch (e) { throw new ErrorApi(e.estado === 0 ? 0 : 400, { error: e.message }); }
     }
-    const tok = opc.sinSesion ? null : api.token();
+    const tok = tokenPara(base, ruta, opc.sinSesion || opc.servidor !== undefined);
     if (tok) cab.Authorization = "Bearer " + tok;
     // (las llaves «_…» del cuerpo son de este equipo, como _llaveDoc: no salen. Las de DENTRO de los datos sí: antes se
     // quitaban todas y un documento perdía lo que la importación guarda así, como el color «_c» de una animación.)
@@ -206,7 +225,7 @@
     const t = setTimeout(() => ctl.abort(), opc.ms || 180000);
     const cab = {};
     if (bytes) cab["Content-Type"] = "application/octet-stream";
-    const tok = opc.sinSesion ? null : api.token();
+    const tok = tokenPara(base, ruta, opc.sinSesion);
     if (tok) cab.Authorization = "Bearer " + tok;
     let r;
     try { r = await fetch(base + ruta, { method: metodo, headers: cab, body: bytes || undefined, signal: ctl.signal }); }
@@ -307,7 +326,9 @@
       const ctl = new AbortController();
       const t = setTimeout(() => ctl.abort(), 4000);
       try {
-        const r = await fetch(api.servidor() + ruta + "?cliente=" + encodeURIComponent(cliente || ""), { headers: Object.assign({ Accept: "text/event-stream" }, api.token() ? { Authorization: "Bearer " + api.token() } : {}), signal: ctl.signal });
+        const base = api.servidor();
+        const tok = tokenPara(base, ruta, false);
+        const r = await fetch(base + ruta + "?cliente=" + encodeURIComponent(cliente || ""), { headers: Object.assign({ Accept: "text/event-stream" }, tok ? { Authorization: "Bearer " + tok } : {}), signal: ctl.signal });
         if (!r.ok) {
           let cuerpo = null;
           try { cuerpo = await r.json(); } catch (x) { /* sin cuerpo */ }

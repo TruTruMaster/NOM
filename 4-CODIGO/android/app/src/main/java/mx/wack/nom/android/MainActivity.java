@@ -33,6 +33,7 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
+import mx.wack.nom.android.anfitrion.LlaveDueno;
 import mx.wack.nom.android.anfitrion.Respaldo;
 import mx.wack.nom.android.anfitrion.ServicioAnfitrion;
 
@@ -99,6 +100,7 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> alElegir;
     /** La cámara que pidió la página (escanear un QR) mientras Android pregunta el permiso. */
     private PermissionRequest pedidoCamara;
+    private final java.util.concurrent.atomic.AtomicBoolean buscandoServidores = new java.util.concurrent.atomic.AtomicBoolean();
 
     @Override
     protected void onCreate(Bundle guardado) {
@@ -173,11 +175,17 @@ public class MainActivity extends Activity {
             @Override
             public void onPermissionRequest(PermissionRequest pedido) {
                 runOnUiThread(() -> {
+                    String[] recursos = pedido == null ? null : pedido.getResources();
+                    Uri origen = pedido == null ? null : pedido.getOrigin();
+                    if (recursos == null || recursos.length == 0 || origen == null || !ORIGEN.equals(origen.toString())) {
+                        if (pedido != null) pedido.deny();
+                        return;
+                    }
                     boolean soloCamara = true;
-                    for (String r : pedido.getResources()) if (!PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(r)) soloCamara = false;
+                    for (String r : recursos) if (!PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(r)) soloCamara = false;
                     if (!soloCamara) { pedido.deny(); return; }
                     if (Build.VERSION.SDK_INT < 23 || checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                        pedido.grant(pedido.getResources());
+                        pedido.grant(recursos);
                         return;
                     }
                     if (pedidoCamara != null) pedidoCamara.deny();
@@ -266,8 +274,15 @@ public class MainActivity extends Activity {
 
     /** Enlaces: lo de la interfaz se queda en la app; lo demás, al navegador. */
     private boolean afuera(String url) {
+        if (url == null) return true;
         if (url.startsWith(ORIGEN + "/") || url.equals(ORIGEN) || (fase != 0 && url.startsWith("file:///android_asset/"))) return false;
-        try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); } catch (Exception ignorado) { }
+        try {
+            Uri u = Uri.parse(url);
+            String esq = u.getScheme() == null ? "" : u.getScheme().toLowerCase(Locale.ROOT);
+            if ("http".equals(esq) || "https".equals(esq) || "mailto".equals(esq)) {
+                startActivity(new Intent(Intent.ACTION_VIEW, u));
+            }
+        } catch (Exception ignorado) { }
         return true;
     }
 
@@ -333,12 +348,20 @@ public class MainActivity extends Activity {
         Uri u = intento != null && Intent.ACTION_VIEW.equals(intento.getAction()) ? intento.getData() : null;
         if (u == null) return;
         String s = u.toString();
-        if (!s.startsWith("https://") || s.length() > 2000) return;
+        if (!s.startsWith("https://") || s.length() > 2000 || s.contains("\\") || s.contains("@")) return;
+        if (u.getUserInfo() != null || u.getPort() != -1) return;
         // Solo los enlaces que declara el manifiesto.
-        String host = u.getHost() == null ? "" : u.getHost().toLowerCase(java.util.Locale.ROOT), camino = u.getPath() == null ? "" : u.getPath();
+        String host = u.getHost() == null ? "" : u.getHost().toLowerCase(java.util.Locale.ROOT);
+        String auth = u.getAuthority() == null ? "" : u.getAuthority().toLowerCase(java.util.Locale.ROOT);
+        String camino = u.getPath() == null ? "" : u.getPath();
+        if (!host.equals(auth)) return;
         if (!(host.equals("www.nom.qd.je") || host.equals("nom.qd.je") || host.equals("nomcolab.dpdns.org")) || !(camino.equals("/unirse") || camino.equals("/proyectar"))) return;
-        if (abierta) web.evaluateJavascript("window.NOM && NOM.union && NOM.union.usar(" + org.json.JSONObject.quote(s) + ")", null);
-        else enlacePendiente = s;
+        StringBuilder limpio = new StringBuilder("https://").append(host).append(camino);
+        if (u.getEncodedQuery() != null) limpio.append('?').append(u.getEncodedQuery());
+        if (u.getEncodedFragment() != null) limpio.append('#').append(u.getEncodedFragment());
+        String destino = limpio.toString();
+        if (abierta) web.evaluateJavascript("window.NOM && NOM.union && NOM.union.usar(" + org.json.JSONObject.quote(destino) + ")", null);
+        else enlacePendiente = destino;
     }
 
     /** Desde Android 15 la app dibuja bajo las barras; se deja el margen que ocupan. */
@@ -420,7 +443,7 @@ public class MainActivity extends Activity {
      */
     static String nombreSeguro(String nombre) {
         String n = nombre == null ? "" : nombre.replaceAll("[\\p{Cntrl}/\\\\:*?\"<>|]", "_").replaceAll("^[.\\s]+", "").trim();
-        if (n.length() > 150) n = n.substring(n.length() - 150);
+        if (n.length() > 150) n = n.substring(n.length() - 150).replaceAll("^[.\\s]+", "").trim();
         return n.isEmpty() ? "NOM" : n;
     }
 
@@ -570,6 +593,7 @@ public class MainActivity extends Activity {
          */
         @JavascriptInterface
         public void buscarServidores() {
+            if (!buscandoServidores.compareAndSet(false, true)) return;
             new Thread(() -> {
                 Map<String, JSONObject> vistos = new LinkedHashMap<>();
                 WifiManager wifi = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
@@ -590,14 +614,23 @@ public class MainActivity extends Activity {
                             sock.receive(p);
                             JSONObject a = new JSONObject(new String(p.getData(), 0, p.getLength(), StandardCharsets.UTF_8));
                             if (a.optInt("nom") != 1) continue;
+                            String srv = a.optString("servidor", "").trim();
+                            if (srv.isEmpty() || srv.length() > 64) continue;
+                            if (!vistos.containsKey(srv) && vistos.size() >= 64) continue;
+                            int puerto = a.optInt("puerto", 8080);
+                            if (puerto < 1 || puerto > 65535) continue;
+                            String eq = a.optString("equipo", "").trim();
+                            if (eq.length() > 64) eq = eq.substring(0, 64);
                             JSONObject s = new JSONObject();
-                            s.put("equipo", a.optString("equipo"));
+                            s.put("equipo", eq);
                             s.put("host", p.getAddress().getHostAddress());
-                            s.put("puerto", a.optInt("puerto", 8080));
-                            s.put("espacios", a.optJSONArray("espacios") == null ? 0 : a.optJSONArray("espacios").length());
-                            vistos.put(a.optString("servidor"), s);
+                            s.put("puerto", puerto);
+                            s.put("espacios", a.optJSONArray("espacios") == null ? 0 : Math.min(a.optJSONArray("espacios").length(), 200));
+                            vistos.put(srv, s);
                         } catch (SocketTimeoutException ignorado) {
                             // se sigue escuchando hasta el plazo
+                        } catch (Exception ignorado) {
+                            // paquete no válido: se descarta sin cortar la búsqueda
                         }
                     }
                 } catch (Exception e) {
@@ -605,6 +638,7 @@ public class MainActivity extends Activity {
                 } finally {
                     if (sock != null) sock.close();
                     if (candado != null && candado.isHeld()) candado.release();
+                    buscandoServidores.set(false);
                 }
                 String json = new JSONArray(vistos.values()).toString();
                 runOnUiThread(() -> web.evaluateJavascript(
@@ -647,23 +681,7 @@ public class MainActivity extends Activity {
          */
         @JavascriptInterface
         public String llaveDueno() {
-            File f = new File(Build.VERSION.SDK_INT >= 21 ? getNoBackupFilesDir() : getFilesDir(), "llave-dueno");
-            try {
-                if (f.isFile() && f.length() >= 32) {
-                    try (FileInputStream in = new FileInputStream(f)) {
-                        byte[] b = new byte[(int) f.length()];
-                        int n = in.read(b);
-                        return new String(b, 0, Math.max(0, n), StandardCharsets.US_ASCII).trim();
-                    }
-                }
-                byte[] r = new byte[32];
-                new java.security.SecureRandom().nextBytes(r);
-                String llave = Base64.encodeToString(r, Base64.URL_SAFE | Base64.NO_PADDING | Base64.NO_WRAP);
-                try (FileOutputStream o = new FileOutputStream(f)) { o.write(llave.getBytes(StandardCharsets.US_ASCII)); }
-                return llave;
-            } catch (Exception e) {
-                return "";
-            }
+            return LlaveDueno.obtener(MainActivity.this);
         }
 
         /** Hoja de compartir de Android (WhatsApp, correo, Bluetooth…) con un texto, p. ej. la dirección del servidor. */

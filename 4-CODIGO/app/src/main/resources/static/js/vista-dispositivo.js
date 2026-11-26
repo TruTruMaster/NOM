@@ -72,7 +72,7 @@
   }
 
   function fila(d, extra, acciones) {
-    const m = MODOS[d.modo] || MODOS.TEXTO;
+    const m = Object.prototype.hasOwnProperty.call(MODOS, d.modo) ? MODOS[d.modo] : MODOS.TEXTO;
     return `<div class="lista-item modo-${esc(d.modo)}" data-id="${esc(d.id)}" style="flex-wrap:wrap">
       <span class="modo-insignia">${ico(m.icono)}</span>
       <span class="crece" style="min-width:160px"><b>${esc(d.nombre)}</b><small>${extra}</small></span>

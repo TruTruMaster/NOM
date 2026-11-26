@@ -18,22 +18,11 @@ import jakarta.servlet.http.HttpServletResponse;
  * las necesita (400). Y solo los nombres de servidor de NOM (ver Hosts; 421).
  */
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE - 1)
+@Order(Ordered.HIGHEST_PRECEDENCE)
 public class FiltroRutas extends OncePerRequestFilter {
 
     /** ¿La dirección (tal como llegó, sin la consulta) es de las que se entienden igual en todos lados? */
-    static boolean valida(String uri) {
-        if (uri == null || uri.isEmpty() || uri.charAt(0) != '/') return false;
-        if (uri.indexOf(';') >= 0 || uri.indexOf('\\') >= 0 || uri.contains("//")) return false;
-        String bajo = uri.toLowerCase(java.util.Locale.ROOT);
-        if (bajo.contains("%2e") || bajo.contains("%2f") || bajo.contains("%5c") || bajo.contains("%25") || bajo.contains("%00") || bajo.contains("%3b")) return false;
-        for (String s : uri.split("/", -1)) if (s.equals(".") || s.equals("..")) return false;
-        for (int i = 0; i < uri.length(); i++) {
-            char c = uri.charAt(i);
-            if (c < 0x21 || c > 0x7e) return false;   // (lo que no es ASCII visible llega codificado: %xx)
-        }
-        return true;
-    }
+    static boolean valida(String uri) { return mx.wack.nom.core.servicio.Hosts.rutaValida(uri); }
 
     /** Los nombres de la nube que atiende este servidor (NOM_NUBE, NOM_CANONICO y NOM_NOMBRES, con y sin «www.»). */
     static final java.util.Set<String> CONOCIDOS = conocidos(System.getenv("NOM_NUBE"), System.getenv("NOM_CANONICO"), System.getenv("NOM_NOMBRES"));

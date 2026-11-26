@@ -127,7 +127,7 @@
     const u = api.usuario() || {};
     let alm = null;
     try { alm = await api.get("/api/cuentas/almacenamiento"); } catch (e) { /* se explica sin las cifras */ }
-    const nEsp = alm ? alm.espacios.length : null, nDoc = alm ? alm.documentos : null;
+    const nEsp = alm && Array.isArray(alm.espacios) ? alm.espacios.length : null, nDoc = alm ? (+alm.documentos || 0) : null;
     const cuerpo = html(`<form class="col" novalidate>
       <div class="alerta error">${ico("triangle-alert")}<span><b>No se puede deshacer.</b> Nadie, ni quien administra NOM, puede recuperar la cuenta después.</span></div>
       <div class="lista">
@@ -400,8 +400,11 @@
         const p = NOM.anfitrion.pie();
         if (p) f.append(p);
       } else if (api.empaquetada) {
-        const srv = api.servidor().replace(/^https?:\/\//, "");
-        const internet = /(^|\.)nom\.dpdns\.org$|(^|\.)nom\.qd\.je$|\.ts\.net$/.test(srv.replace(/\/.*$/, ""));
+        const dirSrv = api.servidor();
+        let hostSrv = "", protoSrv = "";
+        try { const u = new URL(dirSrv); hostSrv = u.hostname.toLowerCase(); protoSrv = u.protocol; } catch (e) { /* url inválida */ }
+        const srv = dirSrv.replace(/^https?:\/\//, "");
+        const internet = protoSrv === "https:" && (api.esNube(dirSrv) || /^[a-z0-9-]+\.[a-z0-9-]+\.ts\.net$/.test(hostSrv));
         // H-8: a un equipo del Wi-Fi se entra con una cuenta de ESE equipo. Se dice arriba y en grande,
         // para que nadie escriba ahí la contraseña de su cuenta de Internet.
         if (!internet && !f.querySelector("[data-aviso-wifi]")) {
@@ -427,7 +430,7 @@
       f.querySelectorAll(".error-campo").forEach((x) => x.remove());
       clearInterval(f._cuenta);
       if (err.campo) {
-        const i = f.querySelector(`[name="${err.campo}"]`);
+        const i = f.querySelector(`[name="${CSS.escape(String(err.campo))}"]`);
         if (i) {
           i.closest(".entrada").classList.add("invalida");
           i.closest(".campo").append(html(`<div class="error-campo">${ico("triangle-alert", "ico-s")} ${esc(err.message)}</div>`));
@@ -613,17 +616,15 @@
     tarjeta.append(f);
     const alerta = $("[data-alerta]", f);
     async function probar(dir) {
-      const anterior = api.servidor();
-      api.fijarServidor(dir);
       try {
-        // (a un servidor que apenas se prueba no se le manda la sesión de ningún otro)
-        const info = await api.get("/api/red/info", undefined, { ms: 4000, sinSesion: true });
+        // (a un servidor que apenas se prueba no se le manda la sesión de ningún otro ni se cambia aún el servidor guardado)
+        const info = await api.get("/api/red/info", undefined, { ms: 4000, sinSesion: true, servidor: dir });
         if (info.nom !== 1) throw new Error();
+        api.fijarServidor(dir);
         NOM.aviso("Conectado con " + (info.equipo || dir), { tipo: "ok" });
         if (NOM.revisarVersion) NOM.revisarVersion(info);
         listo();
       } catch (e) {
-        api.fijarServidor(anterior);
         alerta.className = "alerta error"; alerta.hidden = false;
         alerta.innerHTML = `${ico("wifi-off")}<span>No encontramos NOM en esa dirección. Revisa que estés en el mismo Wi-Fi que el equipo que comparte (o que tengas Internet, si es la versión en línea).</span>`;
       }
@@ -638,8 +639,9 @@
         const cont = $("[data-encontrados]", f);
         cont.innerHTML = lista.length ? "" : `<p class="suave chico">No apareció ningún equipo. Pide al propietario que active la "Conexión del proyecto".</p>`;
         lista.forEach((s) => {
-          const it = html(`<button type="button" class="lista-item" style="text-align:left">${ico("server")}<span class="crece"><b>${esc(s.equipo)}</b><small>${esc(s.host)}:${s.puerto} · ${s.espacios} espacio(s) en red</small></span>${ico("chevron-right")}</button>`);
-          it.onclick = () => probar(s.host + ":" + s.puerto);
+          const pto = Math.max(1, Math.min(65535, +s.puerto || 8080)), espN = +s.espacios || 0;
+          const it = html(`<button type="button" class="lista-item" style="text-align:left">${ico("server")}<span class="crece"><b>${esc(s.equipo)}</b><small>${esc(s.host)}:${pto} · ${espN} espacio(s) en red</small></span>${ico("chevron-right")}</button>`);
+          it.onclick = () => probar(s.host + ":" + pto);
           cont.append(it);
         });
         // Primera vez: si en el Wi-Fi hay un solo servidor, se conecta solo.

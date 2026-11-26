@@ -166,8 +166,10 @@ public class Descubrimiento {
                         if (lista.size() >= 50) break;
                         if (!(o instanceof Map)) continue;
                         Map<String, Object> e = (Map<String, Object>) o;
+                        String col = corto(e.get("color"), 16);
+                        if (!col.matches("#[0-9a-fA-F]{6}")) col = "";
                         lista.add(Map.of("id", corto(e.get("id"), 64), "nombre", corto(e.get("nombre"), 600),
-                                "propietario", corto(e.get("propietario"), 64), "color", corto(e.get("color"), 16)));
+                                "propietario", corto(e.get("propietario"), 64), "color", col));
                     }
                 }
                 int puerto = n.get("puerto") instanceof Number ? ((Number) n.get("puerto")).intValue() : 8080;

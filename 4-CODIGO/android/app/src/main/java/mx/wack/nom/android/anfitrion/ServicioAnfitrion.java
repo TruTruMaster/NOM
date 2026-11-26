@@ -54,6 +54,7 @@ public class ServicioAnfitrion extends Service {
     private NodoTelefono nodo;
     private ServidorHttp http;
     private Descubrimiento descubrimiento;
+    private Difusor difusor;
     private ServicioDocumentos documentos;
     private ScheduledExecutorService reloj, copias;
     private PowerManager.WakeLock despierto;
@@ -126,7 +127,7 @@ public class ServicioAnfitrion extends Service {
         Repositorios.Documentos docsRepo = new Repositorios.Documentos(almacen);
         Cifrado cifrado = new Cifrado();
         // Mismos valores que application.properties del servidor de la computadora.
-        Difusor difusor = new Difusor(Difusor.MAX_PERSONAS);
+        difusor = new Difusor(Difusor.MAX_PERSONAS);
         ServicioCuentas cuentas = new ServicioCuentas(usuarios, cifrado, 5, 15, 72);
         // Los canales en vivo cuya sesión ya terminó se cierran en el latido (cada 20 s).
         difusor.revisarSesionesCon(cuentas::sesionVigente);
@@ -153,13 +154,14 @@ public class ServicioAnfitrion extends Service {
 
         // Fase 9: fuentes para investigar (cuando el teléfono tiene Internet) y la biblioteca del espacio.
         ServicioFuentes fuentes = new ServicioFuentes(espacios, espaciosRepo, Json.YO, cifrado);
+        fuentes.usarCuota(documentos);
         // El almacén de binarios (imágenes y el Office original fuera del documento), como en la nube; tope por archivo
         // igual al del cuerpo de una petición del teléfono (40 MB).
         RepositorioBinariosTelefono repoBinarios = new RepositorioBinariosTelefono(new File(almacen.raiz(), "binarios"));
         mx.wack.nom.core.servicio.ServicioBinarios binarios = new mx.wack.nom.core.servicio.ServicioBinarios(espacios, documentos, repoBinarios, 40L * 1024 * 1024);
         // la sincronía con la nube también lleva y trae lo del almacén
         sincronia.usarBinarios(repoBinarios);
-        http = new ServidorHttp(getAssets(), new ApiTelefono(cuentas, espacios, documentos, difusor, descubrimiento, nodo, sincronia, fuentes, pases, binarios));
+        http = new ServidorHttp(getAssets(), new ApiTelefono(cuentas, espacios, documentos, difusor, descubrimiento, nodo, sincronia, fuentes, pases, binarios, LlaveDueno.obtener(this)));
         puerto = http.iniciar(8080);
         nodo.fijarPuerto(puerto);
 
@@ -227,11 +229,13 @@ public class ServicioAnfitrion extends Service {
         if (reloj != null) reloj.shutdownNow();
         if (copias != null) copias.shutdownNow();
         try { if (documentos != null) documentos.alApagar(); } catch (Throwable e) { log.error("Al apagar", e); }
+        if (difusor != null) difusor.detener();
         if (descubrimiento != null) descubrimiento.detener();
         if (http != null) http.detener();
         if (despierto != null && despierto.isHeld()) despierto.release();
         if (wifi != null && wifi.isHeld()) wifi.release();
         if (difusion != null && difusion.isHeld()) difusion.release();
+        difusor = null;
         http = null;
         super.onDestroy();
     }

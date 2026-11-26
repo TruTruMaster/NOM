@@ -32,12 +32,10 @@ if ! command -v java >/dev/null; then di "instalando Java"; apk add -q openjdk21
 # ---- usuario y carpetas
 getent group nom >/dev/null || addgroup -S nom
 id nom >/dev/null 2>&1 || adduser -S -D -H -h $VAR -s /sbin/nologin -G nom nom
-mkdir -p $OPT $VAR/datos $VAR/respaldos $VAR/tmp
-chown root:root $OPT && chmod 755 $OPT
-chown nom:nom $VAR $VAR/datos $VAR/tmp && chmod 750 $VAR $VAR/datos $VAR/tmp
+mkdir -p $OPT $VAR/datos $VAR/datos-llaves $VAR/respaldos $VAR/tmp
+chown root:root $OPT $VAR && chmod 755 $OPT $VAR
+chown nom:nom $VAR/datos $VAR/datos-llaves $VAR/tmp && chmod 700 $VAR/datos $VAR/datos-llaves $VAR/tmp
 chown root:adm $VAR/respaldos && chmod 750 $VAR/respaldos
-# el grupo adm (la cuenta de administración) puede entrar a ver los respaldos
-chgrp adm $VAR && chmod 750 $VAR
 
 # ---- quitar la instalación vieja: el cron que lanzaba todo con nohup
 if grep -q nom-servidor /etc/crontabs/root 2>/dev/null; then
@@ -73,7 +71,7 @@ chown root:root $OPT/nom.jar && chmod 644 $OPT/nom.jar
 
 # ---- ajustes del servidor (no se pisan si ya existen)
 if ! [ -f /etc/nom.conf ]; then
-  install -m 644 "$AQUI/nom.conf" /etc/nom.conf
+  install -m 600 "$AQUI/nom.conf" /etc/nom.conf
 fi
 
 # ---- el túnel: credenciales junto a las del otro túnel, solo para root y cloudflared

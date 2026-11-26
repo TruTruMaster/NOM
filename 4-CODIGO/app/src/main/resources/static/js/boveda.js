@@ -69,6 +69,8 @@
 
   // ------------------------------------------------------------ abrir y cerrar
   const prefijo = () => "nom.u." + uid + ".";
+  let sesionCola = Promise.resolve();
+  const enSesion = (fn) => (sesionCola = sesionCola.then(fn, fn));
 
   /** Al iniciar sesión: desenvuelve (o crea) la llave de datos con la contraseña. */
   async function abrir(usuarioId, contrasena) {
@@ -95,7 +97,7 @@
       const kek = await C.llaveDeContrasena(contrasena, sal, alg);
       await put("cuentas", usuarioId, { sal, alg, envuelta: await C.cifrar(kek, datosLlave, alg) });
     }
-    await put("sesion", usuarioId, { llave: datosLlave, alg, ...sesionDeCuenta(usuarioId) });
+    await enSesion(() => put("sesion", usuarioId, { llave: datosLlave, alg, ...sesionDeCuenta(usuarioId) }));
     await cargar(usuarioId, datosLlave, alg);
     return true;
   }
@@ -106,24 +108,31 @@
      escrito, así que una copia va junto a la llave de la bóveda (que ya está ahí sin cifrar) y,
      al abrir, si localStorage la perdió, se toma de aquí. Cerrar sesión borra el registro entero. */
   function sesionDeCuenta(usuarioId) {
-    const token = leerPlano("nom.token", null), usuario = leerPlano("nom.usuario", null);
-    return token && usuario && usuario.id === usuarioId ? { token, usuario, t: Date.now() } : {};
+    const token = leerPlano("nom.token", null), usuario = leerPlano("nom.usuario", null), servidor = leerPlano("nom.tokenServidor", "");
+    return token && usuario && usuario.id === usuarioId ? { token, usuario, servidor, t: Date.now() } : {};
   }
 
   /** Lo llama api.fijarSesion: si la bóveda de esa cuenta está abierta, actualiza la copia. */
-  async function recordarSesion(token, usuario) {
-    try {
-      if (!usuario || usuario.id !== uid) return;
-      const s = await get("sesion", uid);
-      if (s && (s.token !== token || JSON.stringify(s.usuario) !== JSON.stringify(usuario))) await put("sesion", uid, { ...s, token, usuario, t: Date.now() });
-    } catch (e) { /* sin IndexedDB */ }
+  function recordarSesion(token, usuario) {
+    return enSesion(async () => {
+      try {
+        if (!usuario || usuario.id !== uid) return;
+        const s = await get("sesion", uid);
+        const servidor = leerPlano("nom.tokenServidor", "");
+        if (s && (s.token !== token || s.servidor !== servidor || JSON.stringify(s.usuario) !== JSON.stringify(usuario))) {
+          await put("sesion", uid, { ...s, token, usuario, servidor, t: Date.now() });
+        }
+      } catch (e) { /* sin IndexedDB */ }
+    });
   }
 
   /** Lo llama api.limpiarSesion: ninguna copia del token se queda en el equipo. */
-  async function soltarSesion() {
-    try {
-      for (const [k, s] of await todos("sesion")) if (s && s.token) { const { token, usuario, t, ...resto } = s; await put("sesion", k, resto); }
-    } catch (e) { /* sin IndexedDB */ }
+  function soltarSesion() {
+    return enSesion(async () => {
+      try {
+        for (const [k, s] of await todos("sesion")) if (s && s.token) { const { token, usuario, servidor, t, ...resto } = s; await put("sesion", k, resto); }
+      } catch (e) { /* sin IndexedDB */ }
+    });
   }
 
   /** Al abrir la página sin token en localStorage: la sesión más reciente que quedó en IndexedDB. */
@@ -131,14 +140,14 @@
     try {
       let mejor = null;
       for (const [k, s] of await todos("sesion")) if (s && s.token && s.usuario && s.usuario.id === k && (!mejor || (s.t || 0) > (mejor.t || 0))) mejor = s;
-      return mejor ? { token: mejor.token, usuario: mejor.usuario } : null;
+      return mejor ? { token: mejor.token, usuario: mejor.usuario, servidor: mejor.servidor || "" } : null;
     } catch (e) { return null; }
   }
 
   /** Al recargar la página con la sesión abierta. false = hay que volver a escribir la contraseña. */
   async function reanudar(usuarioId) {
     try {
-      const s = await get("sesion", usuarioId);
+      const s = await enSesion(() => get("sesion", usuarioId));
       if (!s) return false;
       await cargar(usuarioId, s.llave, s.alg);
       return true;
@@ -170,9 +179,10 @@
   /** Al cerrar sesión: guarda lo pendiente y olvida la llave. Los datos quedan cifrados. */
   async function cerrar(olvidar = true) {
     if (!uid) return;
+    const id = uid;
     await vaciar();
-    if (olvidar) { try { await del("sesion", uid); } catch (e) { /* sin IndexedDB */ } }
     memoria.clear(); uid = null; llave = null; alg = null;
+    if (olvidar) { await enSesion(async () => { try { await del("sesion", id); } catch (e) { /* sin IndexedDB */ } }); }
   }
 
   async function borrarDatosDe(usuarioId) {
@@ -300,7 +310,7 @@
     await borrarDatosDe(usuarioId);
     for (const [k] of await todos("datos")) if (k.startsWith(VIEJA + usuarioId + ".")) await del("datos", k);
     for (const [k] of await todos("cuentas")) if (k === usuarioId || (typeof k === "string" && k.startsWith(VIEJA + usuarioId + "."))) await del("cuentas", k);
-    await del("sesion", usuarioId);
+    await enSesion(() => del("sesion", usuarioId));
   }
 
   // ------------------------------------------------------------ escritura en segundo plano

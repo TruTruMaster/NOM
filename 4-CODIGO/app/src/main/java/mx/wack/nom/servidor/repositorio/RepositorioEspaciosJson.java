@@ -51,6 +51,10 @@ public class RepositorioEspaciosJson implements RepositorioEspacios {
         almacen.escribir("biblioteca/" + espacioId + ".json", fuentes);
     }
 
+    @Override public long bytesBiblioteca(String espacioId) {
+        return almacen.tamano("biblioteca/" + id(espacioId) + ".json");
+    }
+
     private static String id(String x) {
         if (x == null || !x.matches("[A-Za-z0-9_-]{1,60}")) throw new IllegalArgumentException("Identificador no válido");
         return x;

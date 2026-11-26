@@ -72,62 +72,65 @@
     const destino = (() => { try { const r = decodeURIComponent(location.hash.slice(1)); return r.startsWith("/") && !r.startsWith("//") ? r : "/"; } catch (e) { return "/"; } })();
     const terminar = () => location.replace(NUEVA + destino);
     document.getElementById("saltar").addEventListener("click", terminar);
+    let ventana = null, mandado = false;
+    window.addEventListener("message", async (ev) => {
+      if (ev.origin !== NUEVA || !ventana || ev.source !== ventana || !ev.data || typeof ev.data !== "object") return;
+      const v = ventana;
+      if (ev.data.t === "lista" && !mandado) {
+        mandado = true;
+        try {
+          let datos = 0, registros = 0;
+          estado("Pasando la sesión y los ajustes…");
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k != null && k.startsWith("nom.")) { v.postMessage({ t: "ls", k, v: localStorage.getItem(k) }, NUEVA); datos++; }
+          }
+          for (const nombre of await nombresBD()) {
+            if (!BASES.includes(nombre)) continue;
+            const db = await abrirSiExiste(nombre);
+            if (!db) continue;
+            const almacenes = [];
+            if (db.objectStoreNames.length) {
+              const tx = db.transaction([...db.objectStoreNames], "readonly");
+              for (const a of db.objectStoreNames) {
+                const s = tx.objectStore(a);
+                almacenes.push({ n: a, kp: s.keyPath, ai: s.autoIncrement,
+                  ix: [...s.indexNames].map((x) => { const ix = s.index(x); return { n: x, kp: ix.keyPath, u: ix.unique, me: ix.multiEntry }; }) });
+              }
+            }
+            v.postMessage({ t: "bd", n: nombre, ver: db.version, almacenes }, NUEVA);
+            for (const al of almacenes) {
+              estado(nombre === "nom-binarios" ? "Pasando las imágenes y los archivos…" : "Pasando los documentos guardados…");
+              for (const k of await pedido(db.transaction(al.n, "readonly").objectStore(al.n).getAllKeys())) {
+                // uno por uno: con archivos grandes no se junta todo en memoria (postMessage copia blobs y bytes tal cual)
+                const x = await pedido(db.transaction(al.n, "readonly").objectStore(al.n).get(k));
+                if (x === undefined) continue;
+                v.postMessage({ t: "r", n: nombre, a: al.n, k: al.kp == null ? k : undefined, v: x }, NUEVA); registros++;
+              }
+            }
+            db.close();
+          }
+          v.postMessage({ t: "fin", datos, registros }, NUEVA);
+          estado("Guardando en la dirección nueva…");
+        } catch (e) {
+          boton.disabled = false; mandado = false;
+          estado("No se pudo pasar todo (" + String((e && e.message) || e).slice(0, 120) + "). Lo tuyo sigue aquí: vuelve a intentarlo.");
+        }
+      } else if (ev.data.t === "hecho") {
+        estado("Listo. Cambiando a la dirección nueva…");
+        try { v.close(); } catch (e) { /* la cierra ella */ }
+        terminar();
+      } else if (ev.data.t === "error") {
+        boton.disabled = false; mandado = false;
+        estado("No se pudo guardar en la dirección nueva (" + String(ev.data.m || "").slice(0, 120) + "). Lo tuyo sigue aquí: vuelve a intentarlo.");
+      }
+    });
     boton.addEventListener("click", () => {
       boton.disabled = true;
+      mandado = false;
       estado("Abriendo la dirección nueva…");
-      const v = window.open(NUEVA + "/mudanza.html", "nom-mudanza");
-      if (!v) { boton.disabled = false; estado("El navegador no dejó abrir la ventana: permite las ventanas emergentes de esta página y vuelve a intentarlo."); return; }
-      let mandado = false;
-      window.addEventListener("message", async (ev) => {
-        if (ev.origin !== NUEVA || ev.source !== v || !ev.data || typeof ev.data !== "object") return;
-        if (ev.data.t === "lista" && !mandado) {
-          mandado = true;
-          try {
-            let datos = 0, registros = 0;
-            estado("Pasando la sesión y los ajustes…");
-            for (let i = 0; i < localStorage.length; i++) {
-              const k = localStorage.key(i);
-              if (k != null) { v.postMessage({ t: "ls", k, v: localStorage.getItem(k) }, NUEVA); datos++; }
-            }
-            for (const nombre of await nombresBD()) {
-              const db = await abrirSiExiste(nombre);
-              if (!db) continue;
-              const almacenes = [];
-              if (db.objectStoreNames.length) {
-                const tx = db.transaction([...db.objectStoreNames], "readonly");
-                for (const a of db.objectStoreNames) {
-                  const s = tx.objectStore(a);
-                  almacenes.push({ n: a, kp: s.keyPath, ai: s.autoIncrement,
-                    ix: [...s.indexNames].map((x) => { const ix = s.index(x); return { n: x, kp: ix.keyPath, u: ix.unique, me: ix.multiEntry }; }) });
-                }
-              }
-              v.postMessage({ t: "bd", n: nombre, ver: db.version, almacenes }, NUEVA);
-              for (const al of almacenes) {
-                estado(nombre === "nom-binarios" ? "Pasando las imágenes y los archivos…" : "Pasando los documentos guardados…");
-                for (const k of await pedido(db.transaction(al.n, "readonly").objectStore(al.n).getAllKeys())) {
-                  // uno por uno: con archivos grandes no se junta todo en memoria (postMessage copia blobs y bytes tal cual)
-                  const x = await pedido(db.transaction(al.n, "readonly").objectStore(al.n).get(k));
-                  if (x === undefined) continue;
-                  v.postMessage({ t: "r", n: nombre, a: al.n, k: al.kp == null ? k : undefined, v: x }, NUEVA); registros++;
-                }
-              }
-              db.close();
-            }
-            v.postMessage({ t: "fin", datos, registros }, NUEVA);
-            estado("Guardando en la dirección nueva…");
-          } catch (e) {
-            boton.disabled = false; mandado = false;
-            estado("No se pudo pasar todo (" + String((e && e.message) || e).slice(0, 120) + "). Lo tuyo sigue aquí: vuelve a intentarlo.");
-          }
-        } else if (ev.data.t === "hecho") {
-          estado("Listo. Cambiando a la dirección nueva…");
-          try { v.close(); } catch (e) { /* la cierra ella */ }
-          terminar();
-        } else if (ev.data.t === "error") {
-          boton.disabled = false; mandado = false;
-          estado("No se pudo guardar en la dirección nueva (" + String(ev.data.m || "").slice(0, 120) + "). Lo tuyo sigue aquí: vuelve a intentarlo.");
-        }
-      });
+      ventana = window.open(NUEVA + "/mudanza.html", "nom-mudanza");
+      if (!ventana) { boton.disabled = false; estado("El navegador no dejó abrir la ventana: permite las ventanas emergentes de esta página y vuelve a intentarlo."); return; }
     });
     return;
   }
@@ -167,6 +170,7 @@
       tx.onabort = () => { if (tx.error && tx.error.name === "ConstraintError") ok(); else mal(tx.error || new Error("No se pudo guardar")); };
     });
   }
+  const ALMACENES_OK = { "nom-boveda": new Set(["cuentas", "sesion", "datos"]), "nom-binarios": new Set(["b"]) };
   const bases = new Map();
   let cola = Promise.resolve(), datos = 0, registros = 0, fallo = null;
   window.addEventListener("message", (ev) => {
@@ -175,12 +179,14 @@
     cola = cola.then(async () => {
       if (fallo) return;
       try {
-        if (m.t === "ls" && typeof m.k === "string" && typeof m.v === "string") {
+        if (m.t === "ls" && typeof m.k === "string" && m.k.startsWith("nom.") && typeof m.v === "string") {
           if (localStorage.getItem(m.k) === null) localStorage.setItem(m.k, m.v);
           datos++;
-        } else if (m.t === "bd" && typeof m.n === "string" && Array.isArray(m.almacenes)) {
-          if (!bases.has(m.n)) bases.set(m.n, await crearBD(m));
-        } else if (m.t === "r" && bases.has(m.n)) {
+        } else if (m.t === "bd" && typeof m.n === "string" && BASES.includes(m.n) && Array.isArray(m.almacenes)) {
+          const perm = ALMACENES_OK[m.n];
+          const filtrados = m.almacenes.filter((al) => al && typeof al.n === "string" && perm.has(al.n));
+          if (!bases.has(m.n)) bases.set(m.n, await crearBD(Object.assign({}, m, { almacenes: filtrados })));
+        } else if (m.t === "r" && bases.has(m.n) && ALMACENES_OK[m.n] && ALMACENES_OK[m.n].has(m.a)) {
           await agregar(bases.get(m.n), m.a, m.k, m.v); registros++;
         } else if (m.t === "fin") {
           bases.forEach((db) => db.close());

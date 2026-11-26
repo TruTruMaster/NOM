@@ -113,7 +113,8 @@ final class Repositorios {
 
         @Override public synchronized void borrar(String id) {
             if (espacios.remove(id) != null) almacen.escribir("espacios.json", espacios);
-            almacen.escribir("biblioteca/" + id + ".json", new ArrayList<>());
+            almacen.borrar("biblioteca/" + id + ".json");
+            almacen.borrar("chat/" + id);
         }
 
         @SuppressWarnings("unchecked")
@@ -126,6 +127,10 @@ final class Repositorios {
 
         @Override public synchronized void guardarBiblioteca(String espacioId, List<Map<String, Object>> fuentes) {
             almacen.escribir("biblioteca/" + espacioId + ".json", fuentes);
+        }
+
+        @Override public long bytesBiblioteca(String espacioId) {
+            return almacen.tamano("biblioteca/" + espacioId + ".json");
         }
 
         private static String id(String x) {
@@ -204,6 +209,21 @@ final class Repositorios {
             return almacen.leer("docs/" + docId + "/" + nombre + ".json", null);
         }
 
+        @Override public long bytesAnexos(String docId) {
+            java.io.File dir = almacen.ruta("docs/" + docId);
+            java.io.File[] fs = dir.listFiles();
+            if (fs == null) return 0;
+            long n = 0;
+            for (java.io.File f : fs) {
+                if (!f.isFile()) continue;
+                String nm = f.getName();
+                if (!nm.endsWith(".json")) continue;
+                if (nm.equals("estado.json") || nm.equals("versiones.json") || nm.equals("visitas.json")) continue;
+                n += f.length();
+            }
+            return n;
+        }
+
         @Override public void olvidarEstado(String docId) { estados.remove(docId); }
 
         @Override public void guardarEstado(String docId, EstadoDocumento estado) {
@@ -212,6 +232,8 @@ final class Repositorios {
         }
 
         @Override public long bytesEstado(String docId) { return almacen.tamano("docs/" + docId + "/estado.json"); }
+
+        @Override public long bytesActividad(String docId) { return almacen.tamano("docs/" + docId + "/actividad.jsonl"); }
 
         @SuppressWarnings("unchecked")
         @Override public synchronized List<Version> historial(String docId) {
@@ -242,14 +264,12 @@ final class Repositorios {
 
         @SuppressWarnings("unchecked")
         @Override public List<Map<String, Object>> actividad(String docId, int max) {
-            java.io.File f = almacen.ruta("docs/" + docId + "/actividad.jsonl");
-            if (!f.isFile()) return List.of();
-            String[] lineas = Almacen.leerTexto(f).split("\n");
             List<Map<String, Object>> r = new ArrayList<>();
-            for (int i = lineas.length - 1; i >= 0 && r.size() < max; i--) {
-                if (lineas[i].isBlank()) continue;
-                Object o = Json.YO.leer(lineas[i]);
-                if (o instanceof Map) r.add((Map<String, Object>) o);
+            for (String linea : almacen.ultimasLineas("docs/" + docId + "/actividad.jsonl", max)) {
+                try {
+                    Object o = Json.YO.leer(linea);
+                    if (o instanceof Map) r.add((Map<String, Object>) o);
+                } catch (RuntimeException ignorado) { /* línea corrupta al final */ }
             }
             return r;
         }

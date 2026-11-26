@@ -13,15 +13,18 @@
   const leer = (t) => { try { return JSON.parse(t || "{}"); } catch (e) { return {}; } };
   const estado = () => (disponible() ? leer(window.NomAndroid.estadoServidor()) : { activo: false });
   /** La app está usando el servidor de este mismo teléfono. */
-  const esLocal = () => /^http:\/\/(127\.0\.0\.1|localhost)(:|$)/.test(api().servidor() || "");
+  const esLocal = () => {
+    try { const u = new URL(api().servidor() || ""); return u.protocol === "http:" && (u.hostname === "127.0.0.1" || u.hostname === "localhost"); }
+    catch (e) { return false; }
+  };
   const direccion = (e) => (e.direcciones && e.direcciones[0]) || "";
 
   /** Enciende el servidor; si conectar, la app pasa a usarlo. Devuelve el estado. */
-  function encender(conectar) {
+  async function encender(conectar) {
     if (!disponible()) throw new Error("Esta opción solo está en la app Android");
     const e = leer(window.NomAndroid.iniciarServidor());
     if (!e.activo) throw new Error(e.error || "No se pudo empezar a compartir desde este teléfono");
-    if (conectar) pasarAlTelefono(e.local);
+    if (conectar) await pasarAlTelefono(e.local);
     return e;
   }
 
@@ -30,10 +33,12 @@
    * dueño entra con su alias (lo hace la pantalla de entrar, sola). Si había sesión en la nube, se
    * guarda (para pedir pases y para volver sin escribir la contraseña).
    */
-  function pasarAlTelefono(local) {
+  async function pasarAlTelefono(local) {
     if (api().token()) {
       const nube = NOM.acceso && NOM.acceso.guardarSesionNube();
-      NOM.boveda.cerrar(!nube).catch(() => {});
+      await NOM.boveda.cerrar(!nube).catch(() => {});
+      if (NOM.e2e && NOM.e2e.limpiar) NOM.e2e.limpiar();
+      if (NOM.binarios && NOM.binarios.limpiar) NOM.binarios.limpiar(false);
       api().limpiarSesion();
     }
     api().fijarServidor(local);
@@ -70,9 +75,9 @@
     $("button", el).onclick = () => {
       const b = $("button", el);
       b.disabled = true; b.innerHTML = `<span class="cargando"></span>`;
-      setTimeout(() => {
+      setTimeout(async () => {
         try {
-          const e = encender(true);
+          const e = await encender(true);
           aviso(direccion(e) ? `Listo: los demás entran en ${direccion(e)}` : "Listo. Conecta el Wi-Fi (o activa el punto de acceso) para que los demás entren.", { tipo: "ok", ms: 6000 });
           alListo();
         } catch (err) {
@@ -134,12 +139,12 @@
       $$("[data-copiar]", sec).forEach((b) => (b.onclick = () => NOM.copiarConAviso(b.dataset.copiar, "Dirección copiada")));
       $$("[data-compartir]", sec).forEach((b) => (b.onclick = () => compartir(b.dataset.compartir)));
       const enc = $("[data-encender]", sec);
-      if (enc) enc.onclick = () => { try { encender(false); aviso("Listo: este teléfono ya comparte", { tipo: "ok" }); } catch (err) { aviso(err.message, { tipo: "error" }); } pintar(); };
+      if (enc) enc.onclick = async () => { try { await encender(false); aviso("Listo: este teléfono ya comparte", { tipo: "ok" }); } catch (err) { aviso(err.message, { tipo: "error" }); } pintar(); };
       const usar = $("[data-usar]", sec);
       if (usar) usar.onclick = async () => {
         if (!(await NOM.confirmar("Entrar a los espacios de este teléfono", "La app se conectará a este teléfono y entrarás como su dueño, con tu alias. Tus espacios del otro lugar siguen ahí; para volver, elígelo al entrar.", { si: "Entrar" }))) return;
         // La sesión era del otro servidor: aquí se entra con el alias del dueño (sin contraseña).
-        pasarAlTelefono(e.local);
+        await pasarAlTelefono(e.local);
         NOM.app.irACuentas();
       };
       const apg = $("[data-apagar]", sec);
@@ -147,7 +152,12 @@
         if (!(await NOM.confirmar("Dejar de compartir", "Los demás dejarán de ver los espacios de este teléfono hasta que lo enciendas otra vez. Los documentos se quedan guardados aquí.", { si: "Apagar", peligro: true }))) return;
         const local = esLocal();
         detener();
-        if (local) { api().limpiarSesion(); api().fijarServidor(""); NOM.app.irACuentas(); return; }
+        if (local) {
+          await NOM.boveda.cerrar().catch(() => {});
+          if (NOM.e2e && NOM.e2e.limpiar) NOM.e2e.limpiar();
+          if (NOM.binarios && NOM.binarios.limpiar) NOM.binarios.limpiar(false);
+          api().limpiarSesion(); api().fijarServidor(""); NOM.app.irACuentas(); return;
+        }
         setTimeout(pintar, 400);
       };
     }
@@ -167,7 +177,7 @@
     try { ls = (await NOM.api.get("/api/espacios")).filter((x) => x.permiso === "PROPIETARIO"); } catch (e) { return aviso(e.message, { tipo: "error" }); }
     if (!ls.length) return aviso("Primero crea un espacio en este teléfono", { tipo: "info" });
     if (ls.length === 1) return NOM.union.invitar(ls[0]);
-    const cuerpo = html(`<div class="lista">${ls.map((x, i) => `<button class="lista-item" data-i="${i}" style="text-align:left;width:100%"><span class="punto-color" style="background:${esc(x.color)}"></span><span class="crece"><b>${esc(x.nombre)}</b><small>${x.documentos} documento(s)</small></span>${ico("chevron-right")}</button>`).join("")}</div>`);
+    const cuerpo = html(`<div class="lista">${ls.map((x, i) => `<button class="lista-item" data-i="${i}" style="text-align:left;width:100%"><span class="punto-color" style="background:${NOM.colorHex(x.color)}"></span><span class="crece"><b>${esc(x.nombre)}</b><small>${+x.documentos || 0} documento(s)</small></span>${ico("chevron-right")}</button>`).join("")}</div>`);
     const h = NOM.hoja({ titulo: "¿A qué espacio?", icono: "qr-code", cuerpo });
     $$("[data-i]", cuerpo).forEach((b) => (b.onclick = () => { h.cerrar(true); NOM.union.invitar(ls[+b.dataset.i]); }));
   }

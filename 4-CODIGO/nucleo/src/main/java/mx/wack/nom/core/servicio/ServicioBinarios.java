@@ -136,6 +136,10 @@ public class ServicioBinarios {
      * de Office, comentarios ni notas); en uno cifrado de extremo a extremo el servidor no puede leerlo, pero el
      * binario va cifrado con la llave del documento y su huella no se puede adivinar.
      */
+    public void exigirCodigoPublico(String tipo, String codigo) {
+        if ("proyeccion".equals(tipo)) documentos.docDeProyeccion(codigo); else documentos.docDeEnlaceVer(codigo);
+    }
+
     public byte[] bajarPublico(String tipo, String codigo, String huella) {
         String h = validar(huella);
         Documento d = "proyeccion".equals(tipo) ? documentos.docDeProyeccion(codigo) : documentos.docDeEnlaceVer(codigo);

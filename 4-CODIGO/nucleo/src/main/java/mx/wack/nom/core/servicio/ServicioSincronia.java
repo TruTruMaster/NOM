@@ -112,6 +112,7 @@ public class ServicioSincronia {
                 try { return distancia(InetAddress.getByAddress(java.util.Arrays.copyOfRange(b, 12, 16))); }
                 catch (UnknownHostException e) { return 0; }
             }
+            if ((b[0] & 255) == 0x20 && (b[1] & 255) == 0x02) return 0;
         }
         if (a.isAnyLocalAddress() || a.isLoopbackAddress() || a.isLinkLocalAddress() || a.isMulticastAddress()) return 0;
         if (b.length == 4 && ((b[0] & 255) == 0 || (b[0] & 255) >= 224)) return 0;

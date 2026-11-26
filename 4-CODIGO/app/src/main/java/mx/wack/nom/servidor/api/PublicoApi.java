@@ -28,35 +28,16 @@ public class PublicoApi {
 
     private final ServicioEspacios espacios;
     private final ServicioDocumentos documentos;
+    private final mx.wack.nom.core.servicio.Topes topes;
 
-    public PublicoApi(ServicioEspacios espacios, ServicioDocumentos documentos) {
+    public PublicoApi(ServicioEspacios espacios, ServicioDocumentos documentos, mx.wack.nom.core.servicio.Topes topes) {
         this.espacios = espacios;
         this.documentos = documentos;
+        this.topes = topes;
     }
 
-    /** Códigos que no existen, por red, en los últimos 10 minutos: quien prueba muchos espera un rato. */
-    private final Map<String, java.util.ArrayDeque<Long>> noExisten = new java.util.HashMap<>();
-    private static final int MAX_NO_EXISTEN = 120;
-    private static final long VENTANA = 600_000L;
-
     private <T> T conTope(jakarta.servlet.http.HttpServletRequest req, java.util.function.Supplier<T> f) {
-        String de = mx.wack.nom.servidor.seguridad.Origen.de(req);
-        long ahora = System.currentTimeMillis();
-        if (de != null) synchronized (noExisten) {
-            java.util.ArrayDeque<Long> l = noExisten.get(de);
-            if (l != null) {
-                while (!l.isEmpty() && ahora - l.peekFirst() > VENTANA) l.pollFirst();
-                if (l.size() >= MAX_NO_EXISTEN) throw new mx.wack.nom.core.servicio.ErrorNom(mx.wack.nom.core.servicio.ErrorNom.DEMASIADOS, "Demasiados códigos que no existen desde esta red: espera unos minutos");
-            }
-        }
-        try { return f.get(); }
-        catch (mx.wack.nom.core.servicio.ErrorNom e) {
-            if (de != null && e.estado == mx.wack.nom.core.servicio.ErrorNom.NO_EXISTE) synchronized (noExisten) {
-                noExisten.computeIfAbsent(de, k -> new java.util.ArrayDeque<>()).addLast(ahora);
-                if (noExisten.size() > 5_000) noExisten.values().removeIf(q -> q.isEmpty() || ahora - q.peekLast() > VENTANA);
-            }
-            throw e;
-        }
+        return topes.conTopeNoExiste(mx.wack.nom.servidor.seguridad.Origen.de(req), f);
     }
 
     @GetMapping("/api/enlaces/{codigo}")

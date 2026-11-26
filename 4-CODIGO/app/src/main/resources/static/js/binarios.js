@@ -33,11 +33,14 @@
   const ES_DATOS = /^data:([a-z0-9.+\/-]+)(?:;[a-z0-9=._-]+)*;base64,/i;
 
   /** La llave de un documento en texto (base64 de URL, como la que llevan el enlace para ver y el QR) → bytes. */
+  const RESERVADO = new Set(["__proto__", "constructor", "prototype"]);
+  const propio = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const uidActual = () => (NOM.api && NOM.api.usuario && (NOM.api.usuario() || {}).id) || null;
   const llaveDeTexto = (t) => { if (!t) return null; try { return deB64(String(t).replace(/-/g, "+").replace(/_/g, "/") + "===".slice((String(t).length + 3) % 4)); } catch (e) { return null; } };
   const esRef = (v) => typeof v === "string" && v.length < 90 && RE.test(v);
   const huellaDe = (ref) => (RE.exec(ref) || [])[1] || null;
-  const mimeDe = (ref) => MIMES[(RE.exec(ref) || [])[2] || "bin"] || "application/octet-stream";
-  const extDe = (mime) => { const m = String(mime || "").toLowerCase(); if (EXT[m]) return EXT[m]; const e = Object.keys(MIMES).find((k) => MIMES[k] === m); return e || "bin"; };
+  const mimeDe = (ref) => { const e = (RE.exec(ref) || [])[2] || "bin"; return propio(MIMES, e) ? MIMES[e] : "application/octet-stream"; };
+  const extDe = (mime) => { const m = String(mime || "").toLowerCase(); if (propio(EXT, m)) return EXT[m]; const e = Object.keys(MIMES).find((k) => MIMES[k] === m); return e || "bin"; };
   const hex = (u) => Array.from(u, (b) => b.toString(16).padStart(2, "0")).join("");
   const deB64 = (s) => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; };
   const aB64 = (u) => { let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
@@ -70,6 +73,7 @@
   }
   const idbPut = (x) => idb("readwrite", (s) => s.put(x));
   const idbGet = (h) => idb("readonly", (s) => s.get(h));
+  const idbDel = (h) => idb("readwrite", (s) => s.delete(h));
   const idbTodos = () => idb("readonly", (s) => s.getAll());
 
   // ------------------------------------------------------------ cifrado (espacios de extremo a extremo)
@@ -81,7 +85,9 @@
     return r;
   }
   async function descifrar(llave, b) {
+    if (!b || !b.length || (b[0] !== 1 && b[0] !== 2)) throw new Error("Formato de archivo cifrado no válido");
     const alg = b[0] === 1 ? "gcm" : "ctr", n = alg === "gcm" ? 12 : 16;
+    if (b.length < 1 + n) throw new Error("Archivo cifrado incompleto");
     return C().descifrar(llave, { alg, iv: b.subarray(1, 1 + n), ct: b.subarray(1 + n) });
   }
   async function huella(bytes) {
@@ -131,7 +137,7 @@
   async function subirUno(reg) {
     if (!reg || !reg.espacio || !NOM.api || !NOM.api.binario) return false;
     try {
-      await NOM.api.binario("PUT", `/api/espacios/${reg.espacio}/binarios/${reg.h}`, reg.datos);
+      await NOM.api.binario("PUT", `/api/espacios/${encodeURIComponent(reg.espacio)}/binarios/${encodeURIComponent(reg.h)}`, reg.datos);
       hayAlmacen = true;
       await idbPut(Object.assign({}, reg, { pendiente: 0 }));
       return true;
@@ -156,11 +162,27 @@
   /** Sube lo que quedó pendiente (sin red, o la app se cerró a la mitad). */
   function subirPendientes() {
     if (subiendo) return subiendo;
+    const activo = uidActual();
+    if (!activo || !NOM.api || !NOM.api.token || !NOM.api.token()) return Promise.resolve();
     subiendo = (async () => {
       const todos = (await idbTodos()) || [];
-      for (const r of todos) if (r && r.pendiente) await subirUno(r);
+      for (const r of todos) if (r && r.pendiente && (!r.uid || r.uid === activo)) await subirUno(r);
     })().finally(() => { subiendo = null; });
     return subiendo;
+  }
+  async function limpiar(borrarDisco, usuarioId) {
+    clearTimeout(reintentoT); reintentoT = null;
+    for (const y of mem.values()) { if (y && y.url) { try { URL.revokeObjectURL(y.url); } catch (e) { /* nada */ } } }
+    mem.clear();
+    cargando.clear();
+    ctxDe.clear();
+    ctx = {};
+    enMemoria = 0;
+    if (borrarDisco) {
+      const objetivo = usuarioId || uidActual();
+      const todos = (await idbTodos()) || [];
+      for (const r of todos) if (r && r.h && (!objetivo || !r.uid || r.uid === objetivo)) await idbDel(r.h);
+    }
   }
   window.addEventListener("online", () => { subirPendientes(); });
   // (algunos WebView no mandan «online»: la API avisa cuando una petición vuelve a salir bien)
@@ -175,7 +197,7 @@
     c = c || ctx;
     const sale = c.llave ? await cifrar(c.llave, bytes) : bytes;
     const h = await huella(sale);
-    const reg = { h, espacio: c.espacio || null, mime: mime || "application/octet-stream", datos: sale, cifrado: c.llave ? 1 : 0, pendiente: 1, t: Date.now() };
+    const reg = { h, uid: uidActual(), espacio: c.espacio || null, mime: mime || "application/octet-stream", datos: sale, cifrado: c.llave ? 1 : 0, pendiente: 1, t: Date.now() };
     recordar(h, bytes, reg.mime);
     ctxDe.set(h, c);
     const antes = esperar ? await idbGet(h) : null;
@@ -206,10 +228,10 @@
 
   // ------------------------------------------------------------ bajar
   async function bajarCrudo(h, c) {
-    if (c.ver) return NOM.api.binario("GET", `/api/ver/${encodeURIComponent(c.ver)}/binarios/${h}`, null, { sinSesion: true });
-    if (c.proyeccion) return NOM.api.binario("GET", `/api/proyeccion/${encodeURIComponent(c.proyeccion)}/binarios/${h}`, null, { sinSesion: true });
+    if (c.ver) return NOM.api.binario("GET", `/api/ver/${encodeURIComponent(c.ver)}/binarios/${encodeURIComponent(h)}`, null, { sinSesion: true });
+    if (c.proyeccion) return NOM.api.binario("GET", `/api/proyeccion/${encodeURIComponent(c.proyeccion)}/binarios/${encodeURIComponent(h)}`, null, { sinSesion: true });
     if (!c.espacio) throw new Error("No se sabe de qué espacio es este archivo");
-    return NOM.api.binario("GET", `/api/espacios/${c.espacio}/binarios/${h}`);
+    return NOM.api.binario("GET", `/api/espacios/${encodeURIComponent(c.espacio)}/binarios/${encodeURIComponent(h)}`);
   }
   /** Los bytes (en claro) de una referencia: de la memoria, de este equipo o del servidor. */
   function bytes(ref, c) {
@@ -224,7 +246,7 @@
       if (!crudo) {
         crudo = await bajarCrudo(h, c);
         // guardado en este equipo: la siguiente vez (o sin Internet) no se vuelve a bajar
-        idbPut({ h, espacio: c.espacio || null, mime: mimeDe(ref), datos: crudo, cifrado: c.llave ? 1 : 0, pendiente: 0, t: Date.now() });
+        idbPut({ h, uid: uidActual(), espacio: c.espacio || null, mime: mimeDe(ref), datos: crudo, cifrado: c.llave ? 1 : 0, pendiente: 0, t: Date.now() });
       }
       const claro = (reg ? reg.cifrado : c.llave) ? await descifrar(c.llave, crudo) : crudo;
       recordar(h, claro, (reg && reg.mime) || mimeDe(ref));
@@ -305,7 +327,7 @@
       return v.replace(RE_EN, (r) => datosYa(r) || r);
     }
     if (Array.isArray(v)) return v.map(conDatos);
-    if (v && typeof v === "object") { const o = {}; for (const k in v) o[k] = conDatos(v[k]); return o; }
+    if (v && typeof v === "object") { const o = {}; for (const k in v) if (propio(v, k) && !RESERVADO.has(k)) o[k] = conDatos(v[k]); return o; }
     return v;
   }
 
@@ -336,7 +358,7 @@
         }
         if (b64) {
           const fmt = String(ogBase.campos.fmt || "bin");
-          const ref = await guardar(deB64(b64), MIMES[fmt] || "application/octet-stream", c, true);
+          const ref = await guardar(deB64(b64), propio(MIMES, fmt) ? MIMES[fmt] : "application/octet-stream", c, true);
           // (los trozos pN pueden estar repartidos entre varias operaciones, también junto con otros campos: se quitan
           // de todas, y las que se quedan vacías, fuera)
           const sinTrozos = (campos) => { const r = {}; for (const k in campos) if (!/^p\d+$/.test(k)) r[k] = campos[k]; return r; };
@@ -362,7 +384,7 @@
           return ref;
         }
         if (Array.isArray(v)) { const r = []; for (const x of v) r.push(await cambiar(x)); return r; }
-        if (v && typeof v === "object") { const o = {}; for (const k in v) o[k] = await cambiar(v[k]); return o; }
+        if (v && typeof v === "object") { const o = {}; for (const k in v) if (propio(v, k) && !RESERVADO.has(k)) o[k] = await cambiar(v[k]); return o; }
         return v;
       };
       for (const o of ops) nuevas.push(o.campos && o.bloque !== "_origen" ? Object.assign({}, o, { campos: await cambiar(o.campos) }) : o);
@@ -397,7 +419,7 @@
     const listas = await sacarDeOps(ops, { espacio: esp.id, llave: kd, nombre, modo });
     const cuerpo = { nombre, modo, ops: NOM.DocCRDT.partir(listas), clave };
     if (kd) cuerpo._llaveDoc = kd;
-    const ruta = `/api/espacios/${esp.id}/documentos`;
+    const ruta = `/api/espacios/${encodeURIComponent(esp.id)}/documentos`;
     let d;
     try { d = await NOM.api.post(ruta, cuerpo, Object.assign({ ms: 60000 }, opc)); }
     catch (e) {
@@ -411,7 +433,8 @@
   }
 
   // ------------------------------------------------------------ al dibujar: cambiar referencias por imágenes
-  const ATRS = ["src", "href", "xlink:href", "poster", "data"];
+  const ATRS = ["src", "href", "xlink:href", "poster"];
+  const ES_IMG_SVG = (el) => { const t = (el.tagName || "").toLowerCase(); return t === "image" || t === "feimage"; };
   /** En un texto (atributo o estilo): cada referencia, cruda o en la marca «GIF#ref», por su URL si ya está. */
   function cambiarEn(t) {
     let falta = false;
@@ -426,6 +449,7 @@
   /** Un EMF o WMF que llegó como datos (data:image/x-emf…): se cambia por su dibujo en SVG. */
   function metaEl(el) {
     for (const a of ["src", "href"]) {
+      if (a === "href" && !ES_IMG_SVG(el)) continue;
       const v = el.getAttribute(a);
       if (v && v.charCodeAt(0) === 100 && NOM.emf && NOM.emf.esDatos(v)) el.setAttribute(a, NOM.emf.paraVer(v));
     }
@@ -436,6 +460,7 @@
     if (!el || el.nodeType !== 1 || !el.getAttribute) return;
     metaEl(el);
     for (const a of ATRS.concat(["style"])) {
+      if ((a === "href" || a === "xlink:href") && !ES_IMG_SVG(el)) continue;
       const v = el.getAttribute(a);
       if (!v || v.indexOf(PRE) < 0) continue;
       const c = cambiarEn(v);
@@ -487,7 +512,7 @@
   NOM.srcExport = paraExportar;
   NOM.binarios = {
     PRE, UMBRAL, esRef, huellaDe, mimeDe, extDe, contexto, guardar, bytes, bytesYa, url, urlYa, datosYa, refsEn, refsDoc,
-    precargar, conDatos, sacarDeOps, crearEnEspacio, claveNueva, subirPendientes, resolverTodo, llaveDeTexto, paraSrc, paraExportar,
+    precargar, conDatos, sacarDeOps, crearEnEspacio, claveNueva, subirPendientes, resolverTodo, llaveDeTexto, paraSrc, paraExportar, limpiar,
     /** Para las pruebas: ¿tiene almacén el servidor? (null = no se ha probado) */
     get hayAlmacen() { return hayAlmacen; },
   };

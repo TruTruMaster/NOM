@@ -43,8 +43,9 @@
     const m = new Uint8Array(total);
     m.set(datos); m[largo] = 0x80;
     const bits = largo * 8;
+    const hi = Math.floor(bits / 2 ** 32);
+    m[total - 8] = hi >>> 24; m[total - 7] = hi >>> 16; m[total - 6] = hi >>> 8; m[total - 5] = hi;
     m[total - 4] = bits >>> 24; m[total - 3] = bits >>> 16; m[total - 2] = bits >>> 8; m[total - 1] = bits;
-    m[total - 8] = Math.floor(bits / 2 ** 32) >>> 0;
     const h = Int32Array.from(H0);
     for (let o = 0; o < total; o += 64) bloqueSha(h, m, o);
     const r = new Uint8Array(32);
@@ -149,8 +150,11 @@
   /** Llave para envolver la llave de datos, derivada de la contraseña (nunca se guarda). */
   async function llaveDeContrasena(contrasena, sal, alg) {
     if (alg === "gcm") {
-      const base = await crypto.subtle.importKey("raw", enc.encode(contrasena), "PBKDF2", false, ["deriveBits"]);
-      return new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", salt: sal, iterations: ITER_NATIVO, hash: "SHA-256" }, base, 256));
+      if (nativo) {
+        const base = await crypto.subtle.importKey("raw", enc.encode(contrasena), "PBKDF2", false, ["deriveBits"]);
+        return new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", salt: sal, iterations: ITER_NATIVO, hash: "SHA-256" }, base, 256));
+      }
+      return pbkdf2(enc.encode(contrasena), sal, ITER_NATIVO, 32);
     }
     return pbkdf2(enc.encode(contrasena), sal, ITER_JS, 32);
   }
@@ -167,10 +171,13 @@
     return { alg: "ctr", iv, ct: unir(ct, hmac(km, unir(iv, ct))) };
   }
   async function descifrar(llave, sobre) {
+    if (!sobre || !sobre.iv || !sobre.ct) throw new Error("Datos cifrados incompletos");
     if (sobre.alg === "gcm") {
       const k = await crypto.subtle.importKey("raw", llave, "AES-GCM", false, ["decrypt"]);
       return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: sobre.iv }, k, sobre.ct));
     }
+    if (sobre.alg !== "ctr") throw new Error("Algoritmo no válido");
+    if (sobre.iv.length !== 16 || sobre.ct.length < 32) throw new Error("Datos cifrados incompletos");
     const km = sha256(unir(llave, enc.encode("mac")));
     const ct = sobre.ct.subarray(0, sobre.ct.length - 32), tag = sobre.ct.subarray(sobre.ct.length - 32);
     const esperado = hmac(km, unir(sobre.iv, ct));

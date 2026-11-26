@@ -17,6 +17,7 @@ public interface RepositorioEspacios {
     /** Fase 9: biblioteca del espacio (fuentes guardadas para investigar sin Internet), en un archivo aparte. */
     List<Map<String, Object>> biblioteca(String espacioId);
     void guardarBiblioteca(String espacioId, List<Map<String, Object>> fuentes);
+    default long bytesBiblioteca(String espacioId) { return 0; }
 
     /** Fase 15: el chat del espacio (los ultimos mensajes) y sus adjuntos, en archivos aparte. */
     List<Map<String, Object>> chat(String espacioId);

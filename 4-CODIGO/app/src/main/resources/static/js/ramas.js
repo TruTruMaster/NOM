@@ -18,18 +18,21 @@
   const clave = (docId) => api().clave("sinred." + docId);
 
   // ------------------------------------------------------------ la base
+  const propio = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const RESERVADO = new Set(["__proto__", "constructor", "prototype"]);
   /** El reloj más alto de cada nodo en un estado (registros y texto letra por letra). */
   function vector(estado) {
-    const v = {};
-    const poner = (n, t) => { if (n && t > (v[n] || 0)) v[n] = t; };
-    for (const b in (estado && estado.bloques) || {}) for (const c in estado.bloques[b]) { const r = estado.bloques[b][c]; if (r) poner(r.n, r.t); }
+    const v = Object.create(null);
+    const poner = (n, t) => { if (n && !RESERVADO.has(n) && t > (v[n] || 0)) v[n] = t; };
+    for (const b in (estado && estado.bloques) || {}) if (propio(estado.bloques, b)) for (const c in estado.bloques[b]) { const r = propio(estado.bloques[b], c) ? estado.bloques[b][c] : null; if (r) poner(r.n, r.t); }
     for (const b in (estado && estado.seq) || {}) {
+      if (!propio(estado.seq, b)) continue;
       const s = estado.seq[b] || {};
       (s.ins || []).forEach((e) => poner(e.n, e.t + (e.e ? 0 : Math.max(0, NOM.Secuencia.caracteres(e.x || "").length - 1))));
       (s.vis || []).forEach((e) => poner(e.n, e.t));
       (s.fmt || []).forEach((e) => poner(e.n, e.t));
     }
-    return v;
+    return Object.assign({}, v);
   }
 
   const marca = (docId) => (api().token() && NOM.boveda && NOM.boveda.activa() ? NOM.leer(clave(docId), null) : null);
@@ -52,19 +55,21 @@
   function replica(estado) {
     const ops = [];
     for (const b in estado.bloques || {}) {
+      if (!propio(estado.bloques, b) || RESERVADO.has(b)) continue;
       const grupos = new Map();
       for (const c in estado.bloques[b]) {
+        if (!propio(estado.bloques[b], c) || RESERVADO.has(c)) continue;
         const r = estado.bloques[b][c];
         if (!r || !r.n || !(r.t > 0) || (b === "_doc" && c === "modo")) continue;
         const k = r.t + "|" + r.n;
-        if (!grupos.has(k)) grupos.set(k, { t: r.t, n: r.n, campos: {} });
+        if (!grupos.has(k)) grupos.set(k, { t: r.t, n: r.n, campos: Object.create(null) });
         grupos.get(k).campos[c] = r.v;
       }
       for (const g of grupos.values()) {
         const ks = Object.keys(g.campos);
         for (let i = 0, parte = 0; i < ks.length; i += 300, parte++) {
           const campos = {};
-          ks.slice(i, i + 300).forEach((k) => (campos[k] = g.campos[k]));
+          ks.slice(i, i + 300).forEach((k) => { if (!RESERVADO.has(k)) campos[k] = g.campos[k]; });
           ops.push({ id: `rx:${g.n}:${g.t}:${b}${parte ? ":" + parte : ""}`, bloque: b, campos, t: g.t, n: g.n });
         }
       }
@@ -105,20 +110,21 @@
     // (nunca cumplía los 2 minutos). La suelta quien manda, cuando el envío de verdad salió bien.
     if (!m.abierto && Date.now() - m.desde <= UMBRAL) return "enviar";
     const nodos = [...new Set(ctx.pendientes.map((o) => o.n).concat(ctx.nodo ? [ctx.nodo] : []))];
+    const did = encodeURIComponent(ctx.docId);
     let r;
-    try { r = await api().post(`/api/documentos/${ctx.docId}/cambios-desde`, { base: m.base, nodos, desde: m.desde }, { ms: 15000 }); }
+    try { r = await api().post(`/api/documentos/${did}/cambios-desde`, { base: m.base, nodos, desde: m.desde }, { ms: 15000 }); }
     catch (e) {
       if (e.red) throw e;
       // Un 404 puede ser que el documento ya no está… o que el servidor es de una versión anterior
       // (no conoce esta ruta): se confirma abriendo el documento.
       let borrado = false;
       if (e.estado === 404) {
-        try { await api().get(`/api/documentos/${ctx.docId}`, undefined, { ms: 10000, sin401: true }); }
+        try { await api().get(`/api/documentos/${did}`, undefined, { ms: 10000, sin401: true }); }
         catch (x) { if (x.red) throw x; borrado = x.estado === 404; }
       }
       if (borrado && ctx.espacioId) {
         // B.6 El original se borró (o está en la papelera) mientras tanto: lo de la persona queda como documento aparte.
-        const doc = await api().post(`/api/espacios/${ctx.espacioId}/documentos`, { nombre: (ctx.nombre || "Documento") + " (recuperado)", modo: ctx.modo || "TEXTO", ops: NOM.DocCRDT.opsDeEstado(ctx.estado, "recuperado") }, { ms: 60000 });
+        const doc = await api().post(`/api/espacios/${encodeURIComponent(ctx.espacioId)}/documentos`, { nombre: (ctx.nombre || "Documento") + " (recuperado)", modo: ctx.modo || "TEXTO", ops: NOM.DocCRDT.opsDeEstado(ctx.estado, "recuperado") }, { ms: 60000 });
         soltar(ctx.docId);
         return { tipo: "recuperado", doc };
       }
@@ -129,7 +135,7 @@
     const motivo = r.entregaVencida ? "entrega" : r.otros ? "cambios" : protegidoAhora ? "protegido" : null;
     if (!motivo) { soltar(ctx.docId); return "enviar"; }
     const yo = (api().usuario() || {}).nombre || "mí";
-    const doc = await api().post(`/api/documentos/${ctx.docId}/ramas`, {
+    const doc = await api().post(`/api/documentos/${did}/ramas`, {
       nombre: nombreRama(ctx.nombre || r.nombre, yo, m.desde, motivo), ops: replica(ctx.estado), base: m.base, nodos,
       propios: ctx.pendientes.slice(0, 5000), motivo, desde: m.desde,
     }, { ms: 90000 });
@@ -166,7 +172,7 @@
     }
     return r;
   }
-  const nuevo = (reg, base) => !!reg && reg.n && reg.t > ((base || {})[reg.n] || 0);
+  const nuevo = (reg, base) => !!reg && reg.n && reg.t > ((base && propio(base, reg.n) ? base[reg.n] : 0) || 0);
 
   /** Lo que difiere entre el original y la rama, y los campos que cambiaron en los dos lados. */
   function diferencias(orig, rama, base, nodos, modo) {
@@ -205,10 +211,12 @@
     if (f.tipo === "parrafo") return `Párrafo ${f.numero}`;
     if (/^c:/.test(f.campo)) return `Celda ${f.campo.slice(2)}`;
     if (f.bloque === "_doc") return f.campo === "paginas" ? "El orden de las páginas" : "El documento";
-    const bl = ((est.bloques || {})[f.bloque]) || {};
+    const bl = (est.bloques && propio(est.bloques, f.bloque) && est.bloques[f.bloque]) || {};
     const tipo = bl.tipo ? bl.tipo.v : "";
-    const nombre = { forma: "Figura", texto: "Cuadro de texto", imagen: "Imagen", tabla: "Tabla", comentario: "Comentario", flecha: "Flecha" }[tipo] || "Elemento";
-    const campo = { x: "posición", y: "posición", w: "tamaño", h: "tamaño", eliminado: "borrado", html: "texto", texto: "texto", relleno: "color", color: "color" }[f.campo] || f.campo;
+    const NOMBRES = { forma: "Figura", texto: "Cuadro de texto", imagen: "Imagen", tabla: "Tabla", comentario: "Comentario", flecha: "Flecha" };
+    const CAMPOS = { x: "posición", y: "posición", w: "tamaño", h: "tamaño", eliminado: "borrado", html: "texto", texto: "texto", relleno: "color", color: "color" };
+    const nombre = propio(NOMBRES, tipo) ? NOMBRES[tipo] : "Elemento";
+    const campo = propio(CAMPOS, f.campo) ? CAMPOS[f.campo] : f.campo;
     return `${nombre} (${campo})`;
   }
 
@@ -216,9 +224,9 @@
   async function comparar(ramaId, alTerminar) {
     let dr, dorig;
     try {
-      dr = await api().get(`/api/documentos/${ramaId}`);
+      dr = await api().get(`/api/documentos/${encodeURIComponent(ramaId)}`);
       if (!dr.documento.ramaDe) return aviso("Este documento ya no es una rama", { tipo: "info" });
-      dorig = await api().get(`/api/documentos/${dr.documento.ramaDe}`);
+      dorig = await api().get(`/api/documentos/${encodeURIComponent(dr.documento.ramaDe)}`);
     } catch (e) { return aviso(e.red ? "Para comparar hace falta conexión" : e.message, { tipo: "error" }); }
     const modo = dr.documento.modo;
     const { filas, conflictos } = diferencias(dorig.estado, dr.estado, dr.documento.ramaBase, dr.documento.ramaNodos, modo);
@@ -265,7 +273,7 @@
 
   async function fusionar(ramaId, elecciones, original) {
     try {
-      const r = await api().post(`/api/documentos/${ramaId}/fusionar`, { elecciones: elecciones || {} }, { ms: 90000 });
+      const r = await api().post(`/api/documentos/${encodeURIComponent(ramaId)}/fusionar`, { elecciones: elecciones || {} }, { ms: 90000 });
       aviso(`Listo: la rama se fusionó${original ? " con «" + original.nombre + "»" : ""}.${r.rechazadas ? ` ${r.rechazadas} cambio(s) no se aplicaron: ${r.motivo || "partes con dueño"}.` : ""} Si algo no quedó bien, regresa a la versión «Antes de fusionar…» en el historial.`, { tipo: r.rechazadas ? "aviso" : "ok", ms: 10000, accion: { texto: "Abrir el original", fn: () => (location.hash = "#/doc/" + r.original) } });
       return r;
     } catch (e) { aviso(e.message, { tipo: "error", ms: 8000 }); return null; }
@@ -273,23 +281,23 @@
 
   async function apartar(ramaId) {
     if (!(await confirmar("Dejar como documento aparte", "Se quita el lazo con el original: queda como un documento más del espacio (no se borra nada y ya no se puede fusionar).", { si: "Dejar aparte" }))) return false;
-    try { await api().put(`/api/documentos/${ramaId}/rama`, { accion: "aparte" }); aviso("Listo: ahora es un documento aparte", { tipo: "ok" }); return true; }
+    try { await api().put(`/api/documentos/${encodeURIComponent(ramaId)}/rama`, { accion: "aparte" }); aviso("Listo: ahora es un documento aparte", { tipo: "ok" }); return true; }
     catch (e) { aviso(e.message, { tipo: "error" }); return false; }
   }
 
   async function descartar(ramaId) {
     if (!(await confirmar("Descartar la rama", "Va a la papelera del espacio (se puede restaurar durante 30 días). El original no cambia.", { si: "Descartar", peligro: true }))) return false;
-    try { await api().delete(`/api/documentos/${ramaId}`); aviso("La rama está en la papelera del espacio", { tipo: "ok" }); return true; }
+    try { await api().delete(`/api/documentos/${encodeURIComponent(ramaId)}`); aviso("La rama está en la papelera del espacio", { tipo: "ok" }); return true; }
     catch (e) { aviso(e.message, { tipo: "error" }); return false; }
   }
 
   /** «Ramas (n)» de un documento: la lista, con abrir, comparar y fusionar. */
   async function lista(docId) {
     let l;
-    try { l = await api().get(`/api/documentos/${docId}/ramas`); } catch (e) { return aviso(e.message, { tipo: "error" }); }
+    try { l = await api().get(`/api/documentos/${encodeURIComponent(docId)}/ramas`); } catch (e) { return aviso(e.message, { tipo: "error" }); }
     const motivo = { entrega: "editada después de la fecha límite", protegido: "lo protegieron mientras tanto", telefono: "desde el teléfono que comparte" };
     const cuerpo = html(`<div class="col"><p class="suave" style="font-weight:400">Versiones de este documento que alguien editó sin conexión mientras otros lo cambiaban. El original no se tocó: compáralas y fusiónalas, o déjalas aparte.</p>
-      <div class="lista">${l.length ? l.map((x) => `<div class="lista-item">${ico("git-branch")}<span class="crece"><b>${esc(x.nombre)}</b><small>${esc(x.autor || "")}${x.motivo && motivo[x.motivo] ? " · " + esc(motivo[x.motivo]) : ""} · ${esc(NOM.haceCuanto(x.creada))}${x.estado === "fusionada" ? ` · fusionada por ${esc(x.fusionadaPor || "")}` : ""}</small></span>
+      <div class="lista">${l.length ? l.map((x) => `<div class="lista-item">${ico("git-branch")}<span class="crece"><b>${esc(x.nombre)}</b><small>${esc(x.autor || "")}${x.motivo && propio(motivo, x.motivo) ? " · " + esc(motivo[x.motivo]) : ""} · ${esc(NOM.haceCuanto(x.creada))}${x.estado === "fusionada" ? ` · fusionada por ${esc(x.fusionadaPor || "")}` : ""}</small></span>
         <a class="btn chico" href="#/doc/${esc(x.id)}">Abrir</a>${x.estado === "abierta" ? `<button class="btn chico primario" data-comparar="${esc(x.id)}">${ico("git-compare", "ico-s")} Comparar</button>` : `<span class="chip chico ok">Fusionada</span>`}</div>`).join("")
         : `<p class="suave">Este documento ya no tiene ramas.</p>`}</div></div>`);
     const h = hoja({ titulo: `Ramas (${l.filter((x) => x.estado === "abierta").length})`, icono: "git-branch", cuerpo, ancha: true });

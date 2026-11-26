@@ -192,7 +192,7 @@
         const ca = $("[data-autores]", cuerpo);
         ca.innerHTML = "";
         (f.autores && f.autores.length ? f.autores : [{}]).forEach((a) => ca.append(filaAutor(a)));
-        $("[data-campos]", cuerpo).innerHTML = (CAMPOS_TIPO[f.tipo] || CAMPOS_TIPO.otro).map(([k, t, ph]) => `<div class="campo"><label for="ff-${k}">${esc(t)}</label><div class="entrada"><input id="ff-${k}" data-campo="${k}" value="${esc(f[k] || (k === "consultado" && f.tipo === "web" ? new Date().toISOString().slice(0, 10) : ""))}" placeholder="${esc(ph || "")}" autocomplete="off"></div></div>`).join("");
+        $("[data-campos]", cuerpo).innerHTML = (Object.prototype.hasOwnProperty.call(CAMPOS_TIPO, f.tipo) ? CAMPOS_TIPO[f.tipo] : CAMPOS_TIPO.otro).map(([k, t, ph]) => `<div class="campo"><label for="ff-${k}">${esc(t)}</label><div class="entrada"><input id="ff-${k}" data-campo="${k}" value="${esc(f[k] || (k === "consultado" && f.tipo === "web" ? new Date().toISOString().slice(0, 10) : ""))}" placeholder="${esc(ph || "")}" autocomplete="off"></div></div>`).join("");
         previa();
       }
       pintar();
@@ -368,8 +368,8 @@
     res.innerHTML = '<div class="esqueleto" style="height:64px"></div>'.repeat(3);
     try {
       panel.resultados = donde === "biblioteca"
-        ? { donde, l: await api().get(`/api/espacios/${ed.espacio.id}/biblioteca${q ? "?q=" + encodeURIComponent(q) : ""}`) }
-        : { donde, l: await api().get(`/api/fuentes/buscar?donde=${donde}&q=${encodeURIComponent(q)}`, undefined, { ms: 25000 }) };
+        ? { donde, l: await api().get(`/api/espacios/${encodeURIComponent(ed.espacio.id)}/biblioteca${q ? "?q=" + encodeURIComponent(q) : ""}`) }
+        : { donde, l: await api().get(`/api/fuentes/buscar?donde=${encodeURIComponent(donde)}&q=${encodeURIComponent(q)}`, undefined, { ms: 25000 }) };
     } catch (e) {
       panel.resultados = { donde, error: e.red || e.estado === 503 ? "Sin Internet. Busca en la biblioteca del espacio: ahí están las fuentes que el equipo guardó." : e.message };
     }
@@ -397,7 +397,7 @@
       if (b.dataset.leer != null) {
         try {
           const d = r.donde === "wikipedia" ? await api().get(`/api/fuentes/wikipedia?titulo=${encodeURIComponent(x.titulo)}`, undefined, { ms: 25000 })
-            : await api().get(`/api/espacios/${ed.espacio.id}/biblioteca/${x.id}`);
+            : await api().get(`/api/espacios/${encodeURIComponent(ed.espacio.id)}/biblioteca/${encodeURIComponent(x.id)}`);
           panel.lectura = { fuente: d.fuente, texto: d.texto || "", deBiblioteca: r.donde === "biblioteca" };
           pintar();
         } catch (err) { aviso(err.message, { tipo: "error" }); }
@@ -412,9 +412,10 @@
   }
   const pintarPestanas = () => { if (panel) { const p = panel.pestana; pintar(); panel.pestana = p; } };
   async function guardarEnBiblioteca(ed, fuente, texto) {
-    try { await api().post(`/api/espacios/${ed.espacio.id}/biblioteca`, { fuente, texto }); aviso("Guardada en la biblioteca del espacio", { tipo: "ok" }); }
+    try { await api().post(`/api/espacios/${encodeURIComponent(ed.espacio.id)}/biblioteca`, { fuente, texto }); aviso("Guardada en la biblioteca del espacio", { tipo: "ok" }); }
     catch (e) { aviso(e.message, { tipo: "error" }); }
   }
+  const esEncabezadoWiki = (p) => p.startsWith("=") && p.endsWith("=") && p.replace(/=/g, "").trim().length > 0;
   /** Lector: el texto en párrafos; se elige un pedazo y se hace una ficha. */
   function pintarLectura(c) {
     const ed = panel.ed, L = panel.lectura, f = L.fuente || {};
@@ -423,7 +424,7 @@
       <h4>${esc(f.titulo || "")}</h4><p class="suave chico">${apaHtml(f)}</p>
       <div class="fila" style="flex-wrap:wrap;gap:6px"><button class="btn chico" data-agregar>${ico("book-marked", "ico-s")} A mis fuentes</button>${!L.deBiblioteca && !ed.local ? `<button class="btn chico" data-guardar>${ico("library", "ico-s")} Guardar con su texto</button>` : ""}</div>
       <p class="inv-pista">${ico("text-select", "ico-s")} Elige un pedazo del texto y toca <b>Hacer ficha</b>.</p>
-      <div class="inv-texto" data-texto>${parrafos.map((p) => /^=+\s*.+\s*=+$/.test(p) ? `<h5>${esc(p.replace(/=/g, "").trim())}</h5>` : `<p>${esc(p)}</p>`).join("") || '<p class="suave">Sin texto.</p>'}</div>
+      <div class="inv-texto" data-texto>${parrafos.map((p) => esEncabezadoWiki(p) ? `<h5>${esc(p.replace(/=/g, "").trim())}</h5>` : `<p>${esc(p)}</p>`).join("") || '<p class="suave">Sin texto.</p>'}</div>
       <button class="btn primario inv-hacer-ficha" data-ficha hidden>${ico("notebook-pen", "ico-s")} Hacer ficha</button></div>`;
     $("[data-volver]", c).onclick = () => { panel.lectura = null; pintar(); };
     $("[data-agregar]", c).onclick = () => { guardarFuente(ed, f); aviso("Agregada a tus fuentes", { tipo: "ok", ms: 1500 }); pintarPestanas(); };

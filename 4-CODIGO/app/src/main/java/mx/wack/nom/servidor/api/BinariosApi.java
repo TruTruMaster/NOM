@@ -34,8 +34,12 @@ import mx.wack.nom.servidor.seguridad.FiltroSesion;
 public class BinariosApi {
 
     private final ServicioBinarios binarios;
+    private final mx.wack.nom.core.servicio.Topes topes;
 
-    public BinariosApi(ServicioBinarios binarios) { this.binarios = binarios; }
+    public BinariosApi(ServicioBinarios binarios, mx.wack.nom.core.servicio.Topes topes) {
+        this.binarios = binarios;
+        this.topes = topes;
+    }
 
     @PutMapping(value = "/api/espacios/{id}/binarios/{huella}", consumes = MediaType.ALL_VALUE)
     public Map<String, Object> subir(@RequestAttribute(FiltroSesion.ATRIBUTO) Usuario u, @PathVariable String id, @PathVariable String huella,
@@ -81,7 +85,9 @@ public class BinariosApi {
     }
 
     @GetMapping("/api/proyeccion/{codigo}/binarios/{huella}")
-    public ResponseEntity<byte[]> proyeccion(@PathVariable String codigo, @PathVariable String huella) {
+    public ResponseEntity<byte[]> proyeccion(@PathVariable String codigo, @PathVariable String huella, HttpServletRequest req) {
+        // El tope cuenta solo códigos que no existen; una imagen que todavía no llega no castiga a todo el salón.
+        topes.conTopeNoExiste(mx.wack.nom.servidor.seguridad.Origen.de(req), () -> { binarios.exigirCodigoPublico("proyeccion", codigo); return null; });
         return conCache(binarios.bajarPublico("proyeccion", codigo, huella), huella);
     }
 

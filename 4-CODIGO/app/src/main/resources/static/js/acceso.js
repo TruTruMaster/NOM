@@ -15,7 +15,7 @@
   /** La nube de NOM (la Raspberry): donde viven las cuentas. Su nombre es www.nom.qd.je (también
    *  responde como nomcolab.dpdns.org, el de antes). La página abierta con cualquiera de sus nombres le
    *  habla con ese mismo nombre (cada nombre guarda aparte en el navegador); la app usa el principal. */
-  const NUBE = /^(www\.)?nom\.qd\.je$|(^|\.)nom\.dpdns\.org$/.test(location.hostname) ? location.origin : api().NUBE_PRINCIPAL;
+  const NUBE = /^(www\.)?nom\.qd\.je$|^(www\.)?nomcolab\.dpdns\.org$/.test(location.hostname) ? location.origin : api().NUBE_PRINCIPAL;
   NOM.NUBE = NUBE;
   /** Alias, invitados y cuentas que llegaron con un pase: no tienen contraseña aquí. */
   NOM.sinContrasena = (u) => !!(u && (u.invitado || u.alias || u.nube || u.retirada));
@@ -95,6 +95,7 @@
 
   /** El dueño del teléfono entra a su propio servidor (solo en la app, desde el mismo teléfono). */
   async function entrarComoDueno() {
+    if (!NOM.anfitrion || !NOM.anfitrion.esLocal || !NOM.anfitrion.esLocal()) throw new Error("Solo el teléfono que comparte puede entrar como su dueño");
     const llave = window.NomAndroid && window.NomAndroid.llaveDueno ? window.NomAndroid.llaveDueno() : "";
     if (!llave) throw new Error("Solo la app de este teléfono puede entrar como su dueño");
     const r = await api().post("/api/cuentas/alias", { llave }, { sin401: true });
@@ -109,7 +110,7 @@
   /** Antes de que la app se conecte a otro servidor: si la sesión actual es de la nube, se guarda. */
   function guardarSesionNube() {
     const s = api().servidor(), t = api().token(), u = api().usuario();
-    if (!api().empaquetada || !t || !u || !/^https:\/\//i.test(s || "")) return false;
+    if (!api().empaquetada || !t || !u || !api().esNube(s)) return false;
     NOM.guardar("nom.sesionNube", { servidor: s, token: t, usuario: u, t: Date.now() });
     return true;
   }
@@ -154,7 +155,7 @@
     let abierta = false;
     if (contrasena) { try { abierta = await NOM.boveda.abrir(r.usuario.id, contrasena); } catch (e) { console.warn(e); } }
     if (!abierta) { try { abierta = await NOM.boveda.reanudar(r.usuario.id); } catch (e) { abierta = false; } }
-    if (!abierta) { try { await NOM.boveda.abrir(r.usuario.id, secretoAlias(r.usuario.id)); } catch (e) { console.warn(e); } }
+    if (!abierta && r.usuario && (r.usuario.alias || r.usuario.invitado)) { try { await NOM.boveda.abrir(r.usuario.id, secretoAlias(r.usuario.id)); } catch (e) { console.warn(e); } }
     NOM.aplicarPreferencias(r.preferencias);
     return r;
   }

@@ -204,6 +204,11 @@ public class ServicioDocumentos {
 
     public void contarBinarios(java.util.function.ToLongFunction<String> f) { this.bytesBinarios = f == null ? id -> 0 : f; }
 
+    /** Biblioteca de fuentes del espacio: también cuenta en la cuota del propietario. */
+    private volatile java.util.function.ToLongFunction<String> bytesBiblioteca = id -> 0;
+
+    public void contarBiblioteca(java.util.function.ToLongFunction<String> f) { this.bytesBiblioteca = f == null ? id -> 0 : f; }
+
     /** Copia binarios de un espacio a otro (de, a, huellas): lo pone ServicioBinarios. */
     public interface CopiaBinarios { int copiar(String deEspacio, String aEspacio, Set<String> huellas); }
     private volatile CopiaBinarios copiaBinarios = (de, a, h) -> 0;
@@ -225,11 +230,12 @@ public class ServicioDocumentos {
         for (Espacio e : espacios.todos()) {
             if (!propietarioId.equals(e.propietarioId)) continue;
             for (Documento d : repo.delEspacio(e.id)) {
-                total += repo.bytesEstado(d.id) + repo.bytesActividad(d.id);
+                total += repo.bytesEstado(d.id) + repo.bytesActividad(d.id) + repo.bytesAnexos(d.id);
                 for (Version v : repo.historial(d.id)) total += v.bytes;
             }
             total += bytesChat.applyAsLong(e.id);
             total += bytesBinarios.applyAsLong(e.id);
+            total += bytesBiblioteca.applyAsLong(e.id);
         }
         usoCache.put(propietarioId, new long[] { total, ahora });
         return total;
@@ -250,7 +256,7 @@ public class ServicioDocumentos {
             long b = 0;
             int n = 0;
             for (Documento d : repo.delEspacio(e.id)) {
-                b += repo.bytesEstado(d.id) + repo.bytesActividad(d.id);
+                b += repo.bytesEstado(d.id) + repo.bytesActividad(d.id) + repo.bytesAnexos(d.id);
                 for (Version v : repo.historial(d.id)) b += v.bytes;
                 n++;
             }
@@ -258,6 +264,7 @@ public class ServicioDocumentos {
             b += chat;
             long bin = bytesBinarios.applyAsLong(e.id);
             b += bin;
+            b += bytesBiblioteca.applyAsLong(e.id);
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", e.id);
             m.put("nombre", e.nombre);
@@ -312,10 +319,13 @@ public class ServicioDocumentos {
      * documento en vez de crear otro. Vale un día (lo creado sin Internet se sube cuando vuelve la red).
      */
     public Documento crear(Usuario u, String espacioId, String nombre, String modo, List<Operacion> iniciales, String llave, String clave) {
-        if (clave == null || clave.isBlank()) return crearNuevo(u, espacioId, nombre, modo, iniciales, llave);
+        Espacio e = espacios.requerir(espacioId);
+        Permiso p = espacios.exigir(e, u, Permiso.EDICION);
+        if (clave == null || clave.isBlank()) return vistaPara(crearNuevo(u, espacioId, nombre, modo, iniciales, llave), u, p);
         if (clave.length() > 64 || !clave.matches("[A-Za-z0-9_-]+")) throw ErrorNom.invalido("Clave de creación no válida", "clave");
         long ahora = System.currentTimeMillis();
         if (creaciones.size() > 64) creaciones.entrySet().removeIf(x -> ahora - x.getValue().t() > VIGENCIA_CLAVE_CREAR_MS);
+        if (creaciones.size() > 10_000) creaciones.clear();
         String k = u.id + "|" + espacioId + "|" + clave;
         Creacion mia = new Creacion(new java.util.concurrent.CompletableFuture<>(), ahora);
         Creacion previa = creaciones.putIfAbsent(k, mia);
@@ -324,7 +334,7 @@ public class ServicioDocumentos {
             try { id = previa.id().get(120, java.util.concurrent.TimeUnit.SECONDS); }
             catch (Exception ex) { id = null; }
             Documento d = id == null ? null : repo.porId(id).orElse(null);
-            if (d != null && d.eliminado <= 0) return d;
+            if (d != null && d.eliminado <= 0 && espacioId.equals(d.espacioId)) return vistaPara(d, u, p);
             // (la primera falló o el documento ya se borró: se crea otra vez)
             creaciones.remove(k, previa);
             previa = creaciones.putIfAbsent(k, mia);
@@ -335,7 +345,7 @@ public class ServicioDocumentos {
         try {
             Documento d = crearNuevo(u, espacioId, nombre, modo, iniciales, llave);
             mia.id().complete(d.id);
-            return d;
+            return vistaPara(d, u, p);
         } catch (RuntimeException ex) {
             creaciones.remove(k, mia);
             mia.id().complete(null);
@@ -879,8 +889,16 @@ public class ServicioDocumentos {
         d.eliminado = System.currentTimeMillis();
         d.eliminadoPor = u.nombre;
         repo.guardar(d);
+        cerrarProyeccionesDe(docId);
         difusor.avisarDocumento(docId, "eliminado", Map.of("por", u.nombre, "papelera", true));
         difusor.avisarEspacio(d.espacioId, "documentos", Map.of("accion", "eliminado", "id", d.id));
+    }
+
+    private void cerrarProyeccionesDe(String docId) {
+        for (Proyeccion p : new ArrayList<>(proyecciones.values())) {
+            if (!docId.equals(p.docId)) continue;
+            if (proyecciones.remove(p.codigo, p)) difusor.avisarProyectores(p.codigo, "fin", Map.of("ok", true));
+        }
     }
 
     // ------------------------------------------------------------ 1.2 proteger contra el borrado
@@ -900,12 +918,17 @@ public class ServicioDocumentos {
 
     // ------------------------------------------------------------ 3.6 entrega con fecha limite
 
+    @SuppressWarnings("unchecked")
     private Map<String, Object> entregaInfo(Documento d, Permiso p) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("limite", d.entregaLimite);
         m.put("vencida", entregaVencida(d));
         m.put("cerrada", d.entregaCerrada);
-        if (p == Permiso.PROPIETARIO) m.put("recibos", d.entregaRecibos == null ? List.of() : d.entregaRecibos);
+        if (p == Permiso.PROPIETARIO) {
+            Object anexo = d.entregaCerrada ? repo.anexo(d.id, "entrega-recibos") : null;
+            List<?> lista = anexo instanceof List<?> l ? l : d.entregaRecibos;
+            m.put("recibos", lista == null ? List.of() : lista);
+        }
         return m;
     }
 
@@ -932,13 +955,22 @@ public class ServicioDocumentos {
             nuevaVersion(d, repo.estado(d.id), duenio, "Entrega (fecha límite)");
         }
         cerrarRachas(d.id, true);
-        Set<String> personas = new LinkedHashSet<>();
-        for (Map<String, Object> a : repo.actividad(d.id, 100_000)) if (a.get("usuarioId") != null) personas.add(String.valueOf(a.get("usuarioId")));
+        // Una sola lectura de la bitácora, agrupada por persona (los recibos van en su anexo del documento).
+        List<Map<String, Object>> todas = repo.actividad(d.id, 100_000);
+        Map<String, List<Map<String, Object>>> porPersona = new LinkedHashMap<>();
+        for (int i = todas.size() - 1; i >= 0; i--) {
+            Map<String, Object> a = todas.get(i);
+            if (a.get("usuarioId") == null) continue;
+            String uid = String.valueOf(a.get("usuarioId"));
+            if (!porPersona.containsKey(uid) && porPersona.size() >= 200) continue;
+            porPersona.computeIfAbsent(uid, k -> new ArrayList<>()).add(a);
+        }
         String duenio = espacios.requerir(d.espacioId).propietarioId;
         List<Map<String, Object>> recibos = new ArrayList<>();
-        for (String uid : personas) {
+        for (var en : porPersona.entrySet()) {
+            String uid = en.getKey();
             if (uid.equals(duenio)) continue;
-            Map<String, Object> r = construirRecibo(d, uid);
+            Map<String, Object> r = construirRecibo(d, uid, en.getValue());
             Map<String, Object> x = new LinkedHashMap<>();
             x.put("usuarioId", uid);
             x.put("usuario", ((Map<?, ?>) r.get("persona")).get("nombre"));
@@ -947,7 +979,8 @@ public class ServicioDocumentos {
             x.put("recibo", r);
             recibos.add(x);
         }
-        d.entregaRecibos = recibos;
+        repo.guardarAnexo(d.id, "entrega-recibos", recibos);
+        d.entregaRecibos = null;
         d.entregaCerrada = true;
         repo.guardar(d);
         difusor.avisarDocumento(d.id, "entrega", Map.of("limite", d.entregaLimite, "cerrada", true));
@@ -1020,6 +1053,7 @@ public class ServicioDocumentos {
         Permiso p = permiso(u, d, Permiso.LECTURA);
         if (!p.alMenos(Permiso.EDICION))
             throw ErrorNom.prohibido("Solo puedes consultar versiones");
+        revisarCuota(espacios.requerir(d.espacioId));
         Map<String, Map<String, Object>> f = repo.fotoVersion(docId, numero);
         if (f == null) throw ErrorNom.noEncontrado("La versión " + numero);
         List<Operacion> ops;
@@ -1102,15 +1136,21 @@ public class ServicioDocumentos {
         return l;
     }
 
+    /** Último recibo emitido por documento y persona: sin cambios en su contenido, se devuelve el mismo sin duplicar archivos. */
+    private final Map<String, Object[]> ultimosRecibos = new ConcurrentHashMap<>();
+
+    private Map<String, Object> construirRecibo(Documento d, String usuarioId) {
+        return construirRecibo(d, usuarioId, actividadDe(d.id, usuarioId));
+    }
+
     /**
      * El recibo: sesiones (inicio, fin, minutos activos, dispositivo), letras tecleadas contra
      * pegadas, pegados grandes (hora y tamano, nunca el texto), versiones y la huella SHA-256 de
      * todo eso. Se guarda la huella para poder comprobar despues que el recibo es autentico.
      */
     @SuppressWarnings("unchecked")
-    private Map<String, Object> construirRecibo(Documento d, String usuarioId) {
+    private Map<String, Object> construirRecibo(Documento d, String usuarioId, List<Map<String, Object>> act) {
         Usuario persona = cuentas.porId(usuarioId).orElse(null);
-        List<Map<String, Object>> act = actividadDe(d.id, usuarioId);
         List<Map<String, Object>> sesiones = new ArrayList<>();
         List<Map<String, Object>> grandes = new ArrayList<>();
         Map<String, Object> s = null;
@@ -1172,7 +1212,6 @@ public class ServicioDocumentos {
         per.put("nombre", nombre == null ? "?" : nombre);
         r.put("persona", per);
         r.put("servidor", nodo.equipo());
-        r.put("generado", System.currentTimeMillis());
         r.put("primeraActividad", primera);
         r.put("ultimaActividad", ultima);
         r.put("sesiones", sesiones);
@@ -1195,6 +1234,11 @@ public class ServicioDocumentos {
         ver.put("guardadasPorLaPersona", suyas);
         ver.put("ultima", (long) d.version);
         r.put("versiones", ver);
+        String firma = Huella.sha256(r);
+        String clave = d.id + "|" + usuarioId;
+        Object[] previo = ultimosRecibos.get(clave);
+        if (previo != null && firma.equals(previo[0])) return (Map<String, Object>) previo[1];
+        r.put("generado", System.currentTimeMillis());
         String h = Huella.sha256(r);
         r.put("hash", h);
         Map<String, Object> reg = new LinkedHashMap<>();
@@ -1204,6 +1248,8 @@ public class ServicioDocumentos {
         reg.put("documento", d.nombre);
         reg.put("persona", per.get("nombre"));
         repo.guardarRecibo(h, reg);
+        if (ultimosRecibos.size() > 2_000) ultimosRecibos.clear();
+        ultimosRecibos.put(clave, new Object[] { firma, r });
         return r;
     }
 
@@ -1215,6 +1261,7 @@ public class ServicioDocumentos {
         String quien = usuarioId == null || usuarioId.isBlank() ? u.id : usuarioId;
         if (!quien.equals(u.id) && p != Permiso.PROPIETARIO)
             throw ErrorNom.prohibido("Solo el propietario del espacio ve el recibo de otras personas");
+        topes.exigir("recibo|" + u.id, 15, "Muchos recibos seguidos: espera un momento");
         return construirRecibo(d, quien);
     }
 
@@ -1251,6 +1298,7 @@ public class ServicioDocumentos {
     public Map<String, Object> aportes(Usuario u, String docId) {
         Documento d = requerir(docId);
         permiso(u, d, Permiso.LECTURA);
+        topes.exigir("aportes|" + u.id, 30, "Muchas consultas de aportes seguidas: espera un momento");
         cerrarRachas(docId, true);
         Map<String, Map<String, Object>> per = new LinkedHashMap<>();
         Map<String, String> nodoUsuario = new HashMap<>();
@@ -1343,6 +1391,7 @@ public class ServicioDocumentos {
 
     public Map<String, Object> moverProyeccion(Usuario u, String docId, String pagina, int paso) {
         if (pagina != null && (pagina.length() > 64 || !pagina.matches("[A-Za-z0-9_.:-]+"))) throw ErrorNom.invalido("Diapositiva no válida", "pagina");
+        permiso(u, requerir(docId), Permiso.LECTURA);
         Proyeccion p = proyeccionDe(docId, u.id);
         if (p == null) { iniciarProyeccion(u, docId); p = proyeccionDe(docId, u.id); }
         boolean otra = pagina != null && !pagina.equals(p.pagina);
@@ -1360,6 +1409,7 @@ public class ServicioDocumentos {
      */
     @SuppressWarnings("unchecked")
     public Map<String, Object> marcarProyeccion(Usuario u, String docId, Map<String, Object> marcas) {
+        permiso(u, requerir(docId), Permiso.LECTURA);
         Proyeccion p = proyeccionDe(docId, u.id);
         if (p == null) throw new ErrorNom(ErrorNom.NO_EXISTE, "No estás presentando este documento en otra pantalla");
         Map<String, Object> m = new LinkedHashMap<>();
@@ -1417,6 +1467,10 @@ public class ServicioDocumentos {
         List<Operacion> r = new ArrayList<>();
         for (Operacion op : ops) {
             if ("_origen".equals(op.bloque())) continue;
+            // Lo que vuelve a verse (deshacer un borrado, restaurar) no viaja en la copia de las pantallas: que la vuelvan a pedir.
+            if (op.esSecuencia() ? op.s() != null && "v".equals(op.s().get("k")) && Boolean.TRUE.equals(op.s().get("v"))
+                    : op.campos() != null && op.campos().containsKey("eliminado") && !Boolean.TRUE.equals(op.campos().get("eliminado")))
+                return Map.of("recargar", true);
             if (op.esSecuencia()) { if (!"comentario".equals(est.valor(op.bloque(), "tipo"))) r.add(new Operacion(op.id(), op.bloque(), op.campos(), op.t(), op.n(), op.s(), null)); continue; }
             Map<String, Object> c = op.campos();
             if (c == null || "comentario".equals(c.containsKey("tipo") ? c.get("tipo") : est.valor(op.bloque(), "tipo"))) continue;
@@ -1432,8 +1486,16 @@ public class ServicioDocumentos {
 
     /** Una copia del estado para quien solo mira: sin comentarios, notas del orador, dueños ni el original de Office. */
     private static EstadoDocumento paraMirar(EstadoDocumento copia, boolean sinAnimaciones) {
-        copia.bloques.entrySet().removeIf(en -> "_origen".equals(en.getKey())
+        // Lo borrado no se muestra: los bloques eliminados no viajan y el texto oculto va sin su contenido.
+        Set<String> eliminados = new HashSet<>();
+        copia.bloques.forEach((id, campos) -> {
+            Registro r = campos.get("eliminado");
+            if (!Operacion.DOC.equals(id) && r != null && Boolean.TRUE.equals(r.v)) eliminados.add(id);
+        });
+        copia.bloques.entrySet().removeIf(en -> "_origen".equals(en.getKey()) || eliminados.contains(en.getKey())
                 || (en.getValue().get("tipo") != null && "comentario".equals(en.getValue().get("tipo").v)));
+        copia.seq.keySet().removeIf(eliminados::contains);
+        copia.seq.replaceAll((b, sq) -> sq.sinOcultos());
         Map<String, Registro> meta = copia.bloques.get(Operacion.DOC);
         if (meta != null) meta.keySet().removeIf(k -> campoPrivado(k) || (sinAnimaciones && k.startsWith("anim:")));
         return copia;
@@ -1538,6 +1600,7 @@ public class ServicioDocumentos {
      * permiso, documentos que creo y su actividad (resumida).
      */
     public Map<String, Object> datosDeCuenta(Usuario u) {
+        topes.exigir("datosCuenta|" + u.id, 6, "Acabas de descargar los datos de tu cuenta: espera un momento");
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("descargado", System.currentTimeMillis());
         r.put("servidor", nodo.equipo());
@@ -1606,6 +1669,7 @@ public class ServicioDocumentos {
             sucios.remove(d.id);
             repo.borrar(d.id);
         }
+        cerrarProyeccionesDe(d.id);
         motores.remove(d.id);
         usoCache.clear();
         difusor.avisarEspacio(d.espacioId, "documentos", Map.of("accion", "borrado", "id", d.id));
@@ -1678,7 +1742,11 @@ public class ServicioDocumentos {
             throw ErrorNom.invalido("En un espacio cifrado, el nombre de la copia se cifra en tu equipo (actualiza la app)", "nombre");
         String nuevo = nombre == null || nombre.isBlank()
                 ? (comoPlantilla || origen.plantilla ? origen.nombre : "Copia de " + origen.nombre) : nombre.trim();
-        if (!ServicioEspacios.cifrado(nuevo)) nuevo = Textos.cortar(Textos.limpio(nuevo), 120);
+        if (eo.e2e && ServicioEspacios.cifrado(nuevo)) {
+            if (nuevo.length() > 600) throw ErrorNom.invalido("El nombre es demasiado largo", "nombre");
+        } else {
+            nuevo = Textos.cortar(Textos.limpio(nuevo), 120);
+        }
         EstadoDocumento est;
         synchronized (candado(docId)) { est = repo.estado(docId).copia(); }
         // lo que el documento tiene en el almacén de binarios (imágenes, el Office original) va también al otro espacio
@@ -2441,8 +2509,12 @@ public class ServicioDocumentos {
     public Map<String, Object> actividadExterna(Usuario u, String docId, List<Object> filas, String via) {
         Documento d = requerir(docId);
         Permiso p = permiso(u, d, Permiso.EDICION);
+        Espacio e = espacios.requerir(d.espacioId);
+        revisarCuota(e);
+        topes.exigir("actext|" + u.id, 60, "Muchas actualizaciones de actividad seguidas: espera un momento");
         int n = 0;
-        String origen = via == null || via.isBlank() ? "otro NOM" : (via.length() > 60 ? via.substring(0, 60) : via);
+        String viaLimpia = Textos.cortar(Textos.limpio(via == null ? "" : via).trim(), 60);
+        String origen = viaLimpia.isEmpty() ? "otro NOM" : viaLimpia;
         long ahora = System.currentTimeMillis();
         for (Object o : filas == null ? List.<Object>of() : filas.subList(0, Math.min(filas.size(), 500))) {
             if (!(o instanceof Map<?, ?> m)) continue;

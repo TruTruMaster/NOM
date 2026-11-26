@@ -26,7 +26,11 @@
     async cuentaBorrada(usuarioId) {
       try { await NOM.boveda.olvidarCuenta(usuarioId); } catch (e) { console.error(e); }
       NOM.quitar("nom.viejaPospuesta." + usuarioId);
+      NOM.quitar("nom.inv." + usuarioId);
       NOM.quitar("nom.ultimoNombre");
+      if (NOM.acceso && NOM.acceso.olvidarSesionNube) NOM.acceso.olvidarSesionNube();
+      if (NOM.e2e && NOM.e2e.limpiar) NOM.e2e.limpiar();
+      if (NOM.binarios && NOM.binarios.limpiar) await NOM.binarios.limpiar(true, usuarioId);
       api.limpiarSesion();
       app.espacios = [];
       if (location.hash === "#/" || !location.hash) ruta(); else location.hash = "#/";
@@ -36,7 +40,10 @@
   api.alExpirar = async () => {
     if (!api.token()) return;
     await NOM.boveda.cerrar();   // sin sesión, los documentos de este equipo quedan cifrados
+    if (NOM.e2e && NOM.e2e.limpiar) NOM.e2e.limpiar();
+    if (NOM.binarios && NOM.binarios.limpiar) NOM.binarios.limpiar(false);
     api.limpiarSesion();
+    app.espacios = [];
     aviso("Tu sesión expiró. Inicia sesión de nuevo.", { tipo: "aviso" });
     ruta();
   };
@@ -111,8 +118,13 @@
       ...(api.empaquetada ? [{ texto: "Cambiar dónde trabaja tu equipo", icono: "server", fn: async () => {
         // La sesión de la nube se guarda (sirve para el pase y para volver sin contraseña).
         NOM.guardar("nom.eligeServidor", true);   // H-8: lo pidió la persona, así que elige ella (no se conecta sola al primero del Wi-Fi)
-        if (NOM.acceso && NOM.acceso.guardarSesionNube()) { await NOM.boveda.cerrar(false); api.limpiarSesion(); app.espacios = []; api.fijarServidor(""); location.hash = "#/"; ruta(); return; }
-        api.fijarServidor(""); cerrarSesion(true);
+        if (NOM.acceso && NOM.acceso.guardarSesionNube()) {
+          await NOM.boveda.cerrar(false);
+          if (NOM.e2e && NOM.e2e.limpiar) NOM.e2e.limpiar();
+          if (NOM.binarios && NOM.binarios.limpiar) NOM.binarios.limpiar(false);
+          api.limpiarSesion(); app.espacios = []; api.fijarServidor(""); location.hash = "#/"; ruta(); return;
+        }
+        await cerrarSesion(true); api.fijarServidor(""); ruta();
       } }] : []),
       // Los alias, invitados y cuentas con pase no tienen contraseña ni cuenta que borrar aquí.
       ...(NOM.sinContrasena(u) ? [] : [{ texto: "Cambiar contraseña…", icono: "key-round", fn: NOM.vistaCuentas.cambiarContrasena }]),
@@ -131,7 +143,7 @@
     if (!l) return;
     const actualId = (location.hash.match(/#\/espacio\/([^/]+)/) || [])[1];
     l.innerHTML = app.espacios.map((e) => `<a class="riel-item" href="#/espacio/${esc(e.id)}" ${e.id === actualId ? 'aria-current="page"' : ""}>
-      <span class="punto-color" style="background:${esc(e.color)}"></span><span class="crece recorta">${esc(e.nombre)}</span>
+      <span class="punto-color" style="background:${NOM.colorHex(e.color)}"></span><span class="crece recorta">${esc(e.nombre)}</span>
       ${e.conexion ? `<span class="chip ok" style="height:20px;padding:0 6px" title="Visible en el Wi-Fi" aria-label="Visible en el Wi-Fi"><span class="punto"></span></span>` : ""}</a>`).join("")
       || `<p class="chico suave" style="padding:4px 12px">Aún no tienes espacios.</p>`;
   }
@@ -155,7 +167,10 @@
     // (separados por cuenta) y se envían la próxima vez que entre.
     const borrar = [api.clave("cache."), api.clave("doc."), api.clave("recientes")];
     NOM.boveda.claves("nom.u.").filter((k) => borrar.some((p) => k.startsWith(p))).forEach((k) => NOM.quitar(k));
+    if (api.esNube(api.servidor()) && NOM.acceso && NOM.acceso.olvidarSesionNube) NOM.acceso.olvidarSesionNube();
     await NOM.boveda.cerrar();   // se olvida la llave: lo que queda en el equipo solo se abre con la contraseña
+    if (NOM.e2e && NOM.e2e.limpiar) NOM.e2e.limpiar();
+    if (NOM.binarios && NOM.binarios.limpiar) NOM.binarios.limpiar(false);
     api.limpiarSesion();
     app.espacios = [];
     location.hash = "#/";
@@ -268,10 +283,11 @@
     const visto = NOM.leer("nom.versionAvisada", {});
     if (visto.clave === clave && visto.dia === hoy) return;
     NOM.guardar("nom.versionAvisada", { clave, dia: hoy });
+    const ver = /^[0-9]+(?:\.[0-9]+){1,3}$/.test(String(info.version || "")) ? String(info.version) : "";
     if (suya < mia) {
-      NOM.aviso(`Este servidor tiene una versión anterior de NOM${info.version && suya ? " (" + info.version + ")" : ""} que esta app (${NOM.VERSION}). Puedes trabajar, pero lo que importes de Word, Excel o PowerPoint puede verse distinto en la página hasta que actualicen el servidor.`, { tipo: "aviso", ms: 12000 });
+      NOM.aviso(`Este servidor tiene una versión anterior de NOM${ver && suya ? " (" + ver + ")" : ""} que esta app (${NOM.VERSION}). Puedes trabajar, pero lo que importes de Word, Excel o PowerPoint puede verse distinto en la página hasta que actualicen el servidor.`, { tipo: "aviso", ms: 12000 });
     } else {
-      NOM.aviso(`Hay una versión más nueva de la app (${info.version || "nueva"}; tienes la ${NOM.VERSION}). Actualízala para ver los documentos igual que en la página.`,
+      NOM.aviso(`Hay una versión más nueva de la app (${ver || "nueva"}; tienes la ${NOM.VERSION}). Actualízala para ver los documentos igual que en la página.`,
         { tipo: "aviso", ms: 15000, accion: { texto: "Descargar", fn: () => { location.href = "https://github.com/TruTruMaster/NOM/releases/latest/download/NOM.apk"; } } });
     }
   };
@@ -302,7 +318,7 @@
     // copia que quedó junto a la llave de la bóveda (sin esto, sin Internet ya no se podría entrar).
     if (!api.token() && NOM.boveda) {
       const s = await NOM.boveda.rescatarSesion();
-      if (s) { NOM.guardar("nom.token", s.token); NOM.guardar("nom.usuario", s.usuario); }
+      if (s) { NOM.guardar("nom.token", s.token); NOM.guardar("nom.usuario", s.usuario); if (s.servidor) NOM.guardar("nom.tokenServidor", s.servidor); }
     }
     if (api.token()) {
       const u = api.usuario() || {};

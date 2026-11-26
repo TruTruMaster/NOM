@@ -10,17 +10,27 @@
   // Trusted Types sigue igual.
   try {
     if (window.trustedTypes && trustedTypes.createPolicy && !trustedTypes.defaultPolicy) {
-      const META = /<(\/?)meta(?=[\s/>])/gi;
+      const PELIGRO = /<(\/?)(meta|script|object|embed|base|iframe)(?=[\s/>])/gi;
+      const SCRIPT_OK = /^\/(?:js\/vendor\/(?:jsQR|mediabunny\.min|qrcode)\.js|js\/guiones-[a-z0-9-]+\.js|sw\.js)$/;
       trustedTypes.createPolicy("default", {
-        createHTML: (s) => { const t = String(s); return /<\/?meta[\s/>]/i.test(t) ? t.replace(META, "<$1x-meta") : t; },
-        createScriptURL: (u) => { if (new URL(String(u), location.href).origin === location.origin) return String(u); throw new TypeError("Solo programas de este sitio"); },
+        createHTML: (s) => { const t = String(s); return PELIGRO.test(t) ? t.replace(PELIGRO, "<$1x-$2") : t; },
+        createScriptURL: (u) => {
+          const s = String(u);
+          if (location.protocol === "file:") {
+            if (/^(?:js\/vendor\/(?:jsQR|mediabunny\.min|qrcode)\.js|js\/guiones-[a-z0-9-]+\.js)$/.test(s)) return s;
+            throw new TypeError("Solo programas de este sitio");
+          }
+          const url = new URL(s, location.href);
+          if ((url.protocol === "https:" || url.protocol === "http:") && url.origin !== "null" && url.origin === location.origin && SCRIPT_OK.test(url.pathname)) return s;
+          throw new TypeError("Solo programas de este sitio");
+        },
       });
     }
   } catch (e) { /* ya había una */ }
   const NOM = (window.NOM = window.NOM || {});
   // Versión de esta interfaz. Tienen que ir a la par de nucleo/.../core/Version.java y del APK:
   // INTERFAZ sube cuando cambia el formato de los documentos o lo que la interfaz sabe leer.
-  NOM.VERSION = "0.23.4";
+  NOM.VERSION = "0.23.5";
   NOM.INTERFAZ = 27;
   /** Versión vigente de los Términos y del Aviso de privacidad (Version.LEGAL en el servidor). */
   NOM.LEGAL = "2026-11-13";
@@ -41,7 +51,7 @@
     else window.open(u, "_blank", "noopener");
   };
   /** Botón «?» que lleva a un artículo de la ayuda. */
-  NOM.botonAyuda = (ruta, titulo) => `<a class="icono-btn chico boton-ayuda" href="${NOM.urlAyuda(ruta)}" data-ayuda="${String(ruta).replace(/"/g, "")}" aria-label="Ayuda: ${String(titulo || "").replace(/"/g, "")}" data-micro="Ayuda|${String(titulo || "Abre la ayuda de esto").replace(/"/g, "")}"><svg class="ico ico-s" aria-hidden="true"><use href="#i-circle-help"/></svg></a>`;
+  NOM.botonAyuda = (ruta, titulo) => `<a class="icono-btn chico boton-ayuda" href="${esc(NOM.urlAyuda(ruta))}" data-ayuda="${esc(ruta)}" aria-label="Ayuda: ${esc(titulo || "")}" data-micro="Ayuda|${esc(titulo || "Abre la ayuda de esto")}"><svg class="ico ico-s" aria-hidden="true"><use href="#i-circle-help"/></svg></a>`;
   // Los «?» (y cualquier enlace a la ayuda) se abren con NOM.ayuda.
   document.addEventListener("click", (e) => {
     const a = e.target.closest && e.target.closest("a[data-ayuda]");
@@ -54,6 +64,15 @@
   const esc = (s) => String(s == null ? "" : s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  const colorHex = (c, def = "#5A5D6B") => { const s = String(c == null ? "" : c).trim(); return /^#[0-9a-f]{6}$/i.test(s) ? s : def; };
+  const colorCss = (c, def = "") => {
+    const s = String(c == null ? "" : c).trim();
+    if (!s) return def;
+    if (/^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(s)) return s;
+    if (/^rgba?\(\s*\d{1,3}%?\s*,\s*\d{1,3}%?\s*,\s*\d{1,3}%?(?:\s*,\s*(?:0|1|0?\.\d+|\d{1,3}%))?\s*\)$/i.test(s)) return s;
+    if (/^(?:transparent|currentcolor|[a-z]{3,20})$/i.test(s)) return s;
+    return def;
+  };
   const $ = (sel, raiz) => (raiz || document).querySelector(sel);
   const $$ = (sel, raiz) => Array.from((raiz || document).querySelectorAll(sel));
   const ico = (n, cls) => `<svg class="ico ${cls || ""}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
@@ -158,8 +177,9 @@
   function aviso(texto, opc) {
     opc = opc || {};
     if (!contAvisos) { contAvisos = html(`<div class="avisos" role="status" aria-live="polite"></div>`); document.body.append(contAvisos); }
-    const tipo = opc.tipo || "info";
-    const icono = { ok: "circle-check", error: "triangle-alert", info: "info", aviso: "triangle-alert" }[tipo];
+    const ICONOS_AVISO = { ok: "circle-check", error: "triangle-alert", info: "info", aviso: "triangle-alert" };
+    const tipo = Object.prototype.hasOwnProperty.call(ICONOS_AVISO, opc.tipo) ? opc.tipo : "info";
+    const icono = ICONOS_AVISO[tipo];
     const el = html(`<div class="aviso ${tipo}">${ico(icono)}<span>${esc(texto)}</span></div>`);
     if (opc.accion) {
       const b = html(`<button type="button">${esc(opc.accion.texto)}</button>`);
@@ -375,7 +395,7 @@
       En la app lo hace Android (agranda todo el texto); en el navegador, la hoja de estilos. */
   const LETRAS = { normal: 100, grande: 115, "muy-grande": 130 };
   function aplicarLetra(v) {
-    v = LETRAS[v] ? v : "normal";
+    v = Object.prototype.hasOwnProperty.call(LETRAS, v) ? v : "normal";
     guardar("nom.letra", v);
     if (window.NomAndroid && window.NomAndroid.tamanoLetra) { window.NomAndroid.tamanoLetra(LETRAS[v]); delete document.documentElement.dataset.letra; }
     else if (v === "normal") delete document.documentElement.dataset.letra;
@@ -451,7 +471,7 @@
     const p = html(`<div class="menu wd-paleta" role="dialog" aria-label="${esc(opc.titulo || "Color")}">
       ${opc.titulo ? `<div class="menu-titulo">${esc(opc.titulo)}</div>` : ""}
       ${opc.sinColor === false ? "" : `<button class="wd-sin-color" data-c="">${esc(opc.sinColor || "Automático")}</button>`}
-      <div class="wd-muestras">${colores.map((c) => `<button data-c="${c}" style="background:${c}" aria-label="${c}" ${c === opc.actual ? 'aria-pressed="true"' : ""}></button>`).join("")}</div>
+      <div class="wd-muestras">${colores.map((c) => { const cc = colorHex(c, "#000000"); return `<button data-c="${cc}" style="background:${cc}" aria-label="${cc}" ${cc === opc.actual ? 'aria-pressed="true"' : ""}></button>`; }).join("")}</div>
       <label class="wd-otro-color">${ico("palette", "ico-s")} Otro color <input type="color" value="${esc(/^#[0-9a-f]{6}$/i.test(opc.actual || "") ? opc.actual : "#000000")}"></label></div>`);
     document.body.append(p);
     const r = ancla.getBoundingClientRect ? ancla.getBoundingClientRect() : { left: ancla.x, bottom: ancla.y, top: ancla.y };
@@ -497,7 +517,7 @@
   try { aplicarLetra(leer("nom.letra", "normal")); } catch (e) { /* sin almacenamiento */ }
   Object.assign(NOM, { aplicarLetra, copiarTexto, copiarConAviso, etiquetaEquipo, paleta, COLORES,
     enApp, aqui,
-    esc, $, $$, ico, html, debounce, throttle, haceCuanto, bytes, iniciales, avatar, sobreColor, idCorto,
+    esc, colorHex, colorCss, $, $$, ico, html, debounce, throttle, haceCuanto, bytes, iniciales, avatar, sobreColor, idCorto,
     avisoNuevo, leer, guardar, quitar, pedirPersistencia, MODOS, miniatura, aviso, hoja, confirmar, cerrarHoja: () => hojaActual && hojaActual.cerrar(true), hayHoja: () => !!hojaActual,
     /** Tecla Atrás del teléfono: cierra lo que esté encima (menú, ruedita, ventana) y dice si cerró algo. */
     atras: () => {

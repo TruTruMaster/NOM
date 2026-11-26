@@ -50,4 +50,5 @@ public interface RepositorioDocumentos {
         quien abrio una rama (fase 13). Se borran con el documento. */
     void guardarAnexo(String docId, String nombre, Object valor);
     Object anexo(String docId, String nombre);
+    default long bytesAnexos(String docId) { return 0; }
 }

@@ -8,6 +8,8 @@
   "use strict";
   const NOM = window.NOM;
   const esc = (s) => NOM.esc(s);
+  const propio = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const esSrcImg = (s) => typeof s === "string" && (/^(data:image\/|blob:|\/api\/)/i.test(s) || !!(NOM.binarios && NOM.binarios.esRef(s)));
 
   // ------------------------------------------------------------ tamaño
   const TAMANOS = {
@@ -20,7 +22,7 @@
     cuadrado: { t: "Cuadrado (redes sociales)", w: 1080, h: 1080 },
     historia: { t: "Historia 9:16 (celular)", w: 608, h: 1080 },
   };
-  const tam = (doc) => { const k = doc && doc.valor ? doc.valor("_doc", "tamDiapo") : null; return TAMANOS[k] || TAMANOS["16:9"]; };
+  const tam = (doc) => { const k = doc && doc.valor ? doc.valor("_doc", "tamDiapo") : null; return propio(TAMANOS, k) ? TAMANOS[k] : TAMANOS["16:9"]; };
 
   // ------------------------------------------------------------ temas
   const TEMAS = {
@@ -34,7 +36,7 @@
     menta: { t: "Menta", fondo: { tipo: "color", color: "#E8F7EF" }, titulo: "#1D7A4C", texto: "#24443A", acentos: ["#2FA868", "#1D7A4C", "#F08C2A", "#3D72F2"] },
     minimal: { t: "Minimalista", fondo: { tipo: "color", color: "#F7F5F0" }, titulo: "#2B2A33", texto: "#4A4854", acentos: ["#2B2A33", "#E8590C", "#6B6875", "#3D72F2"], fuenteT: "Georgia" },
   };
-  const tema = (doc) => TEMAS[doc && doc.valor ? doc.valor("_doc", "tema") : ""] || null;
+  const tema = (doc) => { const k = doc && doc.valor ? doc.valor("_doc", "tema") : ""; return propio(TEMAS, k) ? TEMAS[k] : null; };
   const fuenteCss = (f) => (NOM.textoRico && f ? NOM.textoRico.cssFuente(f) : f ? `'${f}',sans-serif` : "");
   /** CSS de un fondo. */
   const urlCss = (u) => String(u).replace(/["'()\\<>]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
@@ -52,20 +54,21 @@
     }
     if (f.tipo === "trama") {
       // trama de PowerPoint: el color de la trama mezclado con el de fondo según su porcentaje (las de líneas, a rayas)
-      const a = TRAMAS[f.trama], lin = /horz|vert|dn|up|diag|cross|wave|zigZag|brick|weave|trellis|grid|check/i.test(f.trama || "");
-      if (lin) return `repeating-linear-gradient(${/vert/i.test(f.trama) ? 90 : /up/i.test(f.trama) ? 45 : /dn/i.test(f.trama) ? -45 : 0}deg, ${f.linea || "#000"} 0 1px, ${f.color || "#fff"} 1px 6px)`;
-      return `color-mix(in srgb, ${f.linea || "#000"} ${Math.round((a == null ? 0.5 : a) * 100)}%, ${f.color || "#fff"})`;
+      const a = propio(TRAMAS, f.trama) ? TRAMAS[f.trama] : null, lin = /horz|vert|dn|up|diag|cross|wave|zigZag|brick|weave|trellis|grid|check/i.test(f.trama || "");
+      const cl = NOM.colorCss(f.linea, "#000"), cf = NOM.colorCss(f.color, "#fff");
+      if (lin) return `repeating-linear-gradient(${/vert/i.test(f.trama) ? 90 : /up/i.test(f.trama) ? 45 : /dn/i.test(f.trama) ? -45 : 0}deg, ${cl} 0 1px, ${cf} 1px 6px)`;
+      return `color-mix(in srgb, ${cl} ${Math.round((a == null ? 0.5 : a) * 100)}%, ${cf})`;
     }
     // (la dirección va entre comillas simples: este estilo se escribe dentro de un style="…" con comillas dobles)
-    if (f.tipo === "imagen" && f.src && (f.ajuste === "estirar" || f.ajuste === "mosaico")) {
+    if (f.tipo === "imagen" && esSrcImg(f.src) && (f.ajuste === "estirar" || f.ajuste === "mosaico")) {
       const u = urlCss(NOM.srcBin ? NOM.srcBin(f.src) : f.src);
       const px = (v, d) => (isFinite(+v) && +v > 0 ? Math.round(+v * 100) / 100 : d) + "px";
       return f.ajuste === "estirar" ? `#fff url('${u}') 0 0 / 100% 100% no-repeat` : `#fff url('${u}') ${px(f.tx, 0)} ${px(f.ty, 0)} / ${px(f.tw, 48)} ${px(f.th, 48)} repeat`;
     }
-    if (f.tipo === "degradado") return `linear-gradient(${+f.angulo || 135}deg, ${f.c1 || "#FFFFFF"}, ${f.c2 || "#CFE0FF"})`;
-    if (f.tipo === "rayas") return `repeating-linear-gradient(${f.color || "#FFFDF5"} 0 31px, ${f.linea || "#D7E3F4"} 31px 32px)`;
-    if (f.tipo === "imagen" && f.src) return `${f.ajuste === "ajustar" ? "#000" : "#fff"} url('${urlCss(NOM.srcBin ? NOM.srcBin(f.src) : f.src)}') center / ${f.ajuste === "ajustar" ? "contain" : "cover"} no-repeat`;
-    if (f.tipo === "color") return f.color || "#FFFFFF";
+    if (f.tipo === "degradado") return `linear-gradient(${Number.isFinite(+f.angulo) ? +f.angulo : 135}deg, ${NOM.colorCss(f.c1, "#FFFFFF")}, ${NOM.colorCss(f.c2, "#CFE0FF")})`;
+    if (f.tipo === "rayas") return `repeating-linear-gradient(${NOM.colorCss(f.color, "#FFFDF5")} 0 31px, ${NOM.colorCss(f.linea, "#D7E3F4")} 31px 32px)`;
+    if (f.tipo === "imagen" && esSrcImg(f.src)) return `${f.ajuste === "ajustar" ? "#000" : "#fff"} url('${urlCss(NOM.srcBin ? NOM.srcBin(f.src) : f.src)}') center / ${f.ajuste === "ajustar" ? "contain" : "cover"} no-repeat`;
+    if (f.tipo === "color") return NOM.colorCss(f.color, "#FFFFFF");
     return "";
   }
   /** El fondo de una diapositiva: el suyo, o el del tema. */
@@ -305,7 +308,7 @@
     // gráfica importada de Office: con su estilo de Office y los datos de sus celdas (lo editado en la app)
     if (b.office && NOM.graficaOffice && Array.isArray(b.office.tipos)) {
       try {
-        const filas = Math.max(2, +b.filas || 2), cols = Math.max(2, +b.cols || 2), val = (c, f) => { const v = ev.valor(c, f); return v === "" ? null : v; };
+        const filas = Math.max(2, Math.min(200, +b.filas || 2)), cols = Math.max(2, Math.min(50, +b.cols || 2)), val = (c, f) => { const v = ev.valor(c, f); return v === "" ? null : v; };
         const datos = { cats: Array.from({ length: filas - 1 }, (_, f) => { const v = val(0, f + 1); return v == null ? "" : NOM.formulas.formatear(v); }),
           series: Array.from({ length: cols - 1 }, (_, c) => ({ nombre: val(c + 1, 0), vals: Array.from({ length: filas - 1 }, (_, f) => val(c + 1, f + 1)) })) };
         const fam = (n) => (NOM.textoRico ? NOM.textoRico.cssFuente(n) : n);
@@ -318,11 +321,14 @@
   /** Tabla importada de PowerPoint: con sus anchos, altos, celdas combinadas, rellenos, bordes y texto de PowerPoint.
       Una celda que alguien editó en la app muestra lo nuevo con el formato de su celda. */
   function tablaOfficeHtml(b) {
-    const o = b.office, nF = o.altos.length, nC = o.anchos.length, ancho = o.anchos.reduce((a, x) => a + x, 0);
+    const o = b.office, nC = Math.min(50, o.anchos.length), nF = Math.min(200, o.altos.length, Math.floor(5000 / Math.max(1, nC)));
+    const anchos = o.anchos.slice(0, nC).map((w) => (Number.isFinite(+w) && +w >= 0 ? +w : 0));
+    const ancho = anchos.reduce((a, x) => a + x, 0);
+    const V_ALIN = { ctr: "middle", b: "bottom" };
     const css = (x) => (Array.isArray(x) && /^(#[0-9A-Fa-f]{6}|rgba\(\d+,\d+,\d+,[\d.]+\))$/.test(x[1]) ? `${Math.max(0.5, +x[0] || 1)}px ${x[2] && x[2] !== "solid" ? "dashed" : "solid"} ${x[1]}` : x === "no" ? "none" : null);
-    let h = `<div class="libre-tabla diapo-tabla office"><table style="width:${ancho}px"><colgroup>${o.anchos.map((w) => `<col style="width:${+w || 0}px">`).join("")}</colgroup>`;
+    let h = `<div class="libre-tabla diapo-tabla office"><table style="width:${ancho}px"><colgroup>${anchos.map((w) => `<col style="width:${w}px">`).join("")}</colgroup>`;
     for (let f = 0; f < nF; f++) {
-      h += `<tr style="height:${+o.altos[f] || 0}px">`;
+      h += `<tr style="height:${Number.isFinite(+o.altos[f]) ? +o.altos[f] : 0}px">`;
       for (let c = 0; c < nC; c++) {
         const x = o.celdas[f + "," + c];
         if (!x || x.o) continue;
@@ -334,8 +340,8 @@
         const bd = x.bd || {};
         [["t", "top"], ["r", "right"], ["b", "bottom"], ["l", "left"]].forEach(([k, n]) => { const v = css(bd[k]); if (v) st.push(`border-${n}:${v}`); });
         const m = Array.isArray(x.mar) ? x.mar : [9.6, 4.8, 9.6, 4.8];
-        st.push(`padding:${+m[1] || 0}px ${+m[2] || 0}px ${+m[3] || 0}px ${+m[0] || 0}px`, `vertical-align:${{ ctr: "middle", b: "bottom" }[x.anc] || "top"}`);
-        h += `<td${x.cs ? ` colspan="${+x.cs}"` : ""}${x.rs ? ` rowspan="${+x.rs}"` : ""} style="${esc(st.join(";"))}">${cont}</td>`;
+        st.push(`padding:${+m[1] || 0}px ${+m[2] || 0}px ${+m[3] || 0}px ${+m[0] || 0}px`, `vertical-align:${propio(V_ALIN, x.anc) ? V_ALIN[x.anc] : "top"}`);
+        h += `<td${x.cs ? ` colspan="${Math.max(1, Math.min(nC, +x.cs || 1))}"` : ""}${x.rs ? ` rowspan="${Math.max(1, Math.min(nF, +x.rs || 1))}"` : ""} style="${esc(st.join(";"))}">${cont}</td>`;
       }
       h += "</tr>";
     }
@@ -346,8 +352,12 @@
     const filas = +b.filas || 0, cols = +b.cols || 0;
     let mf = filas - 1, mc = cols - 1;
     if (!filas || !cols) { const r = rangoUsado(b); if (!r) return `<div class="libre-tabla"><table><tr><td>Tabla vacía (doble clic para escribir)</td></tr></table></div>`; mf = r.f2; mc = r.c2; }
+    mc = Math.max(0, Math.min(49, mc));
+    mf = Math.max(0, Math.min(199, Math.floor(5000 / (mc + 1)) - 1, mf));
     const ev = NOM.formulas.evaluador((c, f) => b["c:" + ref(c, f)] || "");
-    let h = `<div class="libre-tabla diapo-tabla${b.encabezado ? " con-cab" : ""}" style="${b.tTam ? `font-size:${+b.tTam}px;` : ""}${b.colorCab ? `--cab:${esc(b.colorCab)};` : ""}"><table>`;
+    const tTam = Number.isFinite(+b.tTam) && +b.tTam > 0 ? Math.min(200, +b.tTam) : 0;
+    const colorCab = NOM.colorCss(b.colorCab, "");
+    let h = `<div class="libre-tabla diapo-tabla${b.encabezado ? " con-cab" : ""}" style="${tTam ? `font-size:${tTam}px;` : ""}${colorCab ? `--cab:${colorCab};` : ""}"><table>`;
     for (let f = 0; f <= mf; f++) { h += "<tr>"; for (let c = 0; c <= mc; c++) h += `<td>${esc(NOM.formulas.formatear(ev.valor(c, f)))}</td>`; h += "</tr>"; }
     return h + "</table></div>";
   }
@@ -399,7 +409,7 @@
     const T = tam(doc), k = escala || 1;
     const cont = NOM.lienzoVista.htmlDiapositiva(doc, p);
     // en la página (fuera de la vista) para que cargue sus fuentes y cada renglón quede donde lo pone PowerPoint
-    const el = NOM.html(`<div class="diapo diapo-foto" style="${estiloDiapo(doc, p)}position:relative;left:0;top:0;transform:none;border-radius:0;box-shadow:none">${cont}</div>`);
+    const el = NOM.html(`<div class="diapo diapo-foto" style="${esc(estiloDiapo(doc, p))}position:relative;left:0;top:0;transform:none;border-radius:0;box-shadow:none">${cont}</div>`);
     const fuera = document.createElement("div");
     fuera.style.cssText = "position:fixed;left:-30000px;top:0;visibility:hidden;pointer-events:none;contain:layout";
     fuera.append(el); document.body.append(fuera);
@@ -428,7 +438,7 @@
 
   /** Un ícono (trazos SVG) como PNG de 256 px, para PowerPoint. */
   function iconoPng(svg, color, grosor) {
-    const s = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 24 24" fill="none" stroke="${color || "#2B2A33"}" stroke-width="${+grosor || 2}" stroke-linecap="round" stroke-linejoin="round">${svg || ""}</svg>`;
+    const s = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 24 24" fill="none" stroke="${NOM.colorCss(color, "#2B2A33")}" stroke-width="${+grosor || 2}" stroke-linecap="round" stroke-linejoin="round">${svg || ""}</svg>`;
     return new Promise((ok) => {
       const img = new Image();
       img.onload = () => { const cv = document.createElement("canvas"); cv.width = cv.height = 256; cv.getContext("2d").drawImage(img, 0, 0, 256, 256); try { ok(cv.toDataURL("image/png")); } catch (e) { ok(null); } };
@@ -481,7 +491,7 @@
     const mov = pars.map((p, i) => {
       const cs = getComputedStyle(p), r = p.getBoundingClientRect(), z = r.height / (p.offsetHeight || 1) || 1;
       const fam = (cs.fontFamily.split(",")[0] || "").replace(/["']/g, "").trim();
-      const k = PP_BASE[fam];
+      const k = propio(PP_BASE, fam) ? PP_BASE[fam] : null;
       if (!k) return null;
       // (con la letra todavía sin cargar se mediría la de reemplazo: se vuelve a acomodar cuando llegue)
       // (solo la primera familia: con toda la lista, check() da falso si una de reemplazo que no hace falta no cargó)

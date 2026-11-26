@@ -214,6 +214,7 @@ public class Difusor {
         for (Suscriptor s : subs) {
             if (!docId.equals(s.docId)) continue;
             if (s.proyector == null) enviar(s, "ops", datos);
+            else if (paraProyectores instanceof Map<?, ?> m && Boolean.TRUE.equals(m.get("recargar"))) enviar(s, "version", Map.of("ok", true));
             else if (paraProyectores != null) enviar(s, "ops", paraProyectores);
         }
     }
@@ -436,5 +437,15 @@ public class Difusor {
             if (desde > 0 && ahora - desde > MAX_ESCRITURA_MS) { cortar(s); continue; }
             encolar(s, new Object[] { LATIDO, null });
         }
+    }
+
+    /** Cierra todos los canales abiertos y detiene los hilos de envío al apagar el servidor. */
+    public void detener() {
+        for (Suscriptor s : subs) {
+            s.muerto = true;
+            try { s.canal.cerrar(); } catch (RuntimeException ignorado) { /* ya cerrado */ }
+        }
+        subs.clear();
+        if (envios != null) envios.shutdownNow();
     }
 }

@@ -41,7 +41,7 @@
             const suyas = ops.filter((o) => o.n === n);
             for (let i = 0; i < suyas.length; i += 300) {
               const lote = suyas.slice(i, i + 300);
-              await api().post(`/api/documentos/${id}/ops`, { cliente: n, ops: lote, dispositivo: api().dispositivo }, { ms: 15000 });
+              await api().post(`/api/documentos/${encodeURIComponent(id)}/ops`, { cliente: n, ops: lote, dispositivo: api().dispositivo }, { ms: 15000 });
               const enviados = new Set(lote.map((o) => o.id));
               ops = (NOM.leer(k, []) || []).filter((o) => !enviados.has(o.id));
               NOM.guardar(k, ops);
@@ -146,8 +146,8 @@
       }
     });
     // --- texto letra por letra: por párrafo
-    const porBloque = {};
-    mios.filter((o) => o.s).forEach((o) => (porBloque[o.bloque] = porBloque[o.bloque] || []).push(o));
+    const porBloque = Object.create(null);
+    mios.filter((o) => o.s).forEach((o) => { if (typeof o.bloque === "string") (porBloque[o.bloque] = porBloque[o.bloque] || []).push(o); });
     for (const b in porBloque) {
       const reg = remoto.seq && remoto.seq[b];
       if (!reg) continue;
@@ -190,17 +190,19 @@
   async function mostrar(ed, resumen) {
     // Quién es cada nodo: la bitácora dice qué persona usaba cada pestaña (cliente).
     const nombres = new Map();
-    try { (await api().get(`/api/documentos/${ed.id}/actividad`)).forEach((a) => { if (a.cliente && !nombres.has(a.cliente)) nombres.set(a.cliente, a.usuario); }); } catch (e) { /* sin nombres */ }
+    try { (await api().get(`/api/documentos/${encodeURIComponent(ed.id)}/actividad`)).forEach((a) => { if (a.cliente && !nombres.has(a.cliente)) nombres.set(a.cliente, a.usuario); }); } catch (e) { /* sin nombres */ }
     (ed.presencia || []).forEach((p) => { if (p.cliente && !nombres.has(p.cliente)) nombres.set(p.cliente, p.nombre); });
     const quien = (n) => nombres.get(n) || "Otra persona";
     const lista = (ns) => { const l = [...new Set(ns.map(quien))]; return l.length > 1 ? l.slice(0, -1).join(", ") + " y " + l[l.length - 1] : l[0]; };
     const F = NOM.formulas;
+    const DOC_CAMPOS = { nombre: "el nombre del documento", paginas: "el orden de las páginas" };
+    const TIPOS_BL = { forma: "la figura", texto: "el cuadro de texto", imagen: "la imagen", tabla: "la tabla", comentario: "un comentario" };
     const cosa = (x) => {
-      if (x.bloque === "_doc") return { nombre: "el nombre del documento", paginas: "el orden de las páginas" }[x.campo] || "el documento";
+      if (x.bloque === "_doc") return Object.prototype.hasOwnProperty.call(DOC_CAMPOS, x.campo) ? DOC_CAMPOS[x.campo] : "el documento";
       if (/^c:/.test(x.campo)) return "la celda " + x.campo.slice(2);
       const b = ed.doc.bloque(x.bloque) || {};
       const t = (b.texto || (b.html && NOM.formatos.textoPlano(b.html)) || "").trim();
-      return ({ forma: "la figura", texto: "el cuadro de texto", imagen: "la imagen", tabla: "la tabla", comentario: "un comentario" }[b.tipo] || "un elemento") + (t ? ` «${t.slice(0, 30)}»` : "");
+      return (Object.prototype.hasOwnProperty.call(TIPOS_BL, b.tipo) ? TIPOS_BL[b.tipo] : "un elemento") + (t ? ` «${t.slice(0, 30)}»` : "");
     };
     const filas = resumen.slice(0, 30).map((x) => {
       if (x.tipo === "parrafo") {

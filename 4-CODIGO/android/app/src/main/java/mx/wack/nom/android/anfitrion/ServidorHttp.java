@@ -94,22 +94,81 @@ final class ServidorHttp {
 
     // ------------------------------------------------------------------ peticiones
 
+    static final class ErrorHttp extends IOException {
+        final int codigo;
+        ErrorHttp(int codigo, String mensaje) { super(mensaje); this.codigo = codigo; }
+    }
+
     static final class Peticion {
         String metodo, ruta, version;
         final Map<String, String> cabeceras = new LinkedHashMap<>();
         final Map<String, String> consulta = new LinkedHashMap<>();
         byte[] cuerpo = new byte[0];
+        private InputStream entrada;
+        int largoCuerpo;
+        private boolean cuerpoLeido;
+        boolean cuerpoConsumido;
+        boolean falloLectura;
         /** Dirección de red de quien llama (null si es este mismo teléfono): para los límites contra el abuso. */
         String origen;
 
         String cabecera(String nombre) { return cabeceras.get(nombre.toLowerCase(Locale.ROOT)); }
 
+        byte[] leerCuerpo(int maxBytes) {
+            if (cuerpoLeido) return cuerpo;
+            cuerpoLeido = true;
+            if (largoCuerpo <= 0) {
+                cuerpoConsumido = true;
+                cuerpo = new byte[0];
+                return cuerpo;
+            }
+            if (largoCuerpo > maxBytes) {
+                throw new mx.wack.nom.core.servicio.ErrorNom(mx.wack.nom.core.servicio.ErrorNom.LLENO, "La petición pasa del tamaño permitido");
+            }
+            int kb = (largoCuerpo + 1023) / 1024;
+            boolean turno;
+            try { turno = EN_VUELO.tryAcquire(kb, 15, java.util.concurrent.TimeUnit.SECONDS); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); turno = false; }
+            if (!turno) {
+                throw new mx.wack.nom.core.servicio.ErrorNom(mx.wack.nom.core.servicio.ErrorNom.DEMASIADOS, "El servidor está ocupado, intenta en un momento");
+            }
+            try {
+                byte[] datos = new byte[largoCuerpo];
+                int leido = 0;
+                // (el cuerpo también con plazo: 20 s y uno más por cada MB que dice traer)
+                long hastaCuerpo = System.currentTimeMillis() + 20_000 + (largoCuerpo >> 20) * 1_000L;
+                while (leido < largoCuerpo) {
+                    if (System.currentTimeMillis() > hastaCuerpo) {
+                        falloLectura = true;
+                        throw new mx.wack.nom.core.servicio.ErrorNom(408, "La petición tardó demasiado");
+                    }
+                    int k = entrada.read(datos, leido, Math.min(64 * 1024, largoCuerpo - leido));
+                    if (k < 0) {
+                        falloLectura = true;
+                        throw new mx.wack.nom.core.servicio.ErrorNom(400, "Cuerpo incompleto");
+                    }
+                    leido += k;
+                }
+                cuerpo = datos;
+                cuerpoConsumido = true;
+                return cuerpo;
+            } catch (IOException e) {
+                falloLectura = true;
+                throw new mx.wack.nom.core.servicio.ErrorNom(400, "No se pudo leer la petición");
+            } finally {
+                EN_VUELO.release(kb);
+            }
+        }
+
         /** El cuerpo como JSON (mapa, lista…), o null si vino vacío. */
-        Object json() {
-            if (cuerpo.length == 0) return null;
-            String t = new String(cuerpo, StandardCharsets.UTF_8).trim();
+        Object json(int maxBytes) {
+            byte[] b = leerCuerpo(maxBytes);
+            if (b.length == 0) return null;
+            String t = new String(b, StandardCharsets.UTF_8).trim();
             return t.isEmpty() ? null : Json.YO.leer(t);
         }
+
+        Object json() { return json(256 * 1024); }
 
         boolean mantener() {
             String c = cabecera("connection");
@@ -165,6 +224,27 @@ final class ServidorHttp {
         try { return URLDecoder.decode(s, "UTF-8"); } catch (Exception e) { return s; }
     }
 
+    /** Decodifica %XX en una ruta sin convertir '+' en espacio (RFC 3986). */
+    private static String decodificarRuta(String s) throws ErrorHttp {
+        if (s.indexOf('%') < 0) return s;
+        ByteArrayOutputStream out = new ByteArrayOutputStream(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '%') {
+                if (i + 2 >= s.length()) throw new ErrorHttp(400, "Petición no válida");
+                int hi = Character.digit(s.charAt(i + 1), 16);
+                int lo = Character.digit(s.charAt(i + 2), 16);
+                if (hi < 0 || lo < 0) throw new ErrorHttp(400, "Petición no válida");
+                out.write((hi << 4) | lo);
+                i += 2;
+            } else {
+                byte[] b = String.valueOf(c).getBytes(StandardCharsets.UTF_8);
+                out.write(b, 0, b.length);
+            }
+        }
+        return new String(out.toByteArray(), StandardCharsets.UTF_8);
+    }
+
     private static Peticion leer(InputStream in) throws IOException {
         // (la espera entre peticiones de una misma conexión la corta el SO_TIMEOUT; una vez que empieza a llegar algo,
         // toda la petición tiene 20 s: una conexión que manda un byte cada tanto no ocupa un lugar para siempre)
@@ -172,18 +252,23 @@ final class ServidorHttp {
         String inicio = linea(in, hasta0);
         int vacias = 0;
         while (inicio != null && inicio.isEmpty()) {
-            if (++vacias > 8) throw new IOException("Petición no válida");
+            if (++vacias > 8) throw new ErrorHttp(400, "Petición no válida");
             inicio = linea(in, System.currentTimeMillis() + 20_000);
         }
         if (inicio == null) return null;
         String[] partes = inicio.split(" ");
-        if (partes.length < 3) throw new IOException("Petición no válida");
+        if (partes.length != 3) throw new ErrorHttp(400, "Petición no válida");
         Peticion p = new Peticion();
         p.metodo = partes[0].toUpperCase(Locale.ROOT);
         p.version = partes[2];
+        if (!"HTTP/1.1".equals(p.version) && !"HTTP/1.0".equals(p.version)) throw new ErrorHttp(400, "Petición no válida");
         String destino = partes[1];
+        if (!destino.startsWith("/")) throw new ErrorHttp(400, "Petición no válida");
         int q = destino.indexOf('?');
-        p.ruta = decodificar(q < 0 ? destino : destino.substring(0, q));
+        String rutaCruda = q < 0 ? destino : destino.substring(0, q);
+        if (!mx.wack.nom.core.servicio.Hosts.rutaValida(rutaCruda)) throw new ErrorHttp(400, "Petición no válida");
+        p.ruta = decodificarRuta(rutaCruda);
+        if (!mx.wack.nom.core.servicio.Hosts.rutaValida(p.ruta)) throw new ErrorHttp(400, "Petición no válida");
         if (q >= 0) {
             for (String par : destino.substring(q + 1).split("&")) {
                 if (par.isEmpty()) continue;
@@ -192,41 +277,32 @@ final class ServidorHttp {
             }
         }
         String l;
+        int nCabeceras = 0;
         long hasta = System.currentTimeMillis() + 20_000;
         while ((l = linea(in, hasta)) != null && !l.isEmpty()) {
-            if (System.currentTimeMillis() > hasta) throw new IOException("Petición demasiado lenta");
+            if (System.currentTimeMillis() > hasta) throw new ErrorHttp(408, "Petición demasiado lenta");
+            if (++nCabeceras > 100) throw new ErrorHttp(400, "Demasiadas cabeceras");
             int i = l.indexOf(':');
-            if (i > 0) p.cabeceras.put(l.substring(0, i).trim().toLowerCase(Locale.ROOT), l.substring(i + 1).trim());
-            if (p.cabeceras.size() > 100) throw new IOException("Demasiadas cabeceras");
+            if (i <= 0) throw new ErrorHttp(400, "Petición no válida");
+            String k = l.substring(0, i).trim().toLowerCase(Locale.ROOT);
+            String v = l.substring(i + 1).trim();
+            if ("transfer-encoding".equals(k)) throw new ErrorHttp(501, "Transferencia no admitida");
+            if (("content-length".equals(k) || "host".equals(k)) && p.cabeceras.containsKey(k)) {
+                throw new ErrorHttp(400, "Cabecera duplicada");
+            }
+            p.cabeceras.put(k, v);
         }
+        if ("HTTP/1.1".equals(p.version) && p.cabecera("host") == null) throw new ErrorHttp(400, "Falta cabecera Host");
         String largo = p.cabecera("content-length");
         if (largo != null) {
-            int n;
-            try { n = Integer.parseInt(largo.trim()); } catch (NumberFormatException e) { throw new IOException("Petición no válida"); }
-            if (n < 0 || n > MAX_CUERPO) throw new IOException("Cuerpo demasiado grande");
-            // Se aparta lo que dice que va a mandar y se lee conforme llega (no se reserva todo de una vez).
-            int kb = (n + 1023) / 1024;
-            boolean turno;
-            try { turno = EN_VUELO.tryAcquire(kb, 15, java.util.concurrent.TimeUnit.SECONDS); }
-            catch (InterruptedException e) { Thread.currentThread().interrupt(); turno = false; }
-            if (!turno) throw new IOException("Ocupado");
-            try {
-                ByteArrayOutputStream b = new ByteArrayOutputStream(Math.min(n, 64 * 1024));
-                byte[] buf = new byte[Math.min(Math.max(n, 1), 64 * 1024)];
-                int leido = 0;
-                // (el cuerpo también con plazo: 20 s y uno más por cada MB que dice traer)
-                long hastaCuerpo = System.currentTimeMillis() + 20_000 + (n >> 20) * 1_000L;
-                while (leido < n) {
-                    if (System.currentTimeMillis() > hastaCuerpo) throw new IOException("Petición demasiado lenta");
-                    int k = in.read(buf, 0, Math.min(buf.length, n - leido));
-                    if (k < 0) throw new IOException("Cuerpo incompleto");
-                    b.write(buf, 0, k);
-                    leido += k;
-                }
-                p.cuerpo = b.toByteArray();
-            } finally {
-                EN_VUELO.release(kb);
-            }
+            long n;
+            try { n = Long.parseLong(largo.trim()); } catch (NumberFormatException e) { throw new ErrorHttp(400, "Petición no válida"); }
+            if (n < 0) throw new ErrorHttp(400, "Petición no válida");
+            if (n > MAX_CUERPO) throw new ErrorHttp(413, "Cuerpo demasiado grande");
+            p.largoCuerpo = (int) n;
+            p.entrada = in;
+        } else {
+            p.cuerpoConsumido = true;
         }
         return p;
     }
@@ -241,7 +317,12 @@ final class ServidorHttp {
             OutputStream out = sock.getOutputStream();
             while (true) {
                 Peticion p;
-                try { p = leer(in); } catch (java.net.SocketTimeoutException e) { return; }
+                try { p = leer(in); }
+                catch (java.net.SocketTimeoutException e) { return; }
+                catch (ErrorHttp e) {
+                    responder(out, e.codigo, "application/json;charset=UTF-8", Json.YO.escribir(Map.of("error", e.getMessage())), false, cors(null), CSP, false);
+                    return;
+                }
                 if (p == null) return;
                 java.net.InetAddress de = sock.getInetAddress();
                 p.origen = de == null || de.isLoopbackAddress() ? null : de.getHostAddress();
@@ -262,13 +343,15 @@ final class ServidorHttp {
             return false;
         }
         if ("OPTIONS".equals(p.metodo)) {
+            if (p.largoCuerpo > 0) mantener = false;
             responder(out, 204, null, null, mantener, cors);
             return mantener;
         }
         if (p.ruta.startsWith("/api/")) {
             Respuesta r = api.atender(p);
+            if (p.falloLectura || (p.largoCuerpo > 0 && !p.cuerpoConsumido)) mantener = false;
             if (r.binario != null) {
-                responder(out, r.codigo, r.tipo, r.binario, mantener, cors);
+                responder(out, r.codigo, r.tipo, r.binario, mantener, cors, CSP, true);
                 return mantener;
             }
             if (r.canal == null) {
@@ -279,6 +362,7 @@ final class ServidorHttp {
             canalEnVivo(r, in, out, sock, cors);
             return false;
         }
+        if (p.largoCuerpo > 0) mantener = false;
         estatico(p, out, mantener);
         return mantener;
     }
@@ -373,11 +457,14 @@ final class ServidorHttp {
             case 401: return "Unauthorized";
             case 403: return "Forbidden";
             case 404: return "Not Found";
+            case 408: return "Request Timeout";
             case 409: return "Conflict";
             case 413: return "Payload Too Large";
             case 421: return "Misdirected Request";
             case 423: return "Locked";
             case 429: return "Too Many Requests";
+            case 501: return "Not Implemented";
+            case 503: return "Service Unavailable";
             default: return c >= 500 ? "Internal Server Error" : "OK";
         }
     }
@@ -406,20 +493,25 @@ final class ServidorHttp {
     static final String CSP = "Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
             + "img-src 'self' data: blob: https: http:; font-src 'self' data:; media-src 'self' data: blob:; "
             + "connect-src 'self' https: http:; worker-src 'self'; manifest-src 'self'; object-src 'none'; "
-            + "base-uri 'self'; form-action 'self'; frame-ancestors 'self'\r\n";
+            + "base-uri 'none'; form-action 'self'; frame-ancestors 'self'\r\n";
 
     /** La de la página principal: además, todo HTML pasa por la política «default» de js/nucleo.js (Trusted Types). */
     static final String CSP_PRINCIPAL = CSP.replace("\r\n", "; require-trusted-types-for 'script'; trusted-types default\r\n");
 
     /** cors: las cabeceras CORS de una respuesta de la API (cors(origen)), o null para la página. */
     private static void responder(OutputStream out, int codigo, String tipo, byte[] cuerpo, boolean mantener, String cors) throws IOException {
-        responder(out, codigo, tipo, cuerpo, mantener, cors, CSP);
+        responder(out, codigo, tipo, cuerpo, mantener, cors, CSP, false);
+    }
+
+    private static void responder(OutputStream out, int codigo, String tipo, byte[] cuerpo, boolean mantener, String cors, String csp) throws IOException {
+        responder(out, codigo, tipo, cuerpo, mantener, cors, csp, false);
     }
 
     /** csp: la política de contenido de una página (CSP, o CSP_PRINCIPAL para la de la app); la API no la lleva. */
-    private static void responder(OutputStream out, int codigo, String tipo, byte[] cuerpo, boolean mantener, String cors, String csp) throws IOException {
+    private static void responder(OutputStream out, int codigo, String tipo, byte[] cuerpo, boolean mantener, String cors, String csp, boolean adjunto) throws IOException {
         StringBuilder h = new StringBuilder("HTTP/1.1 ").append(codigo).append(' ').append(razon(codigo)).append("\r\n");
         if (tipo != null) h.append("Content-Type: ").append(tipo).append("\r\n");
+        if (adjunto) h.append("Content-Disposition: attachment\r\n");
         h.append("Content-Length: ").append(cuerpo == null ? 0 : cuerpo.length).append("\r\n");
         // La API nunca va a la caché del navegador (igual que FiltroCabeceras); la página sí puede, revalidando.
         h.append(cors != null ? "Cache-Control: no-store\r\n" : "Cache-Control: no-cache\r\n");

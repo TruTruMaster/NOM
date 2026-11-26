@@ -64,8 +64,14 @@ public class RepositorioBinariosArchivos implements RepositorioBinarios {
             byte[] sale = cifrado.activo() ? cifrado.cifrar(datos, false, datos.length, relativa(espacioId, huella)) : datos;
             // (termina en .tmp: la migración a cifrado de AlmacenJson no lo toca mientras se escribe)
             Path tmp = f.resolveSibling(huella + "." + Long.toHexString(System.nanoTime()) + ".tmp");
-            Files.write(tmp, sale);
-            Files.move(tmp, f, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            try {
+                Files.write(tmp, sale);
+                try { Files.move(tmp, f, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
+                catch (java.nio.file.AtomicMoveNotSupportedException ex) { Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING); }
+            } catch (IOException e) {
+                try { Files.deleteIfExists(tmp); } catch (IOException ignorado) { }
+                throw e;
+            }
             bytesCache.remove(espacioId);
         } catch (IOException e) { throw new UncheckedIOException("No se pudo guardar el archivo", e); }
     }

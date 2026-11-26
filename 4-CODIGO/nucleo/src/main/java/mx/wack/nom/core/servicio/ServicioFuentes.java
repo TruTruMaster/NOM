@@ -57,12 +57,19 @@ public class ServicioFuentes {
     private final CodecJson json;
     private final Cifrado cifrado;
     private final Map<String, long[]> usos = new ConcurrentHashMap<>();
+    private volatile ServicioDocumentos cuota;
 
     public ServicioFuentes(ServicioEspacios espacios, RepositorioEspacios repo, CodecJson json, Cifrado cifrado) {
         this.espacios = espacios;
         this.repo = repo;
         this.json = json;
         this.cifrado = cifrado;
+    }
+
+    /** Cuenta la biblioteca del espacio en la cuota del propietario (como ServicioChat). */
+    public void usarCuota(ServicioDocumentos documentos) {
+        this.cuota = documentos;
+        if (documentos != null) documentos.contarBiblioteca(repo::bytesBiblioteca);
     }
 
     // ------------------------------------------------------------ lectura segura
@@ -75,6 +82,7 @@ public class ServicioFuentes {
 
     private void limitar(Usuario u) {
         long ahora = System.currentTimeMillis();
+        if (usos.size() > 5_000) usos.entrySet().removeIf(e -> ahora - e.getValue()[0] > 60_000);
         long[] c = usos.computeIfAbsent(u.id, k -> new long[] { ahora, 0 });
         synchronized (c) {
             if (ahora - c[0] > 60_000) { c[0] = ahora; c[1] = 0; }
@@ -97,7 +105,7 @@ public class ServicioFuentes {
             if (x == 198 && (y == 18 || y == 19)) return false;
             if (x == 198 && y == 51 && (b[2] & 255) == 100) return false;
             if (x == 203 && y == 0 && (b[2] & 255) == 113) return false;
-            return true;
+            return !dePropiaRed(b);
         }
         if (a instanceof Inet6Address) {
             if ((b[0] & 0xfe) == 0xfc) return false;                                 // fc00::/7 (privadas)
@@ -110,9 +118,60 @@ public class ServicioFuentes {
                 try { return esPublica(InetAddress.getByAddress(Arrays.copyOfRange(b, 12, 16))); } catch (UnknownHostException e) { return false; }
             }
             if ((b[0] & 255) == 0x00 && (b[1] & 255) == 0x64 && (b[2] & 255) == 0xff && (b[3] & 255) == 0x9b) return false;   // 64:ff9b:: (NAT64)
-            return true;
+            if ((b[0] & 255) == 0x20 && (b[1] & 255) == 0x02) return false;                                                    // 2002::/16 (6to4)
+            return !dePropiaRed(b);
         }
         return false;
+    }
+
+    /*
+     * Una IPv6 «de Internet» también puede ser de la red donde está este servidor: en una casa o un salón con IPv6 cada
+     * equipo (y este mismo) tiene una dirección global de la misma red /64. Esas, y las direcciones propias de este
+     * equipo, cuentan como red interna. Las redes se leen de las interfaces y se vuelven a leer cada minuto.
+     */
+    private static volatile List<byte[]> redesPropias = List.of();
+    private static volatile long redesLeidas;
+
+    static boolean dePropiaRed(byte[] ip) {
+        long ahora = System.currentTimeMillis();
+        if (ahora - redesLeidas > 60_000) { redesPropias = leerRedesPropias(); redesLeidas = ahora; }
+        for (byte[] red : redesPropias) {
+            int bits = red[red.length - 1] & 255;
+            if (red.length - 1 != ip.length) continue;
+            boolean igual = true;
+            for (int i = 0; i < bits && igual; i++) {
+                int m = 0x80 >>> (i % 8);
+                if ((red[i / 8] & m) != (ip[i / 8] & m)) igual = false;
+            }
+            if (igual) return true;
+        }
+        return false;
+    }
+
+    /** Cada dirección de este equipo como red: la IPv4 tal cual (y su red si es pública) y las IPv6 con su /64. */
+    private static List<byte[]> leerRedesPropias() {
+        List<byte[]> r = new ArrayList<>();
+        try {
+            java.util.Enumeration<java.net.NetworkInterface> it = java.net.NetworkInterface.getNetworkInterfaces();
+            while (it != null && it.hasMoreElements()) {
+                java.net.NetworkInterface ni = it.nextElement();
+                for (java.net.InterfaceAddress ia : ni.getInterfaceAddresses()) {
+                    InetAddress a = ia.getAddress();
+                    if (a == null) continue;
+                    byte[] b = a.getAddress();
+                    int largo = ia.getNetworkPrefixLength();
+                    int bits = b.length * 8;
+                    if (a instanceof Inet6Address) bits = (largo > 0 && largo < 64) ? largo : 64;
+                    else if (largo >= 16 && largo < 32) bits = largo;
+                    byte[] red = Arrays.copyOf(b, b.length + 1);
+                    red[b.length] = (byte) bits;
+                    r.add(red);
+                }
+            }
+        } catch (Exception | Error e) {
+            // Sin poder leer las interfaces se queda solo con las reglas fijas de arriba.
+        }
+        return List.copyOf(r);
     }
 
     private static ErrorNom interna() {
@@ -755,7 +814,10 @@ public class ServicioFuentes {
 
     /** Guarda una fuente (y, si se quiere, su texto) para que el equipo la consulte aunque no haya Internet. */
     public synchronized Map<String, Object> guardarEnBiblioteca(Usuario u, String espacioId, Map<String, Object> cuerpo) {
-        espacios.exigir(espacios.requerir(espacioId), u, Permiso.EDICION);
+        mx.wack.nom.core.modelo.Espacio e = espacios.requerir(espacioId);
+        espacios.exigir(e, u, Permiso.EDICION);
+        ServicioDocumentos q = cuota;
+        if (q != null) q.revisarCuotaDe(e);
         Map<String, Object> f = limpiarFuente(cuerpo == null ? null : cuerpo.get("fuente"));
         String texto = cuerpo.get("texto") == null ? null : String.valueOf(cuerpo.get("texto"));
         if (texto != null && texto.length() > MAX_TEXTO) texto = texto.substring(0, MAX_TEXTO);
@@ -767,6 +829,7 @@ public class ServicioFuentes {
                 it.put("fuente", f);
                 if (texto != null && !texto.isBlank()) it.put("texto", texto);
                 repo.guardarBiblioteca(espacioId, l);
+                if (q != null) q.olvidarUso(e.propietarioId);
                 return sinTexto(it);
             }
         }
@@ -779,15 +842,19 @@ public class ServicioFuentes {
         it.put("t", System.currentTimeMillis());
         l.add(0, it);
         repo.guardarBiblioteca(espacioId, l);
+        if (q != null) q.olvidarUso(e.propietarioId);
         log.detalle("Biblioteca de {}: {} fuentes", espacioId, l.size());
         return sinTexto(it);
     }
 
     public synchronized Map<String, Object> quitarDeBiblioteca(Usuario u, String espacioId, String id) {
-        espacios.exigir(espacios.requerir(espacioId), u, Permiso.EDICION);
+        mx.wack.nom.core.modelo.Espacio e = espacios.requerir(espacioId);
+        espacios.exigir(e, u, Permiso.EDICION);
         List<Map<String, Object>> l = new ArrayList<>(repo.biblioteca(espacioId));
         if (!l.removeIf(it -> String.valueOf(it.get("id")).equals(id))) throw ErrorNom.noEncontrado("Esa fuente");
         repo.guardarBiblioteca(espacioId, l);
+        ServicioDocumentos q = cuota;
+        if (q != null) q.olvidarUso(e.propietarioId);
         return Map.of("ok", true);
     }
 

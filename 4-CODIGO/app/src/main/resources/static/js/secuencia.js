@@ -22,14 +22,15 @@
   // Nombres que no pueden ser de un atributo (son parte de todos los objetos), y lo más que puede abarcar una
   // operación de mostrar/ocultar o de formato: lo mismo que acepta el servidor (core/crdt/Secuencia.java).
   const RESERVADO = new Set(["__proto__", "constructor", "prototype"]);
+  const propio = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
   const MAX_ALCANCE = 4000000;
   const rangosValidos = (r) => {
     if (!Array.isArray(r) || r.length > 5000) return false;
     let total = 0;
     for (const x of r) {
-      if (!Array.isArray(x) || x.length !== 3 || typeof x[0] !== "string" || !Number.isFinite(x[1]) || !Number.isFinite(x[2])) return false;
+      if (!Array.isArray(x) || x.length !== 3 || typeof x[0] !== "string" || !Number.isSafeInteger(x[1]) || !Number.isSafeInteger(x[2])) return false;
       if (x[0] === FIN) continue;
-      if (x[1] < 0 || x[2] < x[1]) return false;
+      if (x[1] < 0 || x[2] < x[1] || x[2] >= Number.MAX_SAFE_INTEGER) return false;
       total += x[2] - x[1] + 1;
       if (total > MAX_ALCANCE) return false;
     }
@@ -90,7 +91,7 @@
         const t = r.t + i;
         const it = { id: clave(t, r.n), t, n: r.n, c, iz: i === 0 ? (r.iz || null) : clave(t - 1, r.n), v: true, vt: t, vn: r.n, f: null };
         if (r.e) it.e = r.e;
-        if (r.a) { it.f = {}; for (const k in r.a) if (!RESERVADO.has(k)) it.f[k] = [r.a[k], t, r.n]; }
+        if (r.a) { it.f = {}; for (const k in r.a) if (propio(r.a, k) && !RESERVADO.has(k)) it.f[k] = [r.a[k], t, r.n]; }
         return it;
       });
     }
@@ -164,8 +165,8 @@
       }
       let cambio = false;
       for (const k in o.a) {
-        if (RESERVADO.has(k)) continue;
-        const reg = it.f && it.f[k];
+        if (!propio(o.a, k) || RESERVADO.has(k)) continue;
+        const reg = it.f && propio(it.f, k) ? it.f[k] : null;
         if (!gana(o.t, o.n, reg)) continue;
         if (!it.f) it.f = {};
         if (!reg || !mismo(reg[0], o.a[k])) cambio = true;
@@ -219,7 +220,7 @@
     static attrs(it) {
       if (it._a) return it._a;
       const a = {};
-      if (it.f) for (const k in it.f) if (it.f[k][0] != null && it.f[k][0] !== false && it.f[k][0] !== "") a[k] = it.f[k][0];
+      if (it.f) for (const k in it.f) if (propio(it.f, k) && it.f[k][0] != null && it.f[k][0] !== false && it.f[k][0] !== "") a[k] = it.f[k][0];
       it._a = a;
       return a;
     }

@@ -11,11 +11,12 @@
   const { esc, ico, html, $, $$, aviso, hoja, confirmar } = NOM;
   const api = () => NOM.api;
   const PERMISO = { EDICION: "Puede editar", LECTURA: "Solo puede ver" };
+  const permisoTxt = (p, def) => (Object.prototype.hasOwnProperty.call(PERMISO, p) ? PERMISO[p] : (def !== undefined ? def : p));
   const PENDIENTE = "nom.unirse.pendiente";
 
   const limpiarCodigo = (t) => String(t || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 
-  /** Lo que trae un QR o lo que se escribió: { tipo: "unirse"|"proyectar", codigo, origen? } */
+  /** Lo que trae un QR o lo que se escribió: { tipo: "unirse"|"proyectar", codigo, origen?, llave? } */
   function leer(texto) {
     let t = String(texto || "").trim();
     // DEF-49: un enlace de invitación pegado sin «https://» (como llega en algunos mensajes) también vale
@@ -23,15 +24,13 @@
     try {
       const u = new URL(t);
       // Fase 15: un espacio cifrado lleva su llave después del # (#k=…), que nunca llega al servidor.
-      const k = (/[#&]k=([A-Za-z0-9_-]{40,})/.exec(u.hash) || [])[1];
-      const cod = u.searchParams.get("c");
-      if (k && cod && NOM.e2e) NOM.e2e.recordarInvitacion(limpiarCodigo(cod), k);
-      if (/^https?:$/.test(u.protocol)) {
-        const m = /\/(unirse|proyectar)\/?$/.exec(u.pathname);
+      const k = (/[#&]k=([A-Za-z0-9_-]{40,})/.exec(u.hash) || [])[1] || null;
+      if (/^https?:$/.test(u.protocol) && !u.username && !u.password) {
+        const m = /^\/(unirse|proyectar)\/?$/.exec(u.pathname);
         const c = u.searchParams.get("c") || (/#\/(unirse|proyectar)\/([^/?]+)/.exec(u.hash) || [])[2];
         const tipo = m ? m[1] : (/#\/(unirse|proyectar)\//.exec(u.hash) || [])[1];
-        if (tipo && c) return { tipo, codigo: limpiarCodigo(c), origen: u.origin, url: u.href };
-        return { tipo: null, origen: u.origin, url: u.href };
+        if (tipo && c) return { tipo, codigo: limpiarCodigo(c), origen: u.origin, url: u.href, llave: k };
+        return { tipo: null, origen: u.origin, url: u.href, llave: k };
       }
     } catch (e) { /* no es una dirección: es el código */ }
     const c = limpiarCodigo(t);
@@ -60,20 +59,26 @@
     if (!r.tipo || !r.codigo) return aviso("Ese código QR no es de un espacio de NOM", { tipo: "error" });
     if (api().empaquetada) {
       if (r.origen && !api().mismoServidor(r.origen, api().servidor())) {
-        if (api().token() && !(await confirmar("Otro lugar", `Ese código es de ${r.origen.replace(/^https?:\/\//, "")}. La app se conectará ahí (tus documentos no se tocan; para volver, elige otra vez dónde trabajas).`, { si: "Conectar" }))) return;
+        const nombreDestino = r.origen.replace(/^https?:\/\//, "");
+        if (!(await confirmar("Otro lugar", `Ese código es de ${nombreDestino}. La app se conectará ahí (tus documentos no se tocan; para volver, elige otra vez dónde trabajas).`, { si: "Conectar" }))) return;
         if (api().token()) {
           // Si era la sesión de la nube, se guarda: sirve para entrar al teléfono con la misma cuenta
           // (pase) y para volver a la nube sin escribir la contraseña.
           const nube = NOM.acceso && NOM.acceso.guardarSesionNube();
           try { await NOM.boveda.cerrar(!nube); } catch (e) { /* sin bóveda */ }
+          if (NOM.e2e && NOM.e2e.limpiar) NOM.e2e.limpiar();
+          if (NOM.binarios && NOM.binarios.limpiar) NOM.binarios.limpiar(false);
           api().limpiarSesion();
         }
         api().fijarServidor(r.origen);
       }
     } else if (r.origen && !api().mismoServidor(r.origen, location.origin)) {
+      const nombreDestino = r.origen.replace(/^https?:\/\//, "");
+      if (!(await confirmar("Otro lugar", `Ese código lleva a ${nombreDestino}, que es otro servidor distinto a este. ¿Quieres abrirlo?`, { si: "Abrir" }))) return;
       location.href = r.url;
       return;
     }
+    if (r.llave && NOM.e2e) NOM.e2e.recordarInvitacion(r.codigo, r.llave);
     location.hash = `#/${r.tipo}/${encodeURIComponent(r.codigo)}`;
   }
 
@@ -142,9 +147,9 @@
         ${mismo ? `<p class="suave chico" style="text-align:center"><a href="#" data-otro-alias>Quiero otro alias</a></p>` : ""}` : "";
     t.innerHTML = `<div class="col">
       <div class="fila" style="gap:14px;align-items:center">
-        <span class="icono-espacio grande" style="background:${esc(info.color || "#7AA7FF")}">${esc((info.espacio || "?").trim()[0].toUpperCase())}</span>
+        <span class="icono-espacio grande" style="background:${NOM.colorHex(info.color, "#7AA7FF")}">${esc((((info.espacio || "").trim())[0] || "?").toUpperCase())}</span>
         <div class="crece"><span class="etiqueta">Te invitan a</span><h2 style="margin-top:2px">${esc(info.espacio)}</h2>
-          <span class="suave chico" style="font-weight:500">de ${esc(info.propietario)} · ${esc(PERMISO[info.permiso] || info.permiso)} · el código sirve hasta el ${esc(new Date(info.caduca).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}</span></div>
+          <span class="suave chico" style="font-weight:500">de ${esc(info.propietario)} · ${esc(permisoTxt(info.permiso))} · el código sirve hasta el ${esc(new Date(info.caduca).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}</span></div>
       </div>
       ${info.e2e ? `<div class="alerta ${info.sinLlave ? "aviso" : "info"} chico">${ico("lock-keyhole")}<span>Espacio <b>cifrado de extremo a extremo</b>.${info.sinLlave ? " Este código no trae la llave: entra con el QR o la dirección completa, o pide a alguien del espacio que lo abra después." : " La llave viene en el código QR y no pasa por el servidor."}</span></div>` : ""}
       ${telefono ? `<div class="alerta info chico">${ico("smartphone")}<span>Este espacio está en un <b>teléfono que comparte</b>, sin Internet. Aquí no se crean cuentas: entra con un alias, o con tu cuenta si este equipo tiene Internet.</span>${NOM.botonAyuda("sin-internet/alias", "Alias al azar")}</div>` : ""}
@@ -181,7 +186,12 @@
     const conAlias = async (otro, b) => {
       b.disabled = true;
       try {
-        if (api().token()) { try { await NOM.boveda.cerrar(); } catch (x) { /* sin bóveda */ } api().limpiarSesion(); }
+        if (api().token()) {
+          try { await NOM.boveda.cerrar(); } catch (x) { /* sin bóveda */ }
+          if (NOM.e2e && NOM.e2e.limpiar) NOM.e2e.limpiar();
+          if (NOM.binarios && NOM.binarios.limpiar) NOM.binarios.limpiar(false);
+          api().limpiarSesion();
+        }
         const r = await NOM.acceso.entrarConAlias(codigo, { otro, espacioId: info.espacioId });
         aviso(r.nuevo ? `Entraste como ${r.usuario.nombre}` : `Hola de nuevo, ${r.usuario.nombre}`, { tipo: "ok" });
         alEntrar(r, r.nuevo, r.espacio.id);
@@ -238,7 +248,7 @@
         <div class="qr-caja">${url ? NOM.qr.svg(url, { titulo: "Código QR para unirse a " + (esp.nombre || "") }) : `<div class="qr-sin">${ico("wifi-off")}</div>`}</div>
         <div class="col" style="gap:8px;min-width:0">
           <span class="etiqueta">Código</span><b class="qr-codigo">${esc(enlace.codigo.slice(0, 4))}-${esc(enlace.codigo.slice(4))}</b>
-          <span class="suave chico" style="font-weight:500">${esc(PERMISO[enlace.permiso] || "")}${enlace.invitados ? " · sin cuenta, con alias" : ""} · hasta ${esc(new Date(enlace.caduca).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}</span>
+          <span class="suave chico" style="font-weight:500">${esc(permisoTxt(enlace.permiso, ""))}${enlace.invitados ? " · sin cuenta, con alias" : ""} · hasta ${esc(new Date(enlace.caduca).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}</span>
           ${bs.length > 1 ? `<select class="mini-select" data-base aria-label="Dirección">${bs.map((b) => `<option ${b === base ? "selected" : ""}>${esc(b.replace(/^https?:\/\//, ""))}</option>`).join("")}</select>` : url ? `<span class="chico qr-url">${esc(url)}</span>` : ""}
           ${url ? "" : `<div class="alerta aviso chico">${ico("wifi-off")}<span>${api().lan === false
             ? "Para que el QR funcione, abre NOM con la dirección que usan los demás (la de Internet). Mientras, el código sí sirve escrito a mano."
@@ -303,27 +313,28 @@
       const ls = (d.enlaces || []).slice(0, 12);
       lista.innerHTML = ls.length ? `<span class="etiqueta">Códigos que ya creaste</span><div class="lista">${ls.map((x) => `
         <div class="lista-item"><span class="crece"><b style="font-family:var(--mono)">${esc(x.codigo.slice(0, 4))}-${esc(x.codigo.slice(4))}</b>
-          <small>${esc(PERMISO[x.permiso] || "")}${x.invitados ? " · sin cuenta" : ""} · ${x.estado === "vigente" ? "hasta " + esc(new Date(x.caduca).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })) : x.estado === "revocado" ? "anulado" : "venció"} · ${x.usos} ${x.usos === 1 ? "uso" : "usos"}</small></span>
+          <small>${esc(permisoTxt(x.permiso, ""))}${x.invitados ? " · sin cuenta" : ""} · ${x.estado === "vigente" ? "hasta " + esc(new Date(x.caduca).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })) : x.estado === "revocado" ? "anulado" : "venció"} · ${+x.usos || 0} ${+x.usos === 1 ? "uso" : "usos"}</small></span>
           ${x.estado === "vigente" ? `<button class="btn chico" data-ver="${esc(x.codigo)}">${ico("qr-code", "ico-s")} Ver</button><button class="btn chico peligro" data-revocar="${esc(x.codigo)}">Anular</button>` : `<span class="chip">${x.estado === "revocado" ? "Anulado" : "Venció"}</span>`}
         </div>`).join("")}</div>` : "";
       $$("[data-ver]", lista).forEach((b) => (b.onclick = () => tarjetaQr($("[data-qr]", cuerpo), ls.find((x) => x.codigo === b.dataset.ver), d.conexion, esp)));
       $$("[data-revocar]", lista).forEach((b) => (b.onclick = async () => {
         if (!(await confirmar("Anular el código", "Nadie más podrá entrar con ese código. Quienes ya entraron siguen dentro (si quieres, quítalos en Invitar → Miembros).", { si: "Anular", peligro: true }))) return;
-        try { pintarLista(await api().delete(`/api/espacios/${esp.id}/enlaces/${b.dataset.revocar}`)); $("[data-qr]", cuerpo).innerHTML = ""; aviso("Código anulado", { tipo: "ok" }); } catch (e) { aviso(e.message, { tipo: "error" }); }
+        try { pintarLista(await api().delete(`/api/espacios/${encodeURIComponent(esp.id)}/enlaces/${encodeURIComponent(b.dataset.revocar)}`)); $("[data-qr]", cuerpo).innerHTML = ""; aviso("Código anulado", { tipo: "ok" }); } catch (e) { aviso(e.message, { tipo: "error" }); }
       }));
     }
     $("[data-crear]", cuerpo).onclick = async (ev) => {
       const b = ev.currentTarget;
       b.disabled = true;
       try {
-        const x = await api().post(`/api/espacios/${esp.id}/enlaces`, { permiso, horas: +$("[data-horas]", cuerpo).value, invitados: $("[data-invitados]", cuerpo).checked });
+        const eid = encodeURIComponent(esp.id);
+        const x = await api().post(`/api/espacios/${eid}/enlaces`, { permiso, horas: +$("[data-horas]", cuerpo).value, invitados: $("[data-invitados]", cuerpo).checked });
         tarjetaQr($("[data-qr]", cuerpo), x, x.conexion, esp);
-        pintarLista(await api().get(`/api/espacios/${esp.id}/enlaces`));
+        pintarLista(await api().get(`/api/espacios/${eid}/enlaces`));
         if (NOM.hito) NOM.hito("qr");
       } catch (e) { aviso(e.message, { tipo: "error" }); }
       b.disabled = false;
     };
-    try { const d = await api().get(`/api/espacios/${esp.id}/enlaces`); if (!lista.childElementCount) pintarLista(d); } catch (e) { /* sin lista */ }
+    try { const d = await api().get(`/api/espacios/${encodeURIComponent(esp.id)}/enlaces`); if (!lista.childElementCount) pintarLista(d); } catch (e) { /* sin lista */ }
   }
 
   NOM.union = { esCodigo, leer, usar, escanear, desdeDireccion, pendiente, pantalla, invitar, grande, bases, limpiarCodigo };

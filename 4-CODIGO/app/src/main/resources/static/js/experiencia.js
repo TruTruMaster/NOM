@@ -20,9 +20,11 @@
   /** ¿Se usa con mouse? Así los consejos nombran el gesto que la persona sí tiene. */
   const conMouse = () => matchMedia("(hover: hover) and (pointer: fine)").matches;
   /** Marca algo que la persona ya hizo (probar la ruedita, ajustar la app…). */
+  const propio = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const iconoModo = (m) => (propio(MODO_ICONO, m) ? MODO_ICONO[m] : "file-text");
   NOM.hito = (nombre) => {
     const h = hitos();
-    if (h[nombre]) return;
+    if (propio(h, nombre) && h[nombre]) return;
     h[nombre] = Date.now();
     NOM.guardar(clave("hitos"), h);
     document.dispatchEvent(new CustomEvent("nom:hito", { detail: nombre }));
@@ -89,7 +91,7 @@
     if (!conCuenta()) return [];
     if (Date.now() - docsCache.t < 60000) return docsCache.lista;
     const espacios = (NOM.app && NOM.app.espacios) || [];
-    const listas = await Promise.all(espacios.slice(0, 12).map((e) => api().get(`/api/espacios/${e.id}/documentos`, undefined, { ms: 5000 })
+    const listas = await Promise.all(espacios.slice(0, 12).map((e) => api().get(`/api/espacios/${encodeURIComponent(e.id)}/documentos`, undefined, { ms: 5000 })
       .then((l) => (l || []).map((d) => ({ ...d, espacio: e.nombre }))).catch(() => [])));
     docsCache = { t: Date.now(), lista: listas.flat() };
     return docsCache.lista;
@@ -129,7 +131,7 @@
       l.push({ grupo: "Crear", texto: "Unirse a un espacio", icono: "qr-code", fn: () => NOM.vistaEspacios.unirse(), claves: "codigo qr invitacion entrar wifi buscar" });
       l.push({ grupo: "Crear", texto: "Unirse con código QR", icono: "qr-code", fn: () => NOM.union.escanear(), claves: "qr camara codigo salon escanear" });
       if (esp && esp.permiso === "PROPIETARIO") l.push({ grupo: "Crear", texto: `Invitar a ${esp.nombre} con código QR`, icono: "qr-code", fn: () => NOM.union.invitar(esp), claves: "qr invitar salon alumnos alias apodo sin cuenta" });
-      if (esp && esp.id && !ed) l.push({ grupo: "Crear", texto: `Exportar todo ${esp.nombre} (.zip)`, icono: "archive", fn: async () => NOM.vistaEspacios.exportarTodo(await api().get(`/api/espacios/${esp.id}`)), claves: "descargar office zip respaldo" });
+      if (esp && esp.id && !ed) l.push({ grupo: "Crear", texto: `Exportar todo ${esp.nombre} (.zip)`, icono: "archive", fn: async () => NOM.vistaEspacios.exportarTodo(await api().get(`/api/espacios/${encodeURIComponent(esp.id)}`)), claves: "descargar office zip respaldo" });
     } else {
       l.push({ grupo: "Crear", texto: "Nuevo documento (en este equipo)", icono: "file-plus", fn: nuevoDoc(null), claves: "crear documento nuevo" });
       l.push({ grupo: "Crear", texto: "Crear una cuenta", icono: "user-plus", fn: () => NOM.app.irACuentas("registro"), claves: "registrarse cuenta" });
@@ -140,9 +142,9 @@
     // Recientes primero; luego todos los documentos.
     const vistos = new Set();
     const recientes = conCuenta() ? NOM.leer(api().clave("recientes"), []) : [];
-    recientes.forEach((r) => { vistos.add(r.id); l.push({ grupo: "Recientes", texto: r.nombre || "Sin título", sub2: r.espacio, icono: MODO_ICONO[r.modo] || "file-text", fn: () => (location.hash = "#/doc/" + r.id), modo: r.modo }); });
-    (docs || []).forEach((d) => { if (!vistos.has(d.id)) l.push({ grupo: "Documentos", texto: d.nombre || "Sin título", sub2: d.espacio, icono: MODO_ICONO[d.modo] || "file-text", fn: () => (location.hash = "#/doc/" + d.id), modo: d.modo, oculto: true }); });
-    (NOM.local && NOM.local.lista ? NOM.local.lista() : []).forEach((d) => l.push({ grupo: "En este equipo", texto: d.nombre || "Sin título", sub2: "Solo en este equipo", icono: MODO_ICONO[d.modo] || "file-text", fn: () => (location.hash = "#/local/" + d.id), modo: d.modo, oculto: true }));
+    recientes.forEach((r) => { vistos.add(r.id); l.push({ grupo: "Recientes", texto: r.nombre || "Sin título", sub2: r.espacio, icono: iconoModo(r.modo), fn: () => (location.hash = "#/doc/" + r.id), modo: r.modo }); });
+    (docs || []).forEach((d) => { if (!vistos.has(d.id)) l.push({ grupo: "Documentos", texto: d.nombre || "Sin título", sub2: d.espacio, icono: iconoModo(d.modo), fn: () => (location.hash = "#/doc/" + d.id), modo: d.modo, oculto: true }); });
+    (NOM.local && NOM.local.lista ? NOM.local.lista() : []).forEach((d) => l.push({ grupo: "En este equipo", texto: d.nombre || "Sin título", sub2: "Solo en este equipo", icono: iconoModo(d.modo), fn: () => (location.hash = "#/local/" + d.id), modo: d.modo, oculto: true }));
     espacios.forEach((e) => l.push({ grupo: "Espacios", texto: e.nombre, sub2: `${e.documentos} documento${e.documentos === 1 ? "" : "s"} · ${e.miembros} persona${e.miembros === 1 ? "" : "s"}`, icono: "layout-grid", color: e.color, fn: () => (location.hash = "#/espacio/" + e.id), oculto: espacios.length > 5 }));
 
     l.push({ grupo: "Ir a", texto: "Inicio", icono: "house", fn: () => (location.hash = "#/"), claves: "principal home" });
@@ -199,7 +201,7 @@
       vistos.forEach((it, i) => {
         if (!q.trim() && it.grupo !== grupo) { grupo = it.grupo; h += `<div class="paleta-grupo">${esc(grupo)}</div>`; }
         h += `<button type="button" class="paleta-item ${i === activo ? "activo" : ""}" role="option" aria-selected="${i === activo}" data-i="${i}" style="--i:${Math.min(i, 12)}">
-          <span class="paleta-ico ${it.modo ? "modo-" + esc(it.modo) : ""}" ${it.color ? `style="background:${esc(it.color)};color:#fff"` : ""}>${ico(it.icono || "chevron-right")}</span>
+          <span class="paleta-ico ${it.modo ? "modo-" + esc(it.modo) : ""}" ${it.color ? `style="background:${NOM.colorHex(it.color)};color:#fff"` : ""}>${ico(it.icono || "chevron-right")}</span>
           <span class="crece recorta"><b>${esc(it.texto)}</b>${it.sub2 ? `<small>${esc(it.sub2)}</small>` : ""}</span>
           ${it.marcado ? ico("check", "ico-s") : ""}${it.atajo ? `<kbd>${esc(it.atajo)}</kbd>` : ""}${it.sub ? ico("chevron-right", "ico-s") : ""}</button>`;
       });
@@ -318,7 +320,7 @@
     DIAGRAMA: () => (conMouse() ? "Haz clic derecho en una figura: sale su ruedita. Para elegir varias, usa Mayús + clic." : "Mantén presionada una figura: sale su ruedita. Para elegir varias, sostén una y toca las demás."),
   };
   NOM.alAbrirEditor = (ed, tipo) => {
-    if (!ed || ed.soloLectura || !CONSEJOS[tipo]) return;
+    if (!ed || ed.soloLectura || !propio(CONSEJOS, tipo)) return;
     const k = "consejo." + tipo;
     if (hitos()[k] || hitos().rueda) return;
     setTimeout(() => {

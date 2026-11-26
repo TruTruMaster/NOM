@@ -8,10 +8,11 @@ NOM_PUERTO=8080; NOM_DATOS=$VAR/datos; NOM_MEMORIA=512m
 # Solo en la propia Pi (127.0.0.1): la gente entra por el túnel de Cloudflare, que corre aquí mismo.
 # (Se cambia en /etc/nom.conf; por ejemplo SERVER_ADDRESS=0.0.0.0 lo abre a la red de la casa.)
 SERVER_ADDRESS=127.0.0.1
+set -a
 [ -r /etc/nom.conf ] && . /etc/nom.conf
+set +a
+# Los valores de arriba (los que /etc/nom.conf no cambia) también tienen que llegar a Java.
 export NOM_PUERTO NOM_DATOS NOM_DESCUBRIMIENTO NOM_CUOTA_MB SERVER_ADDRESS
 export HOME=$VAR TMPDIR=$VAR/tmp LANG=C.UTF-8
 cd $VAR || exit 1
-rm -rf $VAR/tmp/* 2>/dev/null
-exec s6-setuidgid nom java -Xmx"$NOM_MEMORIA" -XX:+ExitOnOutOfMemoryError \
-  -Djava.io.tmpdir=$VAR/tmp -Dfile.encoding=UTF-8 -jar $JAR
+exec s6-setuidgid nom sh -c 'rm -rf "$1"/* 2>/dev/null; exec java -Xmx"$2" -XX:+ExitOnOutOfMemoryError -Djava.io.tmpdir="$1" -Dfile.encoding=UTF-8 -jar "$3"' _ "$VAR/tmp" "$NOM_MEMORIA" "$JAR"

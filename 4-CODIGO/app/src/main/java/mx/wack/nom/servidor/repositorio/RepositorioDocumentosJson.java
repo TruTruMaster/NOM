@@ -171,6 +171,10 @@ public class RepositorioDocumentosJson implements RepositorioDocumentos {
         return almacen.leer("docs/" + docId + "/" + anexoValido(nombre) + ".json", Object.class, null);
     }
 
+    @Override public long bytesAnexos(String docId) {
+        return almacen.tamano("docs/" + docId + "/rama.json") + almacen.tamano("docs/" + docId + "/entrega-recibos.json");
+    }
+
     @Override public synchronized long depurar(String docId, int conservar) {
         List<Version> h = historial(docId);
         if (h.size() <= conservar) return 0;

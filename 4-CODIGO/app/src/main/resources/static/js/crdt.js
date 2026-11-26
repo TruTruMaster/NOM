@@ -8,9 +8,15 @@
   "use strict";
   const NOM = window.NOM;
 
+  const azar36 = (n) => {
+    const b = new Uint8Array(n);
+    try { (window.crypto || window.msCrypto).getRandomValues(b); }
+    catch (e) { for (let i = 0; i < n; i++) b[i] = Math.floor(Math.random() * 256); }
+    return Array.from(b, (x) => (x % 36).toString(36)).join("");
+  };
   const idDispositivo = (() => {
     let d = NOM.leer("nom.dispositivo", null);
-    if (!d) { d = "d" + Math.random().toString(36).slice(2, 8); NOM.guardar("nom.dispositivo", d); }
+    if (!d) { d = "d" + azar36(8); NOM.guardar("nom.dispositivo", d); }
     return d;
   })();
 
@@ -34,7 +40,7 @@
       if (!this.estado.seq) this.estado.seq = {};
       this._secs = {};
       // Un nodo por pestaña: dos pestañas del mismo equipo nunca repiten id de operación.
-      this.nodo = idDispositivo + "-" + Math.random().toString(36).slice(2, 6);
+      this.nodo = idDispositivo + "-" + azar36(6);
       this.contador = 0;
       this.opc = opc || {};
       // Sin cuenta (opc.local) no hay servidor: nada se encola, todo se guarda en el dispositivo.
@@ -82,15 +88,15 @@
     }
 
     // ---------------------------------------------------------- lectura
-    valor(b, c) { const x = this.estado.bloques[b]; return x && x[c] ? x[c].v : undefined; }
+    valor(b, c) { const x = propio(this.estado.bloques, b) ? this.estado.bloques[b] : null; return x && propio(x, c) && x[c] ? x[c].v : undefined; }
     bloque(b) {
-      const x = this.estado.bloques[b];
+      const x = propio(this.estado.bloques, b) ? this.estado.bloques[b] : null;
       if (!x || !nombreValido(b)) return null;
       const o = { id: b };
-      for (const c in x) if (!RESERVADO.has(c)) o[c] = x[c].v;
+      for (const c in x) if (propio(x, c) && !RESERVADO.has(c)) o[c] = x[c].v;
       return o;
     }
-    vivo(b) { const x = this.estado.bloques[b]; return !!x && !(x.eliminado && x.eliminado.v === true); }
+    vivo(b) { const x = propio(this.estado.bloques, b) ? this.estado.bloques[b] : null; return !!x && !(propio(x, "eliminado") && x.eliminado && x.eliminado.v === true); }
     /** Bloques vivos del contenido (los comentarios van aparte: no se pintan ni se exportan). */
     vivos() {
       const r = [];
@@ -374,7 +380,7 @@
             return;
           }
         }
-        const r = await NOM.api.post(`/api/documentos/${this.id}/ops`, { cliente: this.nodo, ops: lote, dispositivo: NOM.api.dispositivo }, { ms: 12000 });
+        const r = await NOM.api.post(`/api/documentos/${encodeURIComponent(this.id)}/ops`, { cliente: this.nodo, ops: lote, dispositivo: NOM.api.dispositivo }, { ms: 12000 });
         // Solo un acuse de NOM dice que llegó (siempre trae «aplicadas»); sin él, los cambios se quedan en la cola.
         if (!r || typeof r.aplicadas !== "number") throw new NOM.api.ErrorApi(0, null);
         // DEF-46: el envío salió bien, así que el corte terminó: hasta aquí se suelta la marca de «sin conexión».
@@ -478,7 +484,7 @@
     if (b == null) return a + 1;
     return (a + b) / 2;
   };
-  DocCRDT.nuevoId = () => "b" + Date.now().toString(36).slice(-5) + Math.random().toString(36).slice(2, 7);
+  DocCRDT.nuevoId = () => "b" + Date.now().toString(36).slice(-5) + azar36(6);
 
   /** Máximo de campos por operación (el servidor rechaza las de más de 400). */
   DocCRDT.MAX_CAMPOS = 380;

@@ -25,7 +25,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * La propia pagina de este servidor es del mismo origen y no pasa por aqui.
  */
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE + 1)
+@Order(Ordered.HIGHEST_PRECEDENCE + 2)
 public class FiltroCors extends OncePerRequestFilter {
 
     /** Origen de la interfaz de la app de Android desde la 0.19 (MainActivity la sirve desde sus archivos). */

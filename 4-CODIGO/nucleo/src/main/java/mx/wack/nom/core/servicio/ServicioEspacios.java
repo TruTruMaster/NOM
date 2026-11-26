@@ -225,6 +225,9 @@ public class ServicioEspacios {
         return llaves(u, id);
     }
 
+    /** Máximo de espacios propios por cuenta. */
+    static final int MAX_ESPACIOS_CUENTA = 200;
+
     /** CU-13 Crear espacio de trabajo. */
     public synchronized Espacio crear(Usuario u, String nombre) {
         if (u.esInvitado()) throw ErrorNom.prohibido(u.alias ? "Un alias solo trabaja en el espacio al que entró. Para tener espacios propios, entra con tu cuenta cuando tengas Internet."
@@ -233,6 +236,8 @@ public class ServicioEspacios {
         nombre = nombre == null ? "" : Textos.limpio(nombre).trim();
         if (nombre.isEmpty()) throw ErrorNom.invalido("Ponle un nombre al espacio", "nombre");
         if (nombre.length() > 60) throw ErrorNom.invalido("Máximo 60 caracteres", "nombre");
+        long propios = repo.todos().stream().filter(e -> u.id.equals(e.propietarioId)).count();
+        if (propios >= MAX_ESPACIOS_CUENTA) throw new ErrorNom(ErrorNom.LLENO, "Ya tienes " + MAX_ESPACIOS_CUENTA + " espacios: borra alguno que ya no uses");
         String clave = nombre.toLowerCase(Locale.ROOT);
         boolean repetido = repo.todos().stream()
                 .anyMatch(e -> u.id.equals(e.propietarioId) && e.nombre.toLowerCase(Locale.ROOT).equals(clave));

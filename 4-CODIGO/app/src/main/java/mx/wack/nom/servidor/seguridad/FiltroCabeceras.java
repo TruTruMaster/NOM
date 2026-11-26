@@ -22,14 +22,14 @@ import jakarta.servlet.http.HttpServletResponse;
  * - Por HTTPS, que siempre vuelva por HTTPS.
  */
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
+@Order(Ordered.HIGHEST_PRECEDENCE + 1)
 public class FiltroCabeceras extends OncePerRequestFilter {
 
     /** La misma politica va en index.html (para la app, que carga la interfaz desde sus archivos). */
     static final String CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
             + "img-src 'self' data: blob: https: http:; font-src 'self' data:; media-src 'self' data: blob:; "
             + "connect-src 'self' https: http:; worker-src 'self'; manifest-src 'self'; object-src 'none'; "
-            + "base-uri 'self'; form-action 'self'; frame-ancestors 'self'";
+            + "base-uri 'none'; form-action 'self'; frame-ancestors 'self'";
 
     /** En la página de la app: todo HTML pasa por la política «default» de js/nucleo.js (Trusted Types). */
     static final String TIPOS_SEGUROS = "; require-trusted-types-for 'script'; trusted-types default";

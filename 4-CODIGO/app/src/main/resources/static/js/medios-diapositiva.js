@@ -20,7 +20,7 @@
   const MIME = { mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm", ogv: "video/ogg", wmv: "video/x-ms-wmv",
     avi: "video/x-msvideo", mpg: "video/mpeg", mpeg: "video/mpeg", mp3: "audio/mpeg", m4a: "audio/mp4", wav: "audio/wav", wma: "audio/x-ms-wma",
     aac: "audio/aac", ogg: "audio/ogg", oga: "audio/ogg", flac: "audio/flac", mid: "audio/midi", midi: "audio/midi" };
-  const mimeDe = (ruta) => MIME[(String(ruta || "").split(".").pop() || "").toLowerCase()] || "application/octet-stream";
+  const mimeDe = (ruta) => { const ext = (String(ruta || "").split(".").pop() || "").toLowerCase(); return Object.prototype.hasOwnProperty.call(MIME, ext) ? MIME[ext] : "application/octet-stream"; };
   const loc = (q) => String(q || "").replace(/^.*:/, "");
   const A = (n) => (Array.isArray(n) && n[1]) || {};
   const H = (n) => (Array.isArray(n) && n[2]) || [];
@@ -37,7 +37,7 @@
       const cm = H(n).find((c) => Array.isArray(c) && loc(c[0]) === "cMediaNode");
       if (!cm) continue;
       let es = false;
-      (function rec(m) { if (!Array.isArray(m) || es) return; if (loc(m[0]) === "spTgt" && A(m).bid === bid) es = true; H(m).forEach(rec); })(cm);
+      (function rec(m, prof) { if (!Array.isArray(m) || es || prof > 32) return; if (loc(m[0]) === "spTgt" && A(m).bid === bid) es = true; H(m).forEach((x) => rec(x, prof + 1)); })(cm, 0);
       if (!es) continue;
       const a = A(cm), ctn = H(cm).find((c) => Array.isArray(c) && loc(c[0]) === "cTn");
       return {

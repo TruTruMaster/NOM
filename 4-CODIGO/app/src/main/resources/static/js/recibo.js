@@ -37,7 +37,7 @@
       <header class="recibo-cab"><svg class="logo" aria-hidden="true"><use href="#logo"/></svg>
         <div><h1>Recibo de proceso de escritura</h1><p>NOM · emitido por <b>${esc(r.servidor || "el servidor")}</b> el ${esc(fecha(r.generado))} a las ${esc(hora(r.generado))}</p></div></header>
       <section class="recibo-quien">
-        <div><span>Documento</span><b>${esc(doc.nombre)}</b><small>${esc(TIPOS[doc.tipo] || doc.tipo || "")} · espacio ${esc(doc.espacio || "")}</small></div>
+        <div><span>Documento</span><b>${esc(doc.nombre)}</b><small>${esc((Object.prototype.hasOwnProperty.call(TIPOS, doc.tipo) ? TIPOS[doc.tipo] : doc.tipo) || "")} · espacio ${esc(doc.espacio || "")}</small></div>
         <div><span>Persona</span><b>${esc(per.nombre)}</b><small>${r.primeraActividad ? `trabajó del ${esc(fecha(r.primeraActividad))} al ${esc(fecha(r.ultimaActividad))}` : "sin actividad registrada"}</small></div>
       </section>
       <section class="recibo-cifras">
@@ -88,7 +88,7 @@
   async function mostrar(ed, usuarioId) {
     const fin = NOM.cargando ? NOM.cargando.empezar() : () => {};
     try {
-      const r = await api().get(`/api/documentos/${ed.id}/recibo${usuarioId ? "?usuario=" + encodeURIComponent(usuarioId) : ""}`, undefined, { ms: 20000 });
+      const r = await api().get(`/api/documentos/${encodeURIComponent(ed.id)}/recibo${usuarioId ? "?usuario=" + encodeURIComponent(usuarioId) : ""}`, undefined, { ms: 20000 });
       ver(r);
     } catch (e) { aviso(e.red ? "Para sacar el recibo necesitas conexión" : e.message, { tipo: "error" }); }
     finally { fin(); }
@@ -133,7 +133,7 @@
   async function aportes(cont, ed) {
     cont.innerHTML = `<div class="esqueleto" style="height:56px"></div><div class="esqueleto" style="height:56px"></div>`;
     let d;
-    try { d = await api().get(`/api/documentos/${ed.id}/aportes`); } catch (e) { cont.innerHTML = `<div class="alerta error">${ico("triangle-alert")}<span>${esc(e.message)}</span></div>`; return; }
+    try { d = await api().get(`/api/documentos/${encodeURIComponent(ed.id)}/aportes`); } catch (e) { cont.innerHTML = `<div class="alerta error">${ico("triangle-alert")}<span>${esc(e.message)}</span></div>`; return; }
     const ps = d.personas || [];
     if (!ps.length) { cont.innerHTML = `<p class="suave">Aún no hay aportes registrados.</p>`; return; }
     const texto = d.letrasEnDocumento > 0;
@@ -142,7 +142,7 @@
     const yo = (api().usuario() || {}).id;
     cont.innerHTML = `<div class="aportes">
       <p class="suave chico" style="font-weight:500">${texto ? `Del texto que hay hoy (${n(d.letrasEnDocumento)} letras), cuánto escribió cada quien.` : "Cuántos cambios hizo cada quien."}</p>
-      <div class="aportes-barra" role="img" aria-label="Aportes por persona">${ps.map((p) => `<i style="width:${(peso(p) / total) * 100}%;background:${esc(p.color || "#6B6875")}" title="${esc(p.usuario)}"></i>`).join("")}${texto && d.sinAutor ? `<i class="otros" style="width:${(d.sinAutor / total) * 100}%" title="Plantilla o importado"></i>` : ""}</div>
+      <div class="aportes-barra" role="img" aria-label="Aportes por persona">${ps.map((p) => `<i style="width:${(peso(p) / total) * 100}%;background:${NOM.colorHex(p.color, "#6B6875")}" title="${esc(p.usuario)}"></i>`).join("")}${texto && d.sinAutor ? `<i class="otros" style="width:${(d.sinAutor / total) * 100}%" title="Plantilla o importado"></i>` : ""}</div>
       <div class="col" style="gap:6px">${ps.map((p) => `<div class="version" style="cursor:default">${avatar({ nombre: p.usuario, color: p.color })}
         <span class="crece"><b>${esc(p.usuario)} <span class="suave" style="font-weight:600">${Math.round((peso(p) / total) * 100)}%</span></b>
         <small>${texto ? `${n(p.enDocumento)} letras en el documento · escribió ${n(p.escritas)}${p.pegadas ? ` (${n(p.pegadas)} pegadas)` : ""} · borró ${n(p.borradas)}` : `${n(p.operaciones)} cambios${p.pegadas ? ` · ${n(p.pegadas)} letras pegadas` : ""}`} · ${n(p.minutos)} min</small></span>
@@ -160,7 +160,8 @@
   }
   async function repeticion(ed) {
     let vs;
-    try { vs = (await api().get(`/api/documentos/${ed.id}/versiones`)).slice().reverse(); } catch (e) { return aviso(e.message, { tipo: "error" }); }
+    const did = encodeURIComponent(ed.id);
+    try { vs = (await api().get(`/api/documentos/${did}/versiones`)).slice().reverse(); } catch (e) { return aviso(e.message, { tipo: "error" }); }
     if (!vs.length) return aviso("Aún no hay versiones", { tipo: "info" });
     const capa = html(`<div class="repeticion" role="dialog" aria-label="Repetición">
       <div class="repeticion-barra"><button class="icono-btn" data-play aria-label="Reproducir">${ico("play")}</button>
@@ -170,7 +171,7 @@
     document.body.append(capa);
     const fotos = new Map(), hojaEl = $("[data-hoja]", capa), rango = $("[data-v]", capa), etq = $("[data-etq]", capa);
     let t = null, actual = -1;
-    const foto = async (i) => { if (!fotos.has(i)) fotos.set(i, await api().get(`/api/documentos/${ed.id}/versiones/${vs[i].numero}`)); return fotos.get(i); };
+    const foto = async (i) => { if (!fotos.has(i)) fotos.set(i, await api().get(`/api/documentos/${did}/versiones/${encodeURIComponent(vs[i].numero)}`)); return fotos.get(i); };
     async function ir(i) {
       actual = i;
       rango.value = i;

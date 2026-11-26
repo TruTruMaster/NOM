@@ -95,7 +95,7 @@
       // cifrado, con la llave del documento. Sin cambiar el contexto del documento que esté abierto.
       const d = NOM.binarios
         ? await NOM.binarios.crearEnEspacio({ id: espacioId }, m.nombre, m.modo, local.opsDe(id), { clave, sinContexto: true })
-        : await NOM.api.post(`/api/espacios/${espacioId}/documentos`, { nombre: m.nombre, modo: m.modo, ops: local.opsDe(id) }, { ms: 60000 });
+        : await NOM.api.post(`/api/espacios/${encodeURIComponent(espacioId)}/documentos`, { nombre: m.nombre, modo: m.modo, ops: local.opsDe(id) }, { ms: 60000 });
       local.eliminar(id);
       // Si alguien lo tenía abierto (otra pestaña o el editor), sabe a dónde se fue.
       if (conCuenta()) { const sub = NOM.leer(NOM.api.clave("subidos"), {}) || {}; sub[id] = { doc: d.id, t: Date.now() }; NOM.guardar(NOM.api.clave("subidos"), sub); }

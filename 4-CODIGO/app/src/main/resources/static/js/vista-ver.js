@@ -35,7 +35,7 @@
     const d = r.documento || {};
     document.title = (d.nombre || "Documento") + " · NOM";
     $("[data-nombre]", raiz).textContent = d.nombre || "Documento";
-    const M = (NOM.MODOS || {})[d.modo] || {};
+    const M = (NOM.MODOS && Object.prototype.hasOwnProperty.call(NOM.MODOS, d.modo) ? NOM.MODOS[d.modo] : null) || {};
     $("[data-sub]", raiz).textContent = [M.nombre, r.espacio ? "de " + r.espacio : "", "solo lectura"].filter(Boolean).join(" · ");
     const doc = new NOM.DocCRDT("ver-" + String(token).slice(0, 10), r.estado, { soloLectura: true, soloMemoria: true });
     const modo = d.modo || doc.valor("_doc", "modo") || "TEXTO";
@@ -60,7 +60,7 @@
     } else if (modo === "PRESENTACION" && NOM.lienzoVista) {
       const T = NOM.lienzoVista.tam(doc);
       cuerpo.innerHTML = `<div class="ver-diapos">${doc.paginas().map((p, i) => `<figure class="ver-diapo">
-        <div class="ver-diapo-caja" style="aspect-ratio:${T.w} / ${T.h}"><div class="diapo-mini ver-escala" style="${NOM.diapo ? NOM.diapo.estiloDiapo(doc, p) : `width:${T.w}px;height:${T.h}px`}">${NOM.lienzoVista.htmlDiapositiva(doc, p)}</div></div>
+        <div class="ver-diapo-caja" style="aspect-ratio:${T.w} / ${T.h}"><div class="diapo-mini ver-escala" style="${esc(NOM.diapo ? NOM.diapo.estiloDiapo(doc, p) : `width:${T.w}px;height:${T.h}px`)}">${NOM.lienzoVista.htmlDiapositiva(doc, p)}</div></div>
         <figcaption>${i + 1} / ${doc.paginas().length}</figcaption></figure>`).join("")}</div>`;
       const escalar = () => $$(".ver-diapo-caja", cuerpo).forEach((c) => { c.firstElementChild.style.transform = `scale(${c.clientWidth / T.w})`; });
       escalar();

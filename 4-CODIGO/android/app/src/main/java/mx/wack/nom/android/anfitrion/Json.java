@@ -29,7 +29,12 @@ public final class Json implements CodecJson {
     public byte[] escribir(Object valor) { return texto(valor).getBytes(java.nio.charset.StandardCharsets.UTF_8); }
 
     @Override
-    public Object leer(String texto) { return new Lector(texto).valor(); }
+    public Object leer(String texto) {
+        Lector l = new Lector(texto);
+        Object v = l.valor();
+        l.fin();
+        return v;
+    }
 
     // ------------------------------------------------------------------ escribir
 
@@ -173,9 +178,18 @@ public final class Json implements CodecJson {
         }
         if (c == Object.class) return v;
         if (c == String.class) return String.valueOf(v);
-        if (c == int.class || c == Integer.class) return ((Number) v).intValue();
-        if (c == long.class || c == Long.class) return ((Number) v).longValue();
-        if (c == double.class || c == Double.class) return ((Number) v).doubleValue();
+        if (c == int.class || c == Integer.class) {
+            if (!(v instanceof Number)) throw new IllegalArgumentException("Se esperaba un número");
+            return ((Number) v).intValue();
+        }
+        if (c == long.class || c == Long.class) {
+            if (!(v instanceof Number)) throw new IllegalArgumentException("Se esperaba un número");
+            return ((Number) v).longValue();
+        }
+        if (c == double.class || c == Double.class) {
+            if (!(v instanceof Number)) throw new IllegalArgumentException("Se esperaba un número");
+            return ((Number) v).doubleValue();
+        }
         if (c == boolean.class || c == Boolean.class) return Boolean.TRUE.equals(v);
         if (c.isEnum()) return Enum.valueOf((Class<Enum>) c, String.valueOf(v));
         if (Map.class.isAssignableFrom(c) || Collection.class.isAssignableFrom(c)) return v;
@@ -218,12 +232,19 @@ public final class Json implements CodecJson {
     // ------------------------------------------------------------------ leer
 
     private static final class Lector {
+        private static final int MAX_ELEMENTOS = 250_000;
         private final String s;
-        private int i, profundidad;
+        private int i, profundidad, elementos;
 
-        Lector(String s) { this.s = s; }
+        Lector(String s) { this.s = s == null ? "" : s; }
+
+        void fin() {
+            espacios();
+            if (i < s.length()) throw new IllegalArgumentException("Contenido sobrante en JSON");
+        }
 
         Object valor() {
+            if (++elementos > MAX_ELEMENTOS) throw new IllegalArgumentException("JSON demasiado grande");
             espacios();
             if (i >= s.length()) throw new IllegalArgumentException("JSON vacío");
             char c = s.charAt(i);
@@ -285,6 +306,7 @@ public final class Json implements CodecJson {
                 char c = s.charAt(i++);
                 if (c == '"') return sb.toString();
                 if (c != '\\') { sb.append(c); continue; }
+                if (i >= s.length()) throw new IllegalArgumentException("Escape incompleto");
                 char e = s.charAt(i++);
                 switch (e) {
                     case 'n': sb.append('\n'); break;
@@ -292,7 +314,14 @@ public final class Json implements CodecJson {
                     case 't': sb.append('\t'); break;
                     case 'b': sb.append('\b'); break;
                     case 'f': sb.append('\f'); break;
-                    case 'u': sb.append((char) Integer.parseInt(s.substring(i, i + 4), 16)); i += 4; break;
+                    case 'u':
+                        if (i + 4 > s.length()) throw new IllegalArgumentException("Escape unicode incompleto");
+                        for (int k = 0; k < 4; k++) {
+                            if (Character.digit(s.charAt(i + k), 16) < 0) throw new IllegalArgumentException("Escape unicode no válido");
+                        }
+                        sb.append((char) Integer.parseInt(s.substring(i, i + 4), 16));
+                        i += 4;
+                        break;
                     default: sb.append(e);
                 }
             }
@@ -310,10 +339,14 @@ public final class Json implements CodecJson {
             }
             String n = s.substring(ini, i);
             if (n.isEmpty()) throw new IllegalArgumentException("Valor no válido en " + ini);
-            if (decimal) return Double.parseDouble(n);
-            long l = Long.parseLong(n);
-            if (l >= Integer.MIN_VALUE && l <= Integer.MAX_VALUE) return (int) l;
-            return l;
+            try {
+                if (decimal) return Double.parseDouble(n);
+                long l = Long.parseLong(n);
+                if (l >= Integer.MIN_VALUE && l <= Integer.MAX_VALUE) return (int) l;
+                return l;
+            } catch (NumberFormatException ex) {
+                throw new IllegalArgumentException("Número no válido");
+            }
         }
     }
 }

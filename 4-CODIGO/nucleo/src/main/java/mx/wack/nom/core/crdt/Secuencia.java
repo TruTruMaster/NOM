@@ -47,16 +47,21 @@ public class Secuencia {
 
     /** Lo más que puede tocar una operación de mostrar/ocultar o de formato: caracteres, sumando todos sus rangos. */
     public static final long MAX_ALCANCE = 4_000_000;
+    /** Mayor marca entera exacta en el navegador (2^53 - 2, para que avanzar de uno en uno nunca se quede quieto). */
+    public static final long MAX_ID = 9_007_199_254_740_990L;
+    /** Máximo de rangos en una sola operación de visibilidad o formato. */
+    static final int MAX_RANGOS = 5000;
 
-    /** r = [[nodo, t1, t2], …] (o [fin, 0, 0]): listas de tres, nodo corto, 0 ≤ t1 ≤ t2 y sin pasar del tope en total. */
+    /** r = [[nodo, t1, t2], …] (o [fin, 0, 0]): listas de tres, nodo corto, 0 ≤ t1 ≤ t2 ≤ MAX_ID y sin pasar del tope. */
     static boolean rangosValidos(List<?> r) {
+        if (r == null || r.isEmpty() || r.size() > MAX_RANGOS) return false;
         long total = 0;
         for (Object o : r) {
             if (!(o instanceof List<?> rango) || rango.size() != 3 || !(rango.get(0) instanceof String rn) || rn.isEmpty() || rn.length() > 64
                     || !(rango.get(1) instanceof Number a) || !(rango.get(2) instanceof Number b)) return false;
             if (FIN.equals(rn)) continue;
             long t1 = a.longValue(), t2 = b.longValue();
-            if (t1 < 0 || t2 < t1) return false;
+            if (t1 < 0 || t2 < t1 || t2 > MAX_ID) return false;
             total += Math.min(t2 - t1 + 1, MAX_ALCANCE + 1);
             if (total > MAX_ALCANCE) return false;
         }
@@ -69,7 +74,8 @@ public class Secuencia {
         long total = 0;
         for (Object o : r) {
             if (o instanceof List<?> rango && rango.size() == 3 && !FIN.equals(rango.get(0))
-                    && rango.get(1) instanceof Number a && rango.get(2) instanceof Number b && b.longValue() >= a.longValue())
+                    && rango.get(1) instanceof Number a && rango.get(2) instanceof Number b
+                    && a.longValue() >= 0 && b.longValue() >= a.longValue() && b.longValue() <= MAX_ID)
                 total += Math.min(b.longValue() - a.longValue() + 1, MAX_ALCANCE + 1);
         }
         return total;
@@ -195,6 +201,7 @@ public class Secuencia {
     // Privados y sin "getters": no salen en el JSON.
     private List<Nodo> orden;
     private Map<String, Nodo> nodos;
+    private Map<String, TreeMap<Long, Nodo>> nodosPorNodo;
     private Car carFin;
     private Boolean duenos;
 
@@ -214,6 +221,7 @@ public class Secuencia {
     @SuppressWarnings("unchecked")
     private void armarOrden() {
         nodos = new HashMap<>();
+        nodosPorNodo = new HashMap<>();
         Map<String, List<Nodo>> hijos = new HashMap<>();
         for (Map<String, Object> r : ins) {
             long t = ((Number) r.get("t")).longValue();
@@ -249,6 +257,7 @@ public class Secuencia {
             for (Nodo nd : orden) puestos.add(nd.id);
             nodos.keySet().retainAll(puestos);
         }
+        for (Nodo nd : orden) nodosPorNodo.computeIfAbsent(nd.n, z -> new TreeMap<>()).put(nd.t, nd);
         carFin = new Car();
         for (Map<String, Object> o : vis) aplicarRangosOrden(o);
         for (Map<String, Object> o : fmt) aplicarRangosOrden(o);
@@ -261,7 +270,7 @@ public class Secuencia {
         if (iz == null) i = 0;
         else {
             Nodo izq = nodos.get(iz);
-            if (izq == null) { orden = null; nodos = null; return; }   // huerfano: se rearma la proxima vez
+            if (izq == null) { orden = null; nodos = null; nodosPorNodo = null; return; }   // huerfano: se rearma la proxima vez
             i = orden.indexOf(izq) + 1;
         }
         while (i < orden.size() && (orden.get(i).t > t || (orden.get(i).t == t && orden.get(i).n.compareTo(n) > 0))) i++;
@@ -269,12 +278,14 @@ public class Secuencia {
         List<Nodo> nuevos = new ArrayList<>(cps.length);
         @SuppressWarnings("unchecked")
         Map<String, Object> at = a instanceof Map ? (Map<String, Object>) a : Map.of();
+        TreeMap<Long, Nodo> delNodo = nodosPorNodo.computeIfAbsent(n, z -> new TreeMap<>());
         for (int k = 0; k < cps.length; k++) {
             Nodo nd = new Nodo((t + k) + "@" + n, t + k, n, cps[k] == '\n' && e == null);
             nd.car.vt = t + k;
             nd.car.vn = n;
             for (var en : at.entrySet()) nd.car.f.put(en.getKey(), new Object[] { en.getValue(), t + k, n });
             nodos.put(nd.id, nd);
+            delNodo.put(nd.t, nd);
             nuevos.add(nd);
         }
         orden.addAll(i, nuevos);
@@ -286,15 +297,17 @@ public class Secuencia {
         String n = (String) o.get("n");
         boolean esV = "v".equals(o.get("k")) || o.containsKey("v");
         Map<String, Object> a = esV ? null : (Map<String, Object>) o.get("a");
-        for (Object ob : (List<Object>) o.get("r")) {
-            if (!(ob instanceof List<?> rango) || rango.size() < 3) continue;
-            String rn = String.valueOf(rango.get(0));
+        if (!(o.get("r") instanceof List<?> rs)) return;
+        for (Object ob : rs) {
+            if (!(ob instanceof List<?> rango) || rango.size() != 3 || !(rango.get(0) instanceof String rn)) continue;
             if (FIN.equals(rn)) { aplicarA(carFin, esV, o, a, t, n); continue; }
-            long t1 = ((Number) rango.get(1)).longValue(), t2 = ((Number) rango.get(2)).longValue();
-            for (long tt = t1; tt <= t2 && tt - t1 < MAX_ALCANCE; tt++) {
-                Nodo nd = nodos.get(tt + "@" + rn);
-                if (nd != null) aplicarA(nd.car, esV, o, a, t, n);
-            }
+            if (!(rango.get(1) instanceof Number n1) || !(rango.get(2) instanceof Number n2)) continue;
+            long t1 = n1.longValue(), t2 = n2.longValue();
+            if (t1 < 0 || t2 < t1 || t2 > MAX_ID) continue;
+            TreeMap<Long, Nodo> delNodo = nodosPorNodo.get(rn);
+            if (delNodo == null || delNodo.isEmpty()) continue;
+            long lim = Math.min(t2, t1 + MAX_ALCANCE - 1);
+            for (Nodo nd : delNodo.subMap(t1, true, lim, true).values()) aplicarA(nd.car, esV, o, a, t, n);
         }
     }
 
@@ -341,14 +354,18 @@ public class Secuencia {
             if (d != null) r.add(d);
             return r;
         }
-        if (!(s.get("r") instanceof List<?> rangos)) return r;
+        if (!(s.get("r") instanceof List<?> rangos) || !rangosValidos(rangos)) return r;
         Set<Nodo> tocados = new HashSet<>();
         for (Object ob : rangos) {
-            if (!(ob instanceof List<?> rango) || rango.size() < 3) continue;
-            String rn = String.valueOf(rango.get(0));
+            if (!(ob instanceof List<?> rango) || rango.size() != 3 || !(rango.get(0) instanceof String rn)) continue;
             if (FIN.equals(rn)) { String d = duenoDesde(orden.size()); if (d != null) r.add(d); continue; }
-            long t1 = ((Number) rango.get(1)).longValue(), t2 = ((Number) rango.get(2)).longValue();
-            for (long tt = t1; tt <= t2 && tt - t1 < MAX_ALCANCE; tt++) { Nodo nd = nodos.get(tt + "@" + rn); if (nd != null) tocados.add(nd); }
+            if (!(rango.get(1) instanceof Number n1) || !(rango.get(2) instanceof Number n2)) continue;
+            long t1 = n1.longValue(), t2 = n2.longValue();
+            if (t1 < 0 || t2 < t1 || t2 > MAX_ID) continue;
+            TreeMap<Long, Nodo> delNodo = nodosPorNodo.get(rn);
+            if (delNodo == null || delNodo.isEmpty()) continue;
+            long lim = Math.min(t2, t1 + MAX_ALCANCE - 1);
+            tocados.addAll(delNodo.subMap(t1, true, lim, true).values());
         }
         if (tocados.isEmpty()) return r;
         // Una sola pasada de atras hacia adelante: cada caracter pertenece al siguiente salto visible.
@@ -397,6 +414,7 @@ public class Secuencia {
     @SuppressWarnings("unchecked")
     public synchronized Map<String, Car> caracteres() {
         Map<String, Car> m = new LinkedHashMap<>();
+        Map<String, TreeMap<Long, Car>> porNodo = new HashMap<>();
         Car fin = new Car();
         m.put(FIN, fin);
         for (Map<String, Object> r : ins) {
@@ -405,19 +423,23 @@ public class Secuencia {
             String x = r.get("e") != null ? "￼" : (String) r.get("x");
             int largo = x.codePointCount(0, x.length());
             Map<String, Object> a = r.get("a") instanceof Map ? (Map<String, Object>) r.get("a") : Map.of();
+            TreeMap<Long, Car> delNodo = porNodo.computeIfAbsent(n, z -> new TreeMap<>());
             for (int i = 0; i < largo; i++) {
+                String id = (t + i) + "@" + n;
+                if (m.containsKey(id)) continue;
                 Car c = new Car();
                 c.vt = t + i;
                 c.vn = n;
                 for (var e : a.entrySet()) c.f.put(e.getKey(), new Object[] { e.getValue(), t + i, n });
-                m.putIfAbsent((t + i) + "@" + n, c);
+                m.put(id, c);
+                delNodo.put(t + i, c);
             }
         }
         for (Map<String, Object> o : vis) {
             long t = ((Number) o.get("t")).longValue();
             String n = (String) o.get("n");
             boolean v = Boolean.TRUE.equals(o.get("v"));
-            for (Car c : enRangos(m, (List<Object>) o.get("r"))) {
+            for (Car c : enRangos(fin, porNodo, (List<Object>) o.get("r"))) {
                 if (gana(t, n, c.vt, c.vn)) { c.v = v; c.vt = t; c.vn = n; }
             }
         }
@@ -425,7 +447,7 @@ public class Secuencia {
             long t = ((Number) o.get("t")).longValue();
             String n = (String) o.get("n");
             Map<String, Object> a = (Map<String, Object>) o.get("a");
-            for (Car c : enRangos(m, (List<Object>) o.get("r"))) {
+            for (Car c : enRangos(fin, porNodo, (List<Object>) o.get("r"))) {
                 for (var e : a.entrySet()) {
                     Object[] reg = c.f.get(e.getKey());
                     if (reg == null || gana(t, n, ((Number) reg[1]).longValue(), (String) reg[2])) c.f.put(e.getKey(), new Object[] { e.getValue(), t, n });
@@ -435,18 +457,19 @@ public class Secuencia {
         return m;
     }
 
-    private static List<Car> enRangos(Map<String, Car> m, List<Object> r) {
+    private static List<Car> enRangos(Car fin, Map<String, TreeMap<Long, Car>> porNodo, List<Object> r) {
         List<Car> l = new ArrayList<>();
         if (r == null) return l;
         for (Object o : r) {
-            if (!(o instanceof List<?> rango) || rango.size() < 3) continue;
-            String n = String.valueOf(rango.get(0));
-            if (FIN.equals(n)) { l.add(m.get(FIN)); continue; }
-            long t1 = ((Number) rango.get(1)).longValue(), t2 = ((Number) rango.get(2)).longValue();
-            for (long t = t1; t <= t2 && t - t1 < MAX_ALCANCE; t++) {
-                Car c = m.get(t + "@" + n);
-                if (c != null) l.add(c);
-            }
+            if (!(o instanceof List<?> rango) || rango.size() != 3 || !(rango.get(0) instanceof String n)) continue;
+            if (FIN.equals(n)) { l.add(fin); continue; }
+            if (!(rango.get(1) instanceof Number n1) || !(rango.get(2) instanceof Number n2)) continue;
+            long t1 = n1.longValue(), t2 = n2.longValue();
+            if (t1 < 0 || t2 < t1 || t2 > MAX_ID) continue;
+            TreeMap<Long, Car> delNodo = porNodo.get(n);
+            if (delNodo == null || delNodo.isEmpty()) continue;
+            long lim = Math.min(t2, t1 + MAX_ALCANCE - 1);
+            l.addAll(delNodo.subMap(t1, true, lim, true).values());
         }
         return l;
     }
@@ -505,6 +528,45 @@ public class Secuencia {
         return c;
     }
 
+    /**
+     * Copia para quien solo mira (enlace para ver, proyección): lo que está oculto conserva su lugar y sus ids, pero no su
+     * contenido. Cada carácter oculto se vuelve un espacio y cada objeto oculto se queda solo con su tipo; lo que se ve y
+     * el orden no cambian.
+     */
+    @SuppressWarnings("unchecked")
+    public synchronized Secuencia sinOcultos() {
+        Map<String, Car> cs = caracteres();
+        Map<String, Object> c = copia();
+        for (Map<String, Object> r : (List<Map<String, Object>>) c.get("ins")) {
+            long t = ((Number) r.get("t")).longValue();
+            String n = (String) r.get("n");
+            if (r.get("e") != null) {
+                Car car = cs.get(t + "@" + n);
+                if (car != null && !car.v) {
+                    Map<String, Object> e = new LinkedHashMap<>();
+                    if (r.get("e") instanceof Map<?, ?> em && em.get("tipo") instanceof String tp) e.put("tipo", tp);
+                    r.put("e", e);
+                    r.remove("a");
+                }
+                continue;
+            }
+            String x = (String) r.get("x");
+            int[] cps = x.codePoints().toArray();
+            boolean alguno = false, todos = true;
+            StringBuilder sb = new StringBuilder(x.length());
+            for (int i = 0; i < cps.length; i++) {
+                Car car = cs.get((t + i) + "@" + n);
+                if (car != null && !car.v) { sb.append(' '); alguno = true; }
+                else { sb.appendCodePoint(cps[i]); todos = false; }
+            }
+            if (alguno) {
+                r.put("x", sb.toString());
+                if (todos) r.remove("a");
+            }
+        }
+        return desde(c);
+    }
+
     @SuppressWarnings("unchecked")
     public static Secuencia desde(Map<String, Object> copia) {
         Secuencia s = new Secuencia();
@@ -553,16 +615,20 @@ public class Secuencia {
             formatos.put(String.valueOf(a), a);
         }
         List<Map<String, Object>> ops = new ArrayList<>();
-        if (!ocultar.isEmpty()) ops.add(Map.of("k", "v", "v", false, "r", rangos(ocultar)));
-        if (!mostrar.isEmpty()) ops.add(Map.of("k", "v", "v", true, "r", rangos(mostrar)));
-        porFormato.forEach((k, ids) -> {
-            Map<String, Object> s = new LinkedHashMap<>();
-            s.put("k", "f");
-            s.put("a", formatos.get(k));
-            s.put("r", rangos(ids));
-            ops.add(s);
-        });
+        agregarPartidas(ops, "v", false, null, rangos(ocultar));
+        agregarPartidas(ops, "v", true, null, rangos(mostrar));
+        porFormato.forEach((k, ids) -> agregarPartidas(ops, "f", false, formatos.get(k), rangos(ids)));
         return ops;
+    }
+
+    private static void agregarPartidas(List<Map<String, Object>> ops, String k, boolean v, Map<String, Object> a, List<List<Object>> rs) {
+        for (int i = 0; i < rs.size(); i += MAX_RANGOS) {
+            Map<String, Object> s = new LinkedHashMap<>();
+            s.put("k", k);
+            if ("v".equals(k)) s.put("v", v); else s.put("a", a);
+            s.put("r", new ArrayList<>(rs.subList(i, Math.min(rs.size(), i + MAX_RANGOS))));
+            ops.add(s);
+        }
     }
 
     /** ids "t@n" -> [[n, t1, t2], ...] juntando consecutivos del mismo nodo. */

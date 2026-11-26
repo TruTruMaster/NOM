@@ -89,7 +89,8 @@
   function tasaVideo(info, med, codec, fps) {
     const pxs = med.ancho * med.alto * (fps || 30);
     const techo = pxs * 0.1, piso = pxs * 0.025;
-    const factor = { avc: 0.6, hevc: 0.9, vp9: 0.9, av1: 1, vp8: 0.65 }[info.codecVideo] || 0.45;
+    const FACTORES = { avc: 0.6, hevc: 0.9, vp9: 0.9, av1: 1, vp8: 0.65 };
+    const factor = Object.prototype.hasOwnProperty.call(FACTORES, info.codecVideo) ? FACTORES[info.codecVideo] : 0.45;
     const escala = info.ancho && info.alto ? (med.ancho * med.alto) / (info.ancho * info.alto) : 1;
     let t = info.bpsVideo ? info.bpsVideo * factor * escala : techo;
     if (codec === "vp9") t *= 1.2;
@@ -115,48 +116,52 @@
     if (!puedeConvertir()) return original(archivo, null, "Este navegador no puede convertir video; se sube como está.");
     const M = await cargar();
     const { input, info, vt, at } = await analizar(archivo);
-    const esVideo = info.tipo === "video";
-    if (esVideo && info.duracion > LIMITES.videoSeg) throw errorNom(`El video dura ${tiempo(info.duracion)}; el máximo es ${tiempo(LIMITES.videoSeg)}.`, "largo");
-    if (!esVideo && info.duracion > LIMITES.audioSeg) throw errorNom(`El audio dura ${tiempo(info.duracion)}; el máximo es ${tiempo(LIMITES.audioSeg)}.`, "largo");
-    // códecs: AV1 (o VP9) y Opus, lo que este equipo pueda codificar
-    let video;
-    if (vt) {
-      const med = medidaSalida(info.ancho, info.alto);
-      const codec = await M.getFirstEncodableVideoCodec(["av1", "vp9"], { width: med.ancho, height: med.alto });
-      if (!codec) return original(archivo, info, "Este equipo no puede codificar AV1 ni VP9; se sube como está.");
-      const fps = info.fps ? Math.min(LIMITES.fpsMax, info.fps) : 30;
-      video = { codec, width: med.ancho, height: med.alto, fit: "contain", bitrate: opc.tasaVideo || tasaVideo(info, med, codec, fps), forceTranscode: true, keyFrameInterval: 4 };
-      if (info.fps && info.fps > LIMITES.fpsMax) video.frameRate = LIMITES.fpsMax;
+    try {
+      const esVideo = info.tipo === "video";
+      if (esVideo && info.duracion > LIMITES.videoSeg) throw errorNom(`El video dura ${tiempo(info.duracion)}; el máximo es ${tiempo(LIMITES.videoSeg)}.`, "largo");
+      if (!esVideo && info.duracion > LIMITES.audioSeg) throw errorNom(`El audio dura ${tiempo(info.duracion)}; el máximo es ${tiempo(LIMITES.audioSeg)}.`, "largo");
+      // códecs: AV1 (o VP9) y Opus, lo que este equipo pueda codificar
+      let video;
+      if (vt) {
+        const med = medidaSalida(info.ancho, info.alto);
+        const codec = await M.getFirstEncodableVideoCodec(["av1", "vp9"], { width: med.ancho, height: med.alto });
+        if (!codec) return original(archivo, info, "Este equipo no puede codificar AV1 ni VP9; se sube como está.");
+        const fps = info.fps ? Math.min(LIMITES.fpsMax, info.fps) : 30;
+        video = { codec, width: med.ancho, height: med.alto, fit: "contain", bitrate: opc.tasaVideo || tasaVideo(info, med, codec, fps), forceTranscode: true, keyFrameInterval: 4 };
+        if (info.fps && info.fps > LIMITES.fpsMax) video.frameRate = LIMITES.fpsMax;
+      }
+      let audio;
+      if (at) {
+        const can = Math.min(2, at.numberOfChannels || 2);
+        // Opus 128 kb/s estéreo (64 kb/s en mono) ya no se distingue del original en casi ninguna grabación
+        const tasa = tasaAudio(info, can);
+        const codec = await M.getFirstEncodableAudioCodec(["opus"], { numberOfChannels: can, sampleRate: 48000, bitrate: tasa });
+        if (!codec) return original(archivo, info, "Este equipo no puede codificar Opus; se sube como está.");
+        audio = { codec, numberOfChannels: can, sampleRate: 48000, bitrate: tasa, forceTranscode: true };
+      }
+      const output = new M.Output({ format: new M.WebMOutputFormat(), target: new M.BufferTarget() });
+      const conv = await M.Conversion.init({ input, output, video: video || { discard: true }, audio: audio || { discard: true }, showWarnings: false });
+      if (!conv.isValid) {
+        const por = (conv.discardedTracks || []).map((d) => d.reason).join(", ");
+        return original(archivo, info, "No se pudo convertir (" + (por || "formato no soportado") + "); se sube como está.");
+      }
+      if (opc.alAvance) conv.onProgress = (p, t) => opc.alAvance(Math.max(0, Math.min(1, p)), t);
+      const cancelar = () => conv.cancel();
+      if (opc.senal) { if (opc.senal.aborted) throw errorNom("Conversión cancelada", "cancelado"); opc.senal.addEventListener("abort", cancelar, { once: true }); }
+      try { await conv.execute(); }
+      catch (e) { if (opc.senal && opc.senal.aborted) throw errorNom("Conversión cancelada", "cancelado"); throw e; }
+      finally { if (opc.senal) opc.senal.removeEventListener("abort", cancelar); }
+      const mime = esVideo ? "video/webm" : "audio/webm";
+      const blob = new Blob([output.target.buffer], { type: mime });
+      const r = { blob, mime, tipo: info.tipo, convertido: true, codecVideo: video ? video.codec : null, codecAudio: audio ? audio.codec : null, duracion: info.duracion,
+        ancho: video ? video.width : null, alto: video ? video.height : null, bytesAntes: archivo.size, bytesDespues: blob.size, nota: null };
+      // si el original ya era más ligero (y el navegador lo reproduce), se queda el original
+      if (blob.size >= archivo.size * 0.97 && reproducible(archivo.type)) return original(archivo, info, "El archivo ya era ligero; se sube como está.");
+      revisarTope(r);
+      return r;
+    } finally {
+      input.dispose && input.dispose();
     }
-    let audio;
-    if (at) {
-      const can = Math.min(2, at.numberOfChannels || 2);
-      // Opus 128 kb/s estéreo (64 kb/s en mono) ya no se distingue del original en casi ninguna grabación
-      const tasa = tasaAudio(info, can);
-      const codec = await M.getFirstEncodableAudioCodec(["opus"], { numberOfChannels: can, sampleRate: 48000, bitrate: tasa });
-      if (!codec) return original(archivo, info, "Este equipo no puede codificar Opus; se sube como está.");
-      audio = { codec, numberOfChannels: can, sampleRate: 48000, bitrate: tasa, forceTranscode: true };
-    }
-    const output = new M.Output({ format: new M.WebMOutputFormat(), target: new M.BufferTarget() });
-    const conv = await M.Conversion.init({ input, output, video: video || { discard: true }, audio: audio || { discard: true }, showWarnings: false });
-    if (!conv.isValid) {
-      const por = (conv.discardedTracks || []).map((d) => d.reason).join(", ");
-      return original(archivo, info, "No se pudo convertir (" + (por || "formato no soportado") + "); se sube como está.");
-    }
-    if (opc.alAvance) conv.onProgress = (p, t) => opc.alAvance(Math.max(0, Math.min(1, p)), t);
-    const cancelar = () => conv.cancel();
-    if (opc.senal) { if (opc.senal.aborted) throw errorNom("Conversión cancelada", "cancelado"); opc.senal.addEventListener("abort", cancelar, { once: true }); }
-    try { await conv.execute(); }
-    catch (e) { if (opc.senal && opc.senal.aborted) throw errorNom("Conversión cancelada", "cancelado"); throw e; }
-    finally { if (opc.senal) opc.senal.removeEventListener("abort", cancelar); }
-    const mime = esVideo ? "video/webm" : "audio/webm";
-    const blob = new Blob([output.target.buffer], { type: mime });
-    const r = { blob, mime, tipo: info.tipo, convertido: true, codecVideo: video ? video.codec : null, codecAudio: audio ? audio.codec : null, duracion: info.duracion,
-      ancho: video ? video.width : null, alto: video ? video.height : null, bytesAntes: archivo.size, bytesDespues: blob.size, nota: null };
-    // si el original ya era más ligero (y el navegador lo reproduce), se queda el original
-    if (blob.size >= archivo.size * 0.97 && reproducible(archivo.type)) return original(archivo, info, "El archivo ya era ligero; se sube como está.");
-    revisarTope(r);
-    return r;
   }
   /** Sin convertir: el archivo tal cual, si cabe y se puede reproducir. */
   function original(archivo, info, nota) {
@@ -185,27 +190,43 @@
    */
   async function aMp4(blob, opc) {
     opc = opc || {};
+    if (blob && blob.size > LIMITES.origenBytes) throw errorNom(`El archivo pesa ${MB(blob.size)}; el máximo para convertir es ${MB(LIMITES.origenBytes)}.`, "origen-grande");
     const M = await cargar();
     const input = new M.Input({ formats: M.ALL_FORMATS, source: new M.BlobSource(blob) });
-    const vt = await input.getPrimaryVideoTrack(), at = await input.getPrimaryAudioTrack();
-    let video = { discard: true }, audio = { discard: true }, nota = null;
-    if (vt) {
-      const codec = await M.getFirstEncodableVideoCodec(["avc"], { width: vt.displayWidth, height: vt.displayHeight });
-      if (!codec) throw errorNom("Este equipo no puede codificar H.264 para PowerPoint.", "sin-avc");
-      video = { codec, bitrate: M.QUALITY_HIGH, hardwareAcceleration: "prefer-hardware" };
+    try {
+      const vt = await input.getPrimaryVideoTrack(), at = await input.getPrimaryAudioTrack();
+      if (!vt && !at) throw errorNom("Ese archivo no tiene video ni audio.", "sin-pistas");
+      const dur = await input.computeDuration().catch(() => 0);
+      if (vt && dur > LIMITES.videoSeg) throw errorNom(`El video dura ${tiempo(dur)}; el máximo es ${tiempo(LIMITES.videoSeg)}.`, "largo");
+      if (!vt && dur > LIMITES.audioSeg) throw errorNom(`El audio dura ${tiempo(dur)}; el máximo es ${tiempo(LIMITES.audioSeg)}.`, "largo");
+      let video = { discard: true }, audio = { discard: true }, nota = null;
+      if (vt) {
+        const med = medidaSalida(vt.displayWidth || 1280, vt.displayHeight || 720);
+        const codec = await M.getFirstEncodableVideoCodec(["avc"], { width: med.ancho, height: med.alto });
+        if (!codec) throw errorNom("Este equipo no puede codificar H.264 para PowerPoint.", "sin-avc");
+        video = { codec, width: med.ancho, height: med.alto, fit: "contain", bitrate: M.QUALITY_HIGH, hardwareAcceleration: "prefer-hardware" };
+      }
+      if (at) {
+        const codec = await M.getFirstEncodableAudioCodec(["aac", "opus"], { numberOfChannels: Math.min(2, at.numberOfChannels || 2), sampleRate: 48000 });
+        if (!codec) throw errorNom("Este equipo no puede codificar el audio para PowerPoint.", "sin-aac");
+        if (codec !== "aac") nota = "Este equipo no tiene codificador AAC: el audio va en Opus y PowerPoint quizá no lo suene.";
+        audio = { codec, bitrate: 160000, numberOfChannels: Math.min(2, at.numberOfChannels || 2) };
+      }
+      const output = new M.Output({ format: new M.Mp4OutputFormat({ fastStart: "in-memory" }), target: new M.BufferTarget() });
+      const conv = await M.Conversion.init({ input, output, video, audio, showWarnings: false });
+      if (!conv.isValid) throw errorNom("No se pudo preparar el video para PowerPoint.", "mp4");
+      if (opc.alAvance) conv.onProgress = (p) => opc.alAvance(p);
+      const cancelar = () => conv.cancel();
+      if (opc.senal) { if (opc.senal.aborted) throw errorNom("Conversión cancelada", "cancelado"); opc.senal.addEventListener("abort", cancelar, { once: true }); }
+      try { await conv.execute(); }
+      catch (e) { if (opc.senal && opc.senal.aborted) throw errorNom("Conversión cancelada", "cancelado"); throw e; }
+      finally { if (opc.senal) opc.senal.removeEventListener("abort", cancelar); }
+      const out = new Blob([output.target.buffer], { type: vt ? "video/mp4" : "audio/mp4" });
+      revisarTope({ tipo: vt ? "video" : "audio", convertido: true, bytesDespues: out.size });
+      return { blob: out, nota };
+    } finally {
+      input.dispose && input.dispose();
     }
-    if (at) {
-      const codec = await M.getFirstEncodableAudioCodec(["aac", "opus"], { numberOfChannels: Math.min(2, at.numberOfChannels || 2), sampleRate: 48000 });
-      if (!codec) throw errorNom("Este equipo no puede codificar el audio para PowerPoint.", "sin-aac");
-      if (codec !== "aac") nota = "Este equipo no tiene codificador AAC: el audio va en Opus y PowerPoint quizá no lo suene.";
-      audio = { codec, bitrate: 160000, numberOfChannels: Math.min(2, at.numberOfChannels || 2) };
-    }
-    const output = new M.Output({ format: new M.Mp4OutputFormat({ fastStart: "in-memory" }), target: new M.BufferTarget() });
-    const conv = await M.Conversion.init({ input, output, video, audio, showWarnings: false });
-    if (!conv.isValid) throw errorNom("No se pudo preparar el video para PowerPoint.", "mp4");
-    if (opc.alAvance) conv.onProgress = (p) => opc.alAvance(p);
-    await conv.execute();
-    return { blob: new Blob([output.target.buffer], { type: vt ? "video/mp4" : "audio/mp4" }), nota };
   }
 
   // ------------------------------------------------------------ elegir y convertir con su ventana de avance

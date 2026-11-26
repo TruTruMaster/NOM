@@ -39,7 +39,9 @@
   }
   async function descifrarBytes(llave, texto) {
     const b = deB64(texto.slice(PREFIJO.length));
+    if (!b.length || (b[0] !== 1 && b[0] !== 2)) throw new Error("Formato cifrado no válido");
     const alg = b[0] === 1 ? "gcm" : "ctr", n = alg === "gcm" ? 12 : 16;
+    if (b.length < 1 + n) throw new Error("Datos cifrados incompletos");
     return C().descifrar(llave, { alg, iv: b.subarray(1, 1 + n), ct: b.subarray(1 + n) });
   }
   const cifrarValor = (llave, v) => cifrarBytes(llave, C().bytes(JSON.stringify(v)));
@@ -77,14 +79,22 @@
   }
 
   // ------------------------------------------------------------ operaciones y estados
+  const RESERVADO = new Set(["__proto__", "constructor", "prototype"]);
+  const propio = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
   async function cifrarCampos(llave, campos) {
     const r = {};
-    for (const c in campos || {}) r[c] = claro(c) || campos[c] === null || campos[c] === undefined || cifrado(campos[c]) ? campos[c] : await cifrarValor(llave, campos[c]);
+    for (const c in campos || {}) {
+      if (!propio(campos, c) || RESERVADO.has(c)) continue;
+      r[c] = claro(c) || campos[c] === null || campos[c] === undefined || cifrado(campos[c]) ? campos[c] : await cifrarValor(llave, campos[c]);
+    }
     return r;
   }
   async function descifrarCampos(llave, campos) {
     const r = {};
-    for (const c in campos || {}) r[c] = cifrado(campos[c]) ? await descifrarValor(llave, campos[c]) : campos[c];
+    for (const c in campos || {}) {
+      if (!propio(campos, c) || RESERVADO.has(c)) continue;
+      r[c] = cifrado(campos[c]) ? await descifrarValor(llave, campos[c]) : campos[c];
+    }
     return r;
   }
   async function cifrarSeq(llave, s, t, n) {
@@ -126,13 +136,17 @@
     if (!est) return est;
     const r = Object.assign({}, est, { bloques: {}, seq: {} });
     for (const b in est.bloques || {}) {
-      r.bloques[b] = {};
+      if (!propio(est.bloques, b) || RESERVADO.has(b)) continue;
+      const tb = {};
       for (const c in est.bloques[b]) {
+        if (!propio(est.bloques[b], c) || RESERVADO.has(c)) continue;
         const g = est.bloques[b][c];
-        r.bloques[b][c] = g && cifrado(g.v) ? Object.assign({}, g, { v: await descifrarValor(llave, g.v) }) : g;
+        tb[c] = g && cifrado(g.v) ? Object.assign({}, g, { v: await descifrarValor(llave, g.v) }) : g;
       }
+      r.bloques[b] = tb;
     }
     for (const b in est.seq || {}) {
+      if (!propio(est.seq, b) || RESERVADO.has(b)) continue;
       const s = est.seq[b] || {};
       const ins = [];
       for (const e of s.ins || []) {
@@ -149,6 +163,7 @@
   async function descifrarFoto(llave, foto) {
     const r = {};
     for (const b in foto || {}) {
+      if (!propio(foto, b) || RESERVADO.has(b)) continue;
       if (b.startsWith("_seq:")) {
         const s = foto[b] || {}, ins = [];
         for (const e of s.ins || []) { const x = Object.assign({}, e); if (e.cx && typeof e.x === "string") { x.x = letras(llave, e.n, e.t, e.x, -1); delete x.cx; } if (cifrado(e.e)) x.e = await descifrarValor(llave, e.e); ins.push(x); }
@@ -227,19 +242,22 @@
     } catch (e) { console.warn(e); return false; }
   }
 
-  async function derivarCompartida(privJwk, pubJwk) {
-    const priv = await crypto.subtle.importKey("jwk", privJwk, { name: "ECDH", namedCurve: "P-256" }, false, ["deriveBits"]);
+  async function derivarConLlave(priv, pubJwk) {
     const pub = await crypto.subtle.importKey("jwk", pubJwk, { name: "ECDH", namedCurve: "P-256" }, false, []);
     const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: "ECDH", public: pub }, priv, 256));
     // "nom-colab" (el nombre de antes) se queda así a propósito: con otro texto no se abrirían los espacios cifrados.
     return C().sha256(unir(bits, C().bytes("nom-colab/e2e/envoltura")));
   }
+  async function derivarCompartida(privJwk, pubJwk) {
+    const priv = await crypto.subtle.importKey("jwk", privJwk, { name: "ECDH", namedCurve: "P-256" }, false, ["deriveBits"]);
+    return derivarConLlave(priv, pubJwk);
+  }
   /** Envuelve una llave para una llave pública (ECDH con una llave de un solo uso). */
   async function envolverPara(publicaJwkTexto, llave) {
     if (!hayWebCrypto()) throw new Error("Para dar llaves hace falta una conexión segura (https) o la app");
-    const eph = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
-    const ephPriv = await crypto.subtle.exportKey("jwk", eph.privateKey), ephPub = await crypto.subtle.exportKey("jwk", eph.publicKey);
-    const k = await derivarCompartida(ephPriv, JSON.parse(publicaJwkTexto));
+    const eph = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, false, ["deriveBits"]);
+    const ephPub = await crypto.subtle.exportKey("jwk", eph.publicKey);
+    const k = await derivarConLlave(eph.privateKey, JSON.parse(publicaJwkTexto));
     return JSON.stringify({ epk: ephPub, s: await cifrarBytes(k, llave) });
   }
   async function abrirEnvuelta(texto) {
@@ -252,6 +270,18 @@
 
   // ------------------------------------------------------------ llaves de espacios y documentos
   const memEsp = new Map(), memDoc = new Map(), espCifrado = new Map();
+  function limpiar() {
+    memEsp.clear();
+    memDoc.clear();
+    espCifrado.clear();
+    hashNodo.clear();
+    try {
+      for (let i = sessionStorage.length - 1; i >= 0; i--) {
+        const k = sessionStorage.key(i);
+        if (k && k.startsWith("nom.e2e.inv.")) sessionStorage.removeItem(k);
+      }
+    } catch (e) { /* sin almacenamiento */ }
+  }
   function guardarLlaveEspacio(espacioId, llave) { memEsp.set(espacioId, llave); recordar("esp." + espacioId, b64(llave)); espCifrado.set(espacioId, true); }
   /** La llave de un espacio cifrado (o null si este equipo no la tiene). esp: { id, e2e, miLlave } si ya se sabe. */
   async function llaveEspacio(espacioId, esp) {
@@ -260,7 +290,7 @@
     if (g) { const k = deB64(g); memEsp.set(espacioId, k); return k; }
     let mia = esp && esp.miLlave;
     if (!mia && (!esp || esp.e2e)) {
-      try { const l = await api().get(`/api/espacios/${espacioId}/llaves`, undefined, { ms: 8000, sin401: true, crudo: true }); mia = l.mia; espCifrado.set(espacioId, !!l.e2e); } catch (e) { return null; }
+      try { const l = await api().get(`/api/espacios/${encodeURIComponent(espacioId)}/llaves`, undefined, { ms: 8000, sin401: true, crudo: true }); mia = l.mia; espCifrado.set(espacioId, !!l.e2e); } catch (e) { return null; }
     }
     if (!mia) return null;
     try { const k = await abrirEnvuelta(mia); if (k) { guardarLlaveEspacio(espacioId, k); return k; } } catch (e) { console.warn(e); }
@@ -300,15 +330,16 @@
     const k = await llaveEspacio(espacioId);
     if (!k || !hayWebCrypto()) return 0;
     let l;
-    try { l = await api().get(`/api/espacios/${espacioId}/llaves`, undefined, { crudo: true }); } catch (e) { return 0; }
+    const eid = encodeURIComponent(espacioId);
+    try { l = await api().get(`/api/espacios/${eid}/llaves`, undefined, { crudo: true }); } catch (e) { return 0; }
     let n = 0;
     for (const x of l.faltan || []) {
       if (!x.publica) continue;
-      try { await api().put(`/api/espacios/${espacioId}/llaves`, { usuario: x.id, llave: await envolverPara(x.publica, k) }); n++; } catch (e) { console.warn(e); }
+      try { await api().put(`/api/espacios/${eid}/llaves`, { usuario: x.id, llave: await envolverPara(x.publica, k) }); n++; } catch (e) { console.warn(e); }
     }
     if (!l.mia) {
       const pub = recordado("publica");
-      if (pub) try { await api().put(`/api/espacios/${espacioId}/llaves`, { llave: await envolverPara(pub, k) }); } catch (e) { /* luego */ }
+      if (pub) try { await api().put(`/api/espacios/${eid}/llaves`, { llave: await envolverPara(pub, k) }); } catch (e) { /* luego */ }
     }
     return n;
   }
@@ -474,7 +505,7 @@
   NOM.e2e = {
     hayWebCrypto, cifrado, prepararCuenta, reenvolver, recuperarConCodigo, llaveEspacio, llaveDoc, repartir, fragmento,
     recordarInvitacion, alEntrar, alEnviar, alRecibir, descifrarEnVivo, esCifrado, llaveDocTexto, estadoConLlave, valorConLlave,
-    nombreDoc, nombreEspacio, espacioCifrado,
+    nombreDoc, nombreEspacio, espacioCifrado, limpiar,
     // para las pruebas
     _letras: letras, _cifrarOps: cifrarOps, _descifrarOps: descifrarOps, _b64: b64, _deB64: deB64,
   };

@@ -68,8 +68,32 @@ public final class Respaldo {
         File tmp = new File(dir, destino.getName() + ".tmp");
         try (ZipOutputStream z = new ZipOutputStream(new FileOutputStream(tmp))) {
             agregar(z, datos, "");
+        } catch (IOException | RuntimeException e) {
+            tmp.delete();
+            throw e;
         }
         if (!tmp.renameTo(destino)) { tmp.delete(); throw new IOException("No se pudo guardar " + destino.getName()); }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static byte[] espaciosSinTokens(File f) throws IOException {
+        try {
+            Object leido = Json.YO.leer(Almacen.leerTexto(f));
+            if (leido instanceof java.util.Map) {
+                for (Object v : ((java.util.Map<?, ?>) leido).values()) {
+                    if (v instanceof java.util.Map) {
+                        Object sinc = ((java.util.Map<String, Object>) v).get("sincronia");
+                        if (sinc instanceof java.util.Map) {
+                            ((java.util.Map<String, Object>) sinc).remove("token");
+                        }
+                    }
+                }
+                return Json.YO.escribir(leido);
+            }
+        } catch (RuntimeException ignorado) {
+            // si el archivo está dañado, no se detiene el respaldo completo
+        }
+        return null;
     }
 
     private static void agregar(ZipOutputStream z, File f, String ruta) throws IOException {
@@ -80,9 +104,17 @@ public final class Respaldo {
         for (File h : hijos) {
             String nombre = ruta.isEmpty() ? h.getName() : ruta + "/" + h.getName();
             if (h.isDirectory()) { agregar(z, h, nombre); continue; }
-            // Los temporales y los respaldos rotativos no hacen falta en el .zip.
-            if (h.getName().endsWith(".tmp") || h.getName().matches(".*\\.resp\\d$")) continue;
+            // Los temporales, respaldos rotativos y sesiones activas no salen en el .zip.
+            if (h.getName().endsWith(".tmp") || h.getName().matches(".*\\.resp\\d$") || nombre.equals("sesiones.json")) continue;
             z.putNextEntry(new ZipEntry("servidor/" + nombre));
+            if (nombre.equals("espacios.json")) {
+                byte[] limpio = espaciosSinTokens(h);
+                if (limpio != null) {
+                    z.write(limpio);
+                    z.closeEntry();
+                    continue;
+                }
+            }
             try (InputStream in = new FileInputStream(h)) {
                 int n;
                 while ((n = in.read(buf)) > 0) z.write(buf, 0, n);

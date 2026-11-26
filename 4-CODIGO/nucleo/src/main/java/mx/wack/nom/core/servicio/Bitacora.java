@@ -22,6 +22,17 @@ public final class Bitacora {
 
     public void error(String m, Throwable e) { anotar(Level.SEVERE, m, e); }
 
+    private static String limpio(Object o) {
+        String s = String.valueOf(o);
+        if (s.length() > 500) s = s.substring(0, 500) + "…";
+        StringBuilder b = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            b.append(c < 0x20 || c == 0x7f ? ' ' : c);
+        }
+        return b.toString();
+    }
+
     private void anotar(Level nivel, String m, Throwable e, Object... datos) {
         if (!log.isLoggable(nivel)) return;
         StringBuilder sb = new StringBuilder();
@@ -29,7 +40,7 @@ public final class Bitacora {
         while (i < m.length()) {
             int j = m.indexOf("{}", i);
             if (j < 0 || k >= datos.length) { sb.append(m, i, m.length()); break; }
-            sb.append(m, i, j).append(datos[k++]);
+            sb.append(m, i, j).append(limpio(datos[k++]));
             i = j + 2;
         }
         log.log(nivel, sb.toString(), e);

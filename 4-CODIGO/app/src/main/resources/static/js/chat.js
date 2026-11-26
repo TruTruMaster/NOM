@@ -53,26 +53,29 @@
       $$(".chat-msg", lista).forEach((el) => (el.oncontextmenu = (e) => { e.preventDefault(); opciones(mensajes.find((x) => x.id === el.dataset.m), el); }));
     }
 
+    const eid = encodeURIComponent(esp.id);
     async function cargar() {
-      try { const r = await api().get(`/api/espacios/${esp.id}/chat`); mensajes = r.mensajes || []; pintar(); }
+      try { const r = await api().get(`/api/espacios/${eid}/chat`); mensajes = r.mensajes || []; pintar(); }
       catch (e) { lista.innerHTML = `<div class="alerta error">${ico("triangle-alert")}<span>${esc(e.message)}</span></div>`; }
     }
 
     async function verAdjunto(m, b) {
       b.disabled = true;
       try {
-        const r = await api().get(`/api/espacios/${esp.id}/chat/${m.id}/adjunto`, undefined, { ms: 30000 });
+        const r = await api().get(`/api/espacios/${eid}/chat/${encodeURIComponent(m.id)}/adjunto`, undefined, { ms: 30000 });
         const mime = m.adjunto.mime || "application/octet-stream";
         // Se comprueba que el archivo llegó completo (base64) y la imagen se arma como elemento.
         const datos = r && typeof r.datos === "string" ? r.datos : "";
         if (!/^[A-Za-z0-9+/]*={0,2}$/.test(datos)) throw new Error("El archivo llegó dañado y no se puede abrir");
         if (m.adjunto.tipo === "imagen" && /^image\/[a-z0-9.+-]+$/i.test(mime)) {
-          const caja = $(`[data-img="${m.id}"]`, lista);
-          const img = document.createElement("img");
-          img.className = "chat-img";
-          img.alt = m.adjunto.nombre || "Imagen";
-          img.src = "data:" + mime + ";base64," + datos;
-          caja.replaceChildren(img);
+          const caja = $(`[data-img="${CSS.escape(String(m.id))}"]`, lista);
+          if (caja) {
+            const img = document.createElement("img");
+            img.className = "chat-img";
+            img.alt = m.adjunto.nombre || "Imagen";
+            img.src = "data:" + mime + ";base64," + datos;
+            caja.replaceChildren(img);
+          }
         } else {
           const bytes = Uint8Array.from(atob(datos), (c) => c.charCodeAt(0));
           NOM.formatos.descargarBytes(m.adjunto.nombre || "archivo", mime, bytes);
@@ -89,7 +92,7 @@
         { texto: "Reportar…", icono: "flag", fn: () => reportar(m) },
         ...(puedeBorrar ? ["-", { texto: "Borrar", icono: "trash-2", peligro: true, fn: async () => {
           if (!(await confirmar("Borrar el mensaje", "Se borra para todos.", { si: "Borrar", peligro: true }))) return;
-          try { await api().delete(`/api/espacios/${esp.id}/chat/${m.id}`); } catch (e) { aviso(e.message, { tipo: "error" }); }
+          try { await api().delete(`/api/espacios/${eid}/chat/${encodeURIComponent(m.id)}`); } catch (e) { aviso(e.message, { tipo: "error" }); }
         } }] : []),
       ]);
     }
@@ -112,7 +115,7 @@
       const t = texto.value.trim();
       if (!t) return;
       texto.disabled = true;
-      try { await api().post(`/api/espacios/${esp.id}/chat`, { texto: t }); texto.value = ""; }
+      try { await api().post(`/api/espacios/${eid}/chat`, { texto: t }); texto.value = ""; }
       catch (x) { aviso(x.message, { tipo: "error" }); }
       texto.disabled = false; texto.focus();
     };
@@ -121,14 +124,20 @@
       if (!f) return;
       if (f.size > MAX) return aviso("El archivo pasa de 2 MB. Súbelo como documento del espacio.", { tipo: "aviso", ms: 6000 });
       try {
-        const datos = await leerArchivo(f);
-        await api().post(`/api/espacios/${esp.id}/chat`, { texto: texto.value.trim(), adjunto: { tipo: /^image\//.test(f.type) ? "imagen" : "archivo", nombre: f.name, mime: f.type || "application/octet-stream", datos } }, { ms: 60000 });
+        let datos, mime = f.type || "application/octet-stream";
+        if (/^image\/(jpeg|png|webp|bmp|avif)/i.test(mime) && NOM.formatos && NOM.formatos.imagenADataUrl) {
+          const url = await NOM.formatos.imagenADataUrl(f);
+          const mUrl = /^data:([^;,]+);base64,(.+)$/.exec(url || "");
+          if (mUrl) { mime = mUrl[1]; datos = mUrl[2]; }
+        }
+        if (!datos) datos = await leerArchivo(f);
+        await api().post(`/api/espacios/${eid}/chat`, { texto: texto.value.trim(), adjunto: { tipo: /^image\//.test(mime) ? "imagen" : "archivo", nombre: f.name, mime, datos } }, { ms: 60000 });
         texto.value = "";
       } catch (x) { aviso(x.message, { tipo: "error" }); }
     };
 
     // En vivo: el canal del espacio avisa de cada mensaje (se vuelve a pedir la lista: así llega descifrado).
-    const canal = api().eventos(`/api/espacios/${esp.id}/eventos`, "chat-" + Math.random().toString(36).slice(2, 7), {
+    const canal = api().eventos(`/api/espacios/${eid}/eventos`, "chat-" + Math.random().toString(36).slice(2, 7), {
       chat: () => cargar(),
       hola: () => cargar(),
     });

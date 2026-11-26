@@ -59,8 +59,11 @@
       if (!s) { s = document.createElementNS("http://www.w3.org/2000/svg", "svg"); s.setAttribute("class", "pres-marcas"); d.append(s); }
       s.setAttribute("viewBox", `0 0 ${T.w} ${T.h}`);
       const m = marcas || {}, c = /^#[0-9a-f]{6}$/i.test(m.color || "") ? m.color : "#F2385A";
-      s.innerHTML = (m.trazos || []).map((t) => `<polyline points="${t.map(Number).join(" ")}" fill="none" stroke="${c}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>`).join("")
-        + (m.puntero ? `<circle cx="${+m.puntero.x}" cy="${+m.puntero.y}" r="10" fill="#F2385A" fill-opacity=".85"/><circle cx="${+m.puntero.x}" cy="${+m.puntero.y}" r="22" fill="#F2385A" fill-opacity=".25"/>` : "");
+      const trazos = Array.isArray(m.trazos) ? m.trazos.slice(0, 100) : [];
+      const px = m.puntero && Number.isFinite(+m.puntero.x) ? +m.puntero.x : null;
+      const py = m.puntero && Number.isFinite(+m.puntero.y) ? +m.puntero.y : null;
+      s.innerHTML = trazos.filter(Array.isArray).map((t) => `<polyline points="${t.slice(0, 2000).map((v) => (Number.isFinite(+v) ? +v : 0)).join(" ")}" fill="none" stroke="${c}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>`).join("")
+        + (px != null && py != null ? `<circle cx="${px}" cy="${py}" r="10" fill="#F2385A" fill-opacity=".85"/><circle cx="${px}" cy="${py}" r="22" fill="#F2385A" fill-opacity=".25"/>` : "");
     }
     // La transición de PowerPoint de la diapositiva (la que se elige en el panel, «transOffice:», o la de antes, «trans:»),
     // como la ve quien presenta.

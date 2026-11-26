@@ -141,7 +141,7 @@ public class ServicioCuentas {
 
     private boolean comprobar(char[] secreto, String sal, String hash) {
         boolean turno;
-        try { turno = turnos.tryAcquire(20, java.util.concurrent.TimeUnit.SECONDS); }
+        try { turno = turnos.tryAcquire(4, java.util.concurrent.TimeUnit.SECONDS); }
         catch (InterruptedException e) { Thread.currentThread().interrupt(); turno = false; }
         if (!turno) {
             java.util.Arrays.fill(secreto, '\0');
@@ -272,6 +272,7 @@ public class ServicioCuentas {
     private static String llaveValida(String t, int max, String campo) {
         if (t == null || t.isBlank()) return null;
         if (t.length() > max) throw ErrorNom.invalido("Llave demasiado grande", campo);
+        for (int i = 0; i < t.length(); i++) if (t.charAt(i) < 0x20 || t.charAt(i) == 0x7f) throw ErrorNom.invalido("Llave no válida", campo);
         return t;
     }
 

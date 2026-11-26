@@ -43,4 +43,30 @@ public final class Topes {
         gastos.computeIfAbsent(clave, k -> new ArrayDeque<>()).addLast(new long[] { ahora, ms });
         if (gastos.size() > 20_000) gastos.values().removeIf(q -> q.isEmpty() || ahora - q.peekLast()[0] > MINUTO);
     }
+
+    /** Códigos que no existen por red en 10 minutos (enlaces, proyecciones): compartido por Spring y el teléfono. */
+    private final Map<String, ArrayDeque<Long>> noExisten = new HashMap<>();
+    private static final int MAX_NO_EXISTEN = 120;
+    private static final long VENTANA_CODIGOS = 600_000L;
+
+    public <T> T conTopeNoExiste(String origen, java.util.function.Supplier<T> f) {
+        String de = Hosts.agruparRed(origen);
+        long ahora = System.currentTimeMillis();
+        if (de != null) synchronized (noExisten) {
+            ArrayDeque<Long> l = noExisten.get(de);
+            if (l != null) {
+                while (!l.isEmpty() && ahora - l.peekFirst() > VENTANA_CODIGOS) l.pollFirst();
+                if (l.size() >= MAX_NO_EXISTEN)
+                    throw new ErrorNom(ErrorNom.DEMASIADOS, "Demasiados códigos que no existen desde esta red: espera unos minutos");
+            }
+        }
+        try { return f.get(); }
+        catch (ErrorNom e) {
+            if (de != null && e.estado == ErrorNom.NO_EXISTE) synchronized (noExisten) {
+                noExisten.computeIfAbsent(de, k -> new ArrayDeque<>()).addLast(ahora);
+                if (noExisten.size() > 5_000) noExisten.values().removeIf(q -> q.isEmpty() || ahora - q.peekLast() > VENTANA_CODIGOS);
+            }
+            throw e;
+        }
+    }
 }

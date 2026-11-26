@@ -126,6 +126,58 @@ final class Almacen {
         }
     }
 
+    /** Las últimas 'max' líneas no vacías (del final hacia atrás), sin leer todo el archivo en memoria. */
+    java.util.List<String> ultimasLineas(String relativa, int max) {
+        java.util.List<String> r = new java.util.ArrayList<>();
+        if (max <= 0) return r;
+        File f = ruta(relativa);
+        if (!f.isFile()) return r;
+        try (java.io.RandomAccessFile a = new java.io.RandomAccessFile(f, "r")) {
+            long pos = a.length();
+            long leidoTotal = 0;
+            ByteArrayOutputStream cola = new ByteArrayOutputStream();
+            byte[] buf = new byte[64 * 1024];
+            while (pos > 0 && r.size() < max && leidoTotal < 4L * 1024 * 1024) {
+                int paso = (int) Math.min(buf.length, pos);
+                pos -= paso;
+                a.seek(pos);
+                a.readFully(buf, 0, paso);
+                leidoTotal += paso;
+                for (int i = paso - 1; i >= 0; i--) {
+                    byte b = buf[i];
+                    if (b == '\n') {
+                        if (cola.size() > 0) {
+                            String l = invertir(cola.toByteArray()).trim();
+                            cola.reset();
+                            if (!l.isEmpty()) {
+                                r.add(l);
+                                if (r.size() >= max) break;
+                            }
+                        }
+                    } else if (b != '\r') {
+                        cola.write(b);
+                    }
+                }
+            }
+            if (cola.size() > 0 && r.size() < max) {
+                String l = invertir(cola.toByteArray()).trim();
+                if (!l.isEmpty()) r.add(l);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("No se pudo leer " + f.getName(), e);
+        }
+        return r;
+    }
+
+    private static String invertir(byte[] b) {
+        for (int i = 0, j = b.length - 1; i < j; i++, j--) {
+            byte t = b[i];
+            b[i] = b[j];
+            b[j] = t;
+        }
+        return new String(b, StandardCharsets.UTF_8);
+    }
+
     long tamano(String relativa) {
         File f = ruta(relativa);
         return f.isFile() ? f.length() : 0;

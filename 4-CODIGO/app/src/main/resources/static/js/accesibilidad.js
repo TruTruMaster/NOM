@@ -31,7 +31,7 @@
     return r != null && r < ((+pt || 11) >= 18 || ((+pt || 11) >= 14 && negrita) ? 3 : 4.5) ? Math.round(r * 100) / 100 : null;
   };
   // vínculos que no dicen a dónde llevan
-  const VINCULO_VAGO = /^\s*(aqu[ií]|clic aqu[ií]|haz clic aqu[ií]|da clic aqu[ií]|click here|here|m[aá]s|leer m[aá]s|ver m[aá]s|read more|more|link|enlace|v[ií]nculo|este enlace|este v[ií]nculo|https?:\/\/\S+|www\.\S+)\s*\.?\s*$/i;
+  const VINCULO_VAGO = /^(aqu[ií]|clic aqu[ií]|haz clic aqu[ií]|da clic aqu[ií]|click here|here|m[aá]s|leer m[aá]s|ver m[aá]s|read more|more|link|enlace|v[ií]nculo|este enlace|este v[ií]nculo|https?:\/\/\S+|www\.\S+)\.?$/i;
   const recorta = (s, n = 50) => { s = String(s || "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
 
   // ------------------------------------------------------------ texto (Word)
@@ -42,7 +42,7 @@
     ps.forEach((p, i) => {
       const texto = p.tramos.map((t) => t.x || "").join(""), donde = recorta(texto) || `Párrafo ${i + 1}`;
       // títulos: no saltarse niveles
-      const nv = NIVEL[p.pa.estilo];
+      const nv = Object.prototype.hasOwnProperty.call(NIVEL, p.pa.estilo) ? NIVEL[p.pa.estilo] : 0;
       if (nv) { if (nivelAnt && nv > nivelAnt + 1) out.push({ nivel: "consejo", regla: "Se salta un nivel de título", donde, ir: { parrafo: i } }); nivelAnt = nv; }
       // renglones vacíos seguidos para acomodar
       if (!texto.trim() && !p.tramos.some((t) => t.e)) { vacios++; if (vacios === 3) out.push({ nivel: "advertencia", regla: "Caracteres en blanco repetidos (renglones vacíos para acomodar)", donde: `Párrafo ${i + 1}`, ir: { parrafo: i } }); }
@@ -59,7 +59,7 @@
           return;
         }
         const a = t.a || {};
-        if (a.enlace && VINCULO_VAGO.test(t.x || "")) out.push({ nivel: "advertencia", regla: "Texto de vínculo poco claro", donde: `«${recorta(t.x, 40)}»`, ir: { parrafo: i } });
+        if (a.enlace && VINCULO_VAGO.test(String(t.x || "").trim())) out.push({ nivel: "advertencia", regla: "Texto de vínculo poco claro", donde: `«${recorta(t.x, 40)}»`, ir: { parrafo: i } });
         const r = a.color && (t.x || "").trim() ? pocoContraste(a.color, a.fondo, a.tam, a.b) : null;
         if (r) out.push({ nivel: "advertencia", regla: `Texto con poco contraste (${r} a 1)`, donde: `«${recorta(t.x, 40)}»`, ir: { parrafo: i } });
       });
