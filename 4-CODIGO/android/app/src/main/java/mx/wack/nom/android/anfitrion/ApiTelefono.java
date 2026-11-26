@@ -37,7 +37,7 @@ final class ApiTelefono {
     private static final int MAX_PEQUENO = 256 * 1024;
     private static final int MAX_RECIBO = 2 * 1024 * 1024;
     private static final int MAX_MEDIANO = 12 * 1024 * 1024;
-    private static final int MAX_GRANDE = 25 * 1024 * 1024;
+    private static final int MAX_GRANDE = 32 * 1024 * 1024;
     private static final int MAX_BINARIO = 40 * 1024 * 1024;
 
     private final ServicioCuentas cuentas;
