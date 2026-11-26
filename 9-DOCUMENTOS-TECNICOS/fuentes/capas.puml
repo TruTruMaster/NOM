@@ -1,0 +1,30 @@
+@startuml
+skinparam defaultFontName Calibri
+skinparam defaultFontSize 13
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam rectangleBackgroundColor #F4F4FA
+skinparam rectangleBorderColor #2B2952
+skinparam componentBackgroundColor #F4F4FA
+skinparam componentBorderColor #2B2952
+package "Cliente (navegador o app de Android)" {
+  [Vistas\nvista-cuentas, vista-espacios,\neditor, modo-texto, modo-hoja,\nlienzo, diapositivas] as V
+  [Controlador del cliente\napp.js (rutas #/…), api.js,\nmanejadores de eventos] as CC
+  [Modelo del cliente\ncrdt.js, secuencia.js,\nbóveda cifrada (IndexedDB)] as MC
+}
+package "Servidor (Spring Boot o teléfono)" {
+  [Controladores REST\nCuentasApi, EspaciosApi,\nDocumentosApi, BinariosApi…] as C
+  [Modelo: servicios del núcleo\nServicioCuentas, ServicioEspacios,\nServicioDocumentos, MotorCRDT…] as S
+  [DAO: interfaces Repositorio*\nUsuarios, Espacios,\nDocumentos, Binarios] as D
+}
+database "H2 (cuentas)" as H2
+folder "Archivos JSON y binarios\n(cifrados en reposo)" as F
+V --> CC
+CC --> MC
+CC --> C : HTTP/JSON
+C --> S
+S --> D
+D --> H2 : JDBC
+D --> F
+S ..> CC : SSE (en vivo)
+@enduml

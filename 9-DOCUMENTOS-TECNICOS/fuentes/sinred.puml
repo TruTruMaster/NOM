@@ -1,0 +1,22 @@
+@startuml
+skinparam defaultFontName Calibri
+skinparam defaultFontSize 12
+skinparam shadowing false
+participant "Equipo A" as A
+participant "Servidor" as S
+participant "Equipo B" as B
+A -> S : cambios (con acuse)
+S --> B : SSE
+== A pierde la red ==
+A -> A : sigue editando;\ncola cifrada en el equipo
+B -> S : B también edita
+== vuelve la red ==
+A -> S : ¿qué cambió desde mi base?
+alt nadie más cambió o fueron menos de 2 min
+  A -> S : manda la cola en orden
+  S --> B : SSE
+else otros cambiaron el documento
+  A -> S : lo de A va a una RAMA
+  note right of S : se compara y se fusiona\ncuando la persona decide
+end
+@enduml

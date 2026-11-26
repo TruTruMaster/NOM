@@ -1,0 +1,19 @@
+@startuml
+skinparam defaultFontName Calibri
+skinparam defaultFontSize 12
+skinparam shadowing false
+node "Navegador\n(computadora o celular)" as N1
+node "App de Android\n(WebView)" as N2
+cloud "Cloudflare\n(HTTPS, túnel)" as CF
+node "Raspberry Pi 5\nnube de NOM\nSpring Boot + H2" as PI
+node "Computadora del salón\nSpring Boot (red local)" as PC
+node "Teléfono que comparte\nServidorHttp + ApiTelefono" as TEL
+N1 --> CF : HTTPS (HTTP/2)
+N2 --> CF : HTTPS
+CF --> PI : túnel cifrado
+N1 --> PC : HTTP en el Wi-Fi\n(código QR)
+N2 --> TEL : HTTP en su punto\nde acceso
+PC ..> N1 : anuncio UDP 47474
+PC <--> PI : copia del espacio\n(cada 5 min)
+TEL <--> PI : copia y pases firmados
+@enduml

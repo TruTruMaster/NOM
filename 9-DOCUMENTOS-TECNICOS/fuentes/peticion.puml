@@ -1,0 +1,25 @@
+@startuml
+skinparam defaultFontName Calibri
+skinparam defaultFontSize 12
+skinparam shadowing false
+actor "Persona" as P
+participant "Editor\n(vista)" as V
+participant "crdt.js\n(modelo cliente)" as M
+participant "Filtros y\nFiltroSesion" as F
+participant "DocumentosApi\n(controlador)" as C
+participant "ServicioDocumentos\n(modelo)" as S
+participant "RepositorioDocumentos\n(DAO)" as D
+participant "Difusor" as X
+P -> V : escribe una letra
+V -> M : operación (t, nodo)
+M -> M : se aplica y se guarda en la cola
+M -> F : POST /api/documentos/{id}/ops
+F -> C : sesión comprobada
+C -> S : aplicar(usuario, ops)
+S -> S : permiso y CRDT
+S -> D : estado del documento
+S -> X : ops nuevas
+X --> V : SSE a los demás
+C --> M : { aplicadas, reloj }
+M -> M : se quita de la cola
+@enduml
