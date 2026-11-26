@@ -7,7 +7,7 @@
 
 El diagrama sale de componentes.puml (plantuml -tpng componentes.puml).
 """
-import os, re, subprocess, tempfile
+import datetime, os, sys, re, subprocess, tempfile
 from docx import Document
 from docx.enum.section import WD_SECTION
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING, WD_BREAK
@@ -64,7 +64,7 @@ TEXTO = [
     ("ref", "Lamport, L. (1978). Time, clocks, and the ordering of events in a distributed system. *Communications of the ACM, 21*(7), 558-565. https://doi.org/10.1145/359545.359563", ""),
     ("ref", "Liu, M. L. (2004). *Computación distribuida: Fundamentos y aplicaciones*. Pearson Educación.", ""),
     ("ref", "Özsu, M. T. y Valduriez, P. (2020). *Principles of distributed database systems* (4.ª ed.). Springer.", ""),
-    ("ref", "Shapiro, M., Preguiça, N., Baquero, C. y Zawirski, M. (2011). Conflict-free replicated data types. En *Stabilization, Safety, and Security of Distributed Systems* (pp. 386-400). Springer.", ""),
+    ("ref", "Shapiro, M., Preguiça, N., Baquero, C. y Zawirski, M. (2011). Conflict-free replicated data types. En X. Défago, F. Petit y V. Villain (Eds.), *Stabilization, safety, and security of distributed systems* (pp. 386-400). Springer. https://doi.org/10.1007/978-3-642-24550-3_29", ""),
     ("ref", "Tanenbaum, A. S. y van Steen, M. (2008). *Sistemas distribuidos: Principios y paradigmas* (2.ª ed.). Pearson Educación.", ""),
 ]
 
@@ -100,8 +100,12 @@ def armar(version, ruta):
     est = d.styles["Normal"]
     est.font.name = "Times New Roman"; est.font.size = Pt(12)
     est.element.rPr.rFonts.set(qn("w:eastAsia"), "Times New Roman")
-    d.core_properties.author = AUTOR
-    d.core_properties.title = TITULO
+    # Propiedades del archivo: las del autor (sin las que deja la biblioteca: comentario y fecha de su plantilla).
+    cp = d.core_properties
+    cp.author = AUTOR; cp.last_modified_by = AUTOR; cp.title = TITULO
+    cp.comments = ""; cp.subject = ""; cp.keywords = ""; cp.category = ""
+    cp.created = cp.modified = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0, tzinfo=None)
+    cp.revision = 1
     s = d.sections[0]
     s.page_width, s.page_height = Cm(21.59), Cm(27.94)
     s.top_margin = s.bottom_margin = s.left_margin = s.right_margin = Cm(2.5)
@@ -136,7 +140,11 @@ def armar(version, ruta):
             r = p.add_run(t); r.italic = True
             p = d.add_paragraph(); formato(p, WD_ALIGN_PARAGRAPH.CENTER, False, 0, 6)
             p.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
-            p.add_run().add_picture(DIAGRAMA, width=Cm(15.5))
+            img = p.add_run().add_picture(DIAGRAMA, width=Cm(15.5))
+            # texto alternativo (lo lee un lector de pantalla) y un nombre que no es el del archivo
+            img._inline.docPr.set("descr", "Diagrama de componentes de NOM: dispositivos, servidor y base de datos")
+            img._inline.docPr.set("name", "Figura 1")
+            img._inline.graphic.graphicData.pic.nvPicPr.cNvPr.set("name", "Figura 1")
         elif tipo == "ref":
             p = d.add_paragraph(); formato(p, WD_ALIGN_PARAGRAPH.LEFT, False)
             p.paragraph_format.left_indent = Cm(1.25); p.paragraph_format.first_line_indent = Cm(-1.25)
@@ -148,11 +156,24 @@ def paginas(pdf):
     return int(re.search(r"Pages:\s+(\d+)", subprocess.run(["pdfinfo", pdf], capture_output=True, text=True).stdout).group(1))
 
 
+# El PDF (y el .docx final) los hace Word en la PC de Windows: fuentes reales (Times New Roman) y propiedades de Word.
+# Sin esa PC se usa LibreOffice y se avisa (cambia la letra por una parecida).
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "4-CODIGO", "pruebas", "office"))
+try:
+    import con_word
+    CON_WORD = con_word.disponible()
+except Exception:
+    CON_WORD = False
+if not CON_WORD: print("AVISO: sin la PC de Windows; el PDF sale de LibreOffice (con otra letra). Repetir con Word antes de entregar.")
+
 for version, nombre, maximo in (("C", "Ensayo_Rodriguez_Esparza", 4), ("L", "Ensayo_Rodriguez_Esparza_portada_aparte", 5)):
     docx = os.path.abspath(os.path.join(ENTREGA, nombre + ".docx"))
     armar(version, docx)
-    with tempfile.TemporaryDirectory() as tmp:
-        subprocess.run(["soffice", f"-env:UserInstallation=file://{tmp}/perfil", "--headless", "--convert-to", "pdf",
-                        "--outdir", os.path.dirname(docx), docx], check=True, capture_output=True)
+    if CON_WORD:
+        con_word.guardar_y_pdf(docx, autor=AUTOR, titulo=TITULO)
+    else:
+        with tempfile.TemporaryDirectory() as tmp:
+            subprocess.run(["soffice", f"-env:UserInstallation=file://{tmp}/perfil", "--headless", "--convert-to", "pdf",
+                            "--outdir", os.path.dirname(docx), docx], check=True, capture_output=True)
     n = paginas(docx[:-5] + ".pdf")
     print(f"{nombre}: {n} páginas (máximo {maximo})" + ("" if n <= maximo else "  ¡SE PASA!"))
