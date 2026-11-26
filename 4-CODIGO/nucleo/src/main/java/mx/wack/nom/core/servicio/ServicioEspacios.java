@@ -184,15 +184,20 @@ public class ServicioEspacios {
         return e;
     }
 
-    /** La llave del espacio envuelta para quien pregunta, y quienes todavia no la tienen (con su llave publica). */
+    /**
+     * La llave del espacio envuelta para quien pregunta, y quienes todavia no la tienen (con su llave publica): esa lista
+     * solo a quien puede darles la llave (ver darLlave). Va también el nombre cifrado del espacio: la página comprueba
+     * con él que la llave que abre es la de este espacio antes de usarla.
+     */
     public Map<String, Object> llaves(Usuario u, String id) {
         Espacio e = requerir(id);
-        exigir(e, u, Permiso.LECTURA);
+        Permiso p = exigir(e, u, Permiso.LECTURA);
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("e2e", e.e2e);
         m.put("mia", e.llaves == null ? null : e.llaves.get(u.id));
+        m.put("nombre", e.nombre);
         List<Map<String, Object>> faltan = new ArrayList<>();
-        if (e.e2e) for (String uid : e.accesos.keySet()) {
+        if (e.e2e && puedeDarLlaves(e, u, p)) for (String uid : e.accesos.keySet()) {
             if (e.llaves != null && e.llaves.containsKey(uid)) continue;
             cuentas.porId(uid).ifPresent(x -> {
                 Map<String, Object> f = new LinkedHashMap<>();
@@ -206,20 +211,34 @@ public class ServicioEspacios {
         return m;
     }
 
+    /** ¿Puede dar la llave a otros? Quien edita y ya tiene la suya guardada (o sea, la conoce). */
+    private static boolean puedeDarLlaves(Espacio e, Usuario u, Permiso p) {
+        return p.alMenos(Permiso.EDICION) && e.llaves != null && e.llaves.containsKey(u.id);
+    }
+
     /**
-     * Guarda la llave del espacio envuelta para un miembro. Cada quien puede poner la suya (la trae
-     * del codigo de invitacion) y cualquier miembro que la tiene puede darsela a quien le falte; la de
-     * alguien que ya la tiene solo la cambia esa persona.
+     * Guarda la llave del espacio envuelta para un miembro. Cada quien puede poner la suya (la trae del codigo de
+     * invitacion) o quitarla (llave vacía: su página encontró que no abre este espacio, y así otro miembro se la vuelve a
+     * dar). A quien le falte se la da quien edita y ya tiene la suya; la de alguien que ya la tiene solo la cambia esa
+     * persona o el propietario.
      */
     public synchronized Map<String, Object> darLlave(Usuario u, String id, String usuarioId, String llave) {
         Espacio e = requerir(id);
-        exigir(e, u, Permiso.LECTURA);
+        Permiso p = exigir(e, u, Permiso.LECTURA);
         if (!e.e2e) throw ErrorNom.invalido("Este espacio no está cifrado de extremo a extremo", null);
         String para = usuarioId == null || usuarioId.isBlank() ? u.id : usuarioId;
         if (e.permisoDe(para) == null) throw ErrorNom.invalido("Esa cuenta no es miembro del espacio", "usuario");
-        if (llave == null || llave.isBlank() || llave.length() > 4000) throw ErrorNom.invalido("Falta la llave", "llave");
         if (e.llaves == null) e.llaves = new LinkedHashMap<>();
-        if (!para.equals(u.id) && e.llaves.containsKey(para)) return llaves(u, id);
+        boolean propia = para.equals(u.id);
+        if (propia && (llave == null || llave.isBlank())) {
+            if (e.llaves.remove(u.id) != null) repo.guardar(e);
+            return llaves(u, id);
+        }
+        if (llave == null || llave.isBlank() || llave.length() > 4000) throw ErrorNom.invalido("Falta la llave", "llave");
+        if (!propia) {
+            if (!puedeDarLlaves(e, u, p)) throw ErrorNom.prohibido("Solo quien edita el espacio y ya tiene su llave puede dársela a otros");
+            if (e.llaves.containsKey(para) && p != Permiso.PROPIETARIO) return llaves(u, id);
+        }
         e.llaves.put(para, llave);
         repo.guardar(e);
         return llaves(u, id);
@@ -350,6 +369,7 @@ public class ServicioEspacios {
             throw ErrorNom.invalido("Cada espacio tiene un solo propietario", "permiso");
         if (permiso == null) {
             e.accesos.remove(otro.id);
+            if (e.llaves != null) e.llaves.remove(otro.id);   // (su llave envuelta ya no sirve a nadie)
         } else {
             e.accesos.put(otro.id, permiso);
         }

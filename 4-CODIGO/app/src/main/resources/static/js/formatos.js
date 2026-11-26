@@ -456,14 +456,18 @@ ${formas.join("\n")}
     if (Object.keys(resto).length) ops.push({ id: "imp:d", bloque: "_doc", campos: resto, t: 2, n: "importar" });
     for (const id in r.b) ops.push({ id: "imp:" + i++, bloque: id, campos: r.b[id], t: 2, n: "importar" });
     const partidas = NOM.DocCRDT.partir(ops);
-    let k = 0;
+    // Cada texto empieza donde terminó el anterior: dos letras de un mismo documento nunca comparten (nodo, reloj), que
+    // en un espacio cifrado es también el contador de su cifrado.
+    let k = 0, t0 = 2;
     for (const bl in r.t) {
       const ps = r.t[bl].map(([pa, tr]) => {
         const tramos = [];
         for (let j = 0; j < tr.length; j += 2) { const a = tr[j + 1] || undefined; tramos.push(typeof tr[j] === "string" ? { x: tr[j], a } : { e: tr[j].e, a }); }
         return { a: pa || undefined, tramos };
       });
-      partidas.push(...NOM.Secuencia.crearOps(bl, ps, "importar", 2, "imp" + (k++ ? k : "")));
+      const os = NOM.Secuencia.crearOps(bl, ps, "importar", t0, "imp" + (k++ ? k : ""));
+      for (const o of os) t0 = Math.max(t0, o.t + (o.s && o.s.k === "i" ? NOM.Secuencia.caracteres(o.s.x).length : 1));
+      partidas.push(...os);
     }
     return partidas.concat(r.opsOrigen || []);
   }

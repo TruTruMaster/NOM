@@ -283,17 +283,36 @@
     } catch (e) { /* sin almacenamiento */ }
   }
   function guardarLlaveEspacio(espacioId, llave) { memEsp.set(espacioId, llave); recordar("esp." + espacioId, b64(llave)); espCifrado.set(espacioId, true); }
-  /** La llave de un espacio cifrado (o null si este equipo no la tiene). esp: { id, e2e, miLlave } si ya se sabe. */
+  /**
+   * ¿Esta llave es la del espacio? Nada en la llave envuelta dice de qué espacio es (la puede poner otro miembro o el
+   * servidor): se comprueba abriendo con ella el nombre cifrado del espacio. Sin nombre cifrado no hay con qué comparar.
+   */
+  async function llaveConfirmada(k, nombreCifrado) {
+    if (!(k instanceof Uint8Array) || k.length !== 32) return false;
+    if (!cifrado(nombreCifrado)) return true;
+    return typeof (await descifrarValor(k, nombreCifrado)) === "string";
+  }
+  const mismosBytes = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+  /** La llave de un espacio cifrado (o null si este equipo no la tiene). esp: { id, e2e, miLlave, nombre } si ya se sabe. */
   async function llaveEspacio(espacioId, esp) {
     if (memEsp.has(espacioId)) return memEsp.get(espacioId);
     const g = recordado("esp." + espacioId);
     if (g) { const k = deB64(g); memEsp.set(espacioId, k); return k; }
-    let mia = esp && esp.miLlave;
+    let mia = esp && esp.miLlave, nombre = esp && esp.nombre;
     if (!mia && (!esp || esp.e2e)) {
-      try { const l = await api().get(`/api/espacios/${encodeURIComponent(espacioId)}/llaves`, undefined, { ms: 8000, sin401: true, crudo: true }); mia = l.mia; espCifrado.set(espacioId, !!l.e2e); } catch (e) { return null; }
+      try { const l = await api().get(`/api/espacios/${encodeURIComponent(espacioId)}/llaves`, undefined, { ms: 8000, sin401: true, crudo: true }); mia = l.mia; nombre = l.nombre; espCifrado.set(espacioId, !!l.e2e); } catch (e) { return null; }
     }
     if (!mia) return null;
-    try { const k = await abrirEnvuelta(mia); if (k) { guardarLlaveEspacio(espacioId, k); return k; } } catch (e) { console.warn(e); }
+    // Con la llave privada de la cuenta en este equipo, una llave guardada que no abre o que no es la de este espacio no
+    // se usa (con ella se cifraría lo nuevo) y se quita del servidor para que otro miembro vuelva a dar la buena.
+    const puedeAbrir = !!recordado("privada") && hayWebCrypto();
+    let k = null;
+    try { k = await abrirEnvuelta(mia); } catch (e) { console.warn(e); }
+    if (k && (await llaveConfirmada(k, nombre))) { guardarLlaveEspacio(espacioId, k); return k; }
+    if (puedeAbrir) {
+      console.warn("La llave guardada no es la de este espacio");
+      api().put(`/api/espacios/${encodeURIComponent(espacioId)}/llaves`, { llave: "" }).catch(() => {});
+    }
     return null;
   }
   async function llaveDoc(docId, meta) {
@@ -337,7 +356,10 @@
       if (!x.publica) continue;
       try { await api().put(`/api/espacios/${eid}/llaves`, { usuario: x.id, llave: await envolverPara(x.publica, k) }); n++; } catch (e) { console.warn(e); }
     }
-    if (!l.mia) {
+    // La mía: si falta o la que está guardada no es la buena (p. ej. se la puso otro), se pone la que tengo.
+    let mia = null;
+    if (l.mia) try { mia = await abrirEnvuelta(l.mia); } catch (e) { mia = null; }
+    if (!l.mia || !mia || !mismosBytes(mia, k)) {
       const pub = recordado("publica");
       if (pub) try { await api().put(`/api/espacios/${eid}/llaves`, { llave: await envolverPara(pub, k) }); } catch (e) { /* luego */ }
     }
@@ -357,8 +379,14 @@
   async function alEntrar(codigo, espacioId) {
     const k = invitacion(codigo);
     if (!k) return;
-    guardarLlaveEspacio(espacioId, deB64(k));
+    // La llave del enlace la escribió quien invitó: se usa solo si abre el nombre de este espacio.
+    let l = null;
+    try { l = await api().get(`/api/espacios/${encodeURIComponent(espacioId)}/llaves`, undefined, { ms: 8000, crudo: true }); } catch (e) { return; /* sin red: se queda para el siguiente intento */ }
     try { sessionStorage.removeItem("nom.e2e.inv." + codigo); } catch (e) { /* nada */ }
+    let kb = null;
+    try { kb = deB64(k); } catch (e) { /* no es una llave */ }
+    if (!kb || !(await llaveConfirmada(kb, l.nombre))) { console.warn("La llave del enlace no abre este espacio"); return; }
+    guardarLlaveEspacio(espacioId, kb);
     repartir(espacioId).catch(() => {});
   }
 

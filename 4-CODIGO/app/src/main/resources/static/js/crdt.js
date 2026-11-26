@@ -451,8 +451,13 @@
     }
     /** Reemplaza el estado por el del servidor (cuando rechazó cambios) y vuelve a aplicar lo que aún no se envía. */
     reemplazarEstado(remoto) {
+      // El reloj de esta pestaña nunca regresa: cada letra que escribe lleva (nodo, reloj) como identidad y, en un
+      // espacio cifrado, como contador de su cifrado. Si regresara (el servidor rechazó cambios, se creó una rama),
+      // lo siguiente que se escriba repetiría identidades ya usadas con otro texto.
+      const antes = (this.estado && this.estado.reloj) || 0;
       this.estado = limpiarEstado(remoto && remoto.bloques ? remoto : { bloques: {}, reloj: 0 });
       if (!this.estado.seq) this.estado.seq = {};
+      if (!(this.estado.reloj >= antes)) this.estado.reloj = antes;
       this._secs = {};
       this.pendientes.forEach((op) => this._fusionar(op));
       this.deshacerPila = [];
