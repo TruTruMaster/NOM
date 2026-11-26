@@ -42,6 +42,9 @@ public final class Huella {
             if (d == Math.rint(d) && Math.abs(d) < 9e15) sb.append((long) d); else sb.append(d);
             return;
         }
+        // (un entero grande se escribe completo: con longValue() daba la vuelta y dos números distintos daban la misma huella)
+        if (v instanceof java.math.BigInteger b) { sb.append(b.toString()); return; }
+        if (v instanceof java.math.BigDecimal b) { java.math.BigDecimal z = b.stripTrailingZeros(); sb.append(z.scale() <= 0 ? z.toBigInteger().toString() : z.toPlainString()); return; }
         if (v instanceof Number) { sb.append(((Number) v).longValue()); return; }
         if (v instanceof Enum<?> e) { cadena(sb, e.name()); return; }
         if (v instanceof Map<?, ?> m) {

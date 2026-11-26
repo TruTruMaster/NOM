@@ -25,7 +25,17 @@ final class Almacen {
         if (!raiz.isDirectory() && !raiz.mkdirs()) throw new IllegalStateException("No se pudo crear " + raiz);
     }
 
-    File ruta(String relativa) { return new File(raiz, relativa); }
+    /** La ruta de un archivo de datos; nunca fuera de la carpeta de datos (igual que AlmacenJson en el servidor). */
+    File ruta(String relativa) {
+        File f = new File(raiz, relativa);
+        try {
+            String base = raiz.getCanonicalPath(), destino = f.getCanonicalPath();
+            if (!destino.equals(base) && !destino.startsWith(base + File.separator)) throw new IllegalArgumentException("Ruta de datos no válida");
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        return f;
+    }
 
     File raiz() { return raiz; }
 
@@ -99,6 +109,20 @@ final class Almacen {
             o.write((Json.texto(valor) + "\n").getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
             throw new UncheckedIOException("No se pudo anotar en " + relativa, e);
+        }
+        // (una bitácora no crece sin fin: pasando de 16 MB se queda con lo más nuevo, como en el servidor)
+        if (f.length() > 16L * 1024 * 1024) {
+            try (java.io.RandomAccessFile a = new java.io.RandomAccessFile(f, "r")) {
+                long ini = a.length() - 8L * 1024 * 1024;
+                byte[] resto = new byte[(int) (a.length() - ini)];
+                a.seek(ini);
+                a.readFully(resto);
+                int corte = 0;
+                while (corte < resto.length && resto[corte] != '\n') corte++;
+                File tmp = new File(f.getParentFile(), f.getName() + ".tmp");
+                try (FileOutputStream o = new FileOutputStream(tmp)) { o.write(resto, Math.min(resto.length, corte + 1), Math.max(0, resto.length - corte - 1)); }
+                if (!tmp.renameTo(f)) tmp.delete();
+            } catch (IOException e) { /* se intenta la próxima vez */ }
         }
     }
 

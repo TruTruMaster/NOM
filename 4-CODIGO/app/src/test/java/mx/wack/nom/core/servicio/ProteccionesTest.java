@@ -91,6 +91,16 @@ class ProteccionesTest {
     }
 
     @Test
+    void unaHuellaDistingueEnterosGrandes() {
+        Map<String, Object> a = new LinkedHashMap<>(), b = new LinkedHashMap<>();
+        a.put("letras", 1500L);
+        b.put("letras", new java.math.BigInteger("18446744073709553116"));   // 2^64 + 1500
+        assertFalse(Huella.sha256(a).equals(Huella.sha256(b)));
+        b.put("letras", 1500.0);
+        assertEquals(Huella.sha256(a), Huella.sha256(b), "un 1500.0 es el mismo 1500");
+    }
+
+    @Test
     void losTopesPorMinutoFrenanLaRepeticion() {
         Topes t = new Topes();
         for (int i = 0; i < 30; i++) t.exigir("u1", 30, "espera");

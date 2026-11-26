@@ -219,7 +219,7 @@ public final class Json implements CodecJson {
 
     private static final class Lector {
         private final String s;
-        private int i;
+        private int i, profundidad;
 
         Lector(String s) { this.s = s; }
 
@@ -227,8 +227,11 @@ public final class Json implements CodecJson {
             espacios();
             if (i >= s.length()) throw new IllegalArgumentException("JSON vacío");
             char c = s.charAt(i);
-            if (c == '{') return objeto();
-            if (c == '[') return lista();
+            if ((c == '{' || c == '[') && ++profundidad > 512) throw new IllegalArgumentException("JSON demasiado anidado");
+            try {
+                if (c == '{') return objeto();
+                if (c == '[') return lista();
+            } finally { if (c == '{' || c == '[') profundidad--; }
             if (c == '"') return cadena();
             if (s.startsWith("true", i)) { i += 4; return Boolean.TRUE; }
             if (s.startsWith("false", i)) { i += 5; return Boolean.FALSE; }

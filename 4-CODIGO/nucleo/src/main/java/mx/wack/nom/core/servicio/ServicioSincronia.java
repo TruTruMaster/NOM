@@ -270,7 +270,8 @@ public class ServicioSincronia {
     public void cadaRato() {
         for (Espacio e : espacios.todos()) {
             if (e.sincronia == null || e.sincronia.token == null) continue;
-            try { sincronizarEspacio(e, MAX_MS_ESPACIO); } catch (RuntimeException ex) { log.aviso("Sincronización del espacio {}: {}", e.id, ex.getMessage()); }
+            // (todas las copias comparten un hilo: cada espacio tiene a lo más 2 minutos por vuelta; lo que falte, en la siguiente)
+            try { sincronizarEspacio(e, Math.min(MAX_MS_ESPACIO, 120_000)); } catch (RuntimeException ex) { log.aviso("Sincronización del espacio {}: {}", e.id, ex.getMessage()); }
         }
     }
 
