@@ -111,4 +111,28 @@ public final class PaginasLimpias {
         if (html == null || version == null || !version.matches("[0-9A-Za-z.-]{1,20}")) return html;
         return html.replaceAll("((?:src|href)=\"(?:js|css)/[^\"?#]+\\.(?:js|css))\"", "$1?v=" + version + "\"");
     }
+
+    /** ¿Quien pide es una persona con el navegador (una dirección escrita a mano o un enlace viejo) y no la página o la
+        app pidiendo datos? A ella se le contesta con una página, no con JSON. */
+    public static boolean paraNavegador(String accept, String ruta) {
+        return accept != null && accept.contains("text/html") && ruta != null && !ruta.startsWith("/api/");
+    }
+
+    /** La página de «esa dirección no existe» (404) o «algo falló» (500): con el aspecto de NOM y un camino para seguir. */
+    public static String paginaError(int estado) {
+        boolean noExiste = estado == 404;
+        String titulo = noExiste ? "Esta página no existe" : "Algo falló en el servidor";
+        String texto = noExiste ? "Puede que el enlace esté mal escrito o que la página ya no esté. Tus espacios y documentos siguen en el inicio."
+                : "No es algo que hayas hecho tú. Tu trabajo sigue guardado: vuelve a intentarlo en un momento.";
+        return "<!doctype html><html lang=\"es\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+                + "<meta name=\"robots\" content=\"noindex\"><title>" + titulo + " · NOM</title><link rel=\"icon\" href=\"/img/icono.svg\" type=\"image/svg+xml\">"
+                + "<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#ECEDF1;color:#1E1D2B;font:16px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}"
+                + "main{max-width:440px;margin:24px;background:#fff;border:1px solid #D5D6DD;border-radius:12px;padding:32px;text-align:center}"
+                + "img{width:56px;height:56px}h1{font-size:22px;font-weight:700;margin:16px 0 8px}p{margin:0 0 24px;color:#3A3C49}"
+                + "a{display:inline-block;background:#2B2952;color:#fff;text-decoration:none;font-weight:600;padding:10px 20px;border-radius:8px;min-height:24px}"
+                + "a:focus-visible{outline:3px solid #E2632E;outline-offset:2px}.cod{margin-top:20px;font-size:13px;color:#5B5E6B}"
+                + "@media (prefers-color-scheme:dark){body{background:#16151F;color:#ECEDF1}main{background:#1F1E2B;border-color:#3A3950}p{color:#C9C8DE}.cod{color:#A9A8BE}}</style></head>"
+                + "<body><main><img src=\"/img/icono.svg\" alt=\"\"><h1>" + titulo + "</h1><p>" + texto + "</p><a href=\"/\">Ir al inicio de NOM</a>"
+                + "<p class=\"cod\">Código " + estado + "</p></main></body></html>";
+    }
 }

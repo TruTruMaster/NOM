@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS sesion (
     expira     BIGINT      NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_sesion_usuario ON sesion(id_usuario);
+-- 27-nov-2026: el borrado periódico de sesiones vencidas (WHERE expira <= ahora) ya no recorre toda la tabla.
+CREATE INDEX IF NOT EXISTS ix_sesion_expira ON sesion(expira);
 
 -- Noviembre 2026: cuentas de invitado (entran con apodo y QR, ligadas a un espacio) y el código
 -- para recuperar la contraseña (solo su hash con sal).

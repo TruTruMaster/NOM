@@ -48,19 +48,24 @@ public class ManejoErrores {
     }
 
     @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
-    public ResponseEntity<Map<String, Object>> noExiste() {
+    public ResponseEntity<?> noExiste(jakarta.servlet.http.HttpServletRequest req) {
         // Archivo inexistente (p. ej. un robots*.txt con el que algún servicio sondea el sitio): 404, no 500.
+        // A una persona con el navegador (un enlace mal escrito), una página propia con el camino al inicio.
+        if (mx.wack.nom.core.servicio.PaginasLimpias.paraNavegador(req.getHeader("Accept"), req.getRequestURI()))
+            return pagina(404);
         return ResponseEntity.status(HttpStatus.NOT_FOUND).contentType(JSON).body(Map.of("error", "No existe"));
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, Object>> otro(Exception e) {
+    public ResponseEntity<?> otro(Exception e, jakarta.servlet.http.HttpServletRequest req) {
+        boolean navegador = req != null && mx.wack.nom.core.servicio.PaginasLimpias.paraNavegador(req.getHeader("Accept"), req.getRequestURI());
         // DEF-50: los errores propios de Spring traen su código (405 método no permitido, 415 tipo de
         // contenido, 400 parámetro que falta o JSON mal formado). Antes todos salían como 500.
         if (e instanceof org.springframework.web.ErrorResponse er) {
             int st = er.getStatusCode().value();
             String msg = st == 405 ? "Esa dirección no acepta ese método" : st == 415 ? "Tipo de contenido no aceptado"
                     : st == 404 ? "No existe" : "La petición no es válida";
+            if (navegador && st == 404) return pagina(404);
             return ResponseEntity.status(st).contentType(JSON).body(Map.of("error", msg));
         }
         if (e instanceof org.springframework.http.converter.HttpMessageNotReadableException
@@ -68,7 +73,14 @@ public class ManejoErrores {
             return ResponseEntity.badRequest().contentType(JSON).body(Map.of("error", "La petición no es válida"));
         }
         log.error("Error no controlado", e);
+        if (navegador) return pagina(500);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType(JSON)
                 .body(Map.of("error", "Ocurrio un error inesperado. Intenta de nuevo."));
+    }
+
+    /** La página propia de «no existe» o «algo falló» para quien entra con el navegador. */
+    private static ResponseEntity<String> pagina(int estado) {
+        return ResponseEntity.status(estado).contentType(new MediaType("text", "html", java.nio.charset.StandardCharsets.UTF_8))
+                .cacheControl(org.springframework.http.CacheControl.noStore()).body(mx.wack.nom.core.servicio.PaginasLimpias.paginaError(estado));
     }
 }

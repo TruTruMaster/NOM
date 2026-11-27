@@ -101,7 +101,8 @@
 
   class ErrorApi extends Error {
     constructor(estado, cuerpo) {
-      super((cuerpo && cuerpo.error) || (estado === 0 ? "Sin conexión: revisa el Wi-Fi o los datos" : "Algo falló (error " + estado + "). Intenta de nuevo."));
+      // (sin mensaje propio del servidor: el de errores.js para ese caso, que dice qué pasó y qué hacer)
+      super((cuerpo && cuerpo.error) || (NOM.errores ? NOM.errores.mensaje(estado) : estado === 0 ? "Sin conexión: revisa el Wi-Fi o los datos" : "Algo falló (error " + estado + "). Intenta de nuevo."));
       this.estado = estado;
       this.campo = cuerpo && cuerpo.campo;
       this.detalle = cuerpo && cuerpo.detalle;
@@ -209,6 +210,9 @@
       }
     }
     if (r.status === 426) throw otraVersion(datos);
+    // El servidor no está (Cloudflare contesta por él: la Pi apagada o sin Internet): como sin red, así lo hecho se
+    // queda en este equipo, el documento se abre de la copia guardada y se manda solo cuando vuelva.
+    if (NOM.errores && NOM.errores.caido(r.status, datos)) { marcarRed(false); throw new ErrorApi(0, { error: NOM.errores.CAIDO }); }
     marcarRed(true);
     if (!r.ok) {
       const err = new ErrorApi(r.status, datos);
@@ -246,12 +250,14 @@
     catch (e) { marcarRed(false); throw new ErrorApi(0, (await equipoViejo(base, e)) ? { error: VIEJO } : null); }
     finally { clearTimeout(t); }
     if (r.status === 426) { let d = null; try { d = JSON.parse(await r.text()); } catch (x) { d = null; } throw otraVersion(d); }
-    marcarRed(true);
     if (!r.ok) {
       let datos = null;
       try { datos = JSON.parse(await r.text()); } catch (e) { datos = null; }
+      if (NOM.errores && NOM.errores.caido(r.status, datos)) { marcarRed(false); throw new ErrorApi(0, { error: NOM.errores.CAIDO }); }
+      marcarRed(true);
       throw new ErrorApi(r.status, datos);
     }
+    marcarRed(true);
     if (metodo === "GET") return new Uint8Array(await r.arrayBuffer());
     try { return JSON.parse(await r.text()); } catch (e) { return null; }
   };

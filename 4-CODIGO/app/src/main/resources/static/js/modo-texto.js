@@ -4215,6 +4215,8 @@
          * `abajo` (o el fondo de la hoja). `sigue`: lo que quedó de un párrafo partido, que va primero. Devuelve
          * { i, sigue, bajo, lleno, hechos: [elementos, copias] }.
          */
+        /** ¿Lo que falta de la sección [i, hasta) es solo el párrafo vacío que lleva el salto de sección? */
+        const soloCierraSeccion = (i, hasta) => i === hasta - 1 && hasta < kids.length && kids[i] && !kids[i].textContent.replace(/[\u00ad\u200b]/g, "").trim() && !kids[i].querySelector("[data-obj], img, .wd-salto");
         let sigContinuaRegion = false;   // (la sección que se acomoda termina en un salto continuo)
         function colocarRegion(p, cols, arriba, abajo, i, hasta, sigue, conEspacio, estricto) {
           const desdeRegion = i;
@@ -4254,7 +4256,7 @@
               p.bajo = Math.max(p.bajo || 0, top + h);
               y = top + h + mb(el); bajo = Math.max(bajo, y); primero = false;
               // saltos: de página (lo que sigue, en otra hoja) y de columna (arriba de la siguiente)
-              if (!esCopia && el.querySelector(".wd-salto")) return { i, sigue: null, bajo, lleno: true, hechos, copias, saltos };
+              if (!esCopia && el.querySelector(".wd-salto") && !soloCierraSeccion(i, hasta)) return { i, sigue: null, bajo, lleno: true, hechos, copias, saltos };
               continue;
             }
             // no cabe: se parte (al menos dos líneas en cada lado, como Word) o pasa completo a la columna siguiente
@@ -4359,7 +4361,9 @@
                 p.bajo = Math.max(p.bajo || 0, top + h);
                 y = top + h + mb(el); r.i++; primero = false; conEspacio = false;
                 r.bajo = y;
-                if (el.querySelector(".wd-salto") && r.i < hasta) { r.lleno = true; break; }
+                // (un salto de página seguido solo del párrafo vacío que cierra la sección: Word no le da hoja propia a ese
+                // párrafo —la sección siguiente empieza en la hoja de después del salto, sin una hoja en blanco—)
+                if (el.querySelector(".wd-salto") && r.i < hasta && !soloCierraSeccion(r.i, hasta)) { r.lleno = true; break; }
               }
               i = r.i;
               if (!r.lleno) { p.finSeccion = y; break; }

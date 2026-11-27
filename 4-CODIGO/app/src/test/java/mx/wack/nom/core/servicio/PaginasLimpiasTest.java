@@ -74,4 +74,16 @@ class PaginasLimpiasTest {
         assertEquals(con, PaginasLimpias.conVersion(con, "0.23.10"));      // dos veces no agrega otro ?v=
         assertEquals(html, PaginasLimpias.conVersion(html, "1.0\"><script>"));   // una versión rara no se escribe
     }
+
+    @Test
+    void unaDireccionQueNoExisteSeLeContestaAlNavegadorConUnaPaginaPropia() {
+        assertTrue(PaginasLimpias.paraNavegador("text/html,application/xhtml+xml,*/*;q=0.8", "/esto-no-existe"));
+        assertFalse(PaginasLimpias.paraNavegador("application/json", "/esto-no-existe"));
+        assertFalse(PaginasLimpias.paraNavegador("text/html", "/api/documentos/x"));     // la API siempre en JSON
+        assertFalse(PaginasLimpias.paraNavegador(null, "/x"));
+        String p = PaginasLimpias.paginaError(404);
+        assertTrue(p.contains("Esta página no existe") && p.contains("href=\"/\"") && p.contains("lang=\"es\"") && p.contains("noindex"), p);
+        assertFalse(p.contains("{\"error\""));
+        assertTrue(PaginasLimpias.paginaError(500).contains("Algo falló en el servidor"));
+    }
 }
