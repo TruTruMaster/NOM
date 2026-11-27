@@ -5,15 +5,50 @@
   "use strict";
   /** Un texto que viene del archivo o del documento, para usarlo dentro de una expresión regular tal cual. */
   const reEsc = (t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Tablas Unicode para fuentes de símbolos de Windows en w:sym (Symbol, Wingdings 1/2/3, Webdings).
+  const SYM_SYMBOL = (() => {
+    const t = Object.create(null);
+    const s = " !∀#∃%&∋()∗+,−./0123456789:;<=>?≅ΑΒΧΔΕΦΓΗΙϑΚΛΜΝΟΠΘΡΣΤΥςΩΞΨΖ[∴]⊥_‾αβχδεφγηιϕκλμνοπθρστυϖωξψζ{|}∼";
+    for (let i = 0; i < s.length; i++) t[0x20 + i] = s[i];
+    const a = "€ϒ′≤⁄∞ƒ♣♦♥♠↔←↑→↓°±″≥×∝∂•÷≠≡≈…⏐⎯↵ℵℑℜ℘⊗⊕∅∩∪⊃⊇⊄⊂⊆∈∉∠∇®©™∏√⋅¬∧∨⇔⇐⇑⇒⇓◊〈®©™∑⎛⎜⎝⎡⎢⎣⎧⎨⎩⎪ 〉∫⌠⎮⌡⎞⎟⎠⎤⎥⎦⎫⎬⎭";
+    for (let i = 0; i < a.length; i++) t[0xA0 + i] = a[i];
+    return t;
+  })();
+  const SYM_WINGDINGS = {
+    0x21: "✏", 0x22: "✂", 0x23: "✁", 0x28: "☎", 0x29: "✆", 0x2A: "✉", 0x2B: "✉", 0x41: "✌", 0x42: "👌", 0x43: "👍", 0x44: "👎",
+    0x45: "☜", 0x46: "☞", 0x47: "☝", 0x48: "☟", 0x49: "✋", 0x4A: "☺", 0x4B: "😐", 0x4C: "☹", 0x4D: "💣", 0x4E: "☠", 0x4F: "⚑",
+    0x51: "✈", 0x52: "☀", 0x53: "💧", 0x54: "❄", 0x55: "✞", 0x56: "✞", 0x57: "✠", 0x58: "✠", 0x59: "✡", 0x5A: "☪", 0x5B: "☯",
+    0x5C: "ॐ", 0x5D: "☸", 0x5E: "♈", 0x5F: "♉", 0x60: "♊", 0x61: "♋", 0x62: "♌", 0x63: "♍", 0x64: "♎", 0x65: "♏", 0x66: "♐",
+    0x67: "♑", 0x68: "♒", 0x69: "♓", 0x6C: "●", 0x6D: "❍", 0x6E: "■", 0x6F: "☐", 0x70: "☐", 0x71: "❑", 0x72: "❒", 0x73: "◆",
+    0x74: "◆", 0x75: "◆", 0x76: "❖", 0x77: "◆", 0x78: "⌧", 0x7A: "⌘", 0x80: "⓪", 0x81: "①", 0x82: "②", 0x83: "③", 0x84: "④",
+    0x85: "⑤", 0x86: "⑥", 0x87: "⑦", 0x88: "⑧", 0x89: "⑨", 0x8A: "⑩", 0x8B: "⓿", 0x8C: "❶", 0x8D: "❷", 0x8E: "❸", 0x8F: "❹",
+    0x90: "❺", 0x91: "❻", 0x92: "❼", 0x93: "❽", 0x94: "❾", 0x95: "❿", 0x9F: "•", 0xA0: "□", 0xA1: "○", 0xA2: "○", 0xA3: "○",
+    0xA4: "◉", 0xA5: "◎", 0xA6: "❍", 0xA7: "▪", 0xA8: "☐", 0xA9: "◆", 0xAA: "✦", 0xAB: "★", 0xAC: "✶", 0xAD: "✴", 0xAE: "✹",
+    0xAF: "✵", 0xB2: "◇", 0xB7: "•", 0xD8: "➢", 0xDF: "←", 0xE0: "→", 0xE1: "↑", 0xE2: "↓", 0xE3: "↖", 0xE4: "↗", 0xE5: "↙",
+    0xE6: "↘", 0xE7: "⇐", 0xE8: "➔", 0xEF: "⇦", 0xF0: "⇨", 0xF1: "⇧", 0xF2: "⇩", 0xF3: "⇔", 0xF4: "⇕", 0xFB: "✗", 0xFC: "✓",
+    0xFD: "☒", 0xFE: "☑",
+  };
+  const SYM_WINGDINGS2 = { 0x4F: "✗", 0x50: "✓", 0x51: "✗", 0x52: "☑", 0x53: "☒", 0x54: "☐", 0x97: "●", 0xA2: "■", 0xA3: "☐", 0xA6: "▪" };
+  const SYM_WINGDINGS3 = { 0x22: "➢", 0x70: "▲", 0x71: "▼", 0x75: "◄", 0x76: "►", 0x7C: "◂", 0x7D: "▴", 0x7E: "▾", 0x84: "▸", 0xC6: "⇨", 0xC7: "⇦" };
+  const SYM_WEBDINGS = { 0x33: "◄", 0x34: "►", 0x35: "▲", 0x36: "▼", 0x61: "✓", 0x63: "☐", 0x67: "■", 0x6E: "●", 0x72: "✗" };
   /**
-   * Un símbolo de Word (w:sym): con la fuente Symbol, su letra en Unicode (F06B → κ, como la dibuja Word; js/emf.js);
-   * con otra fuente, el carácter tal cual. (Antes quedaba la letra latina —«knbernaw» en lugar de «κνβερναω»— y al
-   * descargar un párrafo cambiado salía así en Word.)
+   * Un símbolo de Word (w:sym): mapea fuentes simbólicas (Symbol, Wingdings 1/2/3, Webdings) a su carácter Unicode
+   * equivalente y conserva íntegro el código Unicode de fuentes normales (p. ej. MS Gothic 2610 → ☐, 2612 → ☒).
    */
   function textoSym(fuente, codigo) {
     const k = parseInt(codigo || "20", 16);
-    if (/^symbol$/i.test(fuente || "") && NOM.emf && NOM.emf.deSymbol) return NOM.emf.deSymbol(String.fromCharCode(k >= 0xF000 ? k : k + 0xF000));
-    return String.fromCharCode(k & 0xFFF);
+    if (!Number.isFinite(k) || k < 0 || k > 0x10FFFF) return "";
+    const f = String(fuente || "").trim().toLowerCase();
+    const b = k >= 0xF000 && k <= 0xF0FF ? k - 0xF000 : k;
+    if (f === "symbol") {
+      if (NOM.emf && NOM.emf.deSymbol) return NOM.emf.deSymbol(String.fromCharCode(k >= 0xF000 ? k : k + 0xF000));
+      return SYM_SYMBOL[b] || String.fromCharCode(b);
+    }
+    if (f === "wingdings") return Object.hasOwn(SYM_WINGDINGS, b) ? SYM_WINGDINGS[b] : String.fromCharCode(b);
+    if (f === "wingdings 2") return Object.hasOwn(SYM_WINGDINGS2, b) ? SYM_WINGDINGS2[b] : String.fromCharCode(b);
+    if (f === "wingdings 3") return Object.hasOwn(SYM_WINGDINGS3, b) ? SYM_WINGDINGS3[b] : String.fromCharCode(b);
+    if (f === "webdings") return Object.hasOwn(SYM_WEBDINGS, b) ? SYM_WEBDINGS[b] : String.fromCharCode(b);
+    return String.fromCodePoint(k >= 0xF000 && k <= 0xF0FF ? k - 0xF000 : k);
   }
   const NOM = window.NOM;
   const F = () => NOM.formulas;
@@ -500,7 +535,7 @@
     for (const k in nuevos) if (nuevos[k]) hijos.push([k, nuevos[k]]);
     return hijos.sort((a, b) => orden.indexOf(a[0]) - orden.indexOf(b[0])).map((h) => h[1]).join("");
   }
-  const JC_W = { izq: "left", centro: "center", der: "right", just: "both" };
+  const JC_W = { izq: "left", centro: "center", der: "right", just: "both", dist: "distribute" };
   /** Lo que un estilo de NOM cambia: { rpr: {tag: xml}, ppr: {tag: xml} } (spacing junta lo que ya tenía). */
   function piezasEstilo(e, spacingViejo) {
     const rpr = {}, ppr = {}, si = (v, tag) => (v === true ? `<w:${tag}/>` : `<w:${tag} w:val="0"/>`);
@@ -556,7 +591,7 @@
     return defs ? xml.replace("</w:styles>", defs + "</w:styles>") : xml;
   }
 
-  const ALIN_WORD = { centro: "center", der: "right", just: "both" };
+  const ALIN_WORD = { centro: "center", der: "right", just: "both", dist: "distribute" };
   const hexW = (c) => (/^#[0-9a-f]{6}$/i.test(c || "") ? c.slice(1).toUpperCase() : null);
 
   /** Documento de texto (secuencia letra por letra) → .docx con estilos de Word reales. */
@@ -1658,10 +1693,16 @@
     const NSW = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"';
     const campo = (instr, ej) => `<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> ${instr} </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>${ej}</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>`;
     const numero = () => ({ pagina: texto("Página ", {}) + campo("PAGE", "1"), total: campo("PAGE", "1") + texto(" de ", {}) + campo("NUMPAGES", "1"), "pagina-total": texto("Página ", {}) + campo("PAGE", "1") + texto(" de ", {}) + campo("NUMPAGES", "1") }[ep2.fmt] || campo("PAGE", "1"));
+    /** Convierte un texto con marcadores {PAGE}/{NUMPAGES}/{SECTION}/{SECTIONPAGES} en corridas y campos de Word. */
+    const textoConCampos = (s) => String(s || "").split(/(\{(?:PAGE|NUMPAGES|SECTION|SECTIONPAGES)\})/).map((p) => {
+      const m = /^\{(PAGE|NUMPAGES|SECTION|SECTIONPAGES)\}$/.exec(p);
+      return m ? campo(m[1], "1") : p ? texto(p, {}) : "";
+    }).join("");
     /** Un renglón con tres lugares (izquierda, centro y derecha) separados por tabuladores. */
     const renglon = (zona, txt, al, prefijo) => {
       const slots = { izq: "", centro: "", der: "" };
-      if (txt) slots[al] += texto(txt, {});
+      if (txt && txt.includes("\t")) txt.split("\t").slice(0, 3).forEach((t2, k) => { if (t2) slots[["izq", "centro", "der"][k]] += textoConCampos(t2); });
+      else if (txt) slots[al] += textoConCampos(txt);
       const [zn, an] = ep2.pos.split("-");
       if (ep2.nums && zn === zona) slots[an] += (slots[an] ? '<w:r><w:t xml:space="preserve">  </w:t></w:r>' : "") + numero();
       const media = Math.round(anchoTexto / 2);
@@ -1857,7 +1898,9 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     // Los marcadores que usa algún campo (REF, PAGEREF, NOTEREF): solo esos entran al texto (como marcas invisibles),
     // para que «Actualizar campos» encuentre su texto y su página. Los demás (_GoBack, los del índice…) no hace falta.
     const marcadoresUsados = new Set();
-    String(xmlDoc || "").replace(/(?:REF|PAGEREF|NOTEREF)\s+([A-Za-z_][\w]*)/g, (m, n) => { marcadoresUsados.add(n); return m; });
+    const buscarMarcas = (s) => String(s || "").replace(/\b(?:REF|PAGEREF|NOTEREF)\s+([A-Za-z_][\w]*)/gi, (m, n) => { marcadoresUsados.add(n); return m; });
+    buscarMarcas(xmlDoc);
+    buscarMarcas(String(xmlDoc || "").replace(/<[^>]+>/g, ""));
     const nombreMarcador = Object.create(null);   // id → nombre (bookmarkEnd solo trae el id)
     if (!xmlDoc) throw new Error("El archivo no parece un documento de Word (.docx)");
     const P = (t) => new DOMParser().parseFromString(t, "application/xml");
@@ -2670,7 +2713,8 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
               const pila = (parrafo._campos = parrafo._campos || []);
               // (el idioma del campo es el de su texto: con él se escriben los meses y los números con letra)
               const lg = rpr && hijo(rpr, "lang");
-              if (tipoF === "begin") pila.push({ instr: "", etapa: "instr", ini: tramos.length, a, idioma: (lg && (lg.getAttributeNS(W, "val") || lg.getAttribute("w:val"))) || null });
+              const sucio = ["1", "true", "on"].includes(c.getAttributeNS(W, "dirty") || c.getAttribute("w:dirty") || "");
+              if (tipoF === "begin") pila.push({ instr: "", etapa: "instr", ini: tramos.length, a, idioma: (lg && (lg.getAttributeNS(W, "val") || lg.getAttribute("w:val"))) || null, sucio });
               else if (tipoF === "separate" && pila.length) { const f = pila[pila.length - 1]; f.etapa = "res"; f.res0 = tramos.length; }
               else if (tipoF === "end" && pila.length) cerrarCampo(pila, tramos);
             } else if (cn === "instrText" && parrafo && parrafo._campos && parrafo._campos.length) {
@@ -2698,7 +2742,22 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
           if (nm) tramos.push({ e: { tipo: "marcador", nombre: nm, lado: "fin" }, a: {} });
         } else if (ln === "ins" || ln === "moveTo") await runs(r, Object.assign({}, base, { sug: autorCambio(r) }), tramos, parrafo);
         else if (ln === "del" || ln === "moveFrom") await runs(r, Object.assign({}, base, { sugBorrar: autorCambio(r) }), tramos, parrafo);
-        else if (["smartTag", "fldSimple", "customXml", "sdt", "sdtContent", "bdo", "dir"].includes(ln)) await runs(r, base, tramos, parrafo);
+        else if (ln === "sdt") {
+          const antes = tramos.length;
+          await runs(r, base, tramos, parrafo);
+          if (tramos.length === antes) {
+            const cb = r.getElementsByTagNameNS("*", "checkbox")[0];
+            if (cb) {
+              const ch = cb.getElementsByTagNameNS("*", "checked")[0];
+              const vCh = ch ? (ch.getAttribute("w14:val") || ch.getAttributeNS("*", "val") || "") : "";
+              const marcado = vCh === "1" || vCh === "true";
+              const est = cb.getElementsByTagNameNS("*", marcado ? "checkedState" : "uncheckedState")[0];
+              const fCb = est && (est.getAttribute("w14:font") || est.getAttributeNS("*", "font"));
+              const cCb = est && (est.getAttribute("w14:val") || est.getAttributeNS("*", "val"));
+              tramos.push({ x: cCb ? textoSym(fCb, cCb) : (marcado ? "☒" : "☐"), a: base });
+            }
+          }
+        } else if (["smartTag", "fldSimple", "customXml", "sdtContent", "bdo", "dir"].includes(ln)) await runs(r, base, tramos, parrafo);
       }
     }
     /**
@@ -2726,7 +2785,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       const nombre = (/^=/.test(codigo) ? "=" : (codigo.split(" ")[0] || "")).toUpperCase();
       if (!CAMPOS_VIVOS.has(nombre) || texto == null || tramos.slice(f.ini, r0).some((t) => t.e)) return;   // se queda como su texto
       tramos.length = f.ini;
-      tramos.push({ e: { tipo: "campo", instr: codigo, res: texto, a: Object.assign({}, (resTr[0] && resTr[0].a) || f.a || {}), idioma: f.idioma || undefined, orig: true }, a: {} });
+      tramos.push({ e: Object.assign({ tipo: "campo", instr: codigo, res: texto, a: Object.assign({}, (resTr[0] && resTr[0].a) || f.a || {}), idioma: f.idioma || undefined, orig: true }, f.sucio ? { sucio: true } : {}), a: {} });
     }
     const ESTILO_POR_NOMBRE = (nm) => (/^heading 1$|^título 1$/.test(nm) ? "h1" : /^heading 2$|^título 2$/.test(nm) ? "h2" : /^heading [3-9]$|^título [3-9]$/.test(nm) ? "h3"
       : nm === "title" || nm === "título" ? "titulo" : nm === "subtitle" || nm === "subtítulo" ? "subtitulo" : /quote|cita/.test(nm) ? "cita" : null);
@@ -2751,16 +2810,49 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       for (const [k, v] of cuenta) if (v > n) { mejor = k; n = v; }
       return mejor;
     }
+    /** Valores de fábrica de Word para estilos integrados que el archivo usa sin definir en styles.xml. */
+    function fabricaEstiloWord(id) {
+      const k = String(id || "").trim().toLowerCase();
+      const mToc = /^(?:toc|tdc)\s*([1-9])$/.exec(k);
+      if (mToc) {
+        const n = +mToc[1];
+        return { nombre: "toc " + n, p: { desp: 100, izq: (n - 1) * 220 } };
+      }
+      if (k === "tocheading" || k === "toc heading") return { nombre: "toc heading", p: { antes: 240, desp: 0, kn: true }, r: { tam: 16, color: "#2F5496" } };
+      if (k === "caption" || k === "epígrafe" || k === "epigrafe") return { nombre: "caption", p: { desp: 200, linea: 240, regla: "auto" }, r: { i: true, tam: 9, color: "#44546A" } };
+      if (k === "title" || k === "título" || k === "titulo") return { nombre: "title", p: { desp: 0, linea: 240, regla: "auto" }, r: { tam: 28 } };
+      if (k === "subtitle" || k === "subtítulo" || k === "subtitulo") return { nombre: "subtitle", p: { desp: 160 }, r: { tam: 11, color: "#5A5A5A" } };
+      if (k === "quote" || k === "cita") return { nombre: "quote", p: { antes: 200, desp: 160, izq: 864, der: 864, jc: "center" }, r: { i: true, color: "#404040" } };
+      if (k === "intensequote" || k === "intense quote" || k === "citadestacada") return { nombre: "intense quote", p: { antes: 360, desp: 360, izq: 864, der: 864, jc: "center" }, r: { i: true, color: "#2F5496" } };
+      if (k === "listparagraph" || k === "list paragraph") return { nombre: "list paragraph", p: { izq: 720, junto: true } };
+      if (k === "nospacing" || k === "no spacing") return { nombre: "no spacing", p: { antes: 0, desp: 0, linea: 240, regla: "auto" } };
+      if (k === "header" || k === "footer") return { nombre: k, p: { desp: 0, linea: 240, regla: "auto" } };
+      const mH = /^(?:heading|título|titulo)\s*([1-6])$/.exec(k);
+      if (mH) {
+        const lv = +mH[1], tams = [0, 16, 13, 12, 11, 11, 11], ants = [0, 240, 40, 40, 40, 40, 40];
+        return { nombre: "heading " + lv, p: { antes: ants[lv], desp: 0, kn: true, kl: true }, r: { tam: tams[lv], color: "#2F5496", i: lv === 4 ? true : undefined } };
+      }
+      return null;
+    }
     /** Formato del párrafo y la letra que heredan sus corridas: { pa, letra }. */
     function attrsParrafo(ppr) {
-      const pa = {}, idSt = val(hijo(ppr, "pStyle")) != null && defEstilo[val(hijo(ppr, "pStyle"))] ? val(hijo(ppr, "pStyle")) : idNormal;
-      const c = parCrudo(ppr, parDe(idSt)), letra = letraDe(idSt);
+      const pa = {}, rawId = val(hijo(ppr, "pStyle"));
+      const fab = rawId != null && !defEstilo[rawId] ? fabricaEstiloWord(rawId) : null;
+      const idSt = rawId != null && defEstilo[rawId] ? rawId : idNormal;
+      const baseP = fab && fab.p ? Object.assign({}, parDe(idNormal), fab.p) : parDe(idSt);
+      const baseR = fab && fab.r ? Object.assign({}, letraDe(idNormal), fab.r) : letraDe(idSt);
+      const c = parCrudo(ppr, baseP), letra = baseR;
       // estilo: por el nombre del suyo, o del primero de sus estilos base que se reconozca
-      let st = "";
-      for (let id = idSt, n = 0; id != null && defEstilo[id] && n < 20; id = defEstilo[id].base, n++) {
-        if (!n) st = defEstilo[id].nombre;
-        const e = ESTILO_POR_NOMBRE(defEstilo[id].nombre);
-        if (e) { pa.estilo = e; break; }
+      let st = fab ? (fab.nombre || "") : "";
+      if (fab) {
+        const e = ESTILO_POR_NOMBRE(st);
+        if (e) pa.estilo = e;
+      } else {
+        for (let id = idSt, n = 0; id != null && defEstilo[id] && n < 20; id = defEstilo[id].base, n++) {
+          if (!n) st = defEstilo[id].nombre;
+          const e = ESTILO_POR_NOMBRE(defEstilo[id].nombre);
+          if (e) { pa.estilo = e; break; }
+        }
       }
       // un estilo propio del Word (hecho por alguien en Word, o en NOM): su párrafo lo conserva con su nombre
       if (!pa.estilo && defEstilo[idSt] && defEstilo[idSt].propio) { pa.estilo = "u:" + idSt; estilosW["u:" + idSt] = { n: defEstilo[idSt].propio, id: idSt, deWord: 1 }; }
@@ -2789,7 +2881,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       } else if (/^list bullet|^lista con viñetas/.test(st)) pa.lista = "vinetas";
       else if (/^list number|^lista con números/.test(st)) pa.lista = "numeros";
       if (pa.lista) delete pa.estilo;
-      const v = { center: "centro", right: "der", end: "der", both: "just", distribute: "just" }[c.jc];
+      const v = { center: "centro", right: "der", end: "der", both: "just", distribute: "dist" }[c.jc];
       if (v) pa.alin = v;
       if (!pa.lista) {
         const izq = c.izq || 0, der = c.der || 0, pri = c.pri || 0, fr = c.fr || 0, priBase = pa.estilo ? 0 : Math.max(0, pN.pri || 0);
@@ -2806,7 +2898,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       // párrafos del mismo estilo» (contextualSpacing) depende de los vecinos: se resuelve al final (espaciosContextuales)
       const antes = Math.round((c.antes || 0) / 2) / 10, desp = Math.round((c.desp || 0) / 2) / 10;
       const om = pa.lista ? [0, 2] : pa.estilo ? { h1: [12, 0], h2: [2, 0], h3: [2, 0], titulo: [0, 4], cita: [10, 8] }[pa.estilo] : [0, 8];
-      Object.defineProperty(pa, "_esp", { value: { antes, desp, om, st: idSt, ctx: !!c.junto }, enumerable: false, configurable: true });
+      Object.defineProperty(pa, "_esp", { value: { antes, desp, om, st: rawId || idSt, ctx: !!c.junto }, enumerable: false, configurable: true });
       if (!om || antes !== om[0]) pa.antes = antes;
       if (!om || desp !== om[1]) pa.despues = desp;
       // entre páginas: salto antes, con el siguiente (los títulos ya lo llevan aquí), líneas juntas y viudas
@@ -3167,20 +3259,22 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       if (!conSecciones && secciones.some((x) => Math.abs(x.w - sec0.w) > 8 || Math.abs(x.h - sec0.h) > 8)) avisos.push("Este documento cambia de tamaño u orientación de hoja a media obra: aquí se ve todo con la hoja del principio (al descargar en Word sale cada sección con la suya)");
       if (!conSecciones && secciones.some((x) => x.cols > 1)) avisos.push("Las partes en columnas se ven aquí a una sola columna, con una marca donde empiezan (al descargar en Word salen en columnas)");
     }
-    // Encabezado y pie de la primera sección: su texto (izquierda, centro y derecha van separados por
-    // tabuladores) y dónde va el número de página.
+    // Encabezado y pie de cada sección (default, first y even): conserva el texto literal y los campos
+    // PAGE, NUMPAGES, SECTION y SECTIONPAGES en su sitio, y solo separa el número cuando ocupa el hueco solo.
     const R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-    async function zona(etiqueta, sectZ) {
+    async function zona(etiqueta, sectZ, tipo = "default") {
       const deSec = sectZ || sect, refs = deSec ? hijos(deSec, etiqueta) : [];
-      const ref = refs.find((x) => (at(x, "type") || "default") === "default");
+      const ref = refs.find((x) => (at(x, "type") || "default") === tipo);
       const rid = ref && (ref.getAttributeNS(R_NS, "id") || ref.getAttribute("r:id")), destino = rid && rels[rid];
       const xml = destino ? await z.texto(rutaDe(destino)) : null;
-      if (!xml) return null;
+      if (xml == null) return null;
       const huecos = ["", "", ""];
       [...P(xml).getElementsByTagNameNS(W, "p")].forEach((pp) => {
         for (let q = pp.parentNode; q; q = q.parentNode) if (q.localName === "txbxContent") return;
         let out = "", campo = null, instr = "", res = "";
-        const cierra = (i2, r2) => { out += /NUMPAGES|SECTIONPAGES/i.test(i2) ? "\u0002" : /(^|\s)PAGE(\s|$)/i.test(i2) ? "\u0001" : r2; };
+        const cierra = (i2, r2) => {
+          out += /\bSECTIONPAGES\b/i.test(i2) ? "\u0004" : /\bSECTION\b/i.test(i2) ? "\u0003" : /\bNUMPAGES\b/i.test(i2) ? "\u0002" : /\bPAGE\b/i.test(i2) ? "\u0001" : r2;
+        };
         [...pp.getElementsByTagNameNS(W, "*")].forEach((n) => {
           const ln = n.localName;
           if (ln === "fldChar") {
@@ -3190,7 +3284,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
           else if (ln === "fldSimple") cierra(at(n, "instr") || "", "");
           else if (ln === "t") {
             let simple = false;
-            for (let q = n.parentNode; q && q !== pp; q = q.parentNode) if (q.localName === "fldSimple" && /PAGE/i.test(at(q, "instr") || "")) simple = true;
+            for (let q = n.parentNode; q && q !== pp; q = q.parentNode) if (q.localName === "fldSimple" && /\b(?:PAGE|NUMPAGES|SECTION|SECTIONPAGES)\b/i.test(at(q, "instr") || "")) simple = true;
             if (simple) return;
             if (campo === "res") res += n.textContent; else if (!campo) out += n.textContent;
           } else if (ln === "tab" && n.parentNode && n.parentNode.localName === "r" && !campo) out += "\t";
@@ -3203,15 +3297,18 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
         if (partes.length === 1) { const k = jc === "center" ? 1 : jc === "right" || jc === "end" ? 2 : 0; huecos[k] += (huecos[k] ? " · " : "") + partes[0]; }
         else partes.slice(0, 3).forEach((t, k) => { if (t) huecos[k] += (huecos[k] ? " · " : "") + t; });
       });
-      // número de página: en qué hueco está y con qué forma ("Página 1", "1 de 5"…)
+      // número de página aislado (solo si ocupa su hueco sin texto alrededor ni campos SECTION/SECTIONPAGES)
       let num = null;
-      huecos.forEach((t, k) => {
-        if (!t.includes("\u0001")) return;
-        const fmt = /p[áa]gina\s*\u0001\s*(de|\/)\s*\u0002/i.test(t) ? "pagina-total" : /\u0001\s*(de|of|\/)\s*\u0002/i.test(t) ? "total" : /(p[áa]gina|page|p[áa]g\.?)\s*\u0001/i.test(t) ? "pagina" : "n";
-        if (!num) num = { lado: ["izq", "centro", "der"][k], fmt };
-        huecos[k] = t.replace(/(p[áa]gina|page|p[áa]g\.?)?\s*\u0001(\s*(de|of|\/)\s*\u0002)?/i, "").replace(/^[\s·|–-]+|[\s·|–-]+$/g, "");
+      const SOLO_NUM = /^\s*(?:(p[áa]gina|p[áa]g\.?)\s*)?\u0001(?:\s*(de|\/)\s*\u0002)?\s*$/i;
+      const conMarcadores = (t) => t.replace(/\u0001/g, "{PAGE}").replace(/\u0002/g, "{NUMPAGES}").replace(/\u0003/g, "{SECTION}").replace(/\u0004/g, "{SECTIONPAGES}").trim();
+      const limpios = huecos.map((t, k) => {
+        if (!num && !/[\u0003\u0004]/.test(t) && SOLO_NUM.test(t)) {
+          const fmt = /p[áa]gina\s*\u0001\s*(de|\/)\s*\u0002/i.test(t) ? "pagina-total" : /\u0001\s*(de|\/)\s*\u0002/i.test(t) ? "total" : /(p[áa]gina|p[áa]g\.?)\s*\u0001/i.test(t) ? "pagina" : "n";
+          num = { lado: ["izq", "centro", "der"][k], fmt };
+          return "";
+        }
+        return conMarcadores(t);
       });
-      const limpios = huecos.map((t) => t.replace(/[\u0001\u0002]/g, "").trim());
       const usados = limpios.filter(Boolean).length;
       // un solo texto: va con su alineación; varios: izquierda, centro y derecha separados por tabuladores
       const texto = usados <= 1 ? limpios.find(Boolean) || "" : limpios.join("\t").replace(/\t+$/, "");
@@ -3239,10 +3336,13 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     if (Object.keys(formato).length) docCampos.formato = formato;
     // Protección de Word: «restringir edición» (solo lectura, comentarios, cambios marcados o formularios), «contraseña para
     // modificar» con «abrir como de solo lectura» recomendado, y «marcar como final». La contraseña no se guarda: solo su hash.
+    let parImpar = false;
     {
       const st = await z.texto("word/settings.xml");
       if (st) {
         const x = P(st), dp = x.getElementsByTagNameNS(W, "documentProtection")[0], wp = x.getElementsByTagNameNS(W, "writeProtection")[0];
+        const eoh = x.getElementsByTagNameNS(W, "evenAndOddHeaders")[0];
+        if (eoh && activo(eoh)) parImpar = true;
         const enf = dp && /^(1|true|on)$/.test(dp.getAttributeNS(W, "enforcement") || dp.getAttribute("w:enforcement") || "");
         const ed = dp && (dp.getAttributeNS(W, "edit") || dp.getAttribute("w:edit"));
         const tipo = { readOnly: "lectura", comments: "comentarios", trackedChanges: "cambios", forms: "formularios" }[ed];
@@ -3279,24 +3379,51 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       }
       if (sect && hijo(sect, "titlePg") && activo(hijo(sect, "titlePg")) && (docCampos.encabezado || docCampos.pie || num)) docCampos.primeraDistinta = true;
     }
-    // Con secciones: cada una con su encabezado y su pie (si no trae los suyos, los de la anterior, como Word) y dónde
-    // va su número de página
+    // Con secciones: cada una con su encabezado y su pie (default, primera y par, heredando de la anterior como Word),
+    // su número de sección (sn) y dónde va su número de página
     if (paSx.length) {
       const porSec = [];
-      let antE = null, antP = null;
+      let antE = null, antP = null, antE1 = null, antP1 = null, antEp = null, antPp = null;
       for (let k = 0; k < secciones.length; k++) {
-        const e = (await zona("headerReference", secciones[k].sect)) || antE, p2 = (await zona("footerReference", secciones[k].sect)) || antP;
-        porSec.push({ e, p: p2 });
-        antE = e; antP = p2;
+        const sc = secciones[k].sect;
+        const e = (await zona("headerReference", sc, "default")) || antE, p2 = (await zona("footerReference", sc, "default")) || antP;
+        const e1 = (await zona("headerReference", sc, "first")) || antE1, p1 = (await zona("footerReference", sc, "first")) || antP1;
+        const ep2 = parImpar ? ((await zona("headerReference", sc, "even")) || antEp) : null;
+        const pp2 = parImpar ? ((await zona("footerReference", sc, "even")) || antPp) : null;
+        const t1 = !!(sc && hijo(sc, "titlePg") && activo(hijo(sc, "titlePg")));
+        porSec.push({ e, p: p2, e1, p1, ep: ep2, pp: pp2, t1 });
+        antE = e; antP = p2; antE1 = e1; antP1 = p1; antEp = ep2; antPp = pp2;
       }
+      const numDe = (ze, zp) => { const n = (zp && zp.num) || (ze && ze.num); return n ? { np: (zp && zp.num ? "pie-" : "enc-") + n.lado, nf: n.fmt !== "n" ? n.fmt : undefined } : { np: "no", nf: undefined }; };
       paSx.forEach(([pa, k]) => {
         const z = porSec[k];
         if (!z) return;
         let g;
         try { g = JSON.parse(pa.sx); } catch (e) { return; }
-        const num = (z.p && z.p.num) || (z.e && z.e.num);
-        g.ep = { e: z.e ? z.e.texto : "", ea: z.e && z.e.alin !== "izq" ? z.e.alin : undefined, p: z.p ? z.p.texto : "", pa: z.p && z.p.alin !== "izq" ? z.p.alin : undefined,
-          np: num ? (z.p && z.p.num ? "pie-" : "enc-") + num.lado : "no", nf: num && num.fmt !== "n" ? num.fmt : undefined };
+        g.sn = k + 1;
+        const nd = numDe(z.e, z.p);
+        const epObj = { e: z.e ? z.e.texto : "", ea: z.e && z.e.alin !== "izq" ? z.e.alin : undefined, p: z.p ? z.p.texto : "", pa: z.p && z.p.alin !== "izq" ? z.p.alin : undefined, np: nd.np, nf: nd.nf };
+        if (z.t1) {
+          const n1 = numDe(z.e1, z.p1);
+          epObj.t1 = 1;
+          epObj.e1 = z.e1 ? z.e1.texto : "";
+          if (z.e1 && z.e1.alin !== "izq") epObj.e1a = z.e1.alin;
+          epObj.p1 = z.p1 ? z.p1.texto : "";
+          if (z.p1 && z.p1.alin !== "izq") epObj.p1a = z.p1.alin;
+          epObj.np1 = n1.np;
+          if (n1.nf) epObj.nf1 = n1.nf;
+        }
+        if (parImpar) {
+          const np2 = numDe(z.ep, z.pp);
+          epObj.par = 1;
+          epObj.ep = z.ep ? z.ep.texto : "";
+          if (z.ep && z.ep.alin !== "izq") epObj.epa = z.ep.alin;
+          epObj.pp = z.pp ? z.pp.texto : "";
+          if (z.pp && z.pp.alin !== "izq") epObj.ppa = z.pp.alin;
+          epObj.npp = np2.np;
+          if (np2.nf) epObj.nfp = np2.nf;
+        }
+        g.ep = epObj;
         pa.sx = JSON.stringify(g);
       });
     }

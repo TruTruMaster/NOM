@@ -294,7 +294,7 @@
     } else if (/MsoListParagraph/.test(cls)) pa.lista = "vinetas";
     const st = n.style;
     const al = (st && st.textAlign) || n.getAttribute("align");
-    if (al) { const v = { center: "centro", right: "der", justify: "just" }[al.toLowerCase()]; if (v) pa.alin = v; else delete pa.alin; }
+    if (al) { const v = { center: "centro", right: "der", justify: "just", distribute: "dist" }[al.toLowerCase()]; if (v) pa.alin = v; else delete pa.alin; }
     if (st && st.lineHeight && /^[\d.]+$/.test(st.lineHeight)) pa.interlineado = Math.min(3, +st.lineHeight);
     const ml = st && (st.marginLeft || st.paddingLeft);
     if (ml && !pa.lista) { const pt = aPt(ml); if (pt && pt >= 18) pa.sangria = Math.min(10, Math.round(pt / 36)); }
@@ -480,6 +480,46 @@
     const t = (it.e && it.e.tipo) || "x";
     return `<span class="wd-obj wd-${esc(t)}${BLOQUE_OBJ.has(t) ? " bloque" : ""}" data-obj data-id="${esc(it.id)}" contenteditable="false"></span>`;
   }
+  /** Sustituye marcadores de campo de encabezado/pie ({PAGE}, {NUMPAGES}, {SECTION}, {SECTIONPAGES}) en su lugar. */
+  function expandirEncPie(texto, datos) {
+    if (!texto || !texto.includes("{")) return texto || "";
+    const d = datos || {};
+    return String(texto).replace(/\{(PAGE|NUMPAGES|SECTION|SECTIONPAGES)\}/gi, (m, k) => {
+      const c = k.toUpperCase();
+      if (c === "PAGE") return d.pagina != null ? String(d.pagina) : "";
+      if (c === "NUMPAGES") return d.total != null ? String(d.total) : "";
+      if (c === "SECTION") return d.seccion != null ? String(d.seccion) : "";
+      if (c === "SECTIONPAGES") return d.paginasSeccion != null ? String(d.paginasSeccion) : "";
+      return m;
+    });
+  }
+  /** Calcula en pantalla los campos de Word que llegaron vacíos o marcados como sucios (p. ej. PAGEREF). */
+  function valorCampoAuto(docObj, opc) {
+    const res = new Map();
+    if (!NOM.campos || !docObj) return res;
+    const ctx = NOM.campos.contexto(docObj, opc || {});
+    if (!ctx.campos.length) return res;
+    const necesita = ctx.campos.some((c) => c.bl && !/^\s*(XE|TA|TC)\b/i.test(c.bl.instr || "") && (c.bl.sucio || c.bl.res == null || String(c.bl.res) === ""));
+    if (!necesita) return res;
+    for (const { campo, valor } of NOM.campos.calcularTodos(ctx)) {
+      if (valor == null || !campo.ref || !campo.bl) continue;
+      if (/^\s*(XE|TA|TC)\b/i.test(campo.bl.instr || "")) continue;
+      if (campo.bl.sucio || campo.bl.res == null || String(campo.bl.res) === "") res.set(campo.ref, String(valor));
+    }
+    return res;
+  }
+  /** Borde izquierdo efectivo del primer renglón al medir un párrafo: en alineación derecha/centrada/RTL no se toma
+      el borde del primer carácter desplazado (si se tomara, el ancho disponible se encogería al texto y lo partiría). */
+  function inicioPrimerRenglon(o) {
+    const z = o.z || 1;
+    if ((o.alin === "izq" || o.alin === "just" || o.alin === "dist") && !o.rtl && o.rectPrimero != null && isFinite(o.rectPrimero)) return o.rectPrimero;
+    return o.izq + (o.textIndent || 0) * z;
+  }
+  /** Espaciado entre letras (px) para repartir un renglón distribuido (w:jc="distribute") a todo el ancho. */
+  function espaciadoDistribuido(ancho, anchoLinea, nCaracteres) {
+    if (!(nCaracteres > 1) || !(ancho > anchoLinea)) return 0;
+    return Math.max(0, (ancho - anchoLinea - 0.5) / (nCaracteres - 1));
+  }
   function htmlParrafo(vis, p) {
     // (lo de párrafo de su estilo —alineación, espacio, interlineado— se pinta como si fuera del párrafo; lo suyo gana)
     const pa0 = S().attrs(p.mark), est = pa0.estilo ? estilosDocActual()[pa0.estilo] : null;
@@ -505,7 +545,10 @@
       }
       if (pa.lista === "tareas" && pa.hecho) at += ` data-hecho="true"`;
     }
-    if (pa.alin) at += ` data-alin="${esc(pa.alin)}"`;
+    if (pa.alin) {
+      at += ` data-alin="${esc(pa.alin)}"`;
+      if (pa.alin === "dist") st += "text-align:justify;text-align-last:justify;text-justify:inter-character;";
+    }
     // (con qué idioma se parten sus palabras: lo lee el acomodo como Word)
     if (guionesPintar) at += ` data-gi="${esc(guionesPintar.idioma)}"`;
     // («Suprimir números de línea» de Word: sus renglones no se numeran ni cuentan)
@@ -1041,6 +1084,9 @@
           pint.forEach((x) => x.remove());
           el.classList.remove("wd-acomodo", "con-tab");
           el.style.wordSpacing = "";
+          el.style.letterSpacing = "";
+          el.style.removeProperty("--hol");
+          if (el.dataset.alin === "dist") { el.style.textAlign = "justify"; el.style.textAlignLast = "justify"; }
           delete el.dataset.acw;
           el.normalize();
         }
@@ -1085,7 +1131,7 @@
         const medios = [...el.querySelectorAll(":scope > .wd-medio")].map((x) => ({ x0: +x.dataset.x0, x1: +x.dataset.x1, y0: +x.dataset.y0, y1: +x.dataset.y1 }));
         if (excl.some((x) => x.style.shapeOutside && x.style.shapeOutside !== "none")) return no("junto a un contorno");
         const alin = esCelda ? ({ center: "centro", right: "der", end: "der", justify: "just" }[getComputedStyle(el).textAlign] || "izq") : el.dataset.alin || "izq";
-        if (!["izq", "just", "centro", "der"].includes(alin)) return no("alineación " + alin);
+        if (!["izq", "just", "centro", "der", "dist"].includes(alin)) return no("alineación " + alin);
         const er = el.getBoundingClientRect(), z = escalaDe(er, el);
         if (!er.width) return no("sin ancho");
         const cs = getComputedStyle(el);
@@ -1215,10 +1261,11 @@
         const hayTab = fichas.some((f) => f.tab);
         // (con tabulaciones solo a la izquierda: en justificado Word estira solo lo de después de la última)
         if (hayTab && alin !== "izq") return no("tabulación con " + alin);
-        // dónde empieza el primer renglón (sangría de primera línea, número de lista)
-        let x0 = izq;
-        if (primero.nodo) { const rg = document.createRange(); rg.setStart(primero.nodo, 0); rg.setEnd(primero.nodo, Math.min(1, primero.nodo.nodeValue.length)); const q = rg.getClientRects()[0]; if (q) x0 = q.left; }
-        else if (primero.obj) x0 = primero.obj.getBoundingClientRect().left;
+        // dónde empieza el primer renglón (sangría de primera línea, número de lista; nunca el texto desplazado en der/centro)
+        let rectPrimero = null;
+        if (primero.nodo) { const rg = document.createRange(); rg.setStart(primero.nodo, 0); rg.setEnd(primero.nodo, Math.min(1, primero.nodo.nodeValue.length)); const q = rg.getClientRects()[0]; if (q) rectPrimero = q.left; }
+        else if (primero.obj) rectPrimero = primero.obj.getBoundingClientRect().left;
+        const x0 = inicioPrimerRenglon({ alin, izq, textIndent: parseFloat(cs.textIndent) || 0, z, rtl: cs.direction === "rtl", rectPrimero });
         // Tabulaciones: se miden desde el margen (el borde del párrafo; la sangría no las mueve, como en Word)
         let tabs = null;
         if (hayTab) {
@@ -1552,6 +1599,20 @@
         if (L.esCelda) el.dataset.alin = L.alin;   // (para el CSS del justificado y la holgura; una celda no se lee del DOM con esto)
         el.classList.add("wd-acomodo");
         el.dataset.acw = L.ancho.toFixed(2);
+        if (L.alin === "dist" && !cortes.length) {
+          let w = 0, fin = F.length, nCar = 0;
+          while (fin > 0 && F[fin - 1].esp) fin--;
+          for (let q = 0; q < fin; q++) { w += F[q].w; nCar += F[q].obj ? 1 : [...F[q].t].length; }
+          const qu = L.quita ? L.quita(0) : null;
+          const A = L.A1v - (qu ? qu[1] : 0);
+          const ls = espaciadoDistribuido(A, w, nCar);
+          if (ls > 0) {
+            el.style.letterSpacing = ls.toFixed(3) + "px";
+            el.style.textAlign = "left";
+            el.style.textAlignLast = "left";
+            el.style.setProperty("--hol", (ls + 1).toFixed(3) + "px");
+          }
+        }
         if (L.alin === "just") {
           // los espacios, encogidos más de lo que Word encoge (25 %) en todas las fuentes del párrafo: así cada renglón
           // cabe hasta su corte y el navegador lo estira hasta el margen
@@ -1590,7 +1651,7 @@
         for (const L of leidos) {
           if (!L || L.espera) continue;
           const cortes = cortesWord(L);
-          if (!cortes || (!cortes.length && L.alin !== "just" && !L.hayTab)) continue;
+          if (!cortes || (!cortes.length && L.alin !== "just" && L.alin !== "dist" && !L.hayTab)) continue;
           escribirAcomodo(L, cortes);
         }
         for (const el of els) if (!el.classList.contains("wd-acomodo")) restaurarSuaves(el);
@@ -3401,6 +3462,25 @@
           if (s.textContent !== String(n)) s.textContent = String(n);
         });
       }
+      /** Calcula en pantalla los campos de Word sin valor guardado o marcados como sucios (p. ej. PAGEREF). */
+      function numerarCampos() {
+        if (verCodigos || !NOM.campos) return;
+        const pags = $$(".wd-pagina", ed.vista).length || numPaginas || 1;
+        const mapa = valorCampoAuto(doc(), {
+          paginaDe: paginaDeItem,
+          paginas: pags,
+          nombre: doc().valor("_doc", "nombre") || "",
+          usuario: ((NOM.api && NOM.api.usuario && NOM.api.usuario()) || {}).nombre || "",
+        });
+        if (!mapa.size) return;
+        $$(".wd-campo[data-obj]", cuerpo).forEach((o) => {
+          const it = sec().item(o.dataset.id), ref = it && it.e && it.e.ref;
+          if (!ref || !mapa.has(ref)) return;
+          const bl = doc().bloque(ref) || {}, span = $(".wd-campo-v", o);
+          const htmlNuevo = envolver(mapa.get(ref), bl.a || {});
+          if (span && span.innerHTML !== htmlNuevo) span.innerHTML = htmlNuevo;
+        });
+      }
       /** Para la exportación a Word: la página de un párrafo (por su clave) o de un elemento (por su id). */
       function paginaPara(k, id) { const el = k ? elems.get(k) : $(`[data-id="${CSS.escape(id || "")}"]`, cuerpo), pags = $$(".wd-pagina", ed.vista); if (!el || !pags.length) return null; const y = el.getBoundingClientRect().top + 1; let n = 1; pags.forEach((pg, i) => { if (pg.getBoundingClientRect().top <= y) n = i + 1; }); return n; }
 
@@ -4522,26 +4602,44 @@
         cuerpo.style.minHeight = (ultima ? ultima.top + ultima.g.h : 0) + "px";
         const e = encPie(), fb = formatoBase();
         const [zonaNum, alNum] = e.pos.split("-");
-        const fila = (zona, texto, al, q) => {
+        // Cuántas páginas tiene cada sección (para {SECTION} y {SECTIONPAGES})
+        const pagsPorSec = new Map(), ordSec = new Map();
+        pags.forEach((q) => {
+          const k = q.g.sn != null ? q.g.sn : q.g;
+          if (!ordSec.has(k)) ordSec.set(k, ordSec.size + 1);
+          pagsPorSec.set(k, (pagsPorSec.get(k) || 0) + 1);
+        });
+        const fila = (zona, texto, al, q, datosPag, npSec, nfSec) => {
           const slots = { izq: "", centro: "", der: "" };
-          if (texto && texto.includes("\t")) texto.split("\t").slice(0, 3).forEach((t, k) => { slots[["izq", "centro", "der"][k]] += esc(t); });
-          else if (texto) slots[al] += esc(texto);
+          const tx = expandirEncPie(texto, datosPag);
+          if (tx && tx.includes("\t")) tx.split("\t").slice(0, 3).forEach((t, k) => { slots[["izq", "centro", "der"][k]] += esc(t); });
+          else if (tx) slots[al] += esc(tx);
           // (cada sección de Word con su encabezado, su pie y el lugar de su número)
-          const ep = q.g.ep, [zN, aN] = ep ? (ep.np === "no" ? ["", ""] : String(ep.np).split("-")) : [zonaNum, alNum];
-          if ((ep ? ep.np !== "no" : e.nums) && zN === zona) slots[aN] += (slots[aN] ? "&emsp;" : "") + esc(textoNumero(numeroCon(q.num + (ep ? 0 : e.inicio - 1), q.fmt), numPaginas + (ep ? 0 : e.inicio - 1), ep ? ep.nf || "n" : e.fmt));
+          const ep = q.g.ep, npEff = ep ? (npSec != null ? npSec : ep.np) : null, nfEff = ep ? (nfSec !== undefined ? nfSec : ep.nf) : e.fmt;
+          const [zN, aN] = ep ? (npEff === "no" ? ["", ""] : String(npEff).split("-")) : [zonaNum, alNum];
+          if ((ep ? npEff !== "no" : e.nums) && zN === zona) slots[aN] += (slots[aN] ? "&emsp;" : "") + esc(textoNumero(datosPag.pagina, datosPag.total, nfEff || "n"));
           return `<div class="wd-${zona === "enc" ? "enc" : "pie"}"><span class="izq">${slots.izq}</span><span class="centro">${slots.centro}</span><span class="der">${slots.der}</span></div>`;
         };
         const estiloEP = `font-family:${esc(fb.fuente ? cssFuente(fb.fuente) : "Calibri, Carlito, sans-serif")};font-size:${Math.min(12, +fb.tam || 11)}pt`;
         let h = "";
         pags.forEach((q, i) => {
-          const g = q.g, vacia = q.vacia || (e.primera && i === 0);
+          const g = q.g, ep = g.ep;
+          const esPrimeraSec = i === 0 || pags[i - 1].g !== g;
+          const vacia = q.vacia || (!ep && e.primera && i === 0);
           const finI = finPag.get(i) || [];
           const bloqueNotas = (q.notas.length ? `<div class="wd-notas" style="left:${g.m[2]}px;right:${g.m[3]}px;bottom:${g.m[1]}px">${q.notas.map((x) => `<div class="wd-nota-pie">${x.n === "" ? "" : `<sup>${x.n}</sup> `}${esc(x.texto)}</div>`).join("")}</div>` : "")
             + (finI.length ? `<div class="wd-notas wd-notas-fin" style="left:${g.m[2]}px;right:${g.m[3]}px;top:${finI[0].y - 14}px">${finI.map((x) => `<div class="wd-nota-pie"><sup>${esc(x.n)}</sup> ${esc(x.texto)}</div>`).join("")}</div>` : "");
           // la línea entre columnas (Word: «línea entre columnas»), del alto de lo escrito en ellas
           const lineas = q.regiones.map((r) => r.cols.slice(1).map((c, k) => { const a = r.cols[k], x = g.m[2] + (a.x + a.w + c.x) / 2; return `<div class="wd-col-linea" style="left:${x.toFixed(2)}px;top:${(r.top - q.top).toFixed(2)}px;height:${Math.max(0, r.bajo - r.top).toFixed(2)}px"></div>`; }).join("")).join("");
-          const ep = g.ep, encT = ep ? ep.e : e.enc, encA = ep ? ep.ea || "izq" : e.encAl, pieT = ep ? ep.p : e.pie, pieA = ep ? ep.pa || "izq" : e.pieAl;
-          h += `<div class="wd-pagina" style="top:${q.top}px;left:${q.x0}px;width:${g.w}px;height:${g.h}px;--ms:${g.m[0]}px;--mi:${g.m[1]}px;--miz:${g.m[2]}px;--md:${g.m[3]}px;${estiloEP}">${vacia ? "" : fila("enc", encT, encA, q) + fila("pie", pieT, pieA, q)}${bloqueNotas}${lineas}${e.marca ? `<div class="wd-marca-agua">${esc(e.marca)}</div>` : ""}</div>`;
+          const kSec = g.sn != null ? g.sn : g;
+          const datosPag = { pagina: numeroCon(q.num + (ep ? 0 : e.inicio - 1), q.fmt), total: numPaginas + (ep ? 0 : e.inicio - 1), seccion: g.sn || ordSec.get(kSec) || 1, paginasSeccion: pagsPorSec.get(kSec) || 1 };
+          let encT, encA, pieT, pieA, npSec, nfSec;
+          if (ep) {
+            if (ep.t1 && esPrimeraSec) { encT = ep.e1 || ""; encA = ep.e1a || "izq"; pieT = ep.p1 || ""; pieA = ep.p1a || "izq"; npSec = ep.np1 || "no"; nfSec = ep.nf1; }
+            else if (ep.par && q.num % 2 === 0) { encT = ep.ep || ""; encA = ep.epa || "izq"; pieT = ep.pp || ""; pieA = ep.ppa || "izq"; npSec = ep.npp || "no"; nfSec = ep.nfp; }
+            else { encT = ep.e || ""; encA = ep.ea || "izq"; pieT = ep.p || ""; pieA = ep.pa || "izq"; npSec = ep.np; nfSec = ep.nf; }
+          } else { encT = e.enc; encA = e.encAl; pieT = e.pie; pieA = e.pieAl; }
+          h += `<div class="wd-pagina" style="top:${q.top}px;left:${q.x0}px;width:${g.w}px;height:${g.h}px;--ms:${g.m[0]}px;--mi:${g.m[1]}px;--miz:${g.m[2]}px;--md:${g.m[3]}px;${estiloEP}">${vacia ? "" : fila("enc", encT, encA, q, datosPag, npSec, nfSec) + fila("pie", pieT, pieA, q, datosPag, npSec, nfSec)}${bloqueNotas}${lineas}${e.marca ? `<div class="wd-marca-agua">${esc(e.marca)}</div>` : ""}</div>`;
         });
         // (la letra capital, con su párrafo ya en su hoja)
         if (cuerpo.querySelector(":scope > [data-capital]")) { pintarCapitales(); tomarRegistros(); }
@@ -4575,10 +4673,11 @@
         paginarBase();
         for (let k = 0; k < 4 && revisarAcomodos(); k++) paginarBase();
         numerarIndices();
+        numerarCampos();
         // el índice alfabético depende de las páginas: si cambió, se pinta otra vez y se pagina una vez más
         let otra = false;
         $$(".wd-indice-alfa[data-obj]", cuerpo).forEach((o) => { const it = sec().item(o.dataset.id); if (it && it.e && pintarIndiceAlfa(o, it.e)) otra = true; });
-        if (otra) { paginarBase(); numerarIndices(); }
+        if (otra) { paginarBase(); numerarIndices(); numerarCampos(); }
       }
       function paginarBase() {
         clearTimeout(tPag); tPag = null;
@@ -4649,10 +4748,12 @@
         const [zonaNum, alNum] = e.pos.split("-");
         const fila = (zona, texto, al, n, extra) => {
           const slots = { izq: "", centro: "", der: "" };
+          const np = n + e.inicio - 1, nt = numPaginas + e.inicio - 1;
+          const tx = expandirEncPie(texto, { pagina: np, total: nt, seccion: 1, paginasSeccion: numPaginas });
           // con tabuladores, el texto trae sus tres lugares: izquierda, centro y derecha (así viene de Word)
-          if (texto && texto.includes("\t")) texto.split("\t").slice(0, 3).forEach((t, k) => { slots[["izq", "centro", "der"][k]] += esc(t); });
-          else if (texto) slots[al] += esc(texto);
-          if (e.nums && zonaNum === zona) slots[alNum] += (slots[alNum] ? "&emsp;" : "") + esc(textoNumero(n + e.inicio - 1, numPaginas + e.inicio - 1, e.fmt));
+          if (tx && tx.includes("\t")) tx.split("\t").slice(0, 3).forEach((t, k) => { slots[["izq", "centro", "der"][k]] += esc(t); });
+          else if (tx) slots[al] += esc(tx);
+          if (e.nums && zonaNum === zona) slots[alNum] += (slots[alNum] ? "&emsp;" : "") + esc(textoNumero(np, nt, e.fmt));
           return `<div class="wd-${zona === "enc" ? "enc" : "pie"}">${extra || ""}<span class="izq">${slots.izq}</span><span class="centro">${slots.centro}</span><span class="der">${slots.der}</span></div>`;
         };
         const logo = e.logo && e.logo.src ? `<img class="wd-logo" src="${esc(NOM.srcBin ? NOM.srcBin(e.logo.src) : e.logo.src)}" alt="" style="height:${Math.min(80, +e.logo.alto || 36)}px">` : "";
@@ -5808,7 +5909,9 @@
         const el = id ? $(`[data-id="${CSS.escape(id)}"]`, cuerpo) : null;
         const pags = $$(".wd-pagina", ed.vista);
         if (!el || !pags.length) return 1;
-        const y = el.getBoundingClientRect().top + 1;
+        let r = el.getBoundingClientRect();
+        if (!r.height && !r.top && el.parentElement) r = el.parentElement.getBoundingClientRect();
+        const y = r.top + 1;
         let n = 1;
         pags.forEach((pg, i) => { if (pg.getBoundingClientRect().top <= y) n = i + 1; });
         return n;
@@ -6643,5 +6746,5 @@
     },
   };
 
-  NOM.textoRico = { parrafosDe, recorrido, asegurarSecuencia, tokens, envolver, BLOQUE: B, cssFuente, cssBorde, FUENTES, altoFuente };
+  NOM.textoRico = { parrafosDe, recorrido, asegurarSecuencia, tokens, envolver, BLOQUE: B, cssFuente, cssBorde, FUENTES, altoFuente, expandirEncPie, valorCampoAuto, inicioPrimerRenglon, espaciadoDistribuido };
 })();
