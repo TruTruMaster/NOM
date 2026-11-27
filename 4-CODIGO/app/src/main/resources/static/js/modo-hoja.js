@@ -93,7 +93,26 @@
   /** Lo copiado dentro de la hoja (con fórmulas y formato); el sistema solo recibe el texto. */
   let portapapeles = null;
 
+  /** Geometría pura al soltar una imagen sobre la hoja: acota (x, y) contra las orillas permitiendo
+      sobresalir un poco a la derecha/abajo, calcula celda ancla + desplazamiento y nunca altera w ni h. */
+  function posImagenHoja(x, y, tam, cols, filas, margen) {
+    const w = Math.max(1, +tam.w || 1), h = Math.max(1, +tam.h || 1);
+    const m = margen == null ? 32 : Math.max(1, +margen || 0);
+    const uC = cols[cols.length - 1] || { c: 0, x: 0, w: ANCHO };
+    const uF = filas[filas.length - 1] || { f: 0, y: 0, h: ALTO };
+    const totW = uC.x + uC.w, totH = uF.y + uF.h;
+    const visX = Math.min(m, w, totW), visY = Math.min(m, h, totH);
+    const cx = Math.max(0, Math.min(Math.max(0, totW - visX), x));
+    const cy = Math.max(0, Math.min(Math.max(0, totH - visY), y));
+    let col = uC;
+    for (let i = 0; i < cols.length; i++) if (cx < cols[i].x + cols[i].w) { col = cols[i]; break; }
+    let fila = uF;
+    for (let i = 0; i < filas.length; i++) if (cy < filas[i].y + filas[i].h) { fila = filas[i]; break; }
+    return { de: { c: col.c, f: fila.f }, dx: Math.max(0, Math.round(cx - col.x)), dy: Math.max(0, Math.round(cy - fila.y)), w, h };
+  }
+
   NOM.modos.HOJA = {
+    _arrastre: { posImagenHoja },
     montar(ed) {
       const doc = () => ed.doc;
       const self = this;
@@ -113,7 +132,7 @@
       ed.lienzo.style.overflow = "hidden";
       const rej = $("[data-rejilla]", raiz), fx = $("[data-fx]", raiz), refEl = $("[data-ref]", raiz), bandaFiltro = $("[data-filtro]", raiz), zonaGraficas = $("[data-graficas]", raiz);
       { const bc = $("[data-calcular]", raiz); if (bc) bc.onclick = () => calcularAhora(false); }
-      let sel = { c: 0, f: 0 }, ancla = null, editor = null, arrastrando = false;
+      let sel = { c: 0, f: 0 }, ancla = null, editor = null, fxEdit = null, arrastrando = false;
       let visibles = [];          // filas reales en el orden en que se ven
       let resaltadas = new Set(), comentadas = new Map(), halladas = new Set();
       let cubiertas = new Map();  // celdas tapadas por una combinada -> celda de arriba a la izquierda
@@ -1099,7 +1118,7 @@
           { texto: "Más chica", icono: "minus", fn: () => doc().cambiar(id, { w: Math.max(16, Math.round(b.w * 0.8)), h: Math.max(16, Math.round(b.h * 0.8)) }) },
           { texto: "Eliminar", icono: "trash-2", peligro: true, fn: () => { doc().cambiar(id, { eliminado: true }); render(); } }]);
       }
-      /** Arrastrar una imagen de la hoja la lleva a la celda donde se suelta (su esquina de arriba a la izquierda). */
+      /** Arrastrar una imagen de la hoja la lleva a la posición donde se suelta (acotada a la hoja, sin cambiar w ni h). */
       function enlazarImagenesHoja(capa) {
         if (ed.soloLectura) return;
         $$(".nom-img", capa).forEach((el) => {
@@ -1109,13 +1128,29 @@
             if (e.button !== 0) return;
             e.preventDefault();
             const x0 = e.clientX, y0 = e.clientY, r0 = el.getBoundingClientRect();
+            const b0 = doc().bloque(id) || {};
+            const w0 = +b0.w > 0 ? +b0.w : r0.width, h0 = +b0.h > 0 ? +b0.h : r0.height;
             let movio = false;
             el.setPointerCapture(e.pointerId);
+            const limpiar = () => { el.onpointermove = el.onpointerup = el.onpointercancel = null; el.style.transform = ""; };
             el.onpointermove = (m) => { if (Math.abs(m.clientX - x0) + Math.abs(m.clientY - y0) > 3) movio = true; el.style.transform = `translate(${m.clientX - x0}px, ${m.clientY - y0}px)`; };
+            el.onpointercancel = limpiar;
             el.onpointerup = (u) => {
-              el.onpointermove = el.onpointerup = null;
-              el.style.transform = "";
+              limpiar();
               if (!movio) { menuImagenHoja(el, id); return; }
+              const tbEl = rej.querySelector("table");
+              const ths = tbEl ? [...tbEl.querySelectorAll("thead th[data-col]")] : [];
+              const trs = tbEl ? [...tbEl.querySelectorAll("tbody tr[data-fila]")] : [];
+              if (ths.length && trs.length) {
+                const c0 = ths[0].getBoundingClientRect(), f0 = trs[0].getBoundingClientRect();
+                const cols = ths.map((th) => ({ c: +th.dataset.col, x: th.offsetLeft - ths[0].offsetLeft, w: th.offsetWidth || ANCHO }));
+                const filas = trs.map((tr) => ({ f: +tr.dataset.fila, y: tr.offsetTop - trs[0].offsetTop, h: tr.offsetHeight || ALTO }));
+                const px = r0.left + (u.clientX - x0) - c0.left, py = r0.top + (u.clientY - y0) - f0.top;
+                const pos = posImagenHoja(px, py, { w: w0, h: h0 }, cols, filas, 32);
+                doc().cambiar(id, { de: pos.de, dx: pos.dx, dy: pos.dy });
+                render();
+                return;
+              }
               el.style.visibility = "hidden";
               const td = document.elementFromPoint(r0.left + (u.clientX - x0) + 2, r0.top + (u.clientY - y0) + 2);
               el.style.visibility = "";
@@ -2636,7 +2671,7 @@
         if (!ancla) { const vis = visible(sel.c, sel.f); if (vis.c !== sel.c || vis.f !== sel.f) sel = vis; }
         const r = rango();
         refEl.textContent = ancla && (ancla.c !== sel.c || ancla.f !== sel.f) ? textoRango(r) : F().ref(sel.c, sel.f);
-        if (document.activeElement !== fx) fx.value = textoBarra(sel.c, sel.f);
+        if (document.activeElement !== fx || !fxEdit) fx.value = textoBarra(sel.c, sel.f);
         $$("td.sel, td.rango", rej).forEach((x) => x.classList.remove("sel", "rango"));
         $$("th.activa", rej).forEach((x) => x.classList.remove("activa"));
         $$("td.enfoque", rej).forEach((x) => x.classList.remove("enfoque"));
@@ -2928,6 +2963,7 @@
         editor.style.height = r.height + "px";
         editor.value = conservar ? crudo(sel.c, sel.f) : inicial || "";
         editor._c = sel.c; editor._f = sel.f;
+        fx.value = editor.value;
         rej.append(editor);
         editor.focus();
         editor.setSelectionRange(editor.value.length, editor.value.length);
@@ -3170,7 +3206,7 @@
         const p = portapapeles, alto0 = p.celdas.length, ancho0 = p.celdas[0].length;
         const dest = rango();
         const rf = Math.max(1, Math.floor((dest.f2 - dest.f1 + 1) / alto0)), rc = Math.max(1, Math.floor((dest.c2 - dest.c1 + 1) / ancho0));
-        const veces = (dest.f2 - dest.f1 + 1) % alto0 === 0 && (dest.c2 - dest.c1 + 1) % ancho0 === 0 ? [rf, rc] : [1, 1];
+        const veces = !p.cortado && (dest.f2 - dest.f1 + 1) % alto0 === 0 && (dest.c2 - dest.c1 + 1) % ancho0 === 0 ? [rf, rc] : [1, 1];
         const campos = {};
         let maxF = t.filas || 30, maxC = t.cols || 10;
         const escritas = new Set();
@@ -3517,21 +3553,46 @@
       });
 
       // ------------------------------------------------------------ ratón y dedo en las celdas
+      /** Verdadero cuando el cursor de una fórmula está tras un operador o separador y espera una referencia de celda. */
+      const esperaRef = (v, pos) => /^=(?:[\s\S]*[=(;,+\-*/^&<>:{])?\s*$/.test(String(v || "").slice(0, pos == null ? String(v || "").length : pos));
+      function asegurarFxEdit() { if (!fxEdit) fxEdit = { c: sel.c, f: sel.f, orig: textoBarra(sel.c, sel.f) }; }
+      function cerrarFx(guardar) {
+        const x = fxEdit;
+        fxEdit = null;
+        ocultarAyuda();
+        resaltarRefs("");
+        if (!x) return true;
+        if (guardar && fx.value !== x.orig) return escribir(x.c, x.f, fx.value);
+        return true;
+      }
       rej.addEventListener("pointerdown", (e) => {
         if (e.target.closest("[data-asa]") || e.target.closest(".desplegable-celda")) return;
         const td = e.target.closest("td");
         if (e.pointerType === "touch") dedos.add(e.pointerId);
         if (!td) return;
         const c = +td.dataset.c, f = +td.dataset.f;
-        // Escribiendo una fórmula: el clic en otra celda inserta su referencia (como en Excel).
-        if (editor && editor.value.startsWith("=") && (c !== editor._c || f !== editor._f)) {
+        // Escribiendo una fórmula (en la celda o en la barra fx): el clic en otra celda inserta su referencia (como en Excel).
+        if (editor && editor.value.startsWith("=") && esperaRef(editor.value, editor.selectionStart) && (c !== editor._c || f !== editor._f)) {
           e.preventDefault();
-          const p = editor.selectionStart;
-          editor.value = editor.value.slice(0, p) + F().ref(c, f) + editor.value.slice(editor.selectionEnd);
-          editor.setSelectionRange(p + F().ref(c, f).length, p + F().ref(c, f).length);
+          const p = editor.selectionStart == null ? editor.value.length : editor.selectionStart;
+          const rTxt = F().ref(c, f);
+          editor.value = editor.value.slice(0, p) + rTxt + editor.value.slice(editor.selectionEnd == null ? p : editor.selectionEnd);
+          editor.setSelectionRange(p + rTxt.length, p + rTxt.length);
           fx.value = editor.value;
           resaltarRefs(editor.value);
           return;
+        }
+        if (fxEdit && document.activeElement === fx) {
+          const p = fx.selectionStart == null ? fx.value.length : fx.selectionStart;
+          if (fx.value.startsWith("=") && esperaRef(fx.value, p) && (c !== fxEdit.c || f !== fxEdit.f)) {
+            e.preventDefault();
+            const rTxt = F().ref(c, f);
+            fx.value = fx.value.slice(0, p) + rTxt + fx.value.slice(fx.selectionEnd == null ? p : fx.selectionEnd);
+            fx.setSelectionRange(p + rTxt.length, p + rTxt.length);
+            resaltarRefs(fx.value);
+            return;
+          }
+          cerrarFx(true);
         }
         if (editor) cerrarEditor(true);
         // Mayús + clic, o un dedo sosteniendo una celda mientras otro toca otra: rango.
@@ -3571,12 +3632,23 @@
       document.addEventListener("pointercancel", soltar);
       rej.addEventListener("scroll", () => { if (ayuda && editor) colocarAyuda(editor); }, { passive: true });
       prepararAyuda(fx);
-      fx.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") { e.preventDefault(); ocultarAyuda(); if (escribir(sel.c, sel.f, fx.value)) mover(0, 1); rej.focus(); }
-        if (e.key === "Escape") { ocultarAyuda(); fx.value = crudo(sel.c, sel.f); rej.focus(); }
+      fx.addEventListener("focus", () => {
+        if (editor) {
+          const c = editor._c, f = editor._f, val = editor.value;
+          cerrarEditor(false);
+          fx.value = val;
+          fxEdit = { c, f, orig: textoBarra(c, f) };
+          resaltarRefs(fx.value);
+          return;
+        }
+        asegurarFxEdit();
       });
-      fx.addEventListener("input", () => resaltarRefs(fx.value));
-      fx.addEventListener("blur", () => { resaltarRefs(""); if (fx.value !== crudo(sel.c, sel.f)) escribir(sel.c, sel.f, fx.value); });
+      fx.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); asegurarFxEdit(); if (cerrarFx(true)) mover(0, 1); fx.value = textoBarra(sel.c, sel.f); rej.focus(); }
+        if (e.key === "Escape") { e.preventDefault(); cerrarFx(false); fx.value = textoBarra(sel.c, sel.f); rej.focus(); }
+      });
+      fx.addEventListener("input", () => { asegurarFxEdit(); resaltarRefs(fx.value); });
+      fx.addEventListener("blur", () => { cerrarFx(true); });
 
       // ------------------------------------------------------------ 8.1 lista desplegable en la celda
       function pintarDesplegable() {
@@ -4211,7 +4283,7 @@
         else if (deGraficas) pintarGraficas();
         else pintarBandeja();
       };
-      this.desmontar = () => { cerrarEditor(true); cerrarBuscar(); ocultarAyuda(); document.removeEventListener("pointerup", soltar); document.removeEventListener("pointercancel", soltar); ed.lienzo.style.overflow = ""; };
+      this.desmontar = () => { cerrarFx(true); cerrarEditor(true); cerrarBuscar(); ocultarAyuda(); document.removeEventListener("pointerup", soltar); document.removeEventListener("pointercancel", soltar); ed.lienzo.style.overflow = ""; };
       // 3.4 Celdas que cambiaron otros desde la última visita.
       this.resaltarCambios = (c) => {
         resaltadas = new Set();

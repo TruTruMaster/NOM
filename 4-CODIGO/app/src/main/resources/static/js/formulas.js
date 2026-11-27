@@ -269,20 +269,86 @@
     const dia = fin ? ultimoDia(aa, mm) : Math.min(d.getUTCDate(), ultimoDia(aa, mm));
     return new FechaF(serieDe(aa, mm + 1, dia));
   }
+  const COLACION = typeof Intl !== "undefined" && Intl.Collator ? new Intl.Collator("es", { sensitivity: "accent" }) : null;
+  const cmpTexto = (a, b) => (COLACION ? COLACION.compare(a, b) : a.toLowerCase().localeCompare(b.toLowerCase()));
+  /** Expresión regular de comodines de Excel (*, ?, y escape con ~: ~*, ~?, ~~). */
+  function regexComodin(patron) {
+    let re = "^";
+    for (let i = 0; i < patron.length; i++) {
+      const ch = patron[i];
+      if (ch === "~" && i + 1 < patron.length) { re += patron[++i].replace(/[.+^${}()|[\]\\*?]/g, "\\$&"); continue; }
+      if (ch === "*") re += "[\\s\\S]*";
+      else if (ch === "?") re += "[\\s\\S]";
+      else re += ch.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    }
+    return new RegExp(re + "$", "i");
+  }
+  /** Igualdad exacta de búsqueda en Excel: sin cruzar tipos (número ≠ texto ≠ booleano); comodines opcionales. */
+  function igualExacto(v, b, comodines) {
+    if (v instanceof ErrorF) return false;
+    if (esNum(b)) return esNum(v) && +v === +b;
+    if (typeof b === "boolean") return typeof v === "boolean" && v === b;
+    if (typeof b === "string") {
+      if (typeof v !== "string") return false;
+      if (!comodines || !/[*?~]/.test(b)) return v.toLowerCase() === b.toLowerCase();
+      return regexComodin(b).test(v);
+    }
+    return false;
+  }
+  /** Compara v contra b solo si son del mismo tipo y v no es vacío/error; si no, null (se salta en búsqueda aprox.). */
+  function cmpMismoTipo(v, b) {
+    if (v === "" || v == null || v instanceof ErrorF) return null;
+    if (esNum(b)) return esNum(v) ? (+v < +b ? -1 : +v > +b ? 1 : 0) : null;
+    if (typeof b === "boolean") return typeof v === "boolean" ? (v === b ? 0 : v ? 1 : -1) : null;
+    if (typeof b === "string") return typeof v === "string" ? cmpTexto(v, b) : null;
+    return null;
+  }
+  /** Búsqueda binaria de Excel (asc: true ascendente, false descendente; modo: 0 exacta, -1 <=, 1 >=). Salta vacíos y tipos distintos. */
+  function buscarBinaria(buscado, valores, asc, modo) {
+    const objetivo = asc ? modo : -modo;
+    let lo = 0, hi = valores.length - 1, res = -1;
+    while (lo <= hi) {
+      const m = (lo + hi) >> 1;
+      let k = m, c = cmpMismoTipo(valores[k], buscado);
+      if (c === null) {
+        k = m - 1;
+        while (k >= lo && (c = cmpMismoTipo(valores[k], buscado)) === null) k--;
+        if (k < lo) { lo = m + 1; continue; }
+      }
+      const d = asc ? c : -c;
+      if (objetivo === 0) {
+        if (d === 0) return k;
+        if (d < 0) lo = m + 1; else hi = k - 1;
+      } else if (objetivo < 0) {
+        if (d <= 0) { res = k; lo = m + 1; } else hi = k - 1;
+      } else {
+        if (d >= 0) { res = k; hi = k - 1; } else lo = m + 1;
+      }
+    }
+    return res;
+  }
+  /** 4.º argumento de BUSCARV/BUSCARH: omitido = VERDADERO; vacío explícito = FALSO; texto no booleano = #VALOR!. */
+  function esAprox(a, idx) {
+    if (a.length <= idx) return true;
+    const v = a[idx];
+    if (v instanceof ErrorF) throw v;
+    if (v === undefined || v === "") return false;
+    if (typeof v === "boolean") return v;
+    if (esNum(v)) return +v !== 0;
+    if (typeof v === "string") {
+      const u = v.trim().toUpperCase();
+      if (u === "VERDADERO" || u === "TRUE") return true;
+      if (u === "FALSO" || u === "FALSE") return false;
+    }
+    throw E("#VALOR!");
+  }
   function buscarEn(buscado, valores, tipo) {
     if (buscado instanceof ErrorF) throw buscado;
     if (tipo === 0) {
-      const p = criterio(esNum(buscado) ? +buscado : "=" + texto(buscado));
-      return valores.findIndex((v) => p(v));
+      for (let i = 0; i < valores.length; i++) if (igualExacto(valores[i], buscado, true)) return i;
+      return -1;
     }
-    let mejor = -1;
-    for (let i = 0; i < valores.length; i++) {
-      const v = valores[i];
-      const cmp = esNum(buscado) ? (esNum(v) ? +v - +buscado : null) : (!esNum(v) ? texto(v).toLowerCase().localeCompare(texto(buscado).toLowerCase()) : null);
-      if (cmp == null) continue;
-      if (tipo === 1 ? cmp <= 0 : cmp >= 0) mejor = i; else break;
-    }
-    return mejor;
+    return buscarBinaria(buscado, valores, tipo > 0, tipo > 0 ? -1 : 1);
   }
   const FUNCS = {
     // matemáticas
@@ -427,25 +493,25 @@
     },
     // búsqueda
     BUSCARV: (a) => {
+      if (a[0] instanceof ErrorF) return a[0];
+      if (a[1] instanceof ErrorF) return a[1];
       const t = tabla(a[1]);
-      const col = Math.floor(num(a[2]));
-      if (col < 1 || col > (t[0] || []).length) return E("#REF!");
-      const exacta = a[3] !== undefined && !(verdad(a[3]) && a[3] !== 0);
-      const i = buscarEn(a[0], t.map((f) => f[0]), exacta ? 0 : 1);
+      const col = Math.trunc(num(a[2]));
+      if (col < 1) return E("#VALOR!");
+      if (col > (t[0] || []).length) return E("#REF!");
+      const aprox = esAprox(a, 3);
+      const i = buscarEn(a[0], t.map((f) => f[0]), aprox ? 1 : 0);
       return i < 0 ? E("#N/A") : t[i][col - 1];
     },
     BUSCARH: (a) => {
-      const t = tabla(a[1]), fila = Math.floor(num(a[2]));
-      if (fila < 1 || fila > t.length) return E("#REF!");
-      const exacta = a[3] !== undefined && !(verdad(a[3]) && a[3] !== 0);
-      const i = buscarEn(a[0], t[0], exacta ? 0 : 1);
+      if (a[0] instanceof ErrorF) return a[0];
+      if (a[1] instanceof ErrorF) return a[1];
+      const t = tabla(a[1]), fila = Math.trunc(num(a[2]));
+      if (fila < 1) return E("#VALOR!");
+      if (fila > t.length) return E("#REF!");
+      const aprox = esAprox(a, 3);
+      const i = buscarEn(a[0], t[0], aprox ? 1 : 0);
       return i < 0 ? E("#N/A") : t[fila - 1][i];
-    },
-    BUSCARX: (a) => {
-      const donde = lista(a[1]), que = lista(a[2]);
-      const i = buscarEn(a[0], donde, 0);
-      if (i < 0) return a[3] === undefined ? E("#N/A") : a[3];
-      return que[i] === undefined ? E("#VALOR!") : que[i];
     },
     INDICE: (a) => {
       const t = tabla(a[0]);
@@ -455,8 +521,11 @@
       return t[f - 1][c - 1];
     },
     COINCIDIR: (a) => {
-      const tipo = a[2] === undefined ? 1 : Math.sign(num(a[2]));
-      const i = buscarEn(a[0], lista(a[1]), tipo === 0 ? 0 : tipo);
+      if (a[0] instanceof ErrorF) return a[0];
+      if (a[1] instanceof ErrorF) return a[1];
+      if (filasDe(a[1]) > 1 && colsDe(a[1]) > 1) return E("#N/A");
+      const tipo = a.length < 3 ? 1 : a[2] === undefined ? 0 : Math.sign(num(a[2]));
+      const i = buscarEn(a[0], lista(a[1]), tipo);
       return i < 0 ? E("#N/A") : i + 1;
     },
     ELEGIR: (a) => { const i = Math.floor(num(a[0])); if (i < 1 || i >= a.length) return E("#VALOR!"); return a[i]; },
@@ -654,21 +723,31 @@
       return FUNCS[m](datos);
     },
     COINCIDIRX: (a) => {
-      const vals = lista(a[1]).flat(Infinity), modo = Math.floor(num(oDef(a[2], 0))), busq = Math.floor(num(oDef(a[3], 1)));
-      const orden = busq < 0 ? vals.map((_, i) => vals.length - 1 - i) : vals.map((_, i) => i);
       const b = a[0];
+      if (b instanceof ErrorF) return b;
+      if (a[1] instanceof ErrorF) return a[1];
+      if (filasDe(a[1]) > 1 && colsDe(a[1]) > 1) throw E("#VALOR!");
+      const vals = lista(a[1]);
+      const modo = opcional(a[2]) ? 0 : Math.trunc(num(a[2]));
+      const busq = opcional(a[3]) ? 1 : Math.trunc(num(a[3]));
+      if (![0, -1, 1, 2].includes(modo) || ![1, -1, 2, -2].includes(busq)) throw E("#VALOR!");
+      if (modo === 2 && (busq === 2 || busq === -2)) throw E("#VALOR!");
+      if (busq === 2 || busq === -2) {
+        const i = buscarBinaria(b, vals, busq === 2, modo);
+        return i < 0 ? E("#N/A") : i + 1;
+      }
+      const desde = busq < 0 ? vals.length - 1 : 0, paso = busq < 0 ? -1 : 1;
       if (modo === 0 || modo === 2) {
-        const p = criterio(esNum(b) ? +b : "=" + texto(b));
-        for (const i of orden) if (p(vals[i])) return i + 1;
+        for (let i = desde; i >= 0 && i < vals.length; i += paso) if (igualExacto(vals[i], b, modo === 2)) return i + 1;
         return E("#N/A");
       }
       let mejor = -1;
-      for (const i of orden) {
-        const v = vals[i]; if (!esNum(v) || !esNum(b)) { if (texto(v).toLowerCase() === texto(b).toLowerCase()) return i + 1; continue; }
-        const d = +v - +b;
-        if (d === 0) return i + 1;
-        if (modo === -1 && d < 0 && (mejor < 0 || +v > +vals[mejor])) mejor = i;
-        if (modo === 1 && d > 0 && (mejor < 0 || +v < +vals[mejor])) mejor = i;
+      for (let i = desde; i >= 0 && i < vals.length; i += paso) {
+        const c = cmpMismoTipo(vals[i], b);
+        if (c === null) continue;
+        if (c === 0) return i + 1;
+        if (modo === -1 && c < 0 && (mejor < 0 || cmpMismoTipo(vals[i], vals[mejor]) > 0)) mejor = i;
+        if (modo === 1 && c > 0 && (mejor < 0 || cmpMismoTipo(vals[i], vals[mejor]) < 0)) mejor = i;
       }
       return mejor < 0 ? E("#N/A") : mejor + 1;
     },
@@ -857,7 +936,6 @@
     return porElemento(pos.map((k) => a2[k]), (...xs) => { const b = a2.slice(); pos.forEach((k, j) => { b[k] = xs[j]; }); const y = fn(b); if (y instanceof ErrorF) throw y; return y; }, true);
   }
   const vacioM = (v) => v === "" || v == null;
-  const COLACION = typeof Intl !== "undefined" && Intl.Collator ? new Intl.Collator("es", { sensitivity: "accent" }) : null;
   /** Orden de Excel al ordenar: números < textos (sin distinguir mayúsculas) < FALSO < VERDADERO < errores. */
   const claseOrden = (v) => (v instanceof ErrorF ? 4 : typeof v === "boolean" ? 3 : esNum(v) ? 1 : 2);
   function comparaOrden(a, b, o) {
@@ -865,7 +943,7 @@
     if (vacioM(a) || vacioM(b)) return vacioM(a) && vacioM(b) ? 0 : vacioM(a) ? 1 : -1;
     const x = claseOrden(a), y = claseOrden(b);
     let d = x - y;
-    if (!d) d = x === 1 ? +a - +b : x === 2 ? (COLACION ? COLACION.compare(String(a), String(b)) : String(a).toLowerCase().localeCompare(String(b).toLowerCase())) : x === 3 ? (a ? 1 : 0) - (b ? 1 : 0) : 0;
+    if (!d) d = x === 1 ? +a - +b : x === 2 ? cmpTexto(String(a), String(b)) : x === 3 ? (a ? 1 : 0) - (b ? 1 : 0) : 0;
     return d * (o < 0 ? -1 : 1);
   }
   /** Llave para comparar filas iguales (UNICOS): sin distinguir mayúsculas, como Excel. */
@@ -1078,17 +1156,18 @@
       return enM(m, f - 1, c - 1);
     },
     BUSCARX: (a) => {
-      const donde = a[1], que = a[2], ld = lista(donde), vertical = colsDe(donde) === 1;
+      if (a[0] instanceof ErrorF) return a[0];
+      if (a[1] instanceof ErrorF) return a[1];
+      const donde = a[1], que = a[2], ld = lista(donde);
       if (filasDe(donde) > 1 && colsDe(donde) > 1) throw E("#VALOR!");
+      const vertical = filasDe(donde) > 1 || (colsDe(donde) === 1 && filasDe(que) === 1);
+      if (que instanceof ErrorF) return que;
+      if ((vertical ? filasDe(que) : colsDe(que)) !== ld.length) throw E("#VALOR!");
       const modo = opcional(a[4]) ? 0 : Math.trunc(num(a[4])), busq = opcional(a[5]) ? 1 : Math.trunc(num(a[5]));
-      const p = FUNCS.COINCIDIRX([a[0], donde, modo, busq < 0 ? -1 : 1]);
-      if (p instanceof ErrorF) return a[3] === undefined ? E("#N/A") : a[3];
+      const p = FUNCS.COINCIDIRX([a[0], donde, modo, busq]);
+      if (p instanceof ErrorF) return p.codigo === "#N/A" && a[3] !== undefined ? a[3] : p;
       const i = p - 1;
-      if (vertical) {
-        if (filasDe(que) !== ld.length) throw E("#VALOR!");
-        return colsDe(que) === 1 ? enM(que, i, 0) : filaDe(que, i);
-      }
-      if (colsDe(que) !== ld.length) throw E("#VALOR!");
+      if (vertical) return colsDe(que) === 1 ? enM(que, i, 0) : filaDe(que, i);
       return filasDe(que) === 1 ? enM(que, 0, i) : columnaDe(que, i);
     },
     // (las resuelve el evaluador; aquí solo para que se reconozcan y salgan en la ayuda)

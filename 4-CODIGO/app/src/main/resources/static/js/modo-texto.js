@@ -758,8 +758,31 @@
     if (doc.opc.local && !doc.opc.soloMemoria && !soloMemoria) doc.guardarYa();
   }
 
+  /** Geometría pura al mover una imagen flotante: conserva w y h intactos, acota solo (x, y)
+      dejando sobresalir un poco de la hoja (con al menos `margen` px visibles para recuperarla). */
+  function moverCajaFlotante(pos0, delta, tam, limites, margen) {
+    const w = Math.max(1, +tam.w || 0), h = Math.max(1, +tam.h || 0);
+    const m = margen == null ? 32 : Math.max(1, +margen || 0);
+    const anchoLim = Math.max(0, limites.maxX - limites.minX), altoLim = Math.max(0, limites.maxY - limites.minY);
+    const visX = Math.min(m, w, anchoLim > 0 ? anchoLim / 2 : m);
+    const visY = Math.min(m, h, altoLim > 0 ? altoLim / 2 : m);
+    const xMin = limites.minX - (w - visX), xMax = limites.maxX - visX;
+    const yMin = limites.minY - (h - visY), yMax = limites.maxY - visY;
+    const x = Math.round(Math.max(Math.min(xMin, xMax), Math.min(Math.max(xMin, xMax), pos0.x + delta.dx)));
+    const y = Math.round(Math.max(Math.min(yMin, yMax), Math.min(Math.max(yMin, yMax), pos0.y + delta.dy)));
+    return { x, y, w, h };
+  }
+  /** Geometría pura al redimensionar una imagen flotante: si tiene alto fijo (h0 > 0) lo escala proporcionalmente. */
+  function redimImagenFlotante(w0, h0, dx, minW, maxW) {
+    const baseW = Math.max(1, +w0 || 1), lo = Math.max(1, +minW || 24), hi = Math.max(lo, +maxW || baseW);
+    const w = Math.round(Math.max(lo, Math.min(hi, baseW + dx)));
+    const h = h0 > 0 ? Math.max(16, Math.round(h0 * (w / baseW))) : 0;
+    return { w, h };
+  }
+
   // ================================================================== el modo
   NOM.modos.TEXTO = {
+    _arrastre: { moverCajaFlotante, redimImagenFlotante },
     montar(ed) {
       const doc = () => ed.doc;
       const sec = () => doc().secuencia(B);
@@ -1642,11 +1665,17 @@
             o.style.marginLeft = bloque && +bl.dx ? +bl.dx + "px" : "";
             o.classList.toggle("detras", !!(bl && bl.libre && bl.detras));
             // Imagen libre ("delante del texto"): se dibuja encima, desplazada (x, y) desde su párrafo.
+            // Sin max-width:none y ancho fijo, position:absolute se encoge al acercarse a la orilla derecha del párrafo.
             const libre = !!(bl && bl.libre);
             o.classList.toggle("libre", libre);
             o.classList.toggle("sel", o.dataset.id === imgSel);
             o.style.left = libre ? (+bl.x || 0) + "px" : "";
             o.style.top = libre ? (+bl.y || 0) + "px" : "";
+            o.style.maxWidth = libre ? "none" : "";
+            o.style.width = libre ? ((bl.recorte || +bl.rot) ? "max-content" : (+w + "px")) : "";
+            const cajaImg = $(".wd-img-caja", o), imgEl = $("img", o);
+            if (cajaImg) cajaImg.style.maxWidth = libre ? "none" : "";
+            if (imgEl && !(bl && (bl.recorte || +bl.rot))) imgEl.style.maxWidth = libre ? "none" : "";
             // (encima de qué va: el orden de Word entre lo que flota)
             o.style.zIndex = libre && !bl.detras && +bl.z ? String(2 + +bl.z) : "";
             o.title = ed.soloLectura ? "" : libre ? "Arrastra para moverla a cualquier lugar" : "Arrastra para moverla a otro lugar del texto";
@@ -3427,6 +3456,14 @@
         const bl = doc().bloque(ref) || {}, libre = !!bl.libre || !!bl.fl;
         const x0 = e.clientX, y0 = e.clientY, r0 = o.getBoundingClientRect();
         const bx = bl.fl ? parseFloat(o.style.left) || 0 : +bl.x || 0, by = bl.fl ? parseFloat(o.style.top) || 0 : +bl.y || 0;
+        const w0 = +bl.w > 0 ? +bl.w : o.offsetWidth || 1, h0 = +bl.h > 0 ? +bl.h : o.offsetHeight || 1;
+        if (libre) {
+          o.style.maxWidth = "none";
+          if (!bl.recorte && !+bl.rot) o.style.width = w0 + "px";
+          const cj = $(".wd-img-caja", o), im = $("img", o);
+          if (cj) cj.style.maxWidth = "none";
+          if (im) im.style.maxWidth = "none";
+        }
         let activo = false, fantasma = null, marca = null, destino = null;
         const mover = (ev) => {
           if (ev.pointerId !== e.pointerId) return;
@@ -3444,9 +3481,14 @@
           ev.preventDefault();
           if (libre) {
             const p = o.parentElement;
-            const x = Math.max(-p.offsetLeft, Math.min(cuerpo.clientWidth - p.offsetLeft - o.offsetWidth, bx + dx / zoom));
-            const y = Math.max(-p.offsetTop, Math.min(cuerpo.offsetHeight - p.offsetTop - o.offsetHeight, by + dy / zoom));
-            o.style.left = Math.round(x) + "px"; o.style.top = Math.round(y) + "px";
+            const pos = moverCajaFlotante(
+              { x: bx, y: by },
+              { dx: dx / zoom, dy: dy / zoom },
+              { w: w0, h: h0 },
+              { minX: -p.offsetLeft, maxX: cuerpo.clientWidth - p.offsetLeft, minY: -p.offsetTop, maxY: cuerpo.offsetHeight - p.offsetTop },
+              32
+            );
+            o.style.left = pos.x + "px"; o.style.top = pos.y + "px";
             return;
           }
           fantasma.style.transform = `translate(${dx}px, ${dy}px)`;
@@ -3504,11 +3546,21 @@
         const o = e.target.closest(".wd-imagen");
         if (tir && o && !ed.soloLectura) {
           e.preventDefault();
-          const img = $("img", o), w0 = img.offsetWidth, x0 = e.clientX, it = sec().item(o.dataset.id);
-          const mover = (ev) => { img.style.width = Math.max(24, Math.min(anchoUtil(), Math.round(w0 + (ev.clientX - x0) / zoom))) + "px"; };
+          const img = $("img", o), it = sec().item(o.dataset.id), ref = it && it.e && it.e.ref;
+          const bl = ref ? doc().bloque(ref) || {} : {};
+          const libre = !!(bl.libre || bl.fl);
+          const w0 = +bl.w > 0 ? +bl.w : img.offsetWidth, h0 = bl.fl && +bl.h > 0 ? +bl.h : 0, x0 = e.clientX;
+          const maxW = libre ? Math.max(cuerpo.clientWidth || anchoUtil(), anchoUtil(), w0) : Math.max(anchoUtil(), w0);
+          let ult = { w: w0, h: h0 };
+          const mover = (ev) => {
+            ult = redimImagenFlotante(w0, h0, (ev.clientX - x0) / zoom, 24, maxW);
+            img.style.width = ult.w + "px";
+            if (libre && !bl.recorte && !+bl.rot) o.style.width = ult.w + "px";
+            if (ult.h > 0) img.style.height = ult.h + "px";
+          };
           const soltar = () => {
             removeEventListener("pointermove", mover); removeEventListener("pointerup", soltar); removeEventListener("pointercancel", soltar);
-            if (it && it.e && it.e.ref) doc().cambiar(it.e.ref, { w: parseInt(img.style.width, 10) });
+            if (ref) doc().cambiar(ref, ult.h > 0 ? { w: ult.w, h: ult.h } : { w: ult.w });
             programarPaginar();
           };
           addEventListener("pointermove", mover); addEventListener("pointerup", soltar); addEventListener("pointercancel", soltar);

@@ -365,9 +365,62 @@
   const RUTAS = [["recta", "Recta", "move-right"], ["codo", "En codo", "corner-down-right"], ["curva", "Curva", "spline"]];
   NOM.geometria = { conector, rutaConector, svgConector };
   NOM.figuras = { iconoSeguro: (b) => iconoSeguro(b), ruta, svgFigura, estiloFigura, partesFigura, FIGURAS, FIGURAS_UML, FIGURAS_ER, FIGURAS_RED, PRESETS, COMPARTIMENTOS, compartimentos, esLinea, enNegrita };
+  /** Geometría pura al mover un bloque: solo cambia (x, y), nunca w ni h. */
+  function moverBloque(b0, dx, dy) {
+    return { x: Math.round(b0.x + dx), y: Math.round(b0.y + dy), w: b0.w, h: b0.h };
+  }
+  /** Geometría pura al redimensionar desde un tirador (nw, n, ne, e, se, s, sw, w):
+      el borde o esquina opuesta queda fija sin voltearse ni saltar, lo que no se jala no se deforma
+      y el ajuste a cuadrícula respeta tanto el borde fijo como la proporción. */
+  function calcularRedim(b0, t, p, opc) {
+    opc = opc || {};
+    const rot = b0.rot || 0;
+    const c0 = { x: b0.x + b0.w / 2, y: b0.y + b0.h / 2 };
+    const loc = girar(p.x - c0.x, p.y - c0.y, -rot);
+    const dirX = t.includes("e") ? 1 : t.includes("w") ? -1 : 0;
+    const dirY = t.includes("s") ? 1 : t.includes("n") ? -1 : 0;
+    const ax = dirX ? -dirX * (b0.w / 2) : null;
+    const ay = dirY ? -dirY * (b0.h / 2) : null;
+    const minW = opc.minW || 16, minH = opc.minH || 12;
+    let w = dirX ? Math.max(minW, (loc.x - ax) * dirX) : b0.w;
+    let h = dirY ? Math.max(minH, (loc.y - ay) * dirY) : b0.h;
+    const prop = !!opc.prop && dirX !== 0 && dirY !== 0 && b0.w > 0 && b0.h > 0;
+    if (prop) {
+      const k = Math.max(w / b0.w, h / b0.h);
+      w = b0.w * k;
+      h = b0.h * k;
+    }
+    if (opc.paso && !rot) {
+      const paso = opc.paso, pasoH = paso / 2;
+      const aj = (v) => Math.round(v / paso) * paso;
+      const der0 = b0.x + b0.w, ab0 = b0.y + b0.h;
+      if (prop) {
+        const wS = dirX > 0 ? Math.max(paso, aj(b0.x + w) - b0.x) : Math.max(paso, der0 - Math.min(der0 - paso, aj(der0 - w)));
+        const hS = dirY > 0 ? Math.max(pasoH, aj(b0.y + h) - b0.y) : Math.max(pasoH, ab0 - Math.min(ab0 - pasoH, aj(ab0 - h)));
+        const k = Math.max(wS / b0.w, hS / b0.h, minW / b0.w, minH / b0.h);
+        w = b0.w * k;
+        h = b0.h * k;
+      } else {
+        if (dirX > 0) w = Math.max(paso, aj(b0.x + w) - b0.x);
+        else if (dirX < 0) w = Math.max(paso, der0 - Math.min(der0 - paso, aj(der0 - w)));
+        if (dirY > 0) h = Math.max(pasoH, aj(b0.y + h) - b0.y);
+        else if (dirY < 0) h = Math.max(pasoH, ab0 - Math.min(ab0 - pasoH, aj(ab0 - h)));
+      }
+    }
+    const rw = Math.round(w), rh = Math.round(h);
+    if (!rot) {
+      const rx = dirX > 0 ? Math.round(b0.x) : dirX < 0 ? Math.round(b0.x + b0.w) - rw : Math.round(b0.x);
+      const ry = dirY > 0 ? Math.round(b0.y) : dirY < 0 ? Math.round(b0.y + b0.h) - rh : Math.round(b0.y);
+      return { x: rx, y: ry, w: rw, h: rh };
+    }
+    const cxL = dirX ? ax + dirX * (rw / 2) : 0;
+    const cyL = dirY ? ay + dirY * (rh / 2) : 0;
+    const cw = girar(cxL, cyL, rot);
+    return { x: Math.round(c0.x + cw.x - rw / 2), y: Math.round(c0.y + cw.y - rh / 2), w: rw, h: rh };
+  }
   // Lo que usa la pantalla del proyector (proyector.js) para pintar diapositivas.
   NOM.lienzoVista = { motor: (...a) => motorDiapositiva(...a), htmlDiapositiva: (...a) => htmlDiapositiva(...a), pasosDe: (...a) => pasosDe(...a), bloquesPresentables: (...a) => bloquesPresentables(...a), ANCHO, ALTO, tam: tamDoc,
-    estadoAnimaciones: (...a) => estadoAnimaciones(...a), contenido: (b) => contenido(b) };
+    estadoAnimaciones: (...a) => estadoAnimaciones(...a), contenido: (b) => contenido(b), _geometria: { moverBloque, calcularRedim } };
 
   /** Lo único que se guarda del texto de un cuadro: texto, saltos de línea y enlaces http(s). */
   function htmlSeguro(h) {
@@ -1586,27 +1639,12 @@
         if (cuadricula && !e.altKey) { mx = aRejilla(gesto.caja0.x + dx) - gesto.caja0.x; my = aRejilla(gesto.caja0.y + dy) - gesto.caja0.y; }
         pintarGuias(g);
         gesto.b = {};
-        gesto.ids.forEach((id) => { const b0 = gesto.b0[id]; gesto.b[id] = { x: Math.round(b0.x + mx), y: Math.round(b0.y + my), w: b0.w, h: b0.h }; moverVisual(id, gesto.b[id]); });
+        gesto.ids.forEach((id) => { const b0 = gesto.b0[id]; gesto.b[id] = moverBloque(b0, mx, my); moverVisual(id, gesto.b[id]); });
         conectoresVisuales(gesto.b);
         $$(".lz-caja", mundo).forEach((x) => x.remove());
       } else if (gesto.tipo === "tamano") {
         // En el marco girado de la figura: la esquina opuesta queda fija en su lugar.
-        const b0 = gesto.b0, t = gesto.t, c0 = { x: b0.x + b0.w / 2, y: b0.y + b0.h / 2 };
-        const loc = girar(p.x - c0.x, p.y - c0.y, -b0.rot);
-        const ax = t.includes("e") ? -b0.w / 2 : t.includes("w") ? b0.w / 2 : null;
-        const ay = t.includes("s") ? -b0.h / 2 : t.includes("n") ? b0.h / 2 : null;
-        let w = ax != null ? Math.max(16, Math.abs(loc.x - ax)) : b0.w;
-        let h = ay != null ? Math.max(12, Math.abs(loc.y - ay)) : b0.h;
-        if ((gesto.prop || e.shiftKey) && ax != null && ay != null) { const k = Math.max(w / b0.w, h / b0.h); w = b0.w * k; h = b0.h * k; }
-        const cxL = ax != null ? ax + Math.sign(loc.x - ax || 1) * w / 2 : 0, cyL = ay != null ? ay + Math.sign(loc.y - ay || 1) * h / 2 : 0;
-        const cw = girar(cxL, cyL, b0.rot);
-        const nb = { x: Math.round(c0.x + cw.x - w / 2), y: Math.round(c0.y + cw.y - h / 2), w: Math.round(w), h: Math.round(h) };
-        if (cuadricula && !e.altKey && !b0.rot) {
-          if (t.includes("e")) nb.w = Math.max(PASO, aRejilla(nb.x + nb.w) - nb.x);
-          if (t.includes("s")) nb.h = Math.max(PASO / 2, aRejilla(nb.y + nb.h) - nb.y);
-          if (t.includes("w")) { const der = nb.x + nb.w; nb.x = aRejilla(nb.x); nb.w = Math.max(PASO, der - nb.x); }
-          if (t.includes("n")) { const ab = nb.y + nb.h; nb.y = aRejilla(nb.y); nb.h = Math.max(PASO / 2, ab - nb.y); }
-        }
+        const nb = calcularRedim(gesto.b0, gesto.t, p, { prop: gesto.prop || e.shiftKey, paso: cuadricula && !e.altKey ? PASO : 0 });
         gesto.b = nb;
         moverVisual(gesto.id, nb);
         conectoresVisuales({ [gesto.id]: nb });
