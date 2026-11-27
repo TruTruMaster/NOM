@@ -112,6 +112,19 @@
   }
   const editorVisible = () => { const ed = NOM.editorActual; return ed && ed.vista && ed.vista.isConnected ? ed : null; };
 
+  const prefExtra = () => NOM.prefExtra || null;
+  const etiquetaAtajo = (accion, defecto) => {
+    const px = prefExtra();
+    if (!px) return defecto;
+    return px.etiquetaCorta(px.teclaDe(accion));
+  };
+  const kbdAtajo = (accion, defecto) => {
+    const px = prefExtra();
+    const partes = px ? px.partesTecla(px.teclaDe(accion)) : (defecto ? defecto.split(" ") : []);
+    return partes.length ? partes.map((x) => `<kbd>${esc(x)}</kbd>`).join("") : `<span class="suave chico">Sin atajo</span>`;
+  };
+  const mapaAtajoEditor = { "Guardar versión": "guardar", "Modo enfoque": "enfoque", "Comprobar accesibilidad": "accesibilidad" };
+
   /** Todo lo que se puede buscar ahora, según dónde está la persona (docs: documentos de los espacios). */
   function elementos(docs) {
     const l = [];
@@ -119,7 +132,11 @@
     const pref = NOM.leer("nom.pref", {});
     const espacios = (NOM.app && NOM.app.espacios) || [];
     const u = conCuenta() ? api().usuario() || {} : null;
-    if (ed && ed.acciones) ed.acciones().forEach((a) => l.push(Object.assign({ grupo: "En este documento" }, a)));
+    if (ed && ed.acciones) ed.acciones().forEach((a) => {
+      const copia = Object.assign({ grupo: "En este documento" }, a);
+      if (propio(mapaAtajoEditor, a.texto)) copia.atajo = etiquetaAtajo(mapaAtajoEditor[a.texto], a.atajo || "");
+      l.push(copia);
+    });
 
     const nuevoDoc = (esp) => () => NOM.vistaEspacios.nuevoDocumento(esp);
     if (conCuenta()) {
@@ -156,9 +173,9 @@
     l.push({ grupo: "Apariencia", texto: "Tema claro", icono: "sun", marcado: tema === "claro", fn: () => cambiarPreferencia({ tema: "claro" }, "Tema claro"), claves: "dia blanco light" });
     l.push({ grupo: "Apariencia", texto: "Tema automático (como el sistema)", icono: "monitor", marcado: tema === "auto", fn: () => cambiarPreferencia({ tema: "auto" }, "Tema automático"), claves: "sistema" });
     l.push({ grupo: "Apariencia", texto: pref.movimientoReducido ? "Activar animaciones" : "Reducir movimiento", icono: "move", fn: () => cambiarPreferencia({ movimientoReducido: !pref.movimientoReducido }, pref.movimientoReducido ? "Animaciones activadas" : "Movimiento reducido"), claves: "animaciones accesibilidad" });
-    l.push({ grupo: "Ayuda", texto: "Atajos de teclado", icono: "keyboard", atajo: "?", fn: atajos, claves: "teclas shortcuts ayuda" });
+    l.push({ grupo: "Ayuda", texto: "Atajos de teclado", icono: "keyboard", atajo: etiquetaAtajo("atajos", "?"), fn: atajos, claves: "teclas shortcuts ayuda" });
     l.push({ grupo: "Ayuda", texto: "Verificar un recibo de escritura", icono: "circle-check", fn: () => NOM.recibo.verificar(), claves: "recibo autoria hash comprobar" });
-    l.push({ grupo: "Ayuda", texto: "Ajustes y preferencias", icono: "settings", fn: () => NOM.vistaEspacios.preferencias(), claves: "configuracion" });
+    l.push({ grupo: "Ayuda", texto: "Ajustes y preferencias", icono: "settings", atajo: etiquetaAtajo("ajustes", ""), fn: () => NOM.vistaEspacios.preferencias(), claves: "configuracion" });
     if (conCuenta()) l.push({ grupo: "Ayuda", texto: "Cerrar sesión", icono: "log-out", fn: () => NOM.app.cerrarSesion && NOM.app.cerrarSesion(), claves: "salir logout" });
     return l;
   }
@@ -168,11 +185,12 @@
     if (paleta) { $("input", paleta.el).focus(); return; }
     NOM.cerrarMenu(); NOM.rueda && NOM.rueda.cerrar();
     const anterior = document.activeElement;
+    const teclaPaleta = prefExtra() ? prefExtra().partesTecla(prefExtra().teclaDe("paleta")) : ["Ctrl", "K"];
     const el = html(`<div class="paleta-velo" role="presentation">
       <div class="paleta" role="dialog" aria-modal="true" aria-label="Buscar o ir a">
         <div class="paleta-buscar">${ico("search")}<input type="text" autocomplete="off" spellcheck="false" placeholder="Busca documentos, espacios o acciones…" aria-label="Buscar" role="combobox" aria-expanded="true" aria-controls="paleta-lista"><button class="paleta-esc" type="button" aria-label="Cerrar"><kbd>Esc</kbd></button></div>
         <div class="paleta-lista" id="paleta-lista" role="listbox"><div class="paleta-cargando">${'<div class="esqueleto" style="height:40px"></div>'.repeat(4)}</div></div>
-        <div class="paleta-pie"><span><kbd>↑</kbd><kbd>↓</kbd> moverse</span><span><kbd>Enter</kbd> abrir</span><span class="solo-escritorio"><kbd>Ctrl</kbd><kbd>K</kbd> en cualquier momento</span></div>
+        <div class="paleta-pie"><span><kbd>↑</kbd><kbd>↓</kbd> moverse</span><span><kbd>Enter</kbd> abrir</span>${teclaPaleta.length ? `<span class="solo-escritorio">${teclaPaleta.map((x) => `<kbd>${esc(x)}</kbd>`).join("")} en cualquier momento</span>` : ""}</div>
       </div></div>`);
     document.body.append(el);
     const input = $("input", el), lista = $(".paleta-lista", el);
@@ -246,28 +264,98 @@
 
   // ================================================================== hoja de atajos
   function atajos() {
-    const g = (titulo, filas) => `<div class="atajos-grupo"><h3>${esc(titulo)}</h3>${filas.map(([t, k]) => `<div class="atajo"><span>${esc(t)}</span><span>${k.split(" ").map((x) => `<kbd>${esc(x)}</kbd>`).join("")}</span></div>`).join("")}</div>`;
-    NOM.hoja({ titulo: "Atajos de teclado", icono: "keyboard", ancha: true, cuerpo: `<div class="atajos">
-      ${g("En toda la app", [["Buscar o ir a…", "Ctrl K"], ["Buscar dentro del texto", "Alt /"], ["Estos atajos", "?"], ["Cerrar ventanas y menús", "Esc"]])}
-      ${g("Documentos", [["Guardar versión", "Ctrl S"], ["Deshacer", "Ctrl Z"], ["Rehacer", "Ctrl Y"], ["Modo enfoque", "Ctrl ."], ["Buscar y reemplazar", "Ctrl F"]])}
+    const fila = ([t, k, acc]) => `<div class="atajo"><span>${esc(t)}</span><span>${acc ? kbdAtajo(acc, k) : k.split(" ").map((x) => `<kbd>${esc(x)}</kbd>`).join("")}</span></div>`;
+    const g = (titulo, filas) => `<div class="atajos-grupo"><h3>${esc(titulo)}</h3>${filas.map(fila).join("")}</div>`;
+    const pie = NOM.vistaEspacios && NOM.vistaEspacios.preferencias
+      ? html(`<div style="display:contents"><button type="button" class="btn" data-cambiar-atajos>${ico("settings", "ico-s")} Cambiar atajos en Ajustes</button><span class="crece"></span><button type="button" class="btn primario" data-listo>Cerrar</button></div>`)
+      : null;
+    const h = NOM.hoja({ titulo: "Atajos de teclado", icono: "keyboard", ancha: true, pie, cuerpo: `<div class="atajos">
+      ${g("En toda la app", [["Buscar o ir a…", "Ctrl K", "paleta"], ["Buscar dentro del texto", "Alt /", "paletaTexto"], ["Estos atajos", "?", "atajos"], ["Abrir Ajustes", "Ctrl ,", "ajustes"], ["Ir a Inicio", "Alt H", "inicio"], ["Crear un documento nuevo", "Alt N", "nuevoDoc"], ["Cambiar entre claro y oscuro", "Alt T", "tema"], ["Cerrar ventanas y menús", "Esc"]])}
+      ${g("Documentos", [["Guardar versión", "Ctrl S", "guardar"], ["Deshacer", "Ctrl Z"], ["Rehacer", "Ctrl Y"], ["Modo enfoque", "Ctrl .", "enfoque"], ["Comprobar accesibilidad", "Alt Mayús A", "accesibilidad"], ["Buscar y reemplazar", "Ctrl F"]])}
       ${g("Formato", [["Negrita", "Ctrl B"], ["Cursiva", "Ctrl I"], ["Subrayado", "Ctrl U"], ["Enlace (texto)", "Ctrl K"], ["Título 1, 2, 3", "Ctrl Alt 1"]])}
-      ${g("Ruedita", [["Mantener presionado (dedo o clic)", "½ s"], ["Al instante", "Clic derecho"], ["Abrirla donde está el cursor", "Menú"], ["Elegir directo", "1-8"], ["Recorrer", "← →"], ["Regresar de un submenú", "Retroceso"]])}
+      ${g("Menú rápido (ruedita o lista)", [["Mantener presionado (dedo o clic)", "½ s"], ["Al instante", "Clic derecho"], ["Abrirlo donde está el cursor", "Menú"], ["Elegir directo", "1-8"], ["Recorrer", "← →"], ["Regresar de un submenú", "Retroceso"]])}
       ${g("Presentaciones y diagramas", [["Duplicar", "Ctrl D"], ["Agrupar", "Ctrl G"], ["Elegir todo", "Ctrl A"], ["Eliminar", "Supr"], ["Mover fino", "Flechas"], ["Elegir varias", "Mayús clic"]])}
       ${g("Hoja de cálculo", [["Editar celda", "F2"], ["Elegir un rango", "Mayús Flechas"], ["Siguiente celda", "Tab"], ["Bajar", "Enter"], ["Borrar", "Supr"]])}
     </div>` });
+    if (pie) {
+      $("[data-cambiar-atajos]", pie).onclick = () => { h.cerrar(true); NOM.vistaEspacios.preferencias(); };
+      $("[data-listo]", pie).onclick = () => h.cerrar();
+    }
   }
   NOM.atajos = atajos;
+
+  function ejecutarAccionAtajo(accion, e) {
+    const ed = editorVisible();
+    if (accion === "paleta" || accion === "paletaTexto") { e.preventDefault(); abrirPaleta(); return true; }
+    if (accion === "atajos") { e.preventDefault(); atajos(); return true; }
+    if (accion === "ajustes") { if (NOM.vistaEspacios && NOM.vistaEspacios.preferencias) { e.preventDefault(); NOM.vistaEspacios.preferencias(); return true; } return false; }
+    if (accion === "inicio") { e.preventDefault(); location.hash = "#/"; return true; }
+    if (accion === "nuevoDoc") {
+      if (!NOM.vistaEspacios || !NOM.vistaEspacios.nuevoDocumento) return false;
+      const esp = conCuenta() ? (espacioActual() || ((NOM.app && NOM.app.espacios) || [])[0] || null) : null;
+      if (conCuenta() && !esp) return false;
+      e.preventDefault(); NOM.vistaEspacios.nuevoDocumento(esp); return true;
+    }
+    if (accion === "tema") {
+      const actual = document.documentElement.dataset.tema === "oscuro" ? "claro" : "oscuro";
+      e.preventDefault();
+      cambiarPreferencia({ tema: actual }, actual === "oscuro" ? "Tema oscuro" : "Tema claro");
+      return true;
+    }
+    if (accion === "accesibilidad") {
+      if (ed && NOM.accesibilidad && NOM.accesibilidad.abrir) { e.preventDefault(); NOM.accesibilidad.abrir(ed); return true; }
+      return false;
+    }
+    if (accion === "guardar" && ed) {
+      const px = prefExtra();
+      if (px && px.teclaDe("guardar") === "Ctrl+S") return false; // editor.js conserva su manejo de fábrica
+      const act = ed.acciones && ed.acciones().find((x) => x.texto === "Guardar versión");
+      if (act && act.fn) { e.preventDefault(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); act.fn(); return true; }
+      return false;
+    }
+    if (accion === "enfoque" && ed) {
+      const px = prefExtra();
+      if (px && px.teclaDe("enfoque") === "Ctrl+.") return false; // editor.js conserva su manejo de fábrica
+      e.preventDefault();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      if (ed.vista && ed.vista.classList.contains("enfoque")) {
+        ed.vista.classList.remove("enfoque");
+        if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+      } else {
+        const act = ed.acciones && ed.acciones().find((x) => x.texto === "Modo enfoque");
+        if (act && act.fn) act.fn();
+      }
+      return true;
+    }
+    return false;
+  }
 
   // ================================================================== teclado global
   document.addEventListener("keydown", (e) => {
     if (e.defaultPrevented) return;
-    const t = e.target, mod = e.ctrlKey || e.metaKey;
-    const enCampo = t && (t.isContentEditable || /INPUT|TEXTAREA|SELECT/.test(t.tagName));
+    const t = e.target;
+    const enCampo = !!(t && (t.isContentEditable || /INPUT|TEXTAREA|SELECT/.test(t.tagName)));
+    const enEditor = !!editorVisible();
+    const px = prefExtra();
+    if (px) {
+      const accion = px.buscarAccionPorEvento(e, { enCampo, enEditor, hayHoja: !!(NOM.hayHoja && NOM.hayHoja()) });
+      if (accion) {
+        if (ejecutarAccionAtajo(accion, e)) return;
+      }
+      // Si la persona cambió o quitó Ctrl+S o Ctrl+., la tecla anterior deja de disparar la acción fija de editor.js.
+      if (enEditor && px.esDefectoCambiado(e, ["guardar", "enfoque"])) {
+        e.preventDefault();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        return;
+      }
+      return;
+    }
+    const mod = e.ctrlKey || e.metaKey;
     // En el texto, Ctrl+K es "enlace" (como en Word): ahí la paleta se abre con Alt+/.
     if ((mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "k" && !enCampo) || (e.altKey && !mod && e.key === "/")) {
       e.preventDefault(); abrirPaleta(); return;
     }
-    if (e.key === "?" && !mod && !enCampo && !editorVisible() && !NOM.hayHoja()) { e.preventDefault(); atajos(); }
+    if (e.key === "?" && !mod && !enCampo && !enEditor && !NOM.hayHoja()) { e.preventDefault(); atajos(); }
   });
   document.addEventListener("click", (e) => {
     const b = e.target.closest && e.target.closest("[data-a=paleta]");
@@ -313,11 +401,12 @@
 
   // ================================================================== consejo de la ruedita en el editor
   // Con mouse se dice "clic derecho"; con el dedo, "mantén presionado" (el gesto que esa persona sí tiene).
+  const nombreMenuRapido = () => (prefExtra() && prefExtra().esLista() ? "el menú de acciones" : "la ruedita");
   const CONSEJOS = {
-    TEXTO: () => (conMouse() ? "Haz clic derecho sobre el texto" : "Mantén presionado sobre el texto") + ": sale la ruedita con negrita, color, estilos y más.",
-    HOJA: () => (conMouse() ? "Haz clic derecho en una celda" : "Mantén presionada una celda") + ": sale la ruedita con formato, fórmulas y más.",
-    PRESENTACION: () => (conMouse() ? "Haz clic derecho en una figura: sale su ruedita. Para elegir varias, usa Mayús + clic." : "Toca un cuadro ya elegido para escribir en él. Mantén presionada una figura: sale su ruedita."),
-    DIAGRAMA: () => (conMouse() ? "Haz clic derecho en una figura: sale su ruedita. Para elegir varias, usa Mayús + clic." : "Mantén presionada una figura: sale su ruedita. Para elegir varias, sostén una y toca las demás."),
+    TEXTO: () => (conMouse() ? "Haz clic derecho sobre el texto" : "Mantén presionado sobre el texto") + `: sale ${nombreMenuRapido()} con negrita, color, estilos y más.`,
+    HOJA: () => (conMouse() ? "Haz clic derecho en una celda" : "Mantén presionada una celda") + `: sale ${nombreMenuRapido()} con formato, fórmulas y más.`,
+    PRESENTACION: () => (conMouse() ? `Haz clic derecho en una figura: sale ${nombreMenuRapido()}. Para elegir varias, usa Mayús + clic.` : `Toca un cuadro ya elegido para escribir en él. Mantén presionada una figura: sale ${nombreMenuRapido()}.`),
+    DIAGRAMA: () => (conMouse() ? `Haz clic derecho en una figura: sale ${nombreMenuRapido()}. Para elegir varias, usa Mayús + clic.` : `Mantén presionada una figura: sale ${nombreMenuRapido()}. Para elegir varias, sostén una y toca las demás.`),
   };
   NOM.alAbrirEditor = (ed, tipo) => {
     if (!ed || ed.soloLectura || !propio(CONSEJOS, tipo)) return;

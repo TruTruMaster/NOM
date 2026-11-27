@@ -1564,3 +1564,27 @@
 @media print { .wd-obj.wd-campo:hover > .wd-campo-v { background: none; } }
 /* Marcadores de Word (los que usa algún campo): no se ven */
 .wd-obj.wd-marcador { display: inline; width: 0; overflow: hidden; }
+
+/* Menú rápido en modo lista clásica (preferencia Ruedita / Lista en Ajustes) */
+.rueda-velo-lista { background: transparent; }
+.rueda-lista {
+  position: fixed; z-index: 1001; min-width: 224px; max-width: min(300px, calc(100vw - 16px));
+  opacity: 0; transform: translateY(4px);
+  transition: opacity var(--t-micro) linear, transform var(--t-corto) var(--suave);
+}
+.rueda-lista.abierta { opacity: 1; transform: none; }
+.rueda-velo.saliendo .rueda-lista { opacity: 0; transform: translateY(2px); transition-duration: var(--t-micro); }
+.rueda-lista-atras {
+  display: flex; align-items: center; gap: var(--e2); width: 100%;
+  min-height: 36px; padding: 0 var(--e3); margin-bottom: 4px;
+  border: 0; border-bottom: 1px solid var(--borde); border-radius: var(--r-xs) var(--r-xs) 0 0;
+  background: transparent; color: var(--tinta-2); font-size: 13.5px; font-weight: 700; text-align: left; cursor: pointer;
+}
+.rueda-lista-atras:hover, .rueda-lista-atras:focus-visible { background: var(--sup-hundida); box-shadow: none; }
+.rueda-lista-item.activo { background: var(--sup-hundida); }
+.rueda-lista-item.off { opacity: .42; cursor: default; }
+.rueda-lista-item.off:hover { background: transparent; }
+.rueda-lista-item.marcado { color: var(--acento-tinta); font-weight: 600; }
+.rueda-lista-muestra { width: 18px; height: 18px; border-radius: var(--r-xs); border: 1px solid var(--borde-fuerte); flex: none; forced-color-adjust: none; }
+:root[data-movimiento="reducido"] .rueda-lista { transition: none; }
+@media (pointer: coarse) { .rueda-lista-atras, .rueda-lista-item { min-height: 44px; } }

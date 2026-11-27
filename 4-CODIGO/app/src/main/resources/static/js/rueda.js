@@ -25,7 +25,147 @@
 
   const R = 112, RI = 38, MUERTA = 26;   // radio externo, interno y zona muerta del centro
   const MANTENER_MS = 550;                // cuánto hay que mantener presionado para que salga
-  let actual = null;
+  let actual = null, saliendo = null;
+
+  function vibrar(tipo) {
+    if (NOM.prefExtra && NOM.prefExtra.vibrar) return NOM.prefExtra.vibrar(tipo);
+    try {
+      const ms = tipo === "mover" ? 5 : tipo === "elegir" ? 16 : 12;
+      if (typeof navigator !== "undefined" && navigator && typeof navigator.vibrate === "function") { navigator.vibrate(ms); return true; }
+    } catch (e) { /* sin vibración */ }
+    return false;
+  }
+
+  function usarLista() {
+    return !!(NOM.prefExtra && NOM.prefExtra.esLista && NOM.prefExtra.esLista());
+  }
+
+  /** Versión en lista vertical (menú contextual clásico) con las mismas acciones y en el mismo orden. */
+  function abrirLista(x, y, items, opc, interno) {
+    const n = items.length;
+    const v = visible();
+    const velo = html(`<div class="rueda-velo rueda-velo-lista" role="presentation">
+      <div class="menu rueda-lista${opc.padre ? " sub" : ""}" role="menu" aria-label="${esc(opc.titulo || "Acciones rápidas")}">
+        ${opc.padre
+          ? `<button type="button" class="rueda-lista-atras" data-atras aria-label="Volver">${ico("chevron-left", "ico-s")}<span>${esc(opc.titulo || "Volver")}</span></button>`
+          : (opc.titulo ? `<div class="menu-titulo">${esc(opc.titulo)}</div>` : "")}
+        ${items.map((it, i) => `<button type="button" class="rueda-lista-item ${it.off ? "off" : ""} ${it.marcado ? "marcado" : ""}" role="menuitem" data-i="${i}" tabindex="-1"${it.off ? ' aria-disabled="true"' : ""}${it.sub ? ' aria-haspopup="menu"' : ""}>
+          ${it.color ? `<span class="rueda-lista-muestra" style="background:${NOM.colorCss(it.color, "#5A5D6B")}"></span>` : ico(it.icono || "circle")}
+          <span class="crece">${esc(it.texto)}</span>
+          ${it.marcado ? ico("check", "ico-s") : ""}${it.sub ? ico("chevron-right", "ico-s") : ""}</button>`).join("")}
+      </div></div>`);
+    document.body.append(velo);
+    const menu = velo.firstElementChild;
+    const botones = Array.from(menu.querySelectorAll(".rueda-lista-item"));
+    const w = menu.offsetWidth || 232;
+    const h = menu.offsetHeight || (n * 40 + 44);
+    let px = Math.min(v.x + v.w - w - 8, Math.max(v.x + 8, x));
+    let py = y + 4;
+    if (py + h > v.y + v.h - 8) py = y - h - 4;
+    py = Math.min(v.y + v.h - h - 8, Math.max(v.y + 8, py));
+    menu.style.left = px + "px";
+    menu.style.top = py + "px";
+
+    let elegido = -1, modo = opc.modo || "clic", soltado = null;
+    const siguienteHabil = (desde, paso) => {
+      for (let k = 0; k < n; k++) {
+        const j = (desde + paso * k + n * 2) % n;
+        if (items[j] && !items[j].off) return j;
+      }
+      return -1;
+    };
+    function marcar(i, enfocar) {
+      elegido = i;
+      botones.forEach((b) => b.classList.toggle("activo", +b.dataset.i === i));
+      if (enfocar && i >= 0 && botones[i]) botones[i].focus({ preventScroll: true });
+    }
+    function elegir(i) {
+      const it = items[i];
+      if (!it || it.off) return;
+      if (opc.tactil !== false) vibrar("elegir");
+      if (it.sub) { abrir(x, y, it.sub, Object.assign({}, opc, { modo: "clic", titulo: it.texto, padre: { items, opc } }), true); return; }
+      cerrar();
+      it.fn && it.fn();
+      if (NOM.hito) NOM.hito("rueda");
+    }
+    function atras() { if (opc.padre) abrir(x, y, opc.padre.items, opc.padre.opc, true); else cerrar(); }
+    function mover(e) {
+      if (e.pointerType !== "mouse") return;
+      const b = e.target && e.target.closest && e.target.closest(".rueda-lista-item");
+      if (b && menu.contains(b) && !items[+b.dataset.i].off) marcar(+b.dataset.i, false);
+    }
+    function soltar(e) {
+      if (modo !== "mantener") return;
+      // Soltar el gesto que abrió la lista no la cierra ni dispara una opción por accidente.
+      modo = "clic";
+      soltado = { t: Date.now(), x: e.clientX, y: e.clientY };
+    }
+    function clic(e) {
+      if (modo !== "clic") return;
+      if (soltado && Date.now() - soltado.t < 500 && Math.hypot(e.clientX - soltado.x, e.clientY - soltado.y) < 12) { soltado = null; return; }
+      soltado = null;
+      const t = e.target;
+      if (t && t.closest && t.closest("[data-atras]") && menu.contains(t)) { atras(); return; }
+      const b = t && t.closest && t.closest(".rueda-lista-item");
+      if (b && menu.contains(b)) { elegir(+b.dataset.i); return; }
+      if (!menu.contains(t)) cerrar();
+    }
+    function tecla(e) {
+      e.stopPropagation();
+      if (e.key === "Escape") { e.preventDefault(); cerrar(); return; }
+      if ((e.key === "Backspace" || e.key === "ArrowLeft") && opc.padre) { e.preventDefault(); atras(); return; }
+      if (/^[1-8]$/.test(e.key) && +e.key <= n) { e.preventDefault(); elegir(+e.key - 1); return; }
+      if (e.key === "ArrowDown" || (e.key === "Tab" && !e.shiftKey)) {
+        e.preventDefault();
+        marcar(siguienteHabil(elegido < 0 ? 0 : elegido + 1, 1), true);
+      } else if (e.key === "ArrowUp" || (e.key === "Tab" && e.shiftKey)) {
+        e.preventDefault();
+        marcar(siguienteHabil(elegido < 0 ? n - 1 : elegido - 1, -1), true);
+      } else if (e.key === "Home") {
+        e.preventDefault(); marcar(siguienteHabil(0, 1), true);
+      } else if (e.key === "End") {
+        e.preventDefault(); marcar(siguienteHabil(n - 1, -1), true);
+      } else if (e.key === "ArrowRight" && elegido >= 0 && items[elegido] && items[elegido].sub) {
+        e.preventDefault(); elegir(elegido);
+      } else if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        if (elegido >= 0) elegir(elegido);
+      }
+    }
+
+    const tragar = (e) => { if (e.cancelable) e.preventDefault(); e.stopPropagation(); };
+    const oyentes = [
+      ["pointermove", mover],
+      ["pointerup", (e) => { if (modo === "mantener") { tragar(e); soltar(e); } }],
+      ["click", (e) => { tragar(e); clic(e); }],
+      ["pointercancel", () => { if (modo === "mantener") modo = "clic"; }],
+      ["pointerdown", (e) => { if (modo === "clic") { tragar(e); if (!menu.contains(e.target)) cerrar(); } }],
+      ["contextmenu", tragar],
+      ["keydown", tecla],
+    ];
+    oyentes.forEach(([t, f]) => document.addEventListener(t, f, { capture: true, passive: false }));
+    const quitarSel = document.body.style.userSelect;
+    document.body.style.userSelect = "none";
+    actual = {
+      velo, opc,
+      cerrar(sinAviso) {
+        setTimeout(() => oyentes.forEach(([t, f]) => document.removeEventListener(t, f, { capture: true })), 0);
+        document.body.style.userSelect = quitarSel;
+        menu.removeAttribute("role");
+        menu.setAttribute("aria-hidden", "true");
+        if (sinAviso) { velo.remove(); return; }
+        velo.classList.add("saliendo");
+        saliendo = velo;
+        setTimeout(() => { if (saliendo === velo) saliendo = null; velo.remove(); }, 170);
+        opc.alCerrar && opc.alCerrar();
+      },
+    };
+    const primero = siguienteHabil(0, 1);
+    if (primero >= 0) marcar(primero, true);
+    if (!interno && opc.tactil !== false) vibrar("abrir");
+    requestAnimationFrame(() => menu.classList.add("abierta"));
+    return actual;
+  }
 
   function sector(i, n) {
     const paso = (Math.PI * 2) / n, a0 = -Math.PI / 2 - paso / 2 + i * paso, a1 = a0 + paso;
@@ -45,10 +185,12 @@
    * (hasta 8). opc.modo: "mantener" (se elige al soltar) o "clic". opc.alCerrar.
    */
   function abrir(x, y, items, opc, interno) {
+    if (saliendo) { saliendo.remove(); saliendo = null; }
     cerrar(!!interno);
     opc = opc || {};
     items = items.filter(Boolean).slice(0, 8);
     if (!items.length) return null;
+    if (usarLista()) return abrirLista(x, y, items, opc, interno);
     const n = items.length;
     const v = visible();
     // Cerca de la orilla la rueda se recorre hacia adentro. Al mantener presionado, la dirección se
@@ -83,7 +225,7 @@
       elegido = i;
       velo.querySelectorAll("[data-i]").forEach((el) => el.classList.toggle("activo", +el.dataset.i === i));
       etq.textContent = i < 0 ? (opc.titulo || "Elige") : items[i].texto;
-      if (i >= 0 && navigator.vibrate && opc.tactil) navigator.vibrate(5);
+      if (i >= 0 && opc.tactil) vibrar("mover");
     }
     function porPunto(cx, cy, desdeInicio) {
       const dx = cx - (desdeInicio ? x0 : x), dy = cy - (desdeInicio ? y0 : y);
@@ -95,6 +237,7 @@
     function elegir(i) {
       const it = items[i];
       if (!it || it.off) return;
+      if (opc.tactil !== false) vibrar("elegir");
       // El submenú se abre en el mismo lugar; su centro regresa a la rueda anterior.
       if (it.sub) { abrir(x, y, it.sub, Object.assign({}, opc, { modo: "clic", titulo: it.texto, padre: { items, opc } }), true); return; }
       // Al hacer la acción la rueda se va.
@@ -156,6 +299,7 @@
         if (!sinAviso) opc.alCerrar && opc.alCerrar();
       },
     };
+    if (!interno && opc.tactil !== false) vibrar("abrir");
     requestAnimationFrame(() => rueda.classList.add("abierta"));
     return actual;
   }
@@ -180,7 +324,6 @@
       const l = items(ev);
       if (!l) return null;
       const r = abrir(x, y, l, { modo, titulo: l.titulo || opc.titulo, tactil, alCerrar: opc.alCerrar ? () => opc.alCerrar(ev, tactil) : undefined });
-      if (r && tactil && navigator.vibrate) navigator.vibrate(12);
       if (r && opc.alAbrir) opc.alAbrir(ev, tactil);
       return r;
     };

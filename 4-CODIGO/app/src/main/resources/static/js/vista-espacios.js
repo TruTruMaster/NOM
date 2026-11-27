@@ -1260,6 +1260,8 @@
   const FABRICA = { tema: "auto", autoguardadoMin: 5, versionesConservar: 30, calidad: "alta", movimientoReducido: false, enfoqueAtenuar: true, idioma: "es" };
   async function preferencias() {
     let p = Object.assign({}, FABRICA, NOM.leer("nom.pref", {}));
+    const px = NOM.prefExtra || null;
+    const extra = px ? px.clonar() : null;
     const sinCuenta = !api.token();
     if (!sinCuenta) { try { const r = await api.get("/api/cuentas/yo"); p = Object.assign({}, FABRICA, r.preferencias); } catch (e) { /* se usan las locales */ } }
     const u = sinCuenta ? NOM.local.usuario() : api.usuario() || {};
@@ -1270,8 +1272,11 @@
       <div class="campo"><span class="etiqueta">Apariencia</span>
         <div class="segmentado lleno" data-tema>${[["auto", "monitor", "Automático"], ["claro", "sun", "Claro"], ["oscuro", "moon", "Oscuro"]].map(([v, i, t]) => `<button type="button" data-v="${v}" aria-pressed="${p.tema === v}">${ico(i, "ico-s")} ${t}</button>`).join("")}</div></div>
       <div class="campo"><span class="etiqueta">Tamaño de la letra <span class="suave" style="font-weight:600">(en este equipo)</span></span>
-        <div class="segmentado lleno" data-letra>${[["normal", "Normal", 15], ["grande", "Grande", 17], ["muy-grande", "Muy grande", 19]].map(([v, t, px]) => `<button type="button" data-v="${v}" aria-pressed="${(NOM.leer("nom.letra", "normal")) === v}" style="font-size:${px}px">${t}</button>`).join("")}</div>
+        <div class="segmentado lleno" data-letra>${[["normal", "Normal", 15], ["grande", "Grande", 17], ["muy-grande", "Muy grande", 19]].map(([v, t, pxTam]) => `<button type="button" data-v="${v}" aria-pressed="${(NOM.leer("nom.letra", "normal")) === v}" style="font-size:${pxTam}px">${t}</button>`).join("")}</div>
         <div class="ayuda">${api.empaquetada ? "Agranda el texto de toda la app." : "Agranda el texto de las listas, menús y ventanas. Para agrandar todo, usa Ctrl y + en el navegador."}</div></div>
+      ${extra ? `<div class="campo"><span class="etiqueta">Al mantener presionado o clic derecho <span class="suave" style="font-weight:600">(en este equipo)</span></span>
+        <div class="segmentado lleno" data-menu-rapido>${[["rueda", "circle-dot", "Ruedita"], ["lista", "list", "Lista"]].map(([v, i, t]) => `<button type="button" data-v="${v}" aria-pressed="${extra.menuRapido === v}">${ico(i, "ico-s")} ${t}</button>`).join("")}</div>
+        <div class="ayuda">Elige si las acciones rápidas salen en círculo o en una lista vertical.</div></div>` : ""}
       <div class="campo"><label class="etiqueta" for="pa">Guardar una versión automática cada <b data-va>${p.autoguardadoMin}</b> min</label>
         <input id="pa" type="range" min="1" max="60" value="${p.autoguardadoMin}" style="accent-color:var(--acento)"></div>
       <div class="campo"><label class="etiqueta" for="pv">Conservar <b data-vv>${p.versionesConservar}</b> versiones por documento</label>
@@ -1280,8 +1285,12 @@
         <label class="lista-item">${ico("monitor")}<span class="crece"><b>Calidad visual alta</b><small>Desactívala si el equipo se siente lento</small></span><span class="interruptor"><input type="checkbox" data-calidad ${p.calidad === "alta" ? "checked" : ""}><span></span></span></label>
         <label class="lista-item">${ico("hand")}<span class="crece"><b>Reducir movimiento</b><small>Quita animaciones y transiciones${matchMedia("(prefers-reduced-motion: reduce)").matches ? ". Tu sistema ya lo pide, así que ya se aplica" : ""}</small></span><span class="interruptor"><input type="checkbox" data-mov ${p.movimientoReducido ? "checked" : ""}><span></span></span></label>
         <label class="lista-item">${ico("scan-eye")}<span class="crece"><b>Atenuar en modo enfoque</b><small>Resalta solo el párrafo que escribes</small></span><span class="interruptor"><input type="checkbox" data-atenuar ${p.enfoqueAtenuar ? "checked" : ""}><span></span></span></label>
+        ${extra ? `<label class="lista-item">${ico("smartphone")}<span class="crece"><b>Vibrar al tocar <span class="suave" style="font-weight:600">(en este equipo)</span></b><small>Un toque corto al abrir o elegir en el menú rápido del celular</small></span><span class="interruptor"><input type="checkbox" data-haptica ${extra.haptica ? "checked" : ""}><span></span></span></label>` : ""}
         <label class="lista-item">${ico("accessibility")}<span class="crece"><b>Dejar que mis extensiones cambien los colores <span class="suave" style="font-weight:600">(en este equipo)</span></b><small>Para modos oscuros, filtros de contraste o de color del navegador. El alto contraste del sistema siempre se respeta.</small></span><span class="interruptor"><input type="checkbox" data-ext ${NOM.leer("nom.extensiones", false) === true ? "checked" : ""}><span></span></span></label>
       </div>
+      ${extra ? `<div class="campo" data-haptica-nivel-wrap ${extra.haptica ? "" : "hidden"}><span class="etiqueta">Intensidad de la vibración</span>
+        <div class="segmentado lleno" data-haptica-nivel>${[["suave", "Suave"], ["normal", "Normal"], ["fuerte", "Fuerte"]].map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${extra.hapticaNivel === v}">${t}</button>`).join("")}</div></div>
+      <div data-ajustes-atajos></div>` : ""}
       ${sinCuenta ? "" : `<div class="lista-item">${ico("download")}<span class="crece"><b>Descargar los datos de mi cuenta</b><small>Lo que este servidor guarda de ti, en un archivo JSON (sin tu contraseña).</small></span><button type="button" class="btn chico" data-mis-datos>Descargar</button></div>`}
       ${sinCuenta || NOM.sinContrasena(u) ? "" : `<div class="lista-item">${ico("key-round")}<span class="crece"><b>Código para recuperar tu contraseña</b><small data-rec>${recuperacion === false ? "Aún no tienes uno: genéralo y guárdalo en un lugar seguro." : "Si olvidas tu contraseña, con él pones una nueva."}</small></span><button type="button" class="btn chico" data-recuperacion>${recuperacion === false ? "Generar" : "Generar otro"}</button></div>`}
       <p class="suave chico" style="text-align:center;font-weight:400" data-version>NOM ${esc(NOM.VERSION || "")}${api.empaquetada ? " · app para Android" : ""}<span data-version-servidor></span></p>
@@ -1290,9 +1299,10 @@
     if (NOM.acceso && !sinCuenta) NOM.acceso.infoServidor().then((i) => { const el = $("[data-version-servidor]", cuerpo); if (el && i && i.version && i.version !== NOM.VERSION) el.textContent = " · servidor " + i.version; }).catch(() => {});
     const pie = html(`<div style="display:contents"><button class="btn plano" data-fabrica>Valores de fábrica</button><span class="crece"></span><button class="btn primario" data-guardar>Guardar</button></div>`);
     let guardado = false;
+    let atajosCtrl = null;
     const original = Object.assign({}, p);
-    // Si se cierra sin guardar, se deshace la vista previa del tema.
-    const h = hoja({ titulo: "Ajustes y preferencias", icono: "settings", cuerpo, pie, alCerrar: () => { if (!guardado) NOM.aplicarPreferencias(original); } });
+    // Si se cierra sin guardar, se deshace la vista previa del tema y se suelta cualquier captura de teclas.
+    const h = hoja({ titulo: "Ajustes y preferencias", icono: "settings", cuerpo, pie, alCerrar: () => { atajosCtrl && atajosCtrl.desmontar(); if (!guardado) NOM.aplicarPreferencias(original); } });
     const misDatos = $("[data-mis-datos]", cuerpo);
     if (misDatos) misDatos.onclick = async () => {
       try {
@@ -1311,6 +1321,25 @@
     });
     $$("[data-tema] button", cuerpo).forEach((b) => (b.onclick = () => { $$("[data-tema] button", cuerpo).forEach((x) => x.setAttribute("aria-pressed", x === b)); NOM.aplicarPreferencias(leerForm()); }));
     $$("[data-letra] button", cuerpo).forEach((b) => (b.onclick = () => { $$("[data-letra] button", cuerpo).forEach((x) => x.setAttribute("aria-pressed", x === b)); NOM.aplicarLetra(b.dataset.v); }));
+    if (extra) {
+      $$("[data-menu-rapido] button", cuerpo).forEach((b) => (b.onclick = () => {
+        $$("[data-menu-rapido] button", cuerpo).forEach((x) => x.setAttribute("aria-pressed", x === b));
+        extra.menuRapido = b.dataset.v;
+      }));
+      const chkHap = $("[data-haptica]", cuerpo), wrapHap = $("[data-haptica-nivel-wrap]", cuerpo);
+      if (chkHap) chkHap.onchange = (e) => {
+        extra.haptica = e.target.checked;
+        if (wrapHap) wrapHap.hidden = !extra.haptica;
+        if (extra.haptica) px.probarVibracion(extra.hapticaNivel);
+      };
+      $$("[data-haptica-nivel] button", cuerpo).forEach((b) => (b.onclick = () => {
+        $$("[data-haptica-nivel] button", cuerpo).forEach((x) => x.setAttribute("aria-pressed", x === b));
+        extra.hapticaNivel = b.dataset.v;
+        if (extra.haptica) px.probarVibracion(extra.hapticaNivel);
+      }));
+      const contAtajos = $("[data-ajustes-atajos]", cuerpo);
+      if (contAtajos) atajosCtrl = px.montarAtajos(contAtajos, extra);
+    }
     $("#pa", cuerpo).oninput = (e) => ($("[data-va]", cuerpo).textContent = e.target.value);
     const br = $("[data-recuperacion]", cuerpo);
     if (br) br.onclick = async () => {
@@ -1322,11 +1351,11 @@
     // (las extensiones son de cada navegador: se guarda en este equipo y se aplica al recargar)
     $("[data-ext]", cuerpo).onchange = (e) => { NOM.guardar("nom.extensiones", e.target.checked); aviso(e.target.checked ? "Listo: tus extensiones podrán cambiar los colores desde que recargues la página" : "Listo: desde que recargues, la página vuelve a sus colores", { tipo: "ok" }); };
     $("[data-fabrica]", pie).onclick = async () => {
-      try { p = sinCuenta ? Object.assign({}, FABRICA) : await api.put("/api/cuentas/preferencias", FABRICA); guardado = true; NOM.aplicarPreferencias(p); h.cerrar(true); aviso("Se restauraron los valores de fábrica", { tipo: "ok" }); preferencias(); }
+      try { p = sinCuenta ? Object.assign({}, FABRICA) : await api.put("/api/cuentas/preferencias", FABRICA); if (px) px.restablecer(); guardado = true; NOM.aplicarPreferencias(p); h.cerrar(true); aviso("Se restauraron los valores de fábrica", { tipo: "ok" }); preferencias(); }
       catch (e) { aviso(e.message, { tipo: "error" }); }
     };
     $("[data-guardar]", pie).onclick = async () => {
-      try { const n = sinCuenta ? leerForm() : await api.put("/api/cuentas/preferencias", leerForm()); guardado = true; NOM.aplicarPreferencias(n); if (NOM.hito) NOM.hito("preferencias"); h.cerrar(); aviso("Preferencias guardadas", { tipo: "ok" }); }
+      try { const n = sinCuenta ? leerForm() : await api.put("/api/cuentas/preferencias", leerForm()); if (px && extra) px.guardar(extra); guardado = true; NOM.aplicarPreferencias(n); if (NOM.hito) NOM.hito("preferencias"); h.cerrar(); aviso("Preferencias guardadas", { tipo: "ok" }); }
       catch (e) { aviso(e.message, { tipo: "error" }); }
     };
   }
