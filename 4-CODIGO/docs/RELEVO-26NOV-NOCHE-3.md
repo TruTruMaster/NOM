@@ -92,6 +92,57 @@ normales).
 cambio en vivo 1.3 s, ninguna tarea > 100 ms. Desde la 0.23.7 la página va comprimida (`ooxml.js` 611 → 188 KB):
 volver a medir la primera carga.
 
+## 4b. Listos para la expo (G) y ensayo al azar (B.3)
+
+**La nube (Pi en casa) es un solo punto de falla.** Si en la escuela no carga www.nom.qd.je (se fue la luz o el
+Internet de la casa): **plan B** = el teléfono comparte sin Internet. En la app: «¿Dónde trabaja tu equipo?» →
+*Compartir desde este teléfono* → Encender; la laptop se conecta al punto de acceso del teléfono y abre la dirección
+`http://IP:puerto` que muestra la app (o escanea el QR). Ensayarlo una vez antes (los documentos de la nube NO están en
+el teléfono: llevar en la laptop `7-PRESENTACION/5IM7_WACK_Presentacion.nom` y los Office de ejemplo para importarlos
+ahí).
+
+**Cuentas de demostración** en el sitio real (contraseña en `trabajo/expo27/demo.txt`, fuera de git): `expo_profe`
+(propietaria del espacio «Expo NOM»: texto, hoja, presentación, diagrama, un Word de 0.6 y 2 MB, un Excel de 0.4 MB, un
+PowerPoint de 1.5 MB y **la presentación del proyecto**) y `expo_alumna` (puede editar). Crear además una cuenta en vivo.
+
+**Antes de salir:** cargar laptop y teléfonos; instalar el APK 0.23.10 en el A55 (y probar que abre la nube); en la
+laptop abrir www.nom.qd.je y recargar con **Ctrl+Mayús+R** (Cloudflare deja guardados los .js 4 h: sin recargar podría
+quedar una versión de antes; lo arregla el «Browser Cache TTL» de Cloudflare, pendiente del dueño).
+
+**Números para responder** (todos medidos hoy en el sitio real): suites 202 + 205 + 202 (Chromium, celular, Firefox)
+funciones bien y 0 mal; extremo a extremo 33/0; sin Internet 32/0; red 24/0; accesibilidad (axe) 28/0; rastreo de 632
+acciones sin errores. Tiempos: abrir un documento 0.2 s, tecla → pantalla 16 ms, cambio de otra persona 0.18 s, volver
+de sin red 0.4 s. Lenguaje: INFLESZ 76.5 («bastante fácil»). Presentación en NOM: 98.6 % igual al PDF. Lo que falta,
+dicho con honestidad: módulo de OCR (0 %), macros de Office, visor de PDF (después de la expo), prueba con personas.
+
+**Ensayo al azar** (que alguien que no sea quien presenta elija números sin avisar; en la laptop, el A55 y otro
+equipo, en el sitio real). Lo que falle es prioridad absoluta:
+
+1. Recibo de mi trabajo
+2. Historial de versiones y restaurar
+3. Importar un Word, un Excel y un PowerPoint de verdad
+4. Descargar en Word/Excel/PowerPoint y abrirlo en Office
+5. Nueva diapositiva, imagen, animación y Presentar (F5)
+6. Escribir los dos a la vez en el mismo texto
+7. Buscar en los documentos del espacio por lo que dicen
+8. Proyección en el salón con código de 6 letras
+9. Cortar el Wi-Fi, escribir y volver (se junta solo)
+10. Modo sugerencia: proponer y aceptar
+11. Fórmulas en la hoja (=SUMA, =PROMEDIO, =SI) y una gráfica
+12. Ajustes: tema oscuro y letra «Muy grande»
+13. Ctrl+K: buscar un documento y una acción
+14. Comentar y responder
+15. Ayuda «?» de un editor
+16. Diagrama listo (organigrama) y conector entre figuras
+17. Invitar con código QR y entrar desde otro celular
+18. Enlace para ver (sin cuenta) en otro navegador
+19. Compartir desde el teléfono (sin Internet) y entrar desde la laptop
+20. Cambiar un miembro a «Solo puede ver»
+21. Crear un espacio y un documento de cada tipo
+22. Crear un espacio cifrado de extremo a extremo
+23. Ramas: copia sin red y fusionar
+24. Chat del espacio con un adjunto
+
 ## 5. Para el dueño
 
 - Prueba con personas: `ENTREGA/Prueba_con_personas.docx` (tareas de la guía §5 y SUS).

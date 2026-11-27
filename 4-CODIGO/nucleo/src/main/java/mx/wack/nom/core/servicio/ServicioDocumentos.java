@@ -1900,9 +1900,11 @@ public class ServicioDocumentos {
     private static final java.util.regex.Pattern SIN_ETIQUETA = java.util.regex.Pattern.compile("<[^<>]*+>");
 
     /** Todo el texto de un documento: letras del texto, celdas, figuras, notas y ecuaciones (sin comentarios). */
-    private static String textoBuscable(EstadoDocumento est) {
+    static String textoBuscable(EstadoDocumento est) {
         StringBuilder sb = new StringBuilder();
-        est.seq.forEach((b, sec) -> { if (est.vivo(b) && sb.length() < 400_000) sb.append(sec.textoVisible(200_000)).append('\n'); });
+        // El texto de un documento de texto vive en la secuencia «cuerpo», que no siempre tiene campos propios (un Word
+        // importado no los tiene): una secuencia sin bloque cuenta; solo se salta la de un bloque borrado.
+        est.seq.forEach((b, sec) -> { if ((est.vivo(b) || !est.bloques.containsKey(b)) && sb.length() < 400_000) sb.append(sec.textoVisible(200_000)).append('\n'); });
         for (var en : est.bloques.entrySet()) {
             if (sb.length() > 400_000) break;
             String id = en.getKey();

@@ -4,8 +4,13 @@ descripcion: Qué cambió en cada versión, en palabras sencillas.
 orden: 1
 aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-26
-version: 0.23.9
+version: 0.23.10
 ---
+## 0.23.10 — noviembre de 2026
+
+- **Buscar en los documentos del espacio** ahora encuentra lo que dice un Word importado (antes solo lo encontraba por
+  su nombre o por sus tablas).
+
 ## 0.23.9 — noviembre de 2026
 
 - **Descargar en HTML, Markdown o SVG:** lo descargado solo lleva las imágenes del propio documento y sus colores y
