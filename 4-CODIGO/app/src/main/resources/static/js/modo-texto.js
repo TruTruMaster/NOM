@@ -6521,37 +6521,133 @@
       // derecho, centrada en el dedo o el cursor. Mismo orden que en los demás editores: negrita,
       // cursiva, subrayado, color, cortar, copiar, estilo, más.
       let selRueda = null, selOculta = null;
-      function accionesTexto(s) {
+      const PAL_ORTO = /[\p{L}'’]/u;
+      function extraerPalabraOrtografia(i) {
+        if (i == null || i < 0 || i > visPintado.length || !psPintado.length) return null;
+        const p = psPintado[parrafoEn(Math.min(i, Math.max(0, visPintado.length - 1)))];
+        if (!p) return null;
+        const es = (k) => k >= p.ini && k < p.fin && !visPintado[k].e && PAL_ORTO.test(visPintado[k].c);
+        const pos = es(i) ? i : (es(i - 1) ? i - 1 : -1);
+        if (pos < 0) return null;
+        let a = pos, b = pos + 1;
+        while (es(a - 1)) a--;
+        while (es(b)) b++;
+        while (a < b && /['’]/.test(visPintado[a].c)) a++;
+        while (b > a && /['’]/.test(visPintado[b - 1].c)) b--;
+        if (b <= a) return null;
+        const texto = visPintado.slice(a, b).map((x) => x.c).join("");
+        return /\p{L}/u.test(texto) ? { ini: a, fin: b, texto } : null;
+      }
+      function palabraOrtografia(s, e) {
+        if (e && typeof e.clientX === "number" && (e.clientX !== 0 || e.clientY !== 0)) {
+          const pt = posEnPunto(e.clientX, e.clientY);
+          if (pt != null) {
+            const w = extraerPalabraOrtografia(pt);
+            if (w) return w;
+          }
+        }
+        if (s && !s.col) {
+          let a = s.ini, b = s.fin;
+          while (a < b && (visPintado[a].e || !PAL_ORTO.test(visPintado[a].c))) a++;
+          while (b > a && (visPintado[b - 1].e || !PAL_ORTO.test(visPintado[b - 1].c))) b--;
+          while (a < b && /['’]/.test(visPintado[a].c)) a++;
+          while (b > a && /['’]/.test(visPintado[b - 1].c)) b--;
+          if (b > a) {
+            let una = true;
+            for (let k = a; k < b; k++) if (visPintado[k].e || !PAL_ORTO.test(visPintado[k].c)) { una = false; break; }
+            if (una) {
+              const texto = visPintado.slice(a, b).map((x) => x.c).join("");
+              if (/\p{L}/u.test(texto)) return { ini: a, fin: b, texto };
+            }
+          }
+          return null;
+        }
+        return s ? extraerPalabraOrtografia(s.ini) : null;
+      }
+      function reemplazarPalabraOrtografia(pal, nueva) {
+        comando(() => {
+          if (pal.ini < 0 || pal.fin > visPintado.length) return null;
+          const actual = visPintado.slice(pal.ini, pal.fin).map((x) => (x.e ? "" : x.c)).join("");
+          if (actual !== pal.texto) return null;
+          const at = visPintado[pal.ini] ? solo(S().attrs(visPintado[pal.ini]), CAR) : {};
+          const toks = textoTokens(nueva, at);
+          const grupo = "ortografia-" + Date.now();
+          if (modoSug) {
+            const antes = visPintado.length;
+            borrarSugerido(visPintado.slice(pal.ini, pal.fin), grupo, "comando");
+            actualizarPintado();
+            const fin = insertarEn(pal.fin - (antes - visPintado.length), toks, grupo);
+            return { sel: [fin, fin] };
+          }
+          borrarRango(pal.ini, pal.fin, grupo);
+          const fin = insertarEn(pal.ini, toks, grupo);
+          return { sel: [fin, fin] };
+        });
+      }
+      function submenuOrtografia(pal, idi) {
+        const sugs = NOM.ortografia.sugerencias(pal.texto, idi);
+        const ops = sugs.length
+          ? sugs.map((sug) => ({ texto: sug, icono: "check", fn: () => reemplazarPalabraOrtografia(pal, sug) }))
+          : [{ texto: "Sin sugerencias", icono: "info", off: true }];
+        ops.push({
+          texto: "Agregar al diccionario",
+          corto: "Agregar",
+          icono: "book-marked",
+          fn: () => {
+            NOM.ortografia.agregar(pal.texto);
+            aviso(`«${pal.texto}» agregada al diccionario`, { tipo: "ok", ms: 2400 });
+          },
+        });
+        return ops;
+      }
+      function itemOrtografia(s, e) {
+        if (!NOM.ortografia) return null;
+        const pal = palabraOrtografia(s, e);
+        if (!pal) return null;
+        const muestra = visPintado.slice(0, 4000).map((x) => (x.e ? " " : x.c)).join("");
+        const idi = NOM.ortografia.idioma(muestra);
+        // Sin el diccionario todavía: se baja en segundo plano y la ruedita queda igual (el orden de sus 8 lugares no
+        // cambia); la opción «Ortografía» aparece solo cuando la palabra está mal escrita.
+        if (!NOM.ortografia.listo(idi)) { NOM.ortografia.cargar(idi).catch(() => {}); return null; }
+        if (NOM.ortografia.revisar(pal.texto, idi) === false) {
+          return { texto: "Ortografía", icono: "case-sensitive", sub: submenuOrtografia(pal, idi) };
+        }
+        return null;
+      }
+      function accionesTexto(s, e) {
         const restaurar = () => { if (document.activeElement !== cuerpo) cuerpo.focus({ preventScroll: true }); ponerSel(s.a, s.f); };
         const con = (fn) => () => { restaurar(); fn(); };
         const a = attrsEnCursor().a;
         const colores = COLORES.filter((_, i) => [0, 9, 10, 13, 15, 17, 2].includes(i)).map((c) => ({ texto: c === "#000000" ? "Automático" : c, corto: " ", color: c, mantener: true, fn: con(() => formato({ color: c === "#000000" ? null : c })) }));
         const resaltes = RESALTES.slice(0, 7).map((c) => ({ texto: c, corto: " ", color: c, mantener: true, fn: con(() => formato({ fondo: c })) })).concat([{ texto: "Sin resaltado", icono: "x", mantener: true, fn: con(() => formato({ fondo: null })) }]);
-        return [
+        const estilo = { texto: "Estilo", icono: "heading-1", sub: [
+          { texto: "Normal", icono: "pilcrow", mantener: true, fn: con(() => formatoParrafo({ estilo: null })) }, { texto: "Título 1", icono: "heading-1", mantener: true, fn: con(() => formatoParrafo({ estilo: "h1" })) },
+          { texto: "Título 2", icono: "heading-2", mantener: true, fn: con(() => formatoParrafo({ estilo: "h2" })) }, { texto: "Título 3", icono: "heading-3", mantener: true, fn: con(() => formatoParrafo({ estilo: "h3" })) },
+          { texto: "Viñetas", icono: "list", mantener: true, fn: con(() => alternarLista("vinetas")) }, { texto: "Numeración", icono: "list-ordered", mantener: true, fn: con(() => alternarLista("numeros")) },
+          { texto: "Tareas", icono: "list-checks", mantener: true, fn: con(() => alternarLista("tareas")) }, { texto: "Cita", icono: "quote", mantener: true, fn: con(() => formatoParrafo({ estilo: "cita" })) }] };
+        const masSub = [
+          { texto: "Enlace", icono: "link", fn: con(enlace) },
+          { texto: "Elegir todo", icono: "text-select", fn: () => { cuerpo.focus({ preventScroll: true }); ponerSel(0, visPintado.length); } },
+          { texto: "Pegar", icono: "clipboard-paste", fn: con(pegarPortapapeles) },
+          { texto: "Copiar formato", icono: "paintbrush", fn: con(() => copiarFormato(false)) },
+          { texto: "Borrar formato", icono: "remove-formatting", mantener: true, fn: con(borrarFormato) },
+          { texto: "Tachado", icono: "strikethrough", marcado: !!a.s, mantener: true, fn: con(() => alternar("s")) },
+          { texto: "Comentar", icono: "message-square", fn: con(() => NOM.comentarios && NOM.comentarios.nuevo(ed)) },
+          ...(cuerpo.querySelector(".wd-campo[data-obj]") ? [{ texto: "Actualizar campos", corto: "Campos", icono: "refresh-cw", fn: con(() => actualizarCampos()) },
+            { texto: verCodigos ? "Ver valores de campos" : "Ver códigos de campos", corto: "Códigos", icono: "code", fn: con(() => alternarCodigos()) }] : []),
+          ctx.propietario ? { texto: "Asignar párrafo a…", corto: "Asignar", icono: "user-check", fn: con(() => asignarParrafos(parrafosDeSel(s))) }
+            : { texto: modoSug ? "Apagar sugerencias" : "Sugerir cambios", corto: modoSug ? "Sin sugerir" : "Sugerir", icono: "pen-line", marcado: modoSug, fn: con(() => alternarSugerencias()) }];
+        const ort = itemOrtografia(s, e);
+        const base = [
           { texto: "Negrita", icono: "bold", marcado: !!a.b, mantener: true, fn: con(() => alternar("b")) },
           { texto: "Cursiva", icono: "italic", marcado: !!a.i, mantener: true, fn: con(() => alternar("i")) },
           { texto: "Subrayado", icono: "underline", marcado: !!a.u, mantener: true, fn: con(() => alternar("u")) },
           { texto: "Color", icono: "baseline", sub: colores.concat([{ texto: "Resaltar", icono: "highlighter", sub: resaltes }]) },
           { texto: "Cortar", icono: "scissors", off: s.col, fn: con(() => document.execCommand("cut")) },
           { texto: "Copiar", icono: "copy", off: s.col, fn: con(() => document.execCommand("copy")) },
-          { texto: "Estilo", icono: "heading-1", sub: [
-            { texto: "Normal", icono: "pilcrow", mantener: true, fn: con(() => formatoParrafo({ estilo: null })) }, { texto: "Título 1", icono: "heading-1", mantener: true, fn: con(() => formatoParrafo({ estilo: "h1" })) },
-            { texto: "Título 2", icono: "heading-2", mantener: true, fn: con(() => formatoParrafo({ estilo: "h2" })) }, { texto: "Título 3", icono: "heading-3", mantener: true, fn: con(() => formatoParrafo({ estilo: "h3" })) },
-            { texto: "Viñetas", icono: "list", mantener: true, fn: con(() => alternarLista("vinetas")) }, { texto: "Numeración", icono: "list-ordered", mantener: true, fn: con(() => alternarLista("numeros")) },
-            { texto: "Tareas", icono: "list-checks", mantener: true, fn: con(() => alternarLista("tareas")) }, { texto: "Cita", icono: "quote", mantener: true, fn: con(() => formatoParrafo({ estilo: "cita" })) }] },
-          { texto: "Más", icono: "more-horizontal", sub: [
-            { texto: "Enlace", icono: "link", fn: con(enlace) },
-            { texto: "Elegir todo", icono: "text-select", fn: () => { cuerpo.focus({ preventScroll: true }); ponerSel(0, visPintado.length); } },
-            { texto: "Pegar", icono: "clipboard-paste", fn: con(pegarPortapapeles) },
-            { texto: "Copiar formato", icono: "paintbrush", fn: con(() => copiarFormato(false)) },
-            { texto: "Borrar formato", icono: "remove-formatting", mantener: true, fn: con(borrarFormato) },
-            { texto: "Tachado", icono: "strikethrough", marcado: !!a.s, mantener: true, fn: con(() => alternar("s")) },
-            { texto: "Comentar", icono: "message-square", fn: con(() => NOM.comentarios && NOM.comentarios.nuevo(ed)) },
-            ...(cuerpo.querySelector(".wd-campo[data-obj]") ? [{ texto: "Actualizar campos", corto: "Campos", icono: "refresh-cw", fn: con(() => actualizarCampos()) },
-              { texto: verCodigos ? "Ver valores de campos" : "Ver códigos de campos", corto: "Códigos", icono: "code", fn: con(() => alternarCodigos()) }] : []),
-            ctx.propietario ? { texto: "Asignar párrafo a…", corto: "Asignar", icono: "user-check", fn: con(() => asignarParrafos(parrafosDeSel(s))) }
-              : { texto: modoSug ? "Apagar sugerencias" : "Sugerir cambios", corto: modoSug ? "Sin sugerir" : "Sugerir", icono: "pen-line", marcado: modoSug, fn: con(() => alternarSugerencias()) }] },
         ];
+        if (ort) return [ort].concat(base, [{ texto: "Más", icono: "more-horizontal", sub: [estilo].concat(masSub) }]);
+        return base.concat([estilo, { texto: "Más", icono: "more-horizontal", sub: masSub }]);
       }
       function accionesImagen(o) {
         const id = o.dataset.id, it = sec().item(id), ref = it && it.e && it.e.ref;
@@ -6586,7 +6682,7 @@
         if (ed.soloLectura) return null;
         const o = e.target.closest && e.target.closest("[data-obj]");
         if (o && o.classList.contains("wd-imagen")) { seleccionarImagen(o); const l = accionesImagen(o); l.titulo = "Imagen"; return l; }
-        return accionesTexto(selRueda || leerSel());
+        return accionesTexto(selRueda || leerSel(), e);
       }, {
         titulo: "Texto",
         // Con el clic, una pausa mientras se arrastra para seleccionar también la saca (menos sobre
