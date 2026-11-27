@@ -60,4 +60,18 @@ class PaginasLimpiasTest {
         org.junit.jupiter.api.Assertions.assertTrue(sin.contains("<script src=\"js/nucleo.js\"></script>") && sin.contains("<meta charset"));
         org.junit.jupiter.api.Assertions.assertEquals("<p>x</p>", PaginasLimpias.sinPoliticaEnMeta("<p>x</p>"));
     }
+
+    @Test
+    void laPortadaPideLosArchivosConSuVersionParaQueNingunaCacheDeUnoViejo() {
+        String html = "<link rel=\"stylesheet\" href=\"css/nom.css\" data-nom>\n<link rel=\"icon\" href=\"img/icono.svg\">\n"
+                + "<script src=\"js/nucleo.js\"></script>\n<script src=\"js/vendor/qrcode.js\"></script>\n<script src=\"https://x.y/z.js\"></script>";
+        String con = PaginasLimpias.conVersion(html, "0.23.10");
+        assertTrue(con.contains("href=\"css/nom.css?v=0.23.10\""), con);
+        assertTrue(con.contains("src=\"js/nucleo.js?v=0.23.10\""), con);
+        assertTrue(con.contains("src=\"js/vendor/qrcode.js?v=0.23.10\""), con);
+        assertTrue(con.contains("href=\"img/icono.svg\""), con);          // los iconos no cambian con la versión
+        assertTrue(con.contains("src=\"https://x.y/z.js\""), con);        // lo de fuera, tal cual
+        assertEquals(con, PaginasLimpias.conVersion(con, "0.23.10"));      // dos veces no agrega otro ?v=
+        assertEquals(html, PaginasLimpias.conVersion(html, "1.0\"><script>"));   // una versión rara no se escribe
+    }
 }

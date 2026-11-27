@@ -99,4 +99,16 @@ public final class PaginasLimpias {
         while (fin < html.length() && (html.charAt(fin) == '\n' || html.charAt(fin) == '\r' || html.charAt(fin) == ' ')) fin++;
         return html.substring(0, i) + html.substring(fin);
     }
+
+    /**
+     * La portada pide sus programas y estilos con {@code ?v=VERSION}: Cloudflare (y el navegador) guardan los .js y .css
+     * varias horas, y con el candado de versión un navegador que trajera un .js de antes quedaría con «Actualiza NOM»
+     * aunque recargue. Con la versión en la dirección, cada versión nueva es otra dirección. Solo los archivos propios
+     * ({@code js/} y {@code css/}); los iconos y lo de fuera, tal cual. La app (que abre sus archivos sin servidor) no
+     * pasa por aquí.
+     */
+    public static String conVersion(String html, String version) {
+        if (html == null || version == null || !version.matches("[0-9A-Za-z.-]{1,20}")) return html;
+        return html.replaceAll("((?:src|href)=\"(?:js|css)/[^\"?#]+\\.(?:js|css))\"", "$1?v=" + version + "\"");
+    }
 }

@@ -65,6 +65,7 @@ public class PaginasApi {
         String html = leer("index.html");
         if (html == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         html = mx.wack.nom.core.servicio.PaginasLimpias.sinPoliticaEnMeta(html);   // (la política va en la cabecera)
+        html = mx.wack.nom.core.servicio.PaginasLimpias.conVersion(html, mx.wack.nom.core.Version.APP);
         html = Buscadores.cabecera(html, Buscadores.base(req), "");
         // Débil (W/): Tomcat no comprime una respuesta con etiqueta fuerte, y la portada pesa ~70 KB.
         String etiqueta = "W/\"" + Integer.toHexString(html.hashCode()) + "\"";
