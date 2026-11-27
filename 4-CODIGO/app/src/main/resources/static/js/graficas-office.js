@@ -15,7 +15,7 @@
   const n2 = (x) => Math.round(x * 100) / 100;
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const TIPOS = { barChart: "barra", bar3DChart: "barra", lineChart: "linea", line3DChart: "linea", stockChart: "linea", areaChart: "area", area3DChart: "area",
-    pieChart: "pastel", pie3DChart: "pastel", ofPieChart: "pastel", doughnutChart: "anillo", scatterChart: "dispersion", bubbleChart: "dispersion", radarChart: "radar" };
+    pieChart: "pastel", pie3DChart: "pastel", ofPieChart: "pastel", doughnutChart: "anillo", scatterChart: "dispersion", bubbleChart: "burbuja", radarChart: "radar" };
 
   // ================================================================ lectura
   function leer(xml, ctx) {
@@ -99,10 +99,26 @@
     const rotulos = (n) => {
       const dl = n && h1(n, "dLbls");
       if (!dl) return null;
-      const o = { val: si(dl, "showVal", false), pct: si(dl, "showPercent", false), cat: si(dl, "showCatName", false), ser: si(dl, "showSerName", false), pos: val(dl, "dLblPos", null) };
+      const o = { val: si(dl, "showVal", false), pct: si(dl, "showPercent", false), cat: si(dl, "showCatName", false), ser: si(dl, "showSerName", false), bs: si(dl, "showBubbleSize", false), pos: val(dl, "dLblPos", null) };
       const nf = h1(dl, "numFmt"); if (nf && at(nf, "sourceLinked") !== "1") o.fmt = at(nf, "formatCode");
       const l = letra(h1(dl, "txPr")); if (l) o.letra = l;
-      return o.val || o.pct || o.cat || o.ser ? o : null;
+      const sp = h1(dl, "separator"); if (sp) o.sep = sp.textContent;
+      const pts = hs(dl, "dLbl").map((p) => {
+        const q = { idx: +val(p, "idx", -1) };
+        if (si(p, "delete", false)) q.borrado = true;
+        if (h1(p, "showVal")) q.val = si(p, "showVal", false);
+        if (h1(p, "showPercent")) q.pct = si(p, "showPercent", false);
+        if (h1(p, "showCatName")) q.cat = si(p, "showCatName", false);
+        if (h1(p, "showSerName")) q.ser = si(p, "showSerName", false);
+        if (h1(p, "showBubbleSize")) q.bs = si(p, "showBubbleSize", false);
+        if (h1(p, "dLblPos")) q.pos = val(p, "dLblPos", null);
+        const nfp = h1(p, "numFmt"); if (nfp && at(nfp, "sourceLinked") !== "1") q.fmt = at(nfp, "formatCode");
+        const lp = letra(h1(p, "txPr")); if (lp) q.letra = lp;
+        const spp = h1(p, "separator"); if (spp) q.sep = spp.textContent;
+        return q;
+      }).filter((q) => q.idx >= 0);
+      if (pts.length) o.pts = pts;
+      return o.val || o.pct || o.cat || o.ser || o.bs || pts.length ? o : null;
     };
 
     const cs = d.documentElement, ch = h1(cs, "chart"), pa = ch && h1(ch, "plotArea");
@@ -144,14 +160,17 @@
       const gr = { tipo, dir: val(g, "barDir", "col"), grupo: val(g, "grouping", tipo === "barra" ? "clustered" : "standard"), varia: si(g, "varyColors", tipo === "pastel" || tipo === "anillo"),
         hueco: +val(g, "gapWidth", 150), solape: +val(g, "overlap", 0), agujero: +val(g, "holeSize", 50), giro: +val(g, "firstSliceAng", 0),
         ejes: hs(g, "axId").map((a) => at(a, "val")), rotulos: rotulos(g), marcadores: si(g, "marker", true), estiloDisp: val(g, "scatterStyle", "lineMarker"),
+        estiloRadar: val(g, "radarStyle", "standard"),
         series: [] };
+      if (tipo === "burbuja") { gr.tamBurb = val(g, "sizeRepresents", "area"); gr.escBurb = +val(g, "bubbleScale", 100); }
       if (g.localName === "bar3DChart" || g.localName === "pie3DChart" || g.localName === "line3DChart" || g.localName === "area3DChart") gr.tresD = true;
       if (g.localName === "bar3DChart") gr.huecoProf = +val(g, "gapDepth", 150);
       hs(g, "ser").forEach((s) => {
-        const sp = h1(s, "spPr"), mk = h1(s, "marker");
+        const sp = h1(s, "spPr"), mk = h1(s, "marker"), bs = h1(s, "bubbleSize");
         const se = { idx: +val(s, "idx", 0), orden: +val(s, "order", 0), nombre: textoRico(h1(s, "tx")), relleno: relleno(sp), linea: linea(sp),
           cats: cache(h1(s, "cat") || h1(s, "xVal")), vals: cache(h1(s, "val") || h1(s, "yVal")), suave: si(s, "smooth", false), rotulos: rotulos(s),
           explota: +val(s, "explosion", 0), invierte: si(s, "invertIfNegative", false), degr: degradado(sp), opac: alfa(sp && h1(sp, "solidFill")) };
+        if (bs) se.tams = cache(bs);
         if (mk) se.marcador = { simbolo: val(mk, "symbol", "auto"), tam: +val(mk, "size", 5), relleno: relleno(h1(mk, "spPr")), linea: linea(h1(mk, "spPr")) };
         // líneas de tendencia (con su ecuación y su R²) y barras de error
         const tls = hs(s, "trendline").map((tl) => ({ tipo: val(tl, "trendlineType", "linear"), orden: +val(tl, "order", 2), periodo: +val(tl, "period", 2), ec: si(tl, "dispEq", false),
@@ -258,6 +277,7 @@
   // ================================================================ dibujo
   function svg(m, w, h, opc) {
     if (m && m.ex) return svgEx(m, w, h, opc);
+    w = Math.max(0, +w || 0); h = Math.max(0, +h || 0);
     opc = opc || {};
     const pt = opc.pt || 1, fam = (f) => (opc.familia ? opc.familia(f || m.letra.f || "Calibri") : `'${(f || m.letra.f || "Calibri").replace(/'/g, "")}', sans-serif`);
     const L = (l, def) => Object.assign({ tam: 10, c: "#595959", b: false, f: null }, m.letra || {}, def || {}, l || {});
@@ -295,7 +315,7 @@
     const attrsTrazo = (o) => (o ? ` stroke="${esc(o.c || "#000")}" stroke-width="${n2(Math.max(0.25, o.w * pt))}"${guion(o)}` : ' stroke="none"');
     // fondo de la gráfica
     const fa = m.area.degr ? degSvg(m.area.degr) : m.area.relleno === "none" ? "none" : m.area.relleno || "#FFFFFF", la = trazo(m.area.linea, opc.sinBorde ? { no: 1 } : { c: "#D9D9D9", w: 0.75 });
-    partes.push(`<rect x="0.5" y="0.5" width="${n2(w - 1)}" height="${n2(h - 1)}" fill="${esc(fa)}"${la && !la.no ? attrsTrazo(la) : ""}${m.area.redondo ? ' rx="6"' : ""}/>`);
+    partes.push(`<rect x="0.5" y="0.5" width="${n2(Math.max(0, w - 1))}" height="${n2(Math.max(0, h - 1))}" fill="${esc(fa)}"${la && !la.no ? attrsTrazo(la) : ""}${m.area.redondo ? ' rx="6"' : ""}/>`);
     const series = [];
     m.tipos.forEach((g, gi) => g.series.forEach((s, si) => series.push({ g, s, i: series.length })));
     const colorSerie = (k) => {
@@ -329,11 +349,11 @@
     if (m.leyenda) {
       const ll = L(m.leyenda.letra, { tam: 9 });
       if (unaRebanada) entradas = cats.map((c, i) => ({ texto: c, color: colorPunto(series[0].s, i), tipo: "caja" }));
-      else entradas = series.map(({ g, s }, k) => ({ texto: nombreSerie(s, k), color: g.tipo === "linea" || g.tipo === "dispersion" || g.tipo === "radar" ? (s.linea && s.linea.c) || colorSerie(k) : s.relleno && s.relleno !== "none" ? s.relleno : (s.linea && s.linea.c) || colorSerie(k),
-        tipo: g.tipo === "linea" || g.tipo === "dispersion" || g.tipo === "radar" ? "linea" : "caja", k,
-        marca: (g.tipo === "linea" || g.tipo === "dispersion") && (s.marcador ? s.marcador.simbolo !== "none" : g.marcadores && g.tipo === "linea") ? (s.marcador && s.marcador.simbolo) || "circle" : null }));
-      // barras horizontales: Excel lista las series al revés (como se ven de arriba abajo)
-      if (!unaRebanada && m.tipos[0] && m.tipos[0].tipo === "barra" && m.tipos[0].dir === "bar" && (m.leyenda.pos === "b" || m.leyenda.pos === "t")) entradas.reverse();
+      else entradas = series.map(({ g, s }, k) => ({ texto: nombreSerie(s, k), color: (g.tipo === "linea" || g.tipo === "dispersion" || (g.tipo === "radar" && g.estiloRadar !== "filled")) ? (s.linea && s.linea.c) || colorSerie(k) : s.relleno && s.relleno !== "none" ? s.relleno : (s.linea && s.linea.c) || colorSerie(k),
+        tipo: g.tipo === "linea" || g.tipo === "dispersion" || (g.tipo === "radar" && g.estiloRadar !== "filled") ? "linea" : "caja", k,
+        marca: (g.tipo === "linea" || g.tipo === "dispersion" || (g.tipo === "radar" && g.estiloRadar !== "filled")) && (s.marcador ? s.marcador.simbolo !== "none" : (g.marcadores && g.tipo === "linea") || (g.tipo === "radar" && g.estiloRadar === "marker")) ? (s.marcador && s.marcador.simbolo) || "circle" : null }));
+      // barras horizontales agrupadas: Office lista las series al revés (de arriba abajo); en apiladas van de izquierda a derecha
+      if (!unaRebanada && m.tipos[0] && m.tipos[0].tipo === "barra" && m.tipos[0].dir === "bar" && m.tipos[0].grupo !== "stacked" && m.tipos[0].grupo !== "percentStacked" && (m.leyenda.pos === "b" || m.leyenda.pos === "t")) entradas.reverse();
       if (!unaRebanada) series.forEach(({ s }, k) => (s.tendencias || []).forEach((tl) => entradas.push({ texto: tl.nombre || `${NOMBRE_TENDENCIA[tl.tipo] ? NOMBRE_TENDENCIA[tl.tipo](tl) : "Tendencia"} (${nombreSerie(s, k)})`, color: (tl.linea && tl.linea.c) || colorSerie(k), tipo: "linea", guion: tl.linea })));
       entradas = entradas.filter((e, i) => !(m.leyenda.borrar || []).includes(i));
       const cajaW = 7 * pt, sep = 4 * pt, gapE = 10 * pt, lineaW = 18 * pt;
@@ -370,6 +390,14 @@
       if (p && p.relleno && p.relleno !== "none") return p.relleno;
       return colorSerie(i);
     }
+    /** Rótulo efectivo de un punto: combina c:dLbls con la anulación por punto (c:dLbl) si existe. */
+    function rotuloPunto(ro, i) {
+      if (!ro) return null;
+      const p = (ro.pts || []).find((q) => q.idx === i);
+      if (!p) return ro;
+      if (p.borrado) return null;
+      return Object.assign({}, ro, p, { letra: p.letra || ro.letra ? Object.assign({}, ro.letra || {}, p.letra || {}) : undefined });
+    }
     // ---- área de trazado
     let pl = izq, pr = der, ptop = arriba, pb = abajo;
     const disp = m.trazado.disp;
@@ -378,10 +406,14 @@
       dibujarPastel(m.tipos[0], series[0].s, pl, ptop, pr, pb);
       return `<svg xmlns="http://www.w3.org/2000/svg" width="${n2(w)}" height="${n2(h)}" viewBox="0 0 ${n2(w)} ${n2(h)}">${partes.join("")}</svg>`;
     }
-    // ejes: el de categorías (o de X en dispersión) y el de valores
+    if (m.tipos.length === 1 && m.tipos[0].tipo === "radar") {
+      dibujarRadar(m.tipos[0], pl, ptop, pr, pb);
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="${n2(w)}" height="${n2(h)}" viewBox="0 0 ${n2(w)} ${n2(h)}">${partes.join("")}</svg>`;
+    }
+    // ejes: el de categorías (o de X en dispersión/burbujas) y el de valores
     const ejes = Object.values(m.ejes);
     const g0 = m.tipos[0] || { ejes: [] };
-    const ejeC = ejes.find((e) => g0.ejes.includes(e.id) && (e.tipo === "catAx" || e.tipo === "dateAx")) || ejes.find((e) => g0.ejes.includes(e.id) && g0.tipo === "dispersion" && (e.pos === "b" || e.pos === "t")) || { tipo: "catAx", pos: "b", letra: {}, rotulos: "nextTo" };
+    const ejeC = ejes.find((e) => g0.ejes.includes(e.id) && (e.tipo === "catAx" || e.tipo === "dateAx")) || ejes.find((e) => g0.ejes.includes(e.id) && (g0.tipo === "dispersion" || g0.tipo === "burbuja") && (e.pos === "b" || e.pos === "t")) || { tipo: "catAx", pos: "b", letra: {}, rotulos: "nextTo" };
     const ejeV = ejes.find((e) => g0.ejes.includes(e.id) && e.tipo === "valAx" && e !== ejeC) || { tipo: "valAx", pos: "l", letra: {}, rotulos: "nextTo", rejilla: {} };
     const horizontal = g0.tipo === "barra" && g0.dir === "bar";
     if (g0.tresD && g0.tipo === "barra" && !horizontal && m.tipos.length === 1 && !(disp && disp.dentro)) {
@@ -390,7 +422,7 @@
     }
     const apilado = (g) => g.grupo === "stacked" || g.grupo === "percentStacked";
     // eje de valores secundario (combinada): el de los grupos que no usan el eje principal; va a la derecha
-    const g2 = m.tipos.find((g) => g !== g0 && !g.ejes.includes(ejeV.id) && g.tipo !== "dispersion");
+    const g2 = m.tipos.find((g) => g !== g0 && !g.ejes.includes(ejeV.id) && g.tipo !== "dispersion" && g.tipo !== "burbuja");
     const ejeV2 = g2 ? ejes.find((e) => g2.ejes.includes(e.id) && e.tipo === "valAx") || null : null;
     const enSec = (g) => !!ejeV2 && !g.ejes.includes(ejeV.id) && g.ejes.includes(ejeV2.id);
     // extremos de los datos (con las sumas si van apiladas), de cada eje
@@ -415,9 +447,9 @@
     const esc_ = escala(dmin, dmax, ejeV, pct, maxDiv);
     // (Excel: el secundario lleva tantas divisiones como el principal, para que las rayas coincidan)
     const esc2 = ejeV2 ? escala(dmin2, dmax2, ejeV2, pct2, maxDiv) : null;
-    // dispersión: escala también en X
+    // dispersión y burbujas: escala también en X
     let escX = null;
-    if (g0.tipo === "dispersion") {
+    if (g0.tipo === "dispersion" || g0.tipo === "burbuja") {
       let xmin = Infinity, xmax = -Infinity;
       series.forEach(({ s }) => (opc.valores && s.cats.f ? opc.valores(s.cats.f) || s.cats.v : s.cats.v).forEach((x) => { if (x != null && isFinite(+x)) { xmin = Math.min(xmin, +x); xmax = Math.max(xmax, +x); } }));
       escX = escala(xmin, xmax, ejeC, false);
@@ -452,6 +484,8 @@
       if (ejeV.titulo) { const lt = L(ejeV.titulo.letra, { tam: 10 }); if (horizontal) pb -= lt.tam * pt * 1.6; else pl += lt.tam * pt * 1.6; }
       if (ejeC.titulo) { const lt = L(ejeC.titulo.letra, { tam: 10 }); if (horizontal) pl += lt.tam * pt * 1.6; else pb -= lt.tam * pt * 1.6; }
     }
+    if (pr < pl) pr = pl;
+    if (pb < ptop) pb = ptop;
     if (m.trazado.degr || (m.trazado.relleno && m.trazado.relleno !== "none")) partes.push(`<rect x="${n2(pl)}" y="${n2(ptop)}" width="${n2(Math.max(0, pr - pl))}" height="${n2(Math.max(0, pb - ptop))}" fill="${m.trazado.degr ? degSvg(m.trazado.degr) : esc(m.trazado.relleno)}"/>`);
     // posición de un valor y de una categoría
     const largoV = horizontal ? pr - pl : pb - ptop;
@@ -488,7 +522,8 @@
       const ss = g.series.map((s) => ({ s, v: datos(s) })), k0 = series.findIndex((x) => x.g === g);
       if (g.tipo === "barra") {
         const N = apilado(g) ? 1 : ss.length, sol = apilado(g) ? 100 : g.solape, hueco = g.hueco;
-        const bw = anchoCat / (N - ((N - 1) * sol) / 100 + hueco / 100);
+        const denB = N - ((N - 1) * sol) / 100 + hueco / 100;
+        const bw = denB > 0 ? Math.max(0, anchoCat / denB) : 0;
         const base = aV(Math.max(escAct.a, Math.min(escAct.b, 0)));
         const pos = new Array(nC).fill(0), neg = new Array(nC).fill(0), tot = cats.map((_, i) => ss.reduce((a, x) => a + Math.abs(x.v[i] || 0), 0) || 1);
         ss.forEach(({ s, v }, j) => {
@@ -506,10 +541,10 @@
             const r = horizontal ? { x: Math.min(desde, hasta), y: c, w: Math.abs(hasta - desde), h: bw } : { x: c, y: Math.min(desde, hasta), w: bw, h: Math.abs(hasta - desde) };
             const propio = (s.puntos || []).some((q) => q.idx === i && q.relleno);
             marcar(k0 + j, i);
-            partes.push(`<rect x="${n2(r.x)}" y="${n2(r.y)}" width="${n2(r.w)}" height="${n2(r.h)}" fill="${pintaS && !propio ? pintaS : esc(fill)}"${opacS}${ln ? attrsTrazo(ln) : ""}/>`);
+            partes.push(`<rect x="${n2(r.x)}" y="${n2(r.y)}" width="${n2(Math.max(0, r.w))}" height="${n2(Math.max(0, r.h))}" fill="${pintaS && !propio ? pintaS : esc(fill)}"${opacS}${ln ? attrsTrazo(ln) : ""}/>`);
             if (!centros.has(s)) centros.set(s, []);
             centros.get(s)[i] = horizontal ? null : r.x + r.w / 2;
-            const ro = s.rotulos || g.rotulos;
+            const ro = rotuloPunto(s.rotulos || g.rotulos, i);
             if (ro && ro.val) {
               // dentro arriba (inEnd), dentro abajo (inBase), al centro (ctr) o afuera (outEnd, lo de siempre)
               const lr = L(ro.letra, { tam: 9 }), txt = numero(x, ro.fmt || s.vals.fmt, opc), alto = lr.tam * pt;
@@ -529,19 +564,34 @@
         const capas = [];
         ss.forEach(({ s, v }, j) => {
           const col = (s.linea && s.linea.c) || (s.relleno && s.relleno !== "none" ? s.relleno : colorSerie(k0 + j));
-          const ys = v.map((x, i) => { if (x == null) return null; const y = g.grupo === "percentStacked" ? x / tot[i] : x; if (apilado(g)) { acum[i] += y; return acum[i]; } return y; });
+          const prev = apilado(g) ? acum.slice() : null;
+          const ys = v.map((x, i) => {
+            if (x == null && !apilado(g)) return null;
+            const y = g.grupo === "percentStacked" ? (x || 0) / tot[i] : (x || 0);
+            if (apilado(g)) { acum[i] += y; return acum[i]; }
+            return y;
+          });
           const pts = ys.map((y, i) => (y == null ? null : [aC(i), aV(y)]));
+          const basePts = prev ? prev.map((y, i) => [aC(i), aV(y)]) : null;
           centros.set(s, ys.map((y, i) => aC(i)));
-          capas.push({ s, col, pts, j });
+          capas.push({ s, col, pts, basePts, j });
         });
         if (g.tipo === "area") {
-          capas.slice().reverse().forEach(({ s, col, pts, j }, jj) => {
+          const base = aV(Math.max(escAct.a, Math.min(escAct.b, 0)));
+          capas.forEach(({ s, col, pts, basePts, j }) => {
             const ok = pts.filter(Boolean); if (!ok.length) return;
             marcar(k0 + j);
-            const base = aV(Math.max(escAct.a, 0));
-            const d = `M${n2(ok[0][0])},${n2(base)} ` + ok.map((p) => `L${n2(p[0])},${n2(p[1])}`).join(" ") + ` L${n2(ok[ok.length - 1][0])},${n2(base)} Z`;
+            let d;
+            if (apilado(g) && basePts && j > 0) {
+              const sup = pts.map((p) => p || [0, base]);
+              d = `M${n2(sup[0][0])},${n2(sup[0][1])} ` + sup.slice(1).map((p) => `L${n2(p[0])},${n2(p[1])}`).join(" ")
+                + " " + basePts.slice().reverse().map((p) => `L${n2(p[0])},${n2(p[1])}`).join(" ") + " Z";
+            } else {
+              d = `M${n2(ok[0][0])},${n2(base)} ` + ok.map((p) => `L${n2(p[0])},${n2(p[1])}`).join(" ") + ` L${n2(ok[ok.length - 1][0])},${n2(base)} Z`;
+            }
             const fill = s.relleno && s.relleno !== "none" ? s.relleno : col;
-            partes.push(`<path d="${d}" fill="${esc(fill)}"${trazo(s.linea, { no: 1 }) ? attrsTrazo(trazo(s.linea, { no: 1 })) : ""}/>`);
+            const opacS = s.opac != null && s.opac < 1 ? ` fill-opacity="${n2(s.opac)}"` : "";
+            partes.push(`<path d="${d}" fill="${s.degr ? degSvg(s.degr) : esc(fill)}"${opacS}${trazo(s.linea, { no: 1 }) ? attrsTrazo(trazo(s.linea, { no: 1 })) : ""}/>`);
           });
         } else {
           capas.forEach(({ s, col, pts, j }) => {
@@ -551,11 +601,42 @@
             pts.forEach((p, i) => { if (!p) { abierto = false; return; } d += `${abierto ? "L" : "M"}${n2(p[0])},${n2(p[1])} `; abierto = true; });
             if (ln && d) partes.push(`<path d="${d.trim()}" fill="none"${attrsTrazo(ln)} stroke-linejoin="round" stroke-linecap="round"/>`);
             const mk = s.marcador, sim = mk ? mk.simbolo : g.marcadores ? "auto" : "none";
-            if (sim && sim !== "none") pts.forEach((p, i) => { if (!p) return; marcar(k0 + j, i); const r = ((mk && mk.tam) || 5) * pt * 0.5; const f = (mk && mk.relleno && mk.relleno !== "none") ? mk.relleno : col; partes.push(sim === "square" ? `<rect x="${n2(p[0] - r)}" y="${n2(p[1] - r)}" width="${n2(2 * r)}" height="${n2(2 * r)}" fill="${esc(f)}"/>` : sim === "diamond" ? `<path d="M${n2(p[0])},${n2(p[1] - r * 1.3)} L${n2(p[0] + r * 1.3)},${n2(p[1])} L${n2(p[0])},${n2(p[1] + r * 1.3)} L${n2(p[0] - r * 1.3)},${n2(p[1])} Z" fill="${esc(f)}"/>` : sim === "triangle" ? `<path d="M${n2(p[0])},${n2(p[1] - r * 1.2)} L${n2(p[0] + r * 1.2)},${n2(p[1] + r)} L${n2(p[0] - r * 1.2)},${n2(p[1] + r)} Z" fill="${esc(f)}"/>` : `<circle cx="${n2(p[0])}" cy="${n2(p[1])}" r="${n2(r)}" fill="${esc(f)}"/>`); });
-            const ro = s.rotulos || g.rotulos;
-            if (ro && ro.val) { const lr = L(ro.letra, { tam: 9 }); pts.forEach((p, i) => { marcar(k0 + j, i); if (p) t(p[0], p[1] - 6 * pt, numero(s.vals.v[i], ro.fmt || s.vals.fmt, opc), lr, "middle"); }); }
+            if (sim && sim !== "none") pts.forEach((p, i) => { if (!p) return; marcar(k0 + j, i); const r = Math.max(0, ((mk && mk.tam) || 5) * pt * 0.5); const f = (mk && mk.relleno && mk.relleno !== "none") ? mk.relleno : col; partes.push(sim === "square" ? `<rect x="${n2(p[0] - r)}" y="${n2(p[1] - r)}" width="${n2(2 * r)}" height="${n2(2 * r)}" fill="${esc(f)}"/>` : sim === "diamond" ? `<path d="M${n2(p[0])},${n2(p[1] - r * 1.3)} L${n2(p[0] + r * 1.3)},${n2(p[1])} L${n2(p[0])},${n2(p[1] + r * 1.3)} L${n2(p[0] - r * 1.3)},${n2(p[1])} Z" fill="${esc(f)}"/>` : sim === "triangle" ? `<path d="M${n2(p[0])},${n2(p[1] - r * 1.2)} L${n2(p[0] + r * 1.2)},${n2(p[1] + r)} L${n2(p[0] - r * 1.2)},${n2(p[1] + r)} Z" fill="${esc(f)}"/>` : `<circle cx="${n2(p[0])}" cy="${n2(p[1])}" r="${n2(r)}" fill="${esc(f)}"/>`); });
+            const roBase = s.rotulos || g.rotulos;
+            if (roBase) pts.forEach((p, i) => { const ro = rotuloPunto(roBase, i); marcar(k0 + j, i); if (p && ro && ro.val) { const lr = L(ro.letra, { tam: 9 }); t(p[0], p[1] - 6 * pt, numero(s.vals.v[i], ro.fmt || s.vals.fmt, opc), lr, "middle"); } });
           });
         }
+      } else if (g.tipo === "burbuja") {
+        const tamsTodos = ss.map(({ s }) => {
+          const raw = s.tams ? (opc.valores && s.tams.f ? opc.valores(s.tams.f) || s.tams.v : s.tams.v) : [];
+          return raw.map((z) => (z == null || z === "" || !isFinite(+z) ? null : +z));
+        });
+        const zMax = Math.max(0, ...tamsTodos.flat().map((z) => (z == null ? 0 : Math.abs(z)))) || 1;
+        const rMax = Math.max(2 * pt, Math.min(pr - pl, pb - ptop) * 0.12 * Math.max(0.1, (g.escBurb || 100) / 100));
+        ss.forEach(({ s, v }, j) => {
+          const xs = (opc.valores && s.cats.f ? opc.valores(s.cats.f) || s.cats.v : s.cats.v).map((x) => (x == null || x === "" || !isFinite(+x) ? null : +x));
+          const zs = tamsTodos[j];
+          const fill = (s.relleno && s.relleno !== "none" ? s.relleno : null) || (s.linea && s.linea.c) || colorSerie(k0 + j);
+          const ln = trazo(s.linea, { no: 1 });
+          const opac = s.opac != null && s.opac < 1 ? s.opac : 0.75;
+          v.forEach((y, i) => {
+            if (y == null || xs[i] == null) return;
+            const z = zs[i];
+            if (s.tams && (z == null || z <= 0)) return;
+            const frac = z == null ? 0.4 : g.tamBurb === "w" ? Math.abs(z) / zMax : Math.sqrt(Math.abs(z) / zMax);
+            const rad = Math.max(2 * pt, frac * rMax);
+            const pCol = (s.puntos || []).find((q) => q.idx === i && q.relleno && q.relleno !== "none");
+            const cxB = aX(xs[i]), cyB = aV(y);
+            marcar(k0 + j, i);
+            partes.push(`<circle cx="${n2(cxB)}" cy="${n2(cyB)}" r="${n2(rad)}" fill="${esc(pCol ? pCol.relleno : fill)}" fill-opacity="${n2(opac)}"${ln ? attrsTrazo(ln) : ""}/>`);
+            const ro = rotuloPunto(s.rotulos || g.rotulos, i);
+            if (ro && (ro.val || ro.cat || ro.bs)) {
+              const lr = L(ro.letra, { tam: 9 });
+              const txt = [ro.cat ? numero(xs[i], ejeC.fmt, opc) : "", ro.val ? numero(y, ro.fmt || s.vals.fmt, opc) : "", ro.bs && z != null ? numero(z, null, opc) : ""].filter(Boolean).join(ro.sep || ", ");
+              if (txt) t(cxB, cyB + lr.tam * pt * 0.35, txt, lr, "middle");
+            }
+          });
+        });
       } else if (g.tipo === "dispersion") {
         ss.forEach(({ s, v }, j) => {
           marcar(k0 + j);
@@ -759,11 +840,11 @@
         const grande = r2.h - r2.d > Math.PI ? 1 : 0;
         const d = r2.h - r2.d >= Math.PI * 2 - 1e-6 ? `M${P(0)} A${n2(rx)},${n2(ry)} 0 1 1 ${P(Math.PI)} A${n2(rx)},${n2(ry)} 0 1 1 ${P(0)} Z` : `M${n2(cx)},${n2(cy)} L${P(r2.d)} A${n2(rx)},${n2(ry)} 0 ${grande} 1 ${P(r2.h)} Z`;
         partes.push(`<path d="${d}" fill="${esc(colorPunto(se, r2.i))}"${lnS ? attrsTrazo(lnS) : ""} stroke-linejoin="round"/>`);
-        const ro = se.rotulos || g.rotulos;
-        if (ro && (ro.val || ro.pct || ro.cat)) {
-          const lr = L(ro.letra, { tam: 9 }), rm = ro.pos === "outEnd" ? 1.12 : ro.pos === "inEnd" ? 0.8 : 0.62, mid = (r2.d + r2.h) / 2;
-          const txt = [ro.cat ? cats[r2.i] : "", ro.val ? numero(r2.x, ro.fmt || se.vals.fmt, opc) : "", ro.pct ? Math.round((r2.x / tot) * 100) + "%" : ""].filter(Boolean).join("; ");
-          t(cx + rx * rm * Math.sin(mid), cy - ry * rm * Math.cos(mid) + lr.tam * pt * 0.35, txt, lr, "middle");
+        const ro = rotuloPunto(se.rotulos || g.rotulos, r2.i);
+        if (ro && (ro.val || ro.pct || ro.cat || ro.ser)) {
+          const lr = L(ro.letra, { tam: 10 }), rm = ro.pos === "outEnd" ? 1.12 : ro.pos === "inEnd" ? 0.8 : 0.62, mid = (r2.d + r2.h) / 2;
+          const txt = [ro.ser ? nombreSerie(se, series.findIndex((q) => q.s === se)) : "", ro.cat ? cats[r2.i] : "", ro.val ? numero(r2.x, ro.fmt || se.vals.fmt, opc) : "", ro.pct ? Math.round((r2.x / tot) * 100) + "%" : ""].filter(Boolean).join(ro.sep || "; ");
+          if (txt) t(cx + rx * rm * Math.sin(mid), cy - ry * rm * Math.cos(mid) + lr.tam * pt * 0.35, txt, lr, "middle");
         }
       });
     }
@@ -785,15 +866,91 @@
         else if (ri) { const [cx2, cy2] = p(ri, b), [dx2, dy2] = p(ri, ang); d = `M${n2(ax)},${n2(ay)} A${n2(r)},${n2(r)} 0 ${grande} 1 ${n2(bx)},${n2(by)} L${n2(cx2)},${n2(cy2)} A${n2(ri)},${n2(ri)} 0 ${grande} 0 ${n2(dx2)},${n2(dy2)} Z`; }
         else d = `M${n2(cx + dx)},${n2(cy + dy)} L${n2(ax)},${n2(ay)} A${n2(r)},${n2(r)} 0 ${grande} 1 ${n2(bx)},${n2(by)} Z`;
         if (x > 0) partes.push(`<path d="${d}" fill="${esc(colorPunto(se, i))}"${lnS ? attrsTrazo(lnS) : ""} stroke-linejoin="round" fill-rule="evenodd"/>`);
-        const ro = se.rotulos || g.rotulos;
-        if (ro && (ro.val || ro.pct || ro.cat) && x > 0) {
-          const lr = L(ro.letra, { tam: 9 }), rm = ri ? (r + ri) / 2 : ro.pos === "outEnd" ? r * 1.12 : ro.pos === "inEnd" ? r * 0.8 : r * 0.62, [tx, ty] = p(rm, ang + a / 2);
-          const txt = [ro.cat ? cats[i] : "", ro.val ? numero(x, ro.fmt || se.vals.fmt, opc) : "", ro.pct ? Math.round((x / tot) * 100) + "%" : ""].filter(Boolean).join("; ");
-          t(tx, ty + lr.tam * pt * 0.35, txt, lr, "middle");
+        const ro = rotuloPunto(se.rotulos || g.rotulos, i);
+        if (ro && (ro.val || ro.pct || ro.cat || ro.ser) && x > 0) {
+          const lr = L(ro.letra, { tam: 10 }), rm = ri ? (r + ri) / 2 : ro.pos === "outEnd" ? r * 1.12 : ro.pos === "inEnd" ? r * 0.8 : r * 0.62, [tx, ty] = p(rm, ang + a / 2);
+          const txt = [ro.ser ? nombreSerie(se, kS) : "", ro.cat ? cats[i] : "", ro.val ? numero(x, ro.fmt || se.vals.fmt, opc) : "", ro.pct ? Math.round((x / tot) * 100) + "%" : ""].filter(Boolean).join(ro.sep || "; ");
+          if (txt) t(tx, ty + lr.tam * pt * 0.35, txt, lr, "middle");
         }
         ang = b;
       });
       marcar(null);
+    }
+    // ---- radar: rejilla poligonal concéntrica, ejes radiales desde las 12 en punto y polígonos cerrados por serie
+    function dibujarRadar(g, x1, y1, x2, y2) {
+      const ss = g.series.map((s) => ({ s, v: datos(s) })), nC = cats.length;
+      if (!nC) return;
+      const ejesL = Object.values(m.ejes);
+      const eC = ejesL.find((e) => g.ejes.includes(e.id) && (e.tipo === "catAx" || e.tipo === "dateAx")) || { letra: {}, rotulos: "nextTo" };
+      const eV = ejesL.find((e) => g.ejes.includes(e.id) && e.tipo === "valAx") || { letra: {}, rotulos: "nextTo", rejilla: {} };
+      const lc = L(eC.letra, { tam: 9 }), lv = L(eV.letra, { tam: 9 });
+      const verC = !eC.borrado && eC.rotulos !== "none", verV = !eV.borrado && eV.rotulos !== "none";
+      let dminR = Infinity, dmaxR = -Infinity;
+      ss.forEach(({ v }) => v.forEach((x) => { if (x != null) { dminR = Math.min(dminR, x); dmaxR = Math.max(dmaxR, x); } }));
+      const padX = verC ? Math.max(0, ...cats.map((c) => medir(c, lc.tam * pt, fam(lc.f)))) + 8 * pt : 4 * pt;
+      const padY = verC ? lc.tam * pt * 1.4 + 6 * pt : 4 * pt;
+      const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+      const R0 = Math.min(Math.max(0, (x2 - x1) / 2 - padX), Math.max(0, (y2 - y1) / 2 - padY));
+      const R = Math.max(1, R0 > 4 ? R0 : Math.max(0, Math.min(x2 - x1, y2 - y1) * 0.3));
+      const maxDivR = Math.max(4, Math.min(8, Math.floor(R / Math.max(1, lv.tam * pt * 1.6))));
+      const escR = escala(dminR, dmaxR, eV, false, maxDivR);
+      const marcasR = [];
+      for (let v = escR.a, k = 0; v <= escR.b + escR.u * 1e-6 && k < 200; v = escR.a + ++k * escR.u) marcasR.push(Math.round(v * 1e10) / 1e10);
+      const ang = (i) => -Math.PI / 2 + (i * Math.PI * 2) / nC;
+      const radDe = (v) => Math.max(0, ((v - escR.a) / ((escR.b - escR.a) || 1)) * R);
+      const ptR = (r, i) => [cx + r * Math.cos(ang(i)), cy + r * Math.sin(ang(i))];
+      const rejR = eV.rejilla ? trazo(eV.rejilla, { c: "#D9D9D9", w: 0.75 }) : trazo(null, { c: "#D9D9D9", w: 0.75 });
+      marcasR.forEach((v) => {
+        const rr = radDe(v);
+        if (rr > 0.5 && rejR) {
+          const pts = Array.from({ length: nC }, (_, i) => ptR(rr, i).map(n2).join(",")).join(" ");
+          partes.push(`<polygon points="${pts}" fill="none"${attrsTrazo(rejR)}/>`);
+        }
+      });
+      const lnEje = trazo(eC.linea, { c: "#D9D9D9", w: 0.75 }) || trazo(null, { c: "#D9D9D9", w: 0.75 });
+      for (let i = 0; i < nC; i++) {
+        const [ex, ey] = ptR(R, i);
+        partes.push(`<line x1="${n2(cx)}" y1="${n2(cy)}" x2="${n2(ex)}" y2="${n2(ey)}"${attrsTrazo(lnEje)}/>`);
+        if (verC) {
+          const a = ang(i), co = Math.cos(a), si2 = Math.sin(a), [lx, ly] = ptR(R + 6 * pt, i);
+          const anc = Math.abs(co) < 0.2 ? "middle" : co > 0 ? "start" : "end";
+          const dy = si2 > 0.5 ? lc.tam * pt * 0.85 : si2 < -0.5 ? -2 * pt : lc.tam * pt * 0.35;
+          t(lx, ly + dy, cats[i], lc, anc);
+        }
+      }
+      const k0 = series.findIndex((x) => x.g === g), lleno = g.estiloRadar === "filled";
+      ss.forEach(({ s, v }, j) => {
+        marcar(k0 + j);
+        const col = (s.linea && s.linea.c) || (s.relleno && s.relleno !== "none" ? s.relleno : colorSerie(k0 + j));
+        const pts = Array.from({ length: nC }, (_, i) => ptR(radDe(v[i] == null ? escR.a : v[i]), i));
+        const polyPts = pts.map((p) => p.map(n2).join(",")).join(" ");
+        if (lleno) {
+          const fill = s.relleno && s.relleno !== "none" ? s.relleno : col;
+          const opacS = s.opac != null && s.opac < 1 ? ` fill-opacity="${n2(s.opac)}"` : ' fill-opacity="0.7"';
+          const lnS = trazo(s.linea, { no: 1 });
+          partes.push(`<polygon points="${polyPts}" fill="${esc(fill)}"${opacS}${lnS ? attrsTrazo(lnS) : ' stroke="none"'}/>`);
+        } else {
+          const lnS = trazo(s.linea, { c: col, w: 2.25 });
+          if (lnS) partes.push(`<polygon points="${polyPts}" fill="none"${attrsTrazo(lnS)} stroke-linejoin="round"/>`);
+          const mk = s.marcador, sim = mk ? mk.simbolo : g.estiloRadar === "marker" ? "auto" : "none";
+          if (sim && sim !== "none") pts.forEach((p, i) => {
+            if (v[i] == null) return;
+            marcar(k0 + j, i);
+            const r = Math.max(0, ((mk && mk.tam) || 5) * pt * 0.5), f = (mk && mk.relleno && mk.relleno !== "none") ? mk.relleno : col;
+            partes.push(sim === "square" ? `<rect x="${n2(p[0] - r)}" y="${n2(p[1] - r)}" width="${n2(2 * r)}" height="${n2(2 * r)}" fill="${esc(f)}"/>` : `<circle cx="${n2(p[0])}" cy="${n2(p[1])}" r="${n2(r)}" fill="${esc(f)}"/>`);
+          });
+        }
+        const roBase = s.rotulos || g.rotulos;
+        if (roBase) pts.forEach((p, i) => {
+          const ro = rotuloPunto(roBase, i);
+          if (ro && ro.val && v[i] != null) { marcar(k0 + j, i); const lr = L(ro.letra, { tam: 9 }); t(p[0], p[1] - 5 * pt, numero(v[i], ro.fmt || s.vals.fmt, opc), lr, "middle"); }
+        });
+      });
+      marcar(null);
+      if (verV) {
+        const fmtR = (v) => numero(v, eV.ligado ? (ss[0] && ss[0].s.vals.fmt) || eV.fmt : eV.fmt, opc);
+        marcasR.forEach((v) => t(cx - 4 * pt, cy - radDe(v) + lv.tam * pt * 0.35, fmtR(v), lv, "end"));
+      }
     }
   }
 
@@ -868,13 +1025,13 @@
       while (j < area.length && peor(fila.concat(area[j]), lado) <= peor(fila, lado)) fila.push(area[j++]);
       const s = fila.reduce((a, b) => a + b, 0);
       if (w >= h) {   // franja vertical a la izquierda
-        const fw = s / h; let yy = y;
-        fila.forEach((a) => { out.push({ x, y: yy, w: fw, h: a / fw }); yy += a / fw; });
-        x += fw; w -= fw;
+        const fw = h > 0 ? Math.max(0, s / h) : 0; let yy = y;
+        fila.forEach((a) => { const rh = fw > 0 ? Math.max(0, a / fw) : 0; out.push({ x, y: yy, w: fw, h: rh }); yy += rh; });
+        x += fw; w = Math.max(0, w - fw);
       } else {        // franja horizontal arriba
-        const fh = s / w; let xx = x;
-        fila.forEach((a) => { out.push({ x: xx, y, w: a / fh, h: fh }); xx += a / fh; });
-        y += fh; h -= fh;
+        const fh = w > 0 ? Math.max(0, s / w) : 0; let xx = x;
+        fila.forEach((a) => { const rw = fh > 0 ? Math.max(0, a / fh) : 0; out.push({ x: xx, y, w: rw, h: fh }); xx += rw; });
+        y += fh; h = Math.max(0, h - fh);
       }
       i = j;
     }
@@ -891,6 +1048,7 @@
   }
 
   function svgEx(m, w, h, opc) {
+    w = Math.max(0, +w || 0); h = Math.max(0, +h || 0);
     opc = opc || {};
     const pt = opc.pt || 1, fam = (f) => (opc.familia ? opc.familia(f || m.letra.f || "Calibri") : `'${(f || m.letra.f || "Calibri").replace(/'/g, "")}', sans-serif`);
     const partes = [], L = (def) => Object.assign({ tam: 9, c: "#595959", b: false, f: m.letra.f }, def || {});
@@ -898,7 +1056,7 @@
     const ok = (c) => /^#[0-9A-Fa-f]{6}$/.test(c || "");
     const acc = (k) => { const a = (m.acentos || [])[k % 6]; return ok(a) ? a : ["#156082", "#E97132", "#196B24", "#0F9ED5", "#A02B93", "#4EA72E"][k % 6]; };
     const oscuro = (c, f) => "#" + [1, 3, 5].map((i) => Math.round(parseInt(c.slice(i, i + 2), 16) * f).toString(16).padStart(2, "0")).join("");
-    partes.push(`<rect x="0.5" y="0.5" width="${n2(w - 1)}" height="${n2(h - 1)}" fill="#FFFFFF"${opc.sinBorde ? "" : ` stroke="#D9D9D9" stroke-width="${n2(Math.max(0.25, 0.75 * pt))}"`}/>`);
+    partes.push(`<rect x="0.5" y="0.5" width="${n2(Math.max(0, w - 1))}" height="${n2(Math.max(0, h - 1))}" fill="#FFFFFF"${opc.sinBorde ? "" : ` stroke="#D9D9D9" stroke-width="${n2(Math.max(0.25, 0.75 * pt))}"`}/>`);
     // ---- los datos, vivos de la hoja (o lo guardado)
     const colsDe = (f) => { const q = /\$?([A-Z]{1,3})\$?\d+:\$?([A-Z]{1,3})\$?\d+$/.exec(String(f || "")); if (!q) return 1; const nc = (s) => s.split("").reduce((a, c) => a * 26 + c.charCodeAt(0) - 64, 0); return Math.max(1, nc(q[2]) - nc(q[1]) + 1); };
     const filasDe = (dm) => {
@@ -939,20 +1097,21 @@
       const esc_ = escala(dmin, dmax, ejeV, false, Math.floor(alto / (lv.tam * pt * 2.2)));
       const marcas = []; for (let v = esc_.a, k = 0; v <= esc_.b + esc_.u * 1e-6 && k < 200; v = esc_.a + ++k * esc_.u) marcas.push(Math.round(v * 1e10) / 1e10);
       const verV = ejeV.rotulos !== false && !ejeV.oculto;
-      let x0 = izq + (verV ? Math.max(...marcas.map((v) => medir(fmtN(v), lv.tam * pt, fam(lv.f)))) + 6 * pt : 0), x1 = der;
-      const y0 = arriba + lv.tam * pt * 0.6, y1 = abajo - lc.tam * pt * 1.6;
+      let x0 = izq + (verV ? Math.max(0, ...marcas.map((v) => medir(fmtN(v), lv.tam * pt, fam(lv.f)))) + 6 * pt : 0), x1 = der;
+      const y0 = arriba + lv.tam * pt * 0.6, y1 = Math.max(y0, abajo - lc.tam * pt * 1.6);
       let marcasD = null;
       if (derecho) {
         marcasD = []; for (let k = 0; k <= 10; k++) marcasD.push(k / 10);
-        x1 -= Math.max(...marcasD.map((v) => medir(Math.round(v * 100) + "%", lv.tam * pt, fam(lv.f)))) + 6 * pt;
+        x1 -= Math.max(0, ...marcasD.map((v) => medir(Math.round(v * 100) + "%", lv.tam * pt, fam(lv.f)))) + 6 * pt;
       }
+      if (x1 < x0) x1 = x0;
       const yv = (v) => y1 - ((v - esc_.a) / (esc_.b - esc_.a || 1)) * (y1 - y0);
       marcas.forEach((v) => {
         if (ejeV.rejilla !== false) partes.push(`<line x1="${n2(x0)}" y1="${n2(yv(v))}" x2="${n2(x1)}" y2="${n2(yv(v))}" stroke="#D9D9D9" stroke-width="${n2(0.75 * pt)}"/>`);
         if (verV) t(x0 - 6 * pt, yv(v) + lv.tam * pt * 0.35, fmtN(v), lv, "end");
       });
       if (marcasD) marcasD.forEach((v) => t(x1 + 6 * pt, y1 - v * (y1 - y0) + lv.tam * pt * 0.35, Math.round(v * 100) + "%", lv));
-      const anchoC = (x1 - x0) / Math.max(1, etiquetas.length);
+      const anchoC = Math.max(0, x1 - x0) / Math.max(1, etiquetas.length);
       if (ejeC.rotulos !== false && !ejeC.oculto) etiquetas.forEach((e, i) => t(x0 + anchoC * (i + 0.5), y1 + lc.tam * pt * 1.25, e, lc, "middle"));
       return { x0, x1, y0, y1, yv, anchoC };
     };
@@ -987,7 +1146,7 @@
       if (tipo === "pareto") barras = barras.map((x, i) => Object.assign(x, { i })).sort((p, q) => q.valor - p.valor || p.i - q.i);
       const mx = Math.max(0, ...barras.map((x) => x.valor));
       const f = marco(0, mx, barras.map((x) => x.etiqueta), tipo === "pareto");
-      const hueco = ejeC.hueco != null ? ejeC.hueco : 0, bw = f.anchoC / (1 + hueco), col = acc(0);
+      const hueco = ejeC.hueco != null ? Math.max(0, ejeC.hueco) : 0, bw = Math.max(0, f.anchoC / (1 + hueco)), col = acc(0);
       barras.forEach((x, i) => {
         const bx = f.x0 + f.anchoC * i + (f.anchoC - bw) / 2, y = f.yv(x.valor);
         partes.push(`<rect x="${n2(bx)}" y="${n2(y)}" width="${n2(bw)}" height="${n2(Math.max(0, f.y1 - y))}" fill="${col}" stroke="#FFFFFF" stroke-width="${n2(0.75 * pt)}"/>`);
@@ -1009,7 +1168,7 @@
       if (!grupos.size) return fin();
       const todosV = [...grupos.values()].flat();
       const f = marco(Math.min(...todosV), Math.max(...todosV), [...grupos.keys()], false);
-      const hueco = ejeC.hueco != null ? ejeC.hueco : 1, bw = f.anchoC / (1 + hueco), col = acc(0), borde = oscuro(col, 0.7), sw = n2(Math.max(0.5, 0.75 * pt));
+      const hueco = ejeC.hueco != null ? Math.max(0, ejeC.hueco) : 1, bw = Math.max(0, f.anchoC / (1 + hueco)), col = acc(0), borde = oscuro(col, 0.7), sw = n2(Math.max(0.5, 0.75 * pt));
       [...grupos.values()].forEach((g, i) => {
         const ord = g.slice().sort((a, b) => a - b), exc = m.cuartil !== "inclusive";
         const q1 = cuartil(ord, 0.25, exc), q2 = cuartil(ord, 0.5, exc), q3 = cuartil(ord, 0.75, exc), iqr = q3 - q1;
@@ -1039,7 +1198,7 @@
       });
       const extremos = pasos.flatMap((p) => [p.de, p.a]).concat(0);
       const f = marco(Math.min(...extremos), Math.max(...extremos), vals.map((_, i) => (cats[i] || []).join(" ") || String(i + 1)), false);
-      const hueco = ejeC.hueco != null ? ejeC.hueco : 0.5, bw = f.anchoC / (1 + hueco);
+      const hueco = ejeC.hueco != null ? Math.max(0, ejeC.hueco) : 0.5, bw = Math.max(0, f.anchoC / (1 + hueco));
       pasos.forEach((p, i) => {
         const bx = f.x0 + f.anchoC * i + (f.anchoC - bw) / 2, ya = f.yv(Math.max(p.de, p.a)), yb = f.yv(Math.min(p.de, p.a));
         partes.push(`<rect x="${n2(bx)}" y="${n2(ya)}" width="${n2(bw)}" height="${n2(Math.max(0.5, yb - ya))}" fill="${acc(p.tipo)}"/>`);
@@ -1053,11 +1212,11 @@
 
     if (tipo === "embudo") {
       const etiquetas = vals.map((_, i) => (cats[i] || []).join(" ") || String(i + 1)), lc = L();
-      const x0 = izq + Math.max(0, ...etiquetas.map((e) => medir(e, lc.tam * pt, fam(lc.f)))) + 8 * pt, x1 = der, y0 = arriba, y1 = abajo;
-      const mx = Math.max(0, ...vals.map((v) => Math.abs(v || 0))) || 1, altoC = (y1 - y0) / Math.max(1, vals.length);
-      const hueco = ejeC.hueco != null ? ejeC.hueco : 0.06, bh = altoC / (1 + hueco), cx = (x0 + x1) / 2;
+      const x0 = izq + Math.max(0, ...etiquetas.map((e) => medir(e, lc.tam * pt, fam(lc.f)))) + 8 * pt, x1 = Math.max(x0, der), y0 = arriba, y1 = Math.max(y0, abajo);
+      const mx = Math.max(0, ...vals.map((v) => Math.abs(v || 0))) || 1, altoC = Math.max(0, y1 - y0) / Math.max(1, vals.length);
+      const hueco = ejeC.hueco != null ? Math.max(0, ejeC.hueco) : 0.06, bh = Math.max(0, altoC / (1 + hueco)), cx = (x0 + x1) / 2;
       vals.forEach((v, i) => {
-        const bw = (Math.abs(v || 0) / mx) * (x1 - x0), y = y0 + altoC * i + (altoC - bh) / 2;
+        const bw = Math.max(0, (Math.abs(v || 0) / mx) * (x1 - x0)), y = y0 + altoC * i + (altoC - bh) / 2;
         partes.push(`<rect x="${n2(cx - bw / 2)}" y="${n2(y)}" width="${n2(bw)}" height="${n2(bh)}" fill="${acc(0)}"/>`);
         t(x0 - 8 * pt, y0 + altoC * (i + 0.5) + lc.tam * pt * 0.35, etiquetas[i], lc, "end");
       });
@@ -1088,10 +1247,10 @@
       const linea = n2(Math.max(0.75, 1.5 * pt));
       if (tipo === "rectangulos") {
         const dibujar = (nodo, r) => {
-          if (!nodo.hijos.length) { partes.push(`<rect x="${n2(r.x)}" y="${n2(r.y)}" width="${n2(r.w)}" height="${n2(r.h)}" fill="${nodo.color}" stroke="#FFFFFF" stroke-width="${linea}"/>`); return; }
+          if (!nodo.hijos.length) { partes.push(`<rect x="${n2(r.x)}" y="${n2(r.y)}" width="${n2(Math.max(0, r.w))}" height="${n2(Math.max(0, r.h))}" fill="${nodo.color}" stroke="#FFFFFF" stroke-width="${linea}"/>`); return; }
           cuadricular(nodo.hijos.map((x) => x.valor), r.x, r.y, r.w, r.h).forEach((q, i) => dibujar(nodo.hijos[i], q));
         };
-        dibujar(raiz, { x: izq, y: arriba, w: der - izq, h: abajo - arriba });
+        dibujar(raiz, { x: izq, y: arriba, w: Math.max(0, der - izq), h: Math.max(0, abajo - arriba) });
         return fin();
       }
       // proyección solar: anillos del centro hacia afuera, desde las 12 y en el sentido del reloj

@@ -62,7 +62,7 @@
    */
   function svg(d, clase, opc) {
     opc = typeof opc === "string" ? { titulo: opc } : opc || {};
-    const W = opc.ancho || 420, H = opc.alto || 240;
+    const W = Math.max(0, opc.ancho != null ? +opc.ancho || 0 : 420), H = Math.max(0, opc.alto != null ? +opc.alto || 0 : 240);
     // Los colores pueden venir del documento: solo se aceptan colores #RRGGBB (nada de texto suelto en el SVG).
     const col = (Array.isArray(opc.colores) && opc.colores.length ? opc.colores : (PALETAS[opc.colores] || PALETAS.clasica).c).map((c) => (/^#[0-9a-f]{3,8}$/i.test(String(c)) ? c : "#5B5BD6"));
     const C = (i) => col[i % col.length];
@@ -74,7 +74,7 @@
     if (clase === "pastel") {
       const s = d.series[0], total = s.valores.reduce((a, v) => a + Math.max(0, v || 0), 0) || 1;
       let a0 = -Math.PI / 2, h = "";
-      const cx = W * 0.31, cy = ms + (H - ms) / 2 - 4, r = Math.min(W * 0.21, (H - ms) / 2 - 10);
+      const cx = W * 0.31, cy = ms + (H - ms) / 2 - 4, r = Math.max(0, Math.min(W * 0.21, (H - ms) / 2 - 10));
       s.valores.forEach((v, i) => {
         const a = (Math.max(0, v || 0) / total) * Math.PI * 2, a1 = a0 + a;
         const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0), x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
@@ -86,7 +86,7 @@
     }
     const multi = d.series.length > 1;
     const mb = (opc.ejeX ? 52 : 40) + (multi ? 0 : -10), mi = opc.ejeY ? 56 : 44, md = 14;
-    const ah = H - ms - mb, aw = W - mi - md;
+    const ah = Math.max(0, H - ms - mb), aw = Math.max(0, W - mi - md);
     let h = "";
     const ejes = (opc.ejeX ? `<text x="${mi + aw / 2}" y="${H - (multi ? 22 : 6)}" text-anchor="middle" class="graf-eje" style="font-weight:800">${esc(opc.ejeX)}</text>` : "")
       + (opc.ejeY ? `<text transform="translate(12 ${ms + ah / 2}) rotate(-90)" text-anchor="middle" class="graf-eje" style="font-weight:800">${esc(opc.ejeY)}</text>` : "");
@@ -114,13 +114,13 @@
     const mm = marcas(Math.min(0, ...todos), Math.max(0, ...todos));
     const n = d.etiquetas.length;
     if (clase === "barras-h") {
-      const X = (v) => mi + 40 + ((v - mm.min) / (mm.max - mm.min || 1)) * (aw - 40);
+      const X = (v) => mi + 40 + ((v - mm.min) / (mm.max - mm.min || 1)) * Math.max(0, aw - 40);
       const paso = ah / Math.max(1, n), bh = (paso * 0.72) / d.series.length;
       mm.l.forEach((v) => (h += `<line y1="${ms}" y2="${ms + ah}" x1="${n1(X(v))}" x2="${n1(X(v))}" class="graf-reja"/><text y="${ms + ah + 14}" x="${n1(X(v))}" text-anchor="middle" class="graf-eje">${esc(corto(v))}</text>`));
       d.series.forEach((s, si) => s.valores.forEach((v, i) => {
         if (v == null) return;
         const y = ms + paso * i + paso * 0.14 + bh * si, x0 = X(Math.min(0, v)), x1 = X(Math.max(0, v));
-        h += `<rect y="${n1(y)}" x="${n1(x0)}" height="${n1(Math.max(1, bh - 2))}" width="${n1(Math.max(1, x1 - x0))}" rx="3" fill="${C(si)}"/>`;
+        h += `<rect y="${n1(y)}" x="${n1(x0)}" height="${n1(Math.max(ah > 0 ? 1 : 0, bh - 2))}" width="${n1(Math.max(aw > 40 ? 1 : 0, x1 - x0))}" rx="3" fill="${C(si)}"/>`;
       }));
       const cada = Math.ceil(n / 12);
       h += d.etiquetas.map((e, i) => (i % cada ? "" : `<text x="${mi + 36}" y="${n1(ms + paso * (i + 0.5) + 4)}" text-anchor="end" class="graf-eje">${esc(e.slice(0, 12))}</text>`)).join("");
@@ -142,7 +142,7 @@
       d.series.forEach((s, si) => s.valores.forEach((v, i) => {
         if (v == null) return;
         const x = mi + paso * i + paso * 0.14 + bw * si, y0 = Y(Math.max(0, v)), y1 = Y(Math.min(0, v));
-        h += `<rect x="${n1(x)}" y="${n1(y0)}" width="${n1(Math.max(1, bw - 2))}" height="${n1(Math.max(1, y1 - y0))}" rx="3" fill="${C(si)}"/>`;
+        h += `<rect x="${n1(x)}" y="${n1(y0)}" width="${n1(Math.max(aw > 0 ? 1 : 0, bw - 2))}" height="${n1(Math.max(ah > 0 ? 1 : 0, y1 - y0))}" rx="3" fill="${C(si)}"/>`;
       }));
     }
     const cada = Math.ceil(n / 10);

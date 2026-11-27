@@ -222,6 +222,13 @@
         t.push(x);
         continue;
       }
+      // Hoja!Nombre o 'Mi Hoja'!Nombre: nombre definido con ámbito de hoja
+      const hn = new RegExp("^(?:'((?:[^']|'')+)'!|([" + LETRA_HOJA + "][" + LETRA_HOJA + "0-9.]*)!)([A-Za-zÁÉÍÓÚÑáéíóúñ_\\\\][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.\\\\]*)").exec(s.slice(i));
+      if (hn) {
+        const x = { k: "id", v: hn[3].toUpperCase().replace(/^(_XLFN\.|_XLWS\.|_XLPM\.)+/, ""), hoja: hn[1] != null ? hn[1].replace(/''/g, "'") : hn[2] };
+        if (conLugar) x.p = i;
+        t.push(x); i += hn[0].length; continue;
+      }
       const num = /^(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?/.exec(s.slice(i));
       if (num) { t.push({ k: "num", v: parseFloat(num[0]) }); i += num[0].length; continue; }
       const id = /^[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*/.exec(s.slice(i));
@@ -2768,17 +2775,19 @@
       return v;
     }
     /**
-     * Un nombre definido del libro: su definición («=Datos!$A$2:$A$9», «=0,16», «=LAMBDA(x; x*2)») calculada en la hoja
-     * de la fórmula que lo usa, como Excel. undefined si no existe ese nombre.
+     * Un nombre definido del libro o de una hoja: su definición («=Datos!$A$2:$A$9», «=0,16», «=LAMBDA(x; x*2)»)
+     * calculada en su hoja. Sin hojaExp busca primero en la hoja actual (local gana) y luego global; con hojaExp
+     * (Hoja!Nombre) busca solo en el ámbito de esa hoja. undefined si no existe.
      */
     const nombresEnCurso = new Set();
-    function valorNombre(n, h, donde) {
-      const d = opc.nombres ? opc.nombres(n) : null;
+    function valorNombre(n, h, donde, hojaExp) {
+      const d = opc.nombres ? (hojaExp != null ? opc.nombres(n, hojaExp, true) : opc.nombres(n, h && h.nombre)) : null;
       if (d == null || d === "") return undefined;
-      const k = String(n).toLowerCase();
+      const hh = hojaExp != null ? (hojaDe(hojaExp, h) || h) : h;
+      const k = (hojaExp != null ? normal(hojaExp) + "!" : (h && h.nombre ? normal(h.nombre) + "!" : "")) + String(n).toLowerCase();
       if (nombresEnCurso.has(k)) return E("#CICLO!");
       nombresEnCurso.add(k);
-      try { const v = calcular(String(d)[0] === "=" ? String(d) : "=" + d, h, Object.assign({}, donde || {}, { lambda: true })); return v === "" ? 0 : v; }
+      try { const v = calcular(String(d)[0] === "=" ? String(d) : "=" + d, hh, Object.assign({}, donde || {}, { lambda: true })); return v === "" ? 0 : v; }
       catch (e) { return e instanceof ErrorF ? e : E("#VALOR!"); }
       finally { nombresEnCurso.delete(k); }
     }
@@ -2871,6 +2880,16 @@
         }
         if (x.k === "id") {
           i++;
+          if (x.hoja != null) {
+            const nv = valorNombre(x.v, h, donde, x.hoja);
+            if (nv === undefined) throw E("#NOMBRE?");
+            if (nv instanceof ErrorF) throw nv;
+            if (es("(")) {
+              if (nv instanceof LambdaF) return llamadas(nv);
+              throw E("#VALOR!");
+            }
+            return nv;
+          }
           if (x.v === "VERDADERO" || x.v === "TRUE" || x.v === "FALSO" || x.v === "FALSE") {
             if (es("(")) { toma("("); toma(")"); }   // también como función: =VERDADERO()
             return x.v === "VERDADERO" || x.v === "TRUE";
@@ -3830,16 +3849,17 @@
       if (x.k === "ref") { i++; return { t: "ref", txt: textoRef(x.v) + (x.derrame ? "#" : "") }; }
       if (x.k === "id") {
         i++;
+        const txtId = (x.hoja != null ? prefijoHoja(x.hoja) : "") + x.v;
         if (esOp("(")) {
           i++;
           const args = [];
           if (!esOp(")")) for (;;) { args.push(esOp(";") || esOp(")") ? { t: "lit", txt: "" } : expr()); if (esOp(";")) { i++; continue; } break; }
           if (!esOp(")")) falla();
           i++;
-          return { t: "fn", nombre: x.v, args };
+          return { t: "fn", nombre: txtId, args };
         }
-        if (/^(VERDADERO|FALSO|TRUE|FALSE)$/i.test(x.v)) return { t: "lit", txt: /^(VERDADERO|TRUE)$/i.test(x.v) ? "VERDADERO" : "FALSO" };
-        return { t: "ref", txt: x.v };   // (un nombre definido)
+        if (x.hoja == null && /^(VERDADERO|FALSO|TRUE|FALSE)$/i.test(x.v)) return { t: "lit", txt: /^(VERDADERO|TRUE)$/i.test(x.v) ? "VERDADERO" : "FALSO" };
+        return { t: "ref", txt: txtId };   // (un nombre definido)
       }
       if (x.k === "op" && x.v === "(") { i++; const e = expr(); if (!esOp(")")) falla(); i++; return { t: "par", x: e }; }
       if (x.k === "op" && x.v === "{") {
@@ -3948,11 +3968,19 @@
   /** El lector de una hoja que da las fórmulas con referencias estructuradas ya traducidas (si el libro tiene tablas). */
   const conTablas = (lector, tablas, hoja) => (!tablas ? lector : (c, f) => { const v = lector(c, f); return typeof v === "string" && v[0] === "=" && v.includes("[") ? sinEstructuradas(v, tablas, hoja, c, f) : v; });
   const formulasConTablas = (lista, tablas, hoja) => (!tablas ? lista : () => lista().map(([c, f, v]) => [c, f, v.includes("[") ? sinEstructuradas(v, tablas, hoja, c, f) : v]));
-  /** Los nombres definidos del libro (en «_doc», nombres: { minúsculas: { n, d } }): nombre → su definición. */
+  /** Los nombres definidos del libro (en «_doc», nombres: { clave: { n, d, h? } }): (nombre, hoja?, soloHoja?) → definición. */
   function nombresDe(doc) {
     const m = doc && typeof doc.valor === "function" ? doc.valor("_doc", "nombres") : null;
     if (!m || typeof m !== "object" || !Object.keys(m).length) return null;
-    return (n) => { const x = m[String(n).toLowerCase()]; return x && x.d != null ? x.d : null; };
+    return (n, hoja, soloHoja) => {
+      const nl = String(n).toLowerCase();
+      if (hoja != null && hoja !== "") {
+        const kl = normal(hoja) + "!" + nl;
+        if (Object.hasOwn(m, kl) && m[kl] && m[kl].d != null) return m[kl].d;
+        if (soloHoja) return null;
+      }
+      return Object.hasOwn(m, nl) && m[nl] && m[nl].d != null ? m[nl].d : null;
+    };
   }
   function evaluadorDeTabla(doc, b) {
     const todas = doc ? hojasDe(doc) : [], tablas = doc ? tablasLoDe(doc, todas) : null, nb = doc ? nombreDeHoja(doc, b) : "";

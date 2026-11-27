@@ -1444,6 +1444,7 @@
         // una celda con nombre definido se ve con su nombre, como en Excel; las demás, como $B$1
         const hojaN = F().nombreDeHoja(doc(), t).toLowerCase(), conNombre = {}, nm = doc().valor("_doc", "nombres") || {};
         for (const k in nm) {
+          if (nm[k] && nm[k].h && String(nm[k].h).toLowerCase() !== hojaN) continue;
           const d = nm[k] && nm[k].d != null ? String(nm[k].d).replace(/^=/, "").replace(/\$/g, "") : "";
           const m = d.match(/^(?:'((?:[^']|'')+)'|([^!']+))!([A-Za-z]{1,3}\d+)$/);
           if (m && (m[1] != null ? m[1].replace(/''/g, "'") : m[2]).toLowerCase() === hojaN && !conNombre[m[3].toUpperCase()]) conNombre[m[3].toUpperCase()] = nm[k].n || k;
@@ -1597,19 +1598,20 @@
         if (/^(VERDADERO|FALSO|TRUE|FALSE)$/i.test(n)) return "Ese nombre está reservado";
         return null;
       }
-      /** Agrega, cambia (antes: el nombre de antes) o quita (d null) un nombre del libro. Devuelve el motivo si no se pudo. */
-      function guardarNombre(n, d, antes) {
+      /** Agrega, cambia (antes: la clave de antes) o quita (d null) un nombre del libro (o de una hoja si trae h). Devuelve el motivo si no se pudo. */
+      function guardarNombre(n, d, antes, hoja) {
         if (ed.soloLectura) return "Solo puedes ver esta hoja";
         const m = nombresLibro();
         if (antes) delete m[String(antes).toLowerCase()];
         if (d == null) { doc().cambiar("_doc", { nombres: m }); return null; }
         const malo = nombreInvalido(n);
         if (malo) return malo;
-        if (m[n.toLowerCase()]) return "Ya hay un nombre así en el libro";
+        const clave = (hoja ? String(hoja).toLowerCase() + "!" : "") + n.toLowerCase();
+        if (m[clave]) return "Ya hay un nombre así en el libro";
         let def = String(d).trim();
         if (!def) return "Escribe a qué se refiere";
         if (!def.startsWith("=")) def = "=" + def;
-        m[n.toLowerCase()] = { n, d: def };
+        m[clave] = hoja ? { n, d: def, h: hoja } : { n, d: def };
         doc().cambiar("_doc", { nombres: m });
         return null;
       }
@@ -1628,7 +1630,8 @@
         const h = NOM.hoja({ titulo: previo ? "Editar nombre" : "Nombre nuevo", icono: "tag", cuerpo, pie });
         setTimeout(() => $("[data-n]", cuerpo).focus(), 30);
         $("[data-si]", pie).onclick = () => {
-          const malo = guardarNombre($("[data-n]", cuerpo).value.trim(), $("[data-d]", cuerpo).value.trim(), previo && previo.n);
+          const clavePrev = previo ? (previo.h ? String(previo.h).toLowerCase() + "!" : "") + previo.n.toLowerCase() : null;
+          const malo = guardarNombre($("[data-n]", cuerpo).value.trim(), $("[data-d]", cuerpo).value.trim(), clavePrev, previo && previo.h);
           if (malo) return aviso(malo, { tipo: "aviso", ms: 5000 });
           h.cerrar();
           if (alGuardar) alGuardar();
@@ -1640,13 +1643,13 @@
         const pie = html(`<div style="display:contents">${ed.soloLectura ? "" : `<button class="btn" data-nuevo>${ico("plus")} Nuevo…</button>`}<span class="crece"></span><button class="btn primario" data-ok>Cerrar</button></div>`);
         const h = NOM.hoja({ titulo: "Administrador de nombres", icono: "tag", cuerpo, pie });
         const pintar = () => {
-          const m = nombresLibro(), l = Object.values(m).sort((a, b) => a.n.toLowerCase().localeCompare(b.n.toLowerCase()));
+          const m = nombresLibro(), l = Object.entries(m).filter(([, o]) => o && o.n).sort(([, a], [, b]) => a.n.toLowerCase().localeCompare(b.n.toLowerCase()) || (a.h || "").toLowerCase().localeCompare((b.h || "").toLowerCase()));
           const ev = evaluar();
           $("[data-vacio]", cuerpo).hidden = !!l.length;
-          $("[data-lista]", cuerpo).innerHTML = l.map((o) => {
+          $("[data-lista]", cuerpo).innerHTML = l.map(([k, o]) => {
             let v = "";
             try { v = ev.calcular ? F().formatear(ev.calcular(o.d)) : ""; } catch (e) { v = ""; }
-            return `<div class="lista-item"><span class="crece"><b>${esc(o.n)}</b><br><span class="suave chico" style="font-weight:400">${esc(o.d)}${v !== "" ? " · " + esc(String(v).slice(0, 40)) : ""}</span></span>${ed.soloLectura ? "" : `<button class="icono-btn chico" data-editar="${esc(o.n)}" aria-label="Editar ${esc(o.n)}">${ico("pencil", "ico-s")}</button><button class="icono-btn chico" data-quitar="${esc(o.n)}" aria-label="Eliminar ${esc(o.n)}">${ico("trash-2", "ico-s")}</button>`}</div>`;
+            return `<div class="lista-item"><span class="crece"><b>${esc(o.n)}</b>${o.h ? ` <span class="suave chico">(${esc(o.h)})</span>` : ""}<br><span class="suave chico" style="font-weight:400">${esc(o.d)}${v !== "" ? " · " + esc(String(v).slice(0, 40)) : ""}</span></span>${ed.soloLectura ? "" : `<button class="icono-btn chico" data-editar="${esc(k)}" aria-label="Editar ${esc(o.n)}">${ico("pencil", "ico-s")}</button><button class="icono-btn chico" data-quitar="${esc(k)}" aria-label="Eliminar ${esc(o.n)}">${ico("trash-2", "ico-s")}</button>`}</div>`;
           }).join("");
           $$("[data-editar]", cuerpo).forEach((b) => (b.onclick = () => dialogoNombre(nombresLibro()[b.dataset.editar.toLowerCase()], pintar)));
           $$("[data-quitar]", cuerpo).forEach((b) => (b.onclick = () => { guardarNombre(b.dataset.quitar, null, b.dataset.quitar); render(); pintar(); }));
@@ -2471,7 +2474,14 @@
         };
         F().refsDe(cr).forEach(agregar);
         const nm = F().nombresDe(doc());
-        if (nm) for (const id of cr.replace(/"(?:[^"]|"")*"/g, "").match(/[\p{L}_\\][\p{L}\p{N}_.]*/gu) || []) { const d = nm(id); if (d) F().refsDe(d).forEach(agregar); }
+        if (nm) {
+          const hojaTb = F().nombreDeHoja(doc(), tb), limpio = cr.replace(/"(?:[^"]|"")*"/g, "");
+          for (const m2 of limpio.matchAll(/(?:'((?:[^']|'')+)'!|([\p{L}_][\p{L}\p{N}_.]*)!)([\p{L}_\\][\p{L}\p{N}_.]*)/gu)) {
+            const d = nm(m2[3], m2[1] != null ? m2[1].replace(/''/g, "'") : m2[2], true);
+            if (d) F().refsDe(d).forEach(agregar);
+          }
+          for (const id of limpio.match(/[\p{L}_\\][\p{L}\p{N}_.]*/gu) || []) { const d = nm(id, hojaTb); if (d) F().refsDe(d).forEach(agregar); }
+        }
         return { aqui, otras };
       }
       /** Las celdas de esta hoja cuya fórmula usa directamente (c, f), y las de otras hojas (con su hoja). */

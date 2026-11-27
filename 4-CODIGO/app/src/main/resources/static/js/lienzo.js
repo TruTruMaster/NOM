@@ -141,6 +141,15 @@
     }
   }
   const esLinea = (f) => f === "linea" || f === "linea-flecha";
+  // Guiones de Office (prstDash), en múltiplos del grosor de la línea: trazo, hueco, trazo, hueco…
+  const GUIONES_OFFICE = { dot: [1, 3], dash: [4, 3], lgDash: [8, 3], dashDot: [4, 3, 1, 3], lgDashDot: [8, 3, 1, 3], lgDashDotDot: [8, 3, 1, 3, 1, 3],
+    sysDash: [3, 1], sysDot: [1, 1], sysDashDot: [3, 1, 1, 1], sysDashDotDot: [3, 1, 1, 1, 1, 1] };
+  function dashDe(guion, estilo, ancho, lineaOff) {
+    if (guion && Object.hasOwn(GUIONES_OFFICE, guion)) return ` stroke-dasharray="${GUIONES_OFFICE[guion].map((v) => n2(v * ancho)).join(" ")}"`;
+    if (estilo === "guiones") return ` stroke-dasharray="${n2(ancho * (lineaOff ? 4 : 3))} ${n2(ancho * (lineaOff ? 3 : 2))}"`;
+    if (estilo === "puntos") return lineaOff ? ` stroke-dasharray="${n2(ancho)} ${n2(ancho)}"` : ` stroke-dasharray="0 ${n2(ancho * 2)}"`;
+    return "";
+  }
   /** Relleno, borde y adornos de una figura ya resueltos (los usa también exportar). */
   function estiloFigura(b) {
     const f = b.figura || "rect", lineal = esLinea(f);
@@ -149,6 +158,7 @@
     const ancho = lineal ? (ba || 3) : ba || (CON_CONTORNO.has(f) ? 2 : 0);
     const trazo = ancho ? colorCss(b.borde, lineal ? "#4A4854" : "#2B2A33") : null;
     return { f, lineal, relleno, ancho, trazo, radio: b.radio != null ? num(b.radio, 0) : f === "rect" ? 14 : f === "burbuja" ? 14 : 0, estilo: b.bordeEstilo || "solido",
+      guion: b.bordeGuion && Object.hasOwn(GUIONES_OFFICE, b.bordeGuion) ? b.bordeGuion : null,
       prst: b.prst && NOM.geomOffice && NOM.geomOffice.tiene(b.prst) ? b.prst : null, av: b.av || null,
       // forma libre de Office (custGeom) y relleno con degradado o imagen (los de PowerPoint)
       cust: b.cust && Array.isArray(b.cust.p) && NOM.geomOffice ? b.cust : null, pintura: !lineal && b.relleno !== false && pinturaValida(b.pintura) ? b.pintura : null, id: b.id };
@@ -201,8 +211,9 @@
   /** Línea o conector de Office: en píxeles de verdad (sin estirar el trazo), de esquina a esquina, con sus puntas. */
   function svgLineaOffice(b) {
     const w = Math.max(0, num(b.w, 0)), h = Math.max(0, num(b.h, 0)), ancho = Math.max(0.1, num(b.bordeAncho, 1) || 1), color = colorCss(b.borde, "#000000");
-    const tz = NOM.geomOffice.trazos(b.prst || "line", Math.max(w, 0.01), Math.max(h, 0.01), b.av) || [{ d: `M0,0L${n2(w)},${n2(h)}`, contorno: true }];
-    const dash = b.bordeEstilo === "guiones" ? ` stroke-dasharray="${n2(ancho * 4)} ${n2(ancho * 3)}"` : b.bordeEstilo === "puntos" ? ` stroke-dasharray="${n2(ancho)} ${n2(ancho)}"` : "";
+    const tz = NOM.geomOffice.trazos(b.prst || "line", w, h, b.av) || [{ d: `M0,0L${n2(w)},${n2(h)}`, contorno: true }];
+    const dash = dashDe(b.bordeGuion, b.bordeEstilo, ancho, true);
+    const tapa = !b.bordeGuion && b.bordeEstilo === "puntos" ? "round" : "butt";
     const voltear = b.volteoH || b.volteoV ? ` transform="translate(${b.volteoH ? n2(w) : 0} ${b.volteoV ? n2(h) : 0}) scale(${b.volteoH ? -1 : 1} ${b.volteoV ? -1 : 1})"` : "";
     // puntas: en la dirección del primer y del último tramo (headEnd al principio, tailEnd al final)
     const nums = ((tz[0] && tz[0].d) || "").match(/-?\d+(\.\d+)?/g) || [], q = nums.map(Number);
@@ -225,13 +236,13 @@
       puntas += puntaSvg(b.puntas.fin, q[q.length - 2], q[q.length - 1], q[q.length - 4], q[q.length - 3]);
     }
     const W = n2(Math.max(1, w)), H = n2(Math.max(1, h));
-    return `<svg class="forma-svg linea-office" width="${W}" height="${H}" style="width:${W}px;height:${H}px" aria-hidden="true"><g${voltear}>${tz.filter((t) => t.contorno !== false).map((t) => `<path d="${esc(t.d)}" fill="none" stroke="${esc(color)}" stroke-width="${ancho}"${dash} stroke-linecap="${b.bordeEstilo === "puntos" ? "round" : "butt"}" stroke-linejoin="round"/>`).join("")}${puntas}</g></svg>`;
+    return `<svg class="forma-svg linea-office" width="${W}" height="${H}" style="width:${W}px;height:${H}px" aria-hidden="true"><g${voltear}>${tz.filter((t) => t.contorno !== false).map((t) => `<path d="${esc(t.d)}" fill="none" stroke="${esc(color)}" stroke-width="${ancho}"${dash} stroke-linecap="${tapa}" stroke-linejoin="round"/>`).join("")}${puntas}</g></svg>`;
   }
   function svgFigura(b) {
     if (b.lineaOffice && NOM.geomOffice) return svgLineaOffice(b);
     const w = Math.max(1, num(b.w, 1) || 1), h = Math.max(1, num(b.h, 1) || 1), e = estiloFigura(b);
-    const dash = e.estilo === "guiones" ? ` stroke-dasharray="${e.ancho * 3} ${e.ancho * 2}"` : e.estilo === "puntos" ? ` stroke-dasharray="0 ${e.ancho * 2}"` : "";
-    const tapa = e.estilo === "puntos" || e.f === "actor" ? "round" : "butt";
+    const dash = dashDe(e.guion, e.estilo, e.ancho, false);
+    const tapa = (!e.guion && e.estilo === "puntos") || e.f === "actor" ? "round" : "butt";
     const voltear = b.volteoH || b.volteoV ? ` transform="translate(${b.volteoH ? n2(w) : 0} ${b.volteoV ? n2(h) : 0}) scale(${b.volteoH ? -1 : 1} ${b.volteoV ? -1 : 1})"` : "";
     let extra = "";
     if (e.f === "nota") { const k = Math.min(w, h) * 0.16; extra = `<path d="M${n2(w - k)},${n2(h)} L${n2(w - k)},${n2(h - k)} L${n2(w)},${n2(h - k)} Z" fill="rgba(0,0,0,.12)"/>`; }
@@ -501,7 +512,11 @@
     const cf = colorCss(c.fondo, "");
     if (cf) s += `background:${cf};`;
     const cb = Array.isArray(c.borde) ? colorCss(c.borde[1], "") : "";
-    if (cb) { const w = Math.max(0.5, Math.min(20, num(c.borde[0], 1) || 1)); s += `outline:${w}px solid ${cb};outline-offset:-${w / 2}px;`; }
+    if (cb) {
+      const w = Math.max(0.5, Math.min(20, num(c.borde[0], 1) || 1)), g = c.borde[2];
+      const stB = g && g !== "solid" ? (/dot/i.test(g) && !/dash/i.test(g) ? "dotted" : "dashed") : "solid";
+      s += `outline:${w}px ${stB} ${cb};outline-offset:-${w / 2}px;`;
+    }
     if (c.vert === "vert" || c.vert === "eaVert") s += "writing-mode:vertical-rl;";
     else if (c.vert === "vert270") s += "writing-mode:vertical-rl;transform:rotate(180deg);";
     return s + (extra || "");
@@ -545,12 +560,23 @@
     if (b.tipo === "ecuacion") return `<div class="libre-ecuacion" style="${esc(estiloTexto(b))}">${NOM.ecuaciones ? NOM.ecuaciones.html(b.tex || "", true) : esc(b.tex || "")}</div>`;
     return `<div class="libre-ajeno">${esc(b.tipo)}</div>`;
   }
+  /** Filtro CSS drop-shadow para la sombra exterior importada de Office (a:outerShdw). */
+  function filtroSombraOffice(so) {
+    if (!so || typeof so !== "object") return "";
+    const dx = num(so.dx, 0), dy = num(so.dy, 0), b = Math.max(0, num(so.b, 0));
+    const a = Math.max(0, Math.min(1, so.a == null ? 1 : num(so.a, 1)));
+    const m = /^#?([0-9a-f]{6})$/i.exec(so.c || "");
+    const col = m ? `rgba(${parseInt(m[1], 16) >> 16},${(parseInt(m[1], 16) >> 8) & 255},${parseInt(m[1], 16) & 255},${n2(a)})` : `rgba(0,0,0,${n2(a)})`;
+    return `drop-shadow(${n2(dx)}px ${n2(dy)}px ${n2(b)}px ${col})`;
+  }
   /** Estilo del contenedor del bloque: posición, capa, giro, opacidad. */
   function estiloBloque(b, i) {
     const x = num(b.x, 0), y = num(b.y, 0), w = num(b.w, 0), h = num(b.h, 0), z = num(b.z, 0), rot = num(b.rot, 0), op = num(b.opacidad, 1);
     let s = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;z-index:${z + num(i, 0) + 1};`;
     if (rot) s += `transform:rotate(${rot}deg);`;
     if (op < 1) s += `opacity:${Math.max(0, op)};`;
+    const sh = filtroSombraOffice(b.sombraOffice);
+    if (sh) s += `filter:${sh};`;
     return s;
   }
   const clasesBloque = (b) => (b.sombra === true || (b.sombra == null && b.tipo === "forma" && !esLinea(b.figura)) ? " sombra" : "") + (b.bloqueado ? " bloqueado" : "") + (b.lineaOffice ? " linea-office" : "");
@@ -559,7 +585,7 @@
   function posiciones(bs, acotado) {
     let y = 40;
     return bs.map((b) => {
-      if (b.x != null && b.y != null && b.w && b.h) return b;
+      if (b.x != null && b.y != null && ((b.w && b.h) || (b.lineaOffice && b.w != null && b.h != null && (b.w > 0 || b.h > 0)))) return b;
       const h = b.tipo === "texto" ? (b.estilo === "h1" ? 80 : 56) : b.tipo === "tabla" ? 220 : 160;
       const p = Object.assign({}, b, { x: 60, y, w: acotado ? ANCHO - 120 : 520, h, sinPos: true });
       y += h + 16;
@@ -2795,7 +2821,7 @@
   /** Lo que se presenta de una página: sin lo oculto ni lo que quedó en la mesa de trabajo (5.1). */
   function bloquesPresentables(doc, p) {
     const T = tamDoc(doc);
-    const fueraDe = (b) => b.x + b.w <= 0 || b.y + b.h <= 0 || b.x >= T.w || b.y >= T.h;
+    const fueraDe = (b) => (b.lineaOffice ? b.x + b.w < 0 || b.y + b.h < 0 : b.x + b.w <= 0 || b.y + b.h <= 0) || b.x >= T.w || b.y >= T.h;
     return posiciones(doc.deLaPagina(p).filter((b) => b.tipo !== "conector" && !b.oculto), true).filter((b) => !fueraDe(b)).sort((a, b) => (a.z || 0) - (b.z || 0));
   }
   // ------------------------------------------------------------ 8.3 animaciones

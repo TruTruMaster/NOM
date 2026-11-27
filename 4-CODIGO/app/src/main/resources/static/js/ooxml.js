@@ -3710,16 +3710,23 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     return m === "manual" ? ' calcMode="manual"' : m === "sinTablas" ? ' calcMode="autoNoTable"' : "";
   }
   /** Los nombres definidos de NOM como los escribe Excel en workbook.xml (<definedNames>…), o "" si no hay. */
-  function definedNameXml(o, pref) {
+  function definedNameXml(o, pref, hojas) {
     const d = formulaExcel(String(o.d || "").startsWith("=") ? o.d : "=" + (o.d || ""), 7).replace(/^=/, "");
-    return `<${pref || ""}definedName name="${x(o.n)}">${x(d)}</${pref || ""}definedName>`;
+    let loc = "";
+    if (o.h) {
+      const idx = Array.isArray(hojas) ? hojas.findIndex((nm) => String(nm).toLowerCase() === String(o.h).toLowerCase()) : -1;
+      if (idx < 0) return "";
+      loc = ` localSheetId="${idx}"`;
+    }
+    return `<${pref || ""}definedName name="${x(o.n)}"${loc}>${x(d)}</${pref || ""}definedName>`;
   }
-  function definedNamesDe(doc, pref) {
+  function definedNamesDe(doc, pref, hojas) {
     const m = doc && typeof doc.valor === "function" ? doc.valor("_doc", "nombres") : null;
     const l = m && typeof m === "object" ? Object.values(m).filter((o) => o && o.n && o.d != null) : [];
     if (!l.length) return "";
-    l.sort((a, b) => a.n.toLowerCase().localeCompare(b.n.toLowerCase()));
-    return `<${pref || ""}definedNames>${l.map((o) => definedNameXml(o, pref)).join("")}</${pref || ""}definedNames>`;
+    l.sort((a, b) => (a.h || "").toLowerCase().localeCompare((b.h || "").toLowerCase()) || a.n.toLowerCase().localeCompare(b.n.toLowerCase()));
+    const xml = l.map((o) => definedNameXml(o, pref, hojas)).join("");
+    return xml ? `<${pref || ""}definedNames>${xml}</${pref || ""}definedNames>` : "";
   }
   function xlsx(doc) {
     const og = NOM.ooxml.usarOrigen !== false && NOM.origen ? NOM.origen.leer(doc) : null;
@@ -3792,7 +3799,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       return hojaDesdeCero(t, ev, fab, (ref, esFecha) => fab.estilo(t, ref, esFecha), i === 0, dibujo);
     });
     const { fuentes, rellenos, bordes, xfs, numFmts, dxfs } = fab;
-    const libro = XML + `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${nombres.map((n, i) => `<sheet name="${x(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets>${definedNamesDe(doc)}<calcPr calcId="191029"${calcModeDe(doc)} fullCalcOnLoad="1"/>${dinArch.length ? `<pivotCaches>${dinArch.map((_, k) => `<pivotCache cacheId="${101 + k}" r:id="rIdPC${k + 1}"/>`).join("")}</pivotCaches>` : ""}</workbook>`;
+    const libro = XML + `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${nombres.map((n, i) => `<sheet name="${x(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets>${definedNamesDe(doc, "", nombres)}<calcPr calcId="191029"${calcModeDe(doc)} fullCalcOnLoad="1"/>${dinArch.length ? `<pivotCaches>${dinArch.map((_, k) => `<pivotCache cacheId="${101 + k}" r:id="rIdPC${k + 1}"/>`).join("")}</pivotCaches>` : ""}</workbook>`;
     const estilos = XML + `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${numFmts.length ? `<numFmts count="${numFmts.length}">${numFmts.join("")}</numFmts>` : ""}<fonts count="${fuentes.length}">${fuentes.join("")}</fonts>
 <fills count="${rellenos.length}">${rellenos.join("")}</fills><borders count="${bordes.length}">${bordes.join("")}</borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfs.length}">${xfs.join("")}</cellXfs>
@@ -4436,17 +4443,27 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
       if (bv) piezasL.push([bv.i, bv.f, libroTxt.slice(bv.i, bv.f).replace(/\s(activeTab|firstSheet)\s*=\s*"[^"]*"/g, "")]);
     }
     piezasL.push([secHojas.ci, secHojas.cf, lista.join("")]);
-    // Nombres definidos: si los de NOM (Administrador de nombres) ya no son los del original, se escriben los de NOM; los de
-    // una hoja (si las hojas siguen en su lugar) y los de Excel (_xlnm: área de impresión, filtros…) se quedan tal cual.
+    // Nombres definidos: globales y de ámbito de hoja (localSheetId). Si los de NOM ya no son los del original,
+    // se escriben los de NOM; los internos de Excel (_xlnm: área de impresión, filtros…) y los ocultos se quedan tal cual.
     {
       const dn = hsL.find((h) => O.local(h.n) === "definedNames");
       const hijosDn = dn ? O.hijosXml(libroTxt, dn.ci, dn.cf) : [];
       const norm = (t) => String(t || "").replace(/^=/, "").replace(/_xlfn\.|_xlpm\.|_xlws\./g, "").replace(/\s+/g, "");
+      const desEsc = (t) => String(t || "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+      const hojasOrig = info.map((s) => s.nombre || "");
+      const hojasNuevas = lista.map((t) => desEsc((/\sname\s*=\s*"([^"]*)"/.exec(t) || [])[1] || ""));
       const orig = Object.create(null);
       hijosDn.forEach((h) => {
         const nm = O.attr(libroTxt, h, "name") || "", txt = libroTxt.slice(h.i, h.f);
-        if (/^_xlnm\./i.test(nm) || O.attr(libroTxt, h, "localSheetId") != null || /\shidden\s*=\s*"(1|true)"/.test(txt.slice(0, txt.indexOf(">")))) return;
-        orig[nm.toLowerCase()] = norm(txt.replace(/^<[^>]*>|<\/[^>]*>$/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&amp;/g, "&"));
+        if (/^_xlnm\./i.test(nm) || /\shidden\s*=\s*"(1|true)"/.test(txt.slice(0, txt.indexOf(">")))) return;
+        const lid = O.attr(libroTxt, h, "localSheetId");
+        let clave = nm.toLowerCase();
+        if (lid != null) {
+          const hn = hojasOrig[+lid];
+          if (!hn) return;
+          clave = hn.toLowerCase() + "!" + clave;
+        }
+        orig[clave] = norm(desEsc(txt.replace(/^<[^>]*>|<\/[^>]*>$/g, "")));
       });
       const mNom = doc.valor("_doc", "nombres");
       const nom = mNom && typeof mNom === "object" ? mNom : null;
@@ -4460,11 +4477,11 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
         const pref = dn ? (dn.n.includes(":") ? dn.n.split(":")[0] + ":" : "") : prefL;
         const quedan = hijosDn.filter((h) => {
           const nm = O.attr(libroTxt, h, "name") || "", local = O.attr(libroTxt, h, "localSheetId") != null, txt = libroTxt.slice(h.i, h.f);
-          if (local) return mismaLista;
-          if (/^_xlnm\./i.test(nm) || /\shidden\s*=\s*"(1|true)"/.test(txt.slice(0, txt.indexOf(">")))) return true;
-          return !cambianNombres;   // (los del libro: si cambiaron, se escriben los de NOM)
+          const oculto = /\shidden\s*=\s*"(1|true)"/.test(txt.slice(0, txt.indexOf(">")));
+          if (/^_xlnm\./i.test(nm) || oculto) return !local || mismaLista;
+          return !cambianNombres && (!local || mismaLista);
         }).map((h) => libroTxt.slice(h.i, h.f)).join("");
-        const nuevos = cambianNombres ? Object.values(nom).filter((o) => o && o.n && o.d != null).map((o) => definedNameXml(o, pref)).join("") : "";
+        const nuevos = cambianNombres ? Object.values(nom).filter((o) => o && o.n && o.d != null).map((o) => definedNameXml(o, pref, hojasNuevas)).join("") : "";
         const todo = quedan + nuevos;
         if (dn) piezasL.push([dn.i, dn.f, todo ? `<${dn.n}>${todo}</${dn.n}>` : ""]);
         else if (todo) {
@@ -4535,18 +4552,34 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
   const FMT_EXCEL_V2 = Object.assign({}, FMT_EXCEL, { 11: "0.00E+00", 12: "# ?/?", 13: "# ??/??", 20: "h:mm", 21: "h:mm:ss", 37: "#,##0 ;(#,##0)", 38: "#,##0 ;[Red](#,##0)",
     39: "#,##0.00;(#,##0.00)", 40: "#,##0.00;[Red](#,##0.00)", 45: "mm:ss", 46: "[h]:mm:ss", 47: "mm:ss.0", 48: "##0.0E+0" });
   /** .xlsx → { hojas: [{ nombre, campos }], aviso }: cada hoja con sus celdas, formato, combinadas, anchos y filas fijas. */
-  /** Los nombres definidos de todo el libro en workbook.xml: { minúsculas: { n: nombre, d: definición en NOM («=…») } }. */
+  /** Los nombres definidos del libro (globales y con ámbito de hoja via localSheetId) en workbook.xml:
+      globales → { minúsculas: { n, d } }, locales → { "hoja!nombre": { n, d, h } }. */
   function nombresDelLibro(wb) {
     const out = Object.create(null);
+    const desEsc = (t) => String(t || "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+    const hojas = [];
+    const reH = /<(?:\w+:)?sheet\b([^>]*)\/?>/g;
+    let mh;
+    while ((mh = reH.exec(wb))) {
+      const nH = (/\sname\s*=\s*"([^"]*)"/.exec(mh[1]) || [])[1];
+      hojas.push(nH != null ? desEsc(nH) : "");
+    }
     const re = /<(?:\w+:)?definedName\b([^>]*)>([\s\S]*?)<\/(?:\w+:)?definedName>/g;
     let m;
     while ((m = re.exec(wb))) {
-      const nm = (/\sname\s*=\s*"([^"]*)"/.exec(m[1]) || [])[1];
-      if (!nm || /^_xlnm\./i.test(nm) || /\slocalSheetId\s*=/.test(m[1]) || /\shidden\s*=\s*"(1|true)"/.test(m[1])) continue;
-      const t = m[2].replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&").trim();
+      const nm = desEsc((/\sname\s*=\s*"([^"]*)"/.exec(m[1]) || [])[1] || "");
+      if (!nm || /^_xlnm\./i.test(nm) || /\shidden\s*=\s*"(1|true)"/.test(m[1])) continue;
+      const t = desEsc(m[2]).trim();
       let d;
       try { d = F().aEspanol("=" + t.replace(/_xlfn\.|_xlpm\.|_xlws\./g, "")); } catch (e) { d = "=" + t; }
-      out[nm.toLowerCase()] = { n: nm, d };
+      const lid = /\slocalSheetId\s*=\s*"(\d+)"/.exec(m[1]);
+      if (lid) {
+        const hoja = hojas[+lid[1]];
+        if (!hoja) continue;
+        out[hoja.toLowerCase() + "!" + nm.toLowerCase()] = { n: nm, d, h: hoja };
+      } else {
+        out[nm.toLowerCase()] = { n: nm, d };
+      }
     }
     return out;
   }
@@ -6819,7 +6852,7 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
     }
     function xfrmDe(spPr, ph, heredados) {
       const xf = spPr && h1(spPr, "xfrm");
-      const leer = (x) => { const o = h1(x, "off"), e = h1(x, "ext"); return o && e ? { x: +at(o, "x"), y: +at(o, "y"), w: +at(e, "cx"), h: +at(e, "cy"), rot: +(at(x, "rot") || 0), fh: at(x, "flipH") === "1", fv: at(x, "flipV") === "1" } : null; };
+      const leer = (x) => { const o = h1(x, "off"), e = h1(x, "ext"); return o && e ? { x: +at(o, "x"), y: +at(o, "y"), w: +at(e, "cx"), h: +at(e, "cy"), rot: +(at(x, "rot") || 0), fh: at(x, "flipH") === "1" || at(x, "flipH") === "true", fv: at(x, "flipV") === "1" || at(x, "flipV") === "true" } : null; };
       let r = xf ? leer(xf) : null;
       if (!r && ph) r = [heredados["#" + (ph.idx || "")], heredados[ph.clave], heredados[ph.tipo]].find((v) => v && !v.sinPos && v.x != null) || null;
       return r;
@@ -7273,6 +7306,18 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
         return true;
       }
       const geo = (r) => ({ x: Math.round((r.x / EMU) * kx), y: Math.round((r.y / EMU) * ky), w: Math.max(4, Math.round((r.w / EMU) * kx)), h: Math.max(4, Math.round((r.h / EMU) * ky)), rot: r.rot ? Math.round(r.rot / 60000) : undefined, volteoH: r.fh || undefined, volteoV: r.fv || undefined });
+      /** Sombra exterior de DrawingML (<a:effectLst><a:outerShdw>) en px de la diapositiva. */
+      function sombraDe(spPr) {
+        const ef = spPr && h1(spPr, "effectLst"), sh = ef && h1(ef, "outerShdw");
+        if (!sh) return undefined;
+        const r2 = (v) => Math.round(v * 100) / 100, escS = Math.min(kx, ky);
+        const d = (+(at(sh, "dist") || 0) / EMU) * escS, dir = ((+(at(sh, "dir") || 0) / 60000) * Math.PI) / 180;
+        const b = (+(at(sh, "blurRad") || 0) / EMU) * escS;
+        const c = hexDe(sh) || "#000000";
+        const cl = todos(sh, "srgbClr")[0] || todos(sh, "schemeClr")[0] || todos(sh, "sysClr")[0] || todos(sh, "prstClr")[0];
+        const al = cl && h1(cl, "alpha"), a = al ? Math.max(0, Math.min(1, +at(al, "val") / 100000)) : 1;
+        return { dx: r2(d * Math.cos(dir)), dy: r2(d * Math.sin(dir)), b: r2(b), c, a: r2(a) };
+      }
       /** Línea o conector de Office tal cual: de esquina a esquina de su caja (con sus volteos), su grosor en puntos,
           su punteado y sus puntas (headEnd al principio, tailEnd al final). */
       function lineaOffice(el, ajustar) {
@@ -7286,8 +7331,10 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
         const guion = ln ? at(h1(ln, "prstDash"), "val") : null;
         const punta = (n) => { const e = ln && h1(ln, n), t = e && at(e, "type"); return t && t !== "none" ? { t, w: at(e, "w") || "med", l: at(e, "len") || "med" } : undefined; };
         const r2 = (v) => Math.round(v * 100) / 100;
-        agregar({ tipo: "forma", figura: "linea", lineaOffice: true, prst: NOM.geomOffice && NOM.geomOffice.tiene(prst) ? prst : "line", av: ajustesDe(spPr), sombra: false,
-          borde: color || "#000000", bordeAncho: r2(Math.max(0.1, anchoPt * kPt)), bordeEstilo: guion && guion !== "solid" ? (/dot/i.test(guion) && !/dash/i.test(guion) ? "puntos" : "guiones") : undefined,
+        agregar({ tipo: "forma", figura: "linea", lineaOffice: true, prst: NOM.geomOffice && NOM.geomOffice.tiene(prst) ? prst : "line", av: ajustesDe(spPr), sombra: false, sombraOffice: sombraDe(spPr),
+          borde: color || "#000000", bordeAncho: r2(Math.max(0.1, anchoPt * kPt)),
+          bordeGuion: guion && guion !== "solid" ? guion : undefined,
+          bordeEstilo: guion && guion !== "solid" ? (/dot/i.test(guion) && !/dash/i.test(guion) ? "puntos" : "guiones") : undefined,
           puntas: punta("headEnd") || punta("tailEnd") ? { ini: punta("headEnd"), fin: punta("tailEnd") } : undefined,
           x: r2((r.x / EMU) * kx), y: r2((r.y / EMU) * ky), w: r2(Math.max(0, (r.w / EMU) * kx)), h: r2(Math.max(0, (r.h / EMU) * ky)),
           rot: r.rot ? Math.round(r.rot / 60000) : undefined, volteoH: r.fh || undefined, volteoV: r.fv || undefined });
@@ -7345,7 +7392,7 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
         }));
         return { anchos, altos, celdas };
       }
-      const LINEAS_PRST = /^(line|straightConnector1|bentConnector[2-5]|curvedConnector[2-5])$/;
+      const LINEAS_PRST = /^(line|lineInv|straightConnector1|bentConnector[2-5]|curvedConnector[2-5])$/;
       async function elemento(el, grupo, prof = 0) {
         if (!el || prof > 64) return;
         const nm = el.localName;
@@ -7400,16 +7447,26 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
             // (un cuadro de texto puede tener relleno y contorno propios: se ven como en PowerPoint)
             const lnT = spPr && h1(spPr, "ln");
             if (relleno) tp.cuerpo.fondo = relleno;
-            if (lnT && !h1(lnT, "noFill")) { const cT = colorCss(h1(lnT, "solidFill")); if (cT) tp.cuerpo.borde = [Math.max(0.5, Math.round(((+(at(lnT, "w") || 9525)) / 12700) * kPt * 100) / 100), cT]; }
-            agregar(Object.assign({ tipo: "texto", estilo, html: tp.html, ppt: tp.cuerpo }, geo(r)));
+            if (lnT && !h1(lnT, "noFill")) {
+              const cT = colorCss(h1(lnT, "solidFill")), gT = at(h1(lnT, "prstDash"), "val");
+              if (cT) {
+                const wT = Math.max(0.5, Math.round(((+(at(lnT, "w") || 9525)) / 12700) * kPt * 100) / 100);
+                tp.cuerpo.borde = gT && gT !== "solid" ? [wT, cT, gT] : [wT, cT];
+              }
+            }
+            agregar(Object.assign({ tipo: "texto", estilo, html: tp.html, ppt: tp.cuerpo, sombraOffice: sombraDe(spPr) }, geo(r)));
           } else {
             const ln = spPr && h1(spPr, "ln"), tinta = estSp ? hexDe(h1(estSp, "fontRef")) : null;
+            const guionF = ln && !h1(ln, "noFill") ? at(h1(ln, "prstDash"), "val") : null;
             agregar(Object.assign({ tipo: "forma", figura: GEO_INV[prst] || "rect", radio: prst === "rect" || prst === "flowChartProcess" || libre ? 0 : undefined, color: relleno || (pintura && pintura.paradas ? pintura.paradas[0][1] : pintura && pintura.mezcla ? pintura.mezcla : "#CFE0FF"), relleno: spPr && h1(spPr, "noFill") ? false : undefined,
               cust: libre || undefined, pintura: pintura || undefined,
               // la geometría de Office tal cual (se dibuja con js/geometrias.js) y sus ajustes (las manijas amarillas)
               prst: prst && NOM.geomOffice && NOM.geomOffice.tiene(prst) ? prst : undefined, av: ajustesDe(spPr),
               borde: ln && h1(ln, "solidFill") ? hexDe(h1(ln, "solidFill")) : estSp && +at(h1(estSp, "lnRef"), "idx") && !(ln && h1(ln, "noFill")) ? hexDe(h1(estSp, "lnRef")) || undefined : undefined,
-              bordeAncho: ln && h1(ln, "noFill") ? undefined : ln && at(ln, "w") ? Math.max(0.25, Math.round((+at(ln, "w") / 12700) * 100) / 100) : estSp && +at(h1(estSp, "lnRef"), "idx") ? lineasTema[+at(h1(estSp, "lnRef"), "idx")] || 0.75 : undefined, sombra: false, tColor: tinta && tinta !== "#000000" && texto ? tinta : undefined,
+              bordeAncho: ln && h1(ln, "noFill") ? undefined : ln && at(ln, "w") ? Math.max(0.25, Math.round((+at(ln, "w") / 12700) * 100) / 100) : estSp && +at(h1(estSp, "lnRef"), "idx") ? lineasTema[+at(h1(estSp, "lnRef"), "idx")] || 0.75 : undefined,
+              bordeGuion: guionF && guionF !== "solid" ? guionF : undefined,
+              bordeEstilo: guionF && guionF !== "solid" ? (/dot/i.test(guionF) && !/dash/i.test(guionF) ? "puntos" : "guiones") : undefined,
+              sombra: false, sombraOffice: sombraDe(spPr), tColor: tinta && tinta !== "#000000" && texto ? tinta : undefined,
               texto: texto || "", html: texto ? textoPpt(txBody, ctxTexto).html : undefined, ppt: texto ? textoPpt(txBody, ctxTexto).cuerpo : undefined }, geo(r)));
           }
           return;
