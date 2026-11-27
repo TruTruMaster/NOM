@@ -51,7 +51,27 @@ de NOM editable** y se presenta desde el apartado de presentaciones.
 
 ## 2. Matriz de funciones (A)
 
-(en construcción)
+Inventario completo (332 funciones visibles, con archivo:línea y la prueba de cada una) en
+`trabajo/expo27/barridos/ds-inventario.txt`; 31 con prueba de que hacen lo correcto, 183 solo con el rastreo (que no
+truenen) y 118 que el inventario marcó «sin prueba» (varias sí están cubiertas: invitar con código, unirse, escribir a la
+vez, comentar y sugerir están en `prueba_funciones`). Las más visibles que de verdad no tenían prueba quedaron en
+`prueba_demo.py` (importar desde el botón, «Descargar» a Word/Excel/PowerPoint desde la barra, permisos desde la lista de
+miembros, buscar en los documentos).
+
+| Zona | Computadora (Chromium / Firefox) | Celular (navegador) | App Android | Papeles | Sin Internet | Cifrado | Office |
+|---|---|---|---|---|---|---|---|
+| Texto | funciones, rastreo / funciones | funciones --movil | red (interfaz del APK) | funciones (solo ver), demo | sin_internet | e2e | funciones (docx), demo, armados |
+| Hoja | funciones, rastreo | funciones --movil | red | funciones | sin_internet | e2e | funciones (xlsx), demo |
+| Presentación | funciones, presentacion, pres1, pptx2, rastreo | funciones --movil | red | funciones | — | e2e (proyector) | pptx2, demo, comparar_nom |
+| Diagrama | funciones, diag1, rastreo | diag_movil | — | — | — | — | diag1 (pptx/svg), armados |
+| Espacios, invitar, permisos | funciones, 85, demo | funciones --movil | red | demo (solo ver ↔ editar), lectores | — | e2e (llaves) | — |
+| Cuentas y ajustes | funciones, cuentas_equipo | funciones --movil | red (registro desde la app) | — | — | e2e | — |
+| Teléfono que comparte | emulador (H6/H7 hoy), telefono_emulador | — | — | — | — | — | — |
+| Accesibilidad | axe 28/0, accesibilidad 7/7 | — | — | — | — | — | — |
+| Tiempos | prueba_tiempos (normal y 3G) | — | emulador (arranque) | — | — | — | — |
+
+Sin prueba automática todavía (para el ensayo de §4b): teléfono que comparte con dos equipos reales, el A55 con el
+APK nuevo, y Office real (Word/Excel/PowerPoint en Windows) abriendo lo descargado hoy.
 
 ## 3. Resultados de las pruebas en vivo (B)
 

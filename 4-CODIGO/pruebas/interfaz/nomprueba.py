@@ -3,9 +3,18 @@ import json, os, time, urllib.request, random, string
 from playwright.sync_api import sync_playwright
 B = os.environ.get("NOM_BASE", "https://www.nom.qd.je")   # sitio real por omisión (orden del dueño, 25-nov)
 CL = "Clave-Segura-123"
-def api(m, u, b=None, t=None):
+_VERSION = []
+def version():
+    """La versión del servidor (las pruebas hablan como una página de esa misma versión: Version.misma)."""
+    if not _VERSION:
+        try:
+            with urllib.request.urlopen(urllib.request.Request(B + "/api/red/info", headers={"User-Agent": "NOM-pruebas/1.0"}), timeout=30) as x:
+                _VERSION.append(json.loads(x.read()).get("version") or "")
+        except Exception: return ""
+    return _VERSION[0]
+def api(m, u, b=None, t=None, v=None):
     # Un nombre de cliente propio: Cloudflare (la Raspberry detrás del túnel) rechaza el de urllib (error 1010).
-    h = {"Content-Type": "application/json", "User-Agent": "NOM-pruebas/1.0"}
+    h = {"Content-Type": "application/json", "User-Agent": "NOM-pruebas/1.0", "X-NOM-Version": version() if v is None else v}
     if t: h["Authorization"] = "Bearer " + t
     q = urllib.request.Request(B + u, method=m, data=json.dumps(b).encode() if b is not None else None, headers=h)
     try:

@@ -1065,7 +1065,7 @@
       if (enLocal || !api.token()) return;
       const url = api.servidor() + `/api/documentos/${docId}/presencia`, cuerpo = JSON.stringify({ cliente: doc.nodo, salir: true });
       if (alCerrarPestana) {
-        try { fetch(url, { method: "POST", keepalive: true, headers: { "Content-Type": "application/json", Authorization: "Bearer " + api.token() }, body: cuerpo }).catch(() => {}); } catch (e) { /* sin red */ }
+        try { fetch(url, { method: "POST", keepalive: true, headers: { "Content-Type": "application/json", "X-NOM-Version": NOM.VERSION, Authorization: "Bearer " + api.token() }, body: cuerpo }).catch(() => {}); } catch (e) { /* sin red */ }
       } else api.post(`/api/documentos/${docId}/presencia`, { cliente: doc.nodo, salir: true }).catch(() => {});
     };
     // Al cerrar la pestaña también se guarda ya la copia del equipo (en un documento grande se espacia).

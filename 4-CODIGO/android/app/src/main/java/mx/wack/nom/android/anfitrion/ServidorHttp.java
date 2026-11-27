@@ -477,6 +477,7 @@ final class ServidorHttp {
             case 413: return "Payload Too Large";
             case 421: return "Misdirected Request";
             case 423: return "Locked";
+            case 426: return "Upgrade Required";
             case 429: return "Too Many Requests";
             case 431: return "Request Header Fields Too Large";
             case 501: return "Not Implemented";
@@ -497,7 +498,7 @@ final class ServidorHttp {
         if (!ORIGEN_APP.equals(origen)) return "Vary: Origin\r\n";
         return "Access-Control-Allow-Origin: " + ORIGEN_APP
                 + "\r\nVary: Origin\r\nAccess-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n"
-                + "Access-Control-Allow-Headers: Authorization, Content-Type, Accept\r\nAccess-Control-Max-Age: 3600\r\n";
+                + "Access-Control-Allow-Headers: Authorization, Content-Type, Accept, X-NOM-Version\r\nAccess-Control-Max-Age: 3600\r\n";
     }
 
     /** Las mismas cabeceras de seguridad que pone la computadora (FiltroCabeceras). Sin Cross-Origin-Opener-Policy:

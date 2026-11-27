@@ -30,6 +30,36 @@ public final class Version {
         27 = campos nuevos de la 0.22.0 (tablas con formato «lo» y tablas dinámicas «pv» de las hojas, el tema del libro en
         «xl.tema» —importador 13—, tabla de ilustraciones e índice alfabético «modo» del bloque índice). */
     public static final int INTERFAZ = 27;
+    /** Cabecera con la que cada pagina o app dice su version (en el canal en vivo va en ?v=, que EventSource no manda
+        cabeceras). */
+    public static final String CABECERA = "X-NOM-Version";
+
+    /**
+     * Solo trabaja con este servidor (la nube o el telefono que comparte) quien tiene EXACTAMENTE su version: una
+     * version distinta reescribe al editar lo que no conoce (estilos, campos nuevos de Office), dibuja distinto y la
+     * persona "arregla" lo que no estaba mal, o no trae arreglos del formato. Con otra version se sigue trabajando
+     * en el propio equipo; lo hecho se manda al actualizar.
+     */
+    public static boolean misma(String version) {
+        return version != null && APP.equals(version.trim());
+    }
+
+    /** Lo que se deja con cualquier version: saber cual tiene el servidor, salir, y solo mirar (enlace para ver,
+        pantalla de proyeccion, verificar un recibo, la llave publica de los pases). Nada de eso cambia documentos. */
+    public static boolean sinVersion(String metodo, String ruta) {
+        if ("OPTIONS".equals(metodo) || "/api/red/info".equals(ruta)) return true;
+        if ("DELETE".equals(metodo) && "/api/cuentas/sesion".equals(ruta)) return true;
+        if ("GET".equals(metodo) && (ruta.startsWith("/api/ver/") || ruta.startsWith("/api/proyeccion/") || "/api/cuentas/pase/llave".equals(ruta))) return true;
+        return "POST".equals(metodo) && "/api/recibos/verificar".equals(ruta);
+    }
+
+    /** El aviso para quien tiene otra version. */
+    public static java.util.Map<String, Object> distinta(String suya) {
+        String s = suya == null || !suya.matches("[0-9.]{1,20}") ? "otra" : suya;
+        return java.util.Map.of("error", "Tu NOM es de otra versión (" + s + ") que este (" + APP + "). Para no dañar el trabajo "
+                + "de los demás, actualízalo; mientras, lo que hagas se guarda en este equipo.", "version", APP, "actualizar", true);
+    }
+
     /** Fase 14 (F.5): version vigente de los Terminos y del Aviso de privacidad. Al cambiarla, la app
         pide a cada cuenta leerlos y aceptarlos otra vez. */
     public static final String LEGAL = "2026-11-13";

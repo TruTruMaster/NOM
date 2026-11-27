@@ -119,7 +119,7 @@
   /** Pide algo a la nube directamente (no al servidor actual). */
   async function aNube(metodo, ruta, cuerpo, token) {
     const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 9000);
-    const cab = { Accept: "application/json" };
+    const cab = { Accept: "application/json", "X-NOM-Version": NOM.VERSION };
     if (cuerpo !== undefined) cab["Content-Type"] = "application/json";
     if (token) cab.Authorization = "Bearer " + token;
     let r;

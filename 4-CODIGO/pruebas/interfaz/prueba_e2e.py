@@ -124,7 +124,7 @@ def main():
             check("…el servidor no ve ni la referencia ni la imagen", "nom:bin/" not in st2 and r_img["png"] not in st2, st2[:160])
             import hashlib, urllib.request
             h = ref[8:72]
-            q = urllib.request.Request(N.B + f"/api/espacios/{e['id']}/binarios/{h}", headers={"Authorization": "Bearer " + a["token"], "User-Agent": "NOM-pruebas/1.0"})
+            q = urllib.request.Request(N.B + f"/api/espacios/{e['id']}/binarios/{h}", headers={"Authorization": "Bearer " + a["token"], "User-Agent": "NOM-pruebas/1.0", "X-NOM-Version": N.version()})
             crudo_bin = urllib.request.urlopen(q, timeout=30).read()
             check("…y lo que guarda es la imagen cifrada (no un PNG; la huella es la de lo cifrado)", not crudo_bin.startswith(b"\x89PNG") and hashlib.sha256(crudo_bin).hexdigest() == h, crudo_bin[:8])
             def imagen_visible(pg):

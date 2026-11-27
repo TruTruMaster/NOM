@@ -151,13 +151,26 @@
     return tok;
   }
 
+  /**
+   * Este NOM (la nube o el teléfono que comparte) tiene otra versión que esta página o app: no acepta nada (para no dañar
+   * el trabajo de los demás). Se trata como «sin conexión»: lo que se hace se guarda en este equipo y se manda al
+   * actualizar. Se avisa una vez (api.alVersion, en app.js).
+   */
+  function otraVersion(datos) {
+    marcarRed(false);
+    api.versionDistinta = (datos && typeof datos.version === "string" && /^[0-9.]{1,20}$/.test(datos.version)) ? datos.version : "otra";
+    try { api.alVersion && api.alVersion(api.versionDistinta); } catch (e) { /* el aviso no detiene nada */ }
+    return new ErrorApi(0, { error: (datos && datos.error) || "Este NOM es de otra versión: actualiza para seguir.", version: true });
+  }
+
   /** Petición JSON con tiempo límite. Lanza ErrorApi (estado 0 = sin red). */
   api.pedir = async function (metodo, ruta, cuerpo, opc) {
     opc = opc || {};
     exigirRuta(ruta);
     const base = opc.servidor !== undefined ? normalizarBase(opc.servidor) : api.servidor();
     if (empaquetada && !base) throw new ErrorApi(0, { error: "Primero elige dónde trabaja tu equipo" });
-    const cab = { Accept: "application/json" };
+    // (cada petición dice la versión de esta página: el servidor solo trabaja con la suya, Version.misma)
+    const cab = { Accept: "application/json", "X-NOM-Version": NOM.VERSION };
     if (cuerpo !== undefined) cab["Content-Type"] = "application/json";
     // Fase 15: en un espacio cifrado de extremo a extremo, el contenido se cifra aquí antes de salir.
     const original = cuerpo;
@@ -195,6 +208,7 @@
         if (r.ok) { marcarRed(false); throw new ErrorApi(0, { error: "La red respondió con una página que no es de NOM (¿el Wi-Fi pide iniciar sesión?)" }); }
       }
     }
+    if (r.status === 426) throw otraVersion(datos);
     marcarRed(true);
     if (!r.ok) {
       const err = new ErrorApi(r.status, datos);
@@ -223,7 +237,7 @@
     if (empaquetada && !base) throw new ErrorApi(0, { error: "Primero elige dónde trabaja tu equipo" });
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), opc.ms || 180000);
-    const cab = {};
+    const cab = { "X-NOM-Version": NOM.VERSION };
     if (bytes) cab["Content-Type"] = "application/octet-stream";
     const tok = tokenPara(base, ruta, opc.sinSesion);
     if (tok) cab.Authorization = "Bearer " + tok;
@@ -231,6 +245,7 @@
     try { r = await fetch(base + ruta, { method: metodo, headers: cab, body: bytes || undefined, signal: ctl.signal }); }
     catch (e) { marcarRed(false); throw new ErrorApi(0, (await equipoViejo(base, e)) ? { error: VIEJO } : null); }
     finally { clearTimeout(t); }
+    if (r.status === 426) { let d = null; try { d = JSON.parse(await r.text()); } catch (x) { d = null; } throw otraVersion(d); }
     marcarRed(true);
     if (!r.ok) {
       let datos = null;
@@ -250,7 +265,7 @@
   const sinBoletos = new Set();
   async function direccionCanal(ruta, cliente) {
     exigirRuta(ruta);
-    const base = api.servidor(), fin = "&cliente=" + encodeURIComponent(cliente || "");
+    const base = api.servidor(), fin = "&cliente=" + encodeURIComponent(cliente || "") + "&v=" + encodeURIComponent(NOM.VERSION);
     // La pantalla del proyector se abre con su código, sin sesión: no lleva boleto ni token.
     if (!api.token() || ruta.startsWith("/api/proyeccion/")) return base + ruta + "?" + fin.slice(1);
     if (!sinBoletos.has(base)) {
@@ -328,7 +343,8 @@
       try {
         const base = api.servidor();
         const tok = tokenPara(base, ruta, false);
-        const r = await fetch(base + ruta + "?cliente=" + encodeURIComponent(cliente || ""), { headers: Object.assign({ Accept: "text/event-stream" }, tok ? { Authorization: "Bearer " + tok } : {}), signal: ctl.signal });
+        const r = await fetch(base + ruta + "?cliente=" + encodeURIComponent(cliente || ""), { headers: Object.assign({ Accept: "text/event-stream", "X-NOM-Version": NOM.VERSION }, tok ? { Authorization: "Bearer " + tok } : {}), signal: ctl.signal });
+        if (r.status === 426) { let d = null; try { d = await r.json(); } catch (x) { d = null; } otraVersion(d); return; }
         if (!r.ok) {
           let cuerpo = null;
           try { cuerpo = await r.json(); } catch (x) { /* sin cuerpo */ }

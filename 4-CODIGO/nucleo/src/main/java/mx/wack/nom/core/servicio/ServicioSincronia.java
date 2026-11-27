@@ -166,6 +166,8 @@ public class ServicioSincronia {
         // (Java guarda unos segundos lo que contestó el DNS: la conexión usa las mismas IP que se revisaron)
         HttpURLConnection c = (HttpURLConnection) url.openConnection();
         c.setInstanceFollowRedirects(false);
+        // (el otro NOM solo copia con uno de su misma versión: Version.misma)
+        c.setRequestProperty(mx.wack.nom.core.Version.CABECERA, mx.wack.nom.core.Version.APP);
         return c;
     }
 

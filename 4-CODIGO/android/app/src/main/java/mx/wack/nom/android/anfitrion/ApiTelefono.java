@@ -221,6 +221,12 @@ final class ApiTelefono {
 
     Respuesta atender(Peticion p) {
         try {
+            // Solo la misma versión trabaja con este teléfono (como en la nube: Version.misma; FiltroVersion).
+            if (p.ruta.startsWith("/api/") && !mx.wack.nom.core.Version.sinVersion(p.metodo, p.ruta)) {
+                String v = p.cabecera(mx.wack.nom.core.Version.CABECERA);
+                if (v == null) v = p.consulta.get("v");
+                if (!mx.wack.nom.core.Version.misma(v)) return Respuesta.json(426, mx.wack.nom.core.Version.distinta(v));
+            }
             return rutas(p);
         } catch (Throwable e) {
             return error(e);

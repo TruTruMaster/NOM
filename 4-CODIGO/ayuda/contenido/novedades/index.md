@@ -10,6 +10,11 @@ version: 0.23.10
 
 - **Buscar en los documentos del espacio** ahora encuentra lo que dice un Word importado (antes solo lo encontraba por
   su nombre o por sus tablas).
+- **Todos con la misma versión:** NOM en Internet y el teléfono que comparte solo trabajan con la app o la página de
+  su misma versión, para que una versión distinta no dañe el trabajo de los demás. Con otra versión sale «Actualiza
+  NOM» (recargar la página o descargar la app) y, mientras, lo que hagas se guarda en tu equipo.
+- **Dónde se guarda:** al crear o importar un documento dentro de un espacio puedes elegir «En el espacio» o «Solo en
+  este navegador / teléfono».
 
 ## 0.23.9 — noviembre de 2026
 

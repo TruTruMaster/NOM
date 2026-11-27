@@ -515,6 +515,24 @@
     </form>`);
     const pie = html(`<div style="display:contents"><button type="button" class="btn" data-importar>${ico("upload")} Importar archivo</button>${esp && NOM.datos ? `<button type="button" class="btn" data-mas-crear aria-label="Más formas de crear" data-micro="Más|Reporte desde datos (CSV o Excel) y datos públicos.">${ico("more-horizontal")}</button>` : ""}<span class="crece solo-escritorio"></span><button class="btn primario" data-crear>Crear documento</button></div>`);
     const h = hoja({ titulo: esp ? "Nuevo documento" : "Nuevo documento (en este equipo)", cuerpo, pie, ancha: true });
+    // Dentro de un espacio se elige dónde se guarda: en el espacio (NOM en Internet, lo ven sus miembros) o solo en este
+    // equipo (después se puede pasar a un espacio). Lo mismo vale para «Importar archivo».
+    let donde = "espacio";
+    if (esp && api.token()) {
+      const sel = html(`<div class="col" style="gap:8px"><span class="etiqueta">¿Dónde se guarda?</span>
+        <div class="segmentado" role="group" aria-label="Dónde se guarda" data-donde>
+          <button type="button" data-d="espacio" aria-pressed="true">${ico("cloud", "ico-s")} En «${esc(esp.nombre || "el espacio")}»</button>
+          <button type="button" data-d="equipo" aria-pressed="false">${ico(api.empaquetada ? "smartphone" : "hard-drive", "ico-s")} ${api.empaquetada ? "Solo en este teléfono" : "Solo en este navegador"}</button></div>
+        <small class="suave" data-donde-nota>Lo ven los miembros del espacio y lo abres desde cualquier equipo.</small></div>`);
+      $("form", cuerpo) ? $("form", cuerpo).append(sel) : cuerpo.append(sel);
+      $$("[data-d]", sel).forEach((b) => (b.onclick = () => {
+        donde = b.dataset.d;
+        $$("[data-d]", sel).forEach((x) => x.setAttribute("aria-pressed", x === b));
+        $("[data-donde-nota]", sel).textContent = donde === "equipo"
+          ? `Solo ${NOM.aqui().en}, protegido con tu contraseña: nadie más lo ve. Después puedes pasarlo a un espacio.`
+          : "Lo ven los miembros del espacio y lo abres desde cualquier equipo.";
+      }));
+    }
     if (!esp) cuerpo.prepend(html(api.token()
       ? `<div class="alerta aviso">${ico("hard-drive")}<span>Este documento se guarda <b>solo ${NOM.aqui().en}</b>, protegido con tu contraseña: no se ve en tus otros equipos. Después puedes pasarlo a un espacio.</span></div>`
       : `<div class="alerta aviso">${ico("hard-drive")}<span>Sin cuenta, el documento se guarda <b>solo ${NOM.aqui().en}</b>. Si ${NOM.aqui().borrar} se pierde, salvo que lo descargues.</span></div>`));
@@ -535,14 +553,14 @@
       const nombre = cuerpo.nombre.value.trim() || (plantilla && plantilla.nombre !== "En blanco" ? plantilla.nombre : "");
       $("[data-crear]", pie).disabled = true;
       try {
-        if (plantilla && plantilla.delEspacio && esp) {
+        if (plantilla && plantilla.delEspacio && esp && donde !== "equipo") {
           const d = await api.post(`/api/documentos/${plantilla.docId}/copia`, { nombre: nombre || plantilla.nombre });
           h.cerrar(true);
           location.hash = "#/doc/" + d.id;
           return;
         }
-        const ops = plantilla ? plantilla.crear() : [];
-        if (!esp) { const d = NOM.local.crear(nombre, modo, ops); h.cerrar(true); location.hash = "#/local/" + d.id; return; }
+        const ops = plantilla && plantilla.crear ? plantilla.crear() : [];
+        if (!esp || donde === "equipo") { const d = NOM.local.crear(nombre, modo, ops); h.cerrar(true); location.hash = "#/local/" + d.id; return; }
         let d;
         try { d = await api.post(`/api/espacios/${esp.id}/documentos`, { nombre, modo, ops }); }
         catch (err) {
@@ -573,8 +591,8 @@
       const listo = () => { fin(); if (btn.isConnected) { btn.disabled = false; btn.innerHTML = antes; } };
       try {
         const r = await NOM.formatos.importar(f);
-        if (esp && btn.isConnected) btn.innerHTML = `<span class="cargando"></span> Subiendo… puede tardar un poco`;
-        if (!esp) {
+        if (esp && donde !== "equipo" && btn.isConnected) btn.innerHTML = `<span class="cargando"></span> Subiendo… puede tardar un poco`;
+        if (!esp || donde === "equipo") {
           const d = NOM.local.crear(r.nombre, r.modo, r.ops);
           h.cerrar(true);
           location.hash = "#/local/" + d.id;

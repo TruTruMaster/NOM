@@ -37,6 +37,26 @@
     },
   });
 
+  // Este NOM (la nube o el teléfono que comparte) tiene otra versión: no acepta nada de aquí (Version.misma). Se avisa
+  // una vez por versión; lo que se hace queda en este equipo (como sin conexión) y se manda al actualizar.
+  let versionAvisada = null;
+  api.alVersion = (suya) => {
+    if (versionAvisada === suya) return;
+    versionAvisada = suya;
+    const app = !!api.empaquetada;
+    const cuerpo = html(`<div class="col"><div class="alerta aviso">${ico("refresh-cw")}<span>Este NOM tiene la versión <b>${esc(suya)}</b>
+      y ${app ? "tu app" : "esta página"} la <b>${esc(NOM.VERSION)}</b>. Para no dañar el trabajo de los demás, mientras no
+      ${app ? "actualices la app" : "recargues la página"} no se manda nada.</span></div>
+      <p style="margin:0;font-weight:400">Lo que hagas se guarda en este equipo y se envía solo en cuanto tengas la misma versión.
+      ${app ? "Si trabajan sin Internet con un teléfono que comparte, todos necesitan la misma versión de la app que ese teléfono." : ""}</p></div>`);
+    const pie = html(`<div style="display:contents"><button class="btn" data-seguir>Seguir en este equipo</button><span class="crece"></span>
+      ${app ? `<button class="btn primario" data-bajar>${ico("download")} Descargar la app nueva</button>` : `<button class="btn primario" data-recargar>${ico("refresh-cw")} Recargar la página</button>`}</div>`);
+    const h = NOM.hoja({ titulo: "Actualiza NOM", icono: "refresh-cw", cuerpo, pie });
+    $("[data-seguir]", pie).onclick = () => h.cerrar();
+    const r = $("[data-recargar]", pie); if (r) r.onclick = () => location.reload();
+    const bj = $("[data-bajar]", pie); if (bj) bj.onclick = () => { location.href = "https://github.com/TruTruMaster/NOM/releases/latest/download/NOM.apk"; };
+  };
+
   api.alExpirar = async () => {
     if (!api.token()) return;
     await NOM.boveda.cerrar();   // sin sesión, los documentos de este equipo quedan cifrados
@@ -292,7 +312,12 @@
     }
   };
   // ¿Servidor en la red local o en la nube? Cambia los textos de conexión y "Unirse".
-  api.get("/api/red/info", undefined, { ms: 90000 }).then((i) => { api.lan = i.lan !== false; NOM.guardar("nom.lan", api.lan); NOM.revisarVersion(i); }).catch(() => {});
+  api.get("/api/red/info", undefined, { ms: 90000 }).then((i) => {
+    api.lan = i.lan !== false; NOM.guardar("nom.lan", api.lan);
+    // (con otra versión se avisa desde el principio, antes de que la persona empiece a trabajar)
+    if (i && i.nom === 1 && typeof i.version === "string" && /^[0-9.]{1,20}$/.test(i.version) && i.version !== NOM.VERSION) api.alVersion(i.version);
+    else NOM.revisarVersion(i);
+  }).catch(() => {});
 
   // Los datos de la cuenta y sus preferencias se refrescan al abrir (pudieron cambiar en otro equipo).
   if (api.token()) api.get("/api/cuentas/yo").then((r) => {

@@ -10,8 +10,11 @@ import json,urllib.request,os,random,string,time,base64,sys
 B=os.environ.get("NOM_BASE","http://localhost:8099").rstrip("/"); AG={"User-Agent":"NOM-pruebas/1.0"}
 CL="Humo-"+"".join(random.choice(string.ascii_letters) for _ in range(10)); SUF="".join(random.choice("abcdefghjkmnpqrstuvwxyz") for _ in range(4))
 res=[]
-def r(m,u,b=None,t=None):
-    h=dict(AG,**{"Content-Type":"application/json"})
+def _ver():
+    with urllib.request.urlopen(urllib.request.Request(B+"/api/red/info",headers=AG),timeout=60) as x: return json.loads(x.read()).get("version") or ""
+VER=_ver()
+def r(m,u,b=None,t=None,v=None):
+    h=dict(AG,**{"Content-Type":"application/json","X-NOM-Version":VER if v is None else v})
     if t:h["Authorization"]="Bearer "+t
     q=urllib.request.Request(B+u,method=m,data=json.dumps(b).encode() if b is not None else None,headers=h)
     try:
@@ -71,6 +74,10 @@ def comprimido(u):
     with urllib.request.urlopen(q,timeout=60) as x: return (x.headers.get("Content-Encoding") or "").lower()
 for u in ("/js/ooxml.js","/css/nom.css","/"):
     ce=comprimido(u); ok(f"{u} llega comprimido ({ce or 'sin comprimir'})",ce in("gzip","br"))
+# Solo la misma versión trabaja con el servidor (orden del dueño, 26-nov): otra versión o ninguna → 426 y nada cambia.
+ok("con otra versión no se guarda nada (426)",r("POST","/api/espacios",{"nombre":"Vieja"},tk["a"],v="0.1.0")[0]==426)
+ok("sin decir la versión tampoco (426)",r("GET","/api/espacios",None,tk["a"],v="")[0]==426)
+ok("la versión del servidor se puede leer con cualquiera",r("GET","/api/red/info",None,None,v="0.1.0")[0]==200)
 ok("borrar doc a papelera",r("DELETE",f"/api/documentos/{d}",t=tk["a"])[0]==200)
 for n in ("a","b","c"):
     ok(f"borrar cuenta {n}",r("POST","/api/cuentas/eliminar",{"contrasena":CL,"confirmacion":"BORRAR"},tk[n])[0]==200)

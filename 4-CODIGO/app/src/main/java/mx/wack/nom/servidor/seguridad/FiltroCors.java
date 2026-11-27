@@ -64,7 +64,7 @@ public class FiltroCors extends OncePerRequestFilter {
         }
         res.setHeader("Access-Control-Allow-Origin", origen);
         res.setHeader("Access-Control-Allow-Methods", metodos);
-        res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept");
+        res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, X-NOM-Version");
         res.setHeader("Access-Control-Max-Age", "3600");
         if (previo) { res.setStatus(204); return; }
         cadena.doFilter(req, res);
