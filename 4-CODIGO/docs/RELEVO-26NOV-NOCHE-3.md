@@ -249,7 +249,7 @@ tipo de «Insertar» de los 4 editores, cada tamaño de página/diapositiva, let
 medio; dos personas a la vez; sin red a la mitad. Escribir lo que se encuentre como scripts reutilizables
 (`pruebas/interfaz/exploracion_*.py`).
 
-**Después de la expo (cambian formatos o la interfaz; planearlo con el dueño):**
+**Orden del dueño (26-nov, 22:30): TODO esto también antes de las 5:00** — reparto por carriles en `~/NOM/prompt-expo-2.md`:
 - **Ajustes:** atajos de teclado personalizables; en el celular, vibración (háptica) y atajos; elegir **ruedita o la
   lista clásica** (menú contextual de siempre) como preferencia.
 - **Idioma:** tomar el del sistema (hoy todo está en español); traducción de la interfaz (archivos de textos por idioma);
