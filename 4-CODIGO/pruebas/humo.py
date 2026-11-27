@@ -7,6 +7,8 @@ almacenamiento, descargar mis datos, pase firmado. Crea 3 cuentas `humo_…` y l
     NOM_BASE=https://nomcolab.dpdns.org python3 pruebas/humo.py
 """
 import json,urllib.request,os,random,string,time,base64,sys
+if os.environ.get("NOM_PROXY"):   # (por el puente a la Pi, si el módem le corta a esta computadora el camino a Cloudflare)
+    import socket, socks; from urllib.parse import urlparse; _u=urlparse(os.environ["NOM_PROXY"]); socks.set_default_proxy(socks.SOCKS5,_u.hostname,_u.port,rdns=True); socket.socket=socks.socksocket
 B=os.environ.get("NOM_BASE","http://localhost:8099").rstrip("/"); AG={"User-Agent":"NOM-pruebas/1.0"}
 CL="Humo-"+"".join(random.choice(string.ascii_letters) for _ in range(10)); SUF="".join(random.choice("abcdefghjkmnpqrstuvwxyz") for _ in range(4))
 res=[]

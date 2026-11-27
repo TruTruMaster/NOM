@@ -4,12 +4,21 @@ from playwright.sync_api import sync_playwright
 B = os.environ.get("NOM_BASE", "https://www.nom.qd.je")   # sitio real por omisión (orden del dueño, 25-nov)
 # Los navegadores de prueba hablan español de México, como los equipos de la escuela: desde la 0.23.10 la interfaz toma el
 # idioma del sistema («Automático») y Chromium de Playwright dice «en-US». Una prueba que quiera otro idioma pasa locale=.
+# NOM_PROXY=socks5://127.0.0.1:1080: todo sale por ese proxy (el puente a la Pi), para cuando el módem de la casa le corta a
+# esta computadora el camino directo a Cloudflare (pasó el 26-nov a las 23:10).
+_PROXY = os.environ.get("NOM_PROXY")
+if _PROXY:
+    import socket as _socket, socks as _socks
+    from urllib.parse import urlparse as _up
+    _u = _up(_PROXY); _socks.set_default_proxy(_socks.SOCKS5, _u.hostname, _u.port, rdns=True); _socket.socket = _socks.socksocket
 try:
     from playwright.sync_api._generated import Browser as _Navegador
     if not getattr(_Navegador, "_nom_es", False):
+        _base = {"locale": "es-MX"}
+        if _PROXY: _base["proxy"] = {"server": _PROXY}
         _nuevo_ctx, _nueva_pag = _Navegador.new_context, _Navegador.new_page
-        _Navegador.new_context = lambda self, *a, **k: _nuevo_ctx(self, *a, **dict({"locale": "es-MX"}, **k))
-        _Navegador.new_page = lambda self, *a, **k: _nueva_pag(self, *a, **dict({"locale": "es-MX"}, **k))
+        _Navegador.new_context = lambda self, *a, **k: _nuevo_ctx(self, *a, **dict(_base, **k))
+        _Navegador.new_page = lambda self, *a, **k: _nueva_pag(self, *a, **dict(_base, **k))
         _Navegador._nom_es = True
 except Exception:
     pass

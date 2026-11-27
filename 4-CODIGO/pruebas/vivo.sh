@@ -13,7 +13,7 @@ TODAS=(humo demo armados funciones funciones_movil funciones_firefox e2e sin_int
 for t in "$@"; do
   echo "=== $t $(date +%H:%M:%S)"
   case "$t" in
-    humo) timeout 900 python3 "$AQUI/humo.py" > "$OUT/$t.txt" 2>&1 ;;
+    humo) timeout 900 "$PY" "$AQUI/humo.py" > "$OUT/$t.txt" 2>&1 ;;
     funciones) timeout 1800 "$PY" "$AQUI/interfaz/prueba_funciones.py" "$OUT/cap-$t" > "$OUT/$t.txt" 2>&1 ;;
     funciones_movil) timeout 1800 "$PY" "$AQUI/interfaz/prueba_funciones.py" "$OUT/cap-$t" --movil > "$OUT/$t.txt" 2>&1 ;;
     funciones_firefox) NOM_NAVEGADOR=firefox timeout 1800 "$PY" "$AQUI/interfaz/prueba_funciones.py" "$OUT/cap-$t" > "$OUT/$t.txt" 2>&1 ;;
