@@ -49,6 +49,12 @@ de NOM editable** y se presenta desde el apartado de presentaciones.
   Sin errores de JavaScript. Lo que falta para el 100 % son corrimientos de 1 px del texto.
 - Para presentar: abrir el documento → «Presentar» (F5) → flechas, clic o deslizar; Esc sale.
 
+- 19:50 — **0.23.9 publicada en la Pi** (lo descargado en HTML/Markdown/SVG y CSV largos; `prueba_armados.py` 9/0, antes
+  3/6). Todas las suites en verde sobre la 0.23.9 (`trabajo/expo27/vivo4/`: funciones 202/205/202 en Chromium, celular y
+  Firefox, e2e 33, sin Internet 32, red 24, presentación 10, diag1/85/pptx2/pres1 sin errores, ayuda 24, axe 28,
+  accesibilidad 7, rastreo 632 acciones sin errores).
+- 22:25 — **Fin de la sesión (límite de uso).** Estado exacto en §6. **La siguiente sesión empieza en §6.**
+
 ## 2. Matriz de funciones (A)
 
 Inventario completo (332 funciones visibles, con archivo:línea y la prueba de cada una) en
@@ -168,3 +174,110 @@ equipo, en el sitio real). Lo que falle es prioridad absoluta:
 - Prueba con personas: `ENTREGA/Prueba_con_personas.docx` (tareas de la guía §5 y SUS).
 - Lo manual de antes: Browser Cache TTL en Cloudflare, `reposo.key` (copia), correo ARCO, DMARC, TLS 1.2.
 - Decisiones de diseño de los espacios cifrados (plan privado §P.2): se recomiendan **después** de la expo.
+
+
+## 6. Estado al cerrar y qué sigue (LEER PRIMERO)
+
+### 6.1 Dónde quedó todo (26-nov, 22:25)
+
+- **Pi: 0.23.9.** GitHub: `origin/main` sigue en el relevo anterior; **6 commits locales sin subir** (`3c051cf` …
+  `ff07d18`). APK publicado: el de antes (0.23.6, APK 48); el A55 tiene uno viejo.
+- **Sin publicar, en `main` (commit `ff07d18`, compila; JUnit 0 fallas):**
+  1. `16ca8de` Buscar en los documentos encuentra el texto de un Word importado (`BuscarTextoImportadoTest`;
+     en vivo `prueba_demo.py` da 9/1 con la 0.23.9 y debe dar 10/0 con la 0.23.10).
+  2. `ff07d18` **Solo la misma versión trabaja con el servidor** (orden del dueño, 26-nov 20:00): `Version.misma` y
+     `Version.sinVersion` (núcleo), `FiltroVersion` (computadora), la misma revisión al principio de
+     `ApiTelefono.atender` (teléfono), cabecera `X-NOM-Version` en `api.js` (pedir, binario, sondeo), `acceso.js`,
+     `editor.js` (al cerrar) y `?v=` en el canal en vivo; CORS de los dos permite la cabecera; la sincronía entre NOM la
+     manda (`ServicioSincronia.abrir`). Con otra versión: **426** con el aviso; la página lo trata como «sin conexión»
+     (lo hecho queda en el equipo y se manda al actualizar) y `api.alVersion` (app.js) muestra «Actualiza NOM» con
+     «Recargar la página» (web) o «Descargar la app nueva» (app). Se deja sin versión: `GET /api/red/info`, salir,
+     enlace para ver, proyección, verificar recibo, llave de pases. **Por qué** (para la presentación): una versión
+     distinta reescribe al editar lo que no conoce (estilos, campos nuevos de Office, animaciones), dibuja distinto y la
+     persona «arregla» lo que no estaba mal, o no trae arreglos del formato (reloj, llaves). Las páginas servidas por la
+     nube o por el teléfono siempre traen la versión del servidor: solo les toca a pestañas abiertas durante una
+     actualización (o archivos viejos en la caché del navegador) y a la app de Android.
+  3. `ff07d18` **Dónde se guarda:** al crear o importar dentro de un espacio, «En «espacio»» o «Solo en este navegador /
+     teléfono» (`vista-espacios.js nuevoDocumento`).
+  4. Pruebas puestas al día para hablar con la versión del servidor (`nomprueba.version()`, `humo.py`, `prueba_e2e`);
+     `humo.py` revisa el 426: **antes** (0.23.9) 40/42 con las 2 fallas del 426 (`trabajo/expo27/version-antes.txt`).
+
+### 6.2 Lo primero (antes de congelar a las 5:30; expo a las 8:00)
+
+1. **Riesgo del candado de versión con la caché de Cloudflare:** los `.js` llegan con `max-age=14400` (Browser Cache TTL
+   de Cloudflare). Con service worker la página los vuelve a pedir (`cache: no-cache`), pero un navegador que entra por
+   primera vez podría traer `.js` viejos → quedaría con «Actualiza NOM» aunque recargue. Antes de publicar: que el dueño
+   ponga **Browser Cache TTL = «Respect existing headers»** en Cloudflare, o agregar `?v=VERSION` a los `<script>` y
+   `<link>` en `PaginasApi.portada` (solo la página servida; el APK no pasa por ahí). Probarlo con un perfil de navegador
+   nuevo después de publicar.
+2. Publicar la 0.23.10: `mvn package` → `2-PAGINA-Servidor/nom.jar` → `4-CODIGO/servidor-propio/nom pi actualizar` →
+   `humo.py` (debe dar 42/42), `prueba_demo.py` (10/0), `prueba_armados.py`, `prueba_funciones` (+ `--movil` y Firefox),
+   `prueba_red` (ojo: la interfaz del APK en la prueba se carga de archivos con la MISMA versión), `prueba_e2e`,
+   `prueba_sin_internet`, `rastreo`, `prueba_presentacion`. Probar a mano: una pestaña abierta antes de publicar → debe
+   salir «Actualiza NOM» y «Recargar» la arregla.
+3. **APK 0.23.10 (versionCode 52)** con `assembleRelease` (certificado `2ef146f6…`) → `3-APP-Android/NOM.apk` →
+   `android/publicar-apk.sh` → **instalar en el A55** (conectado por USB: `adb -s RZCX41FHPXX install -r …`). Con el
+   candado, **un APK viejo ya no trabaja con la nube**: el A55 y cualquier teléfono de la demo deben tener la 0.23.10.
+   Probar el teléfono que comparte con el emulador o el A55 + la laptop (misma versión) y con versión distinta (426).
+4. `git push` (antes: `git diff origin/main..HEAD` sin nombres de herramientas ni detalle de seguridad) y release.
+5. **Office real** (PC con Windows por SSH, `user@100.65.29.5`, contesta): `pruebas/office/office_abre.py` falló con
+   «resultado.json no existe» (¿sin sesión de escritorio en Windows?). Abrir ahí `7-PRESENTACION/5IM7_WACK_Presentacion.pptx`
+   y `trabajo/expo27/demo-ui/descargado.{docx,xlsx,pptx}`.
+6. Ensayo al azar (§4b) en la laptop, el A55 y otro equipo; lo que falle, primero.
+
+### 6.3 Pedidos del dueño del 26-nov (22:20) — trabajo para la siguiente sesión
+
+Avances ya lanzados (solo lectura, sin cambios): una revisión de los 6 archivos de prueba del dueño contra el importador →
+`trabajo/expo27/`; otra busca la causa de BUSCARV, la imagen que se encoge en los bordes y los
+botones que desaparecen en accesibilidad → `trabajo/expo27/barridos/ds-bugs-dueno.txt`. Confirmar cada hallazgo en el
+código antes de arreglar.
+
+**Antes de la expo si da tiempo (son errores que se ven):**
+- Los **6 archivos del dueño** en `~/NOM` (fuera de git, no subirlos): `word_ooxml_stress_test_max.docx`,
+  `test_features.docx`, `excel_ooxml_stress_test_max.xlsx`, `test_features.xlsx`,
+  `powerpoint_ooxml_stress_test_max (1).pptx`, `test_features.pptx`. Importarlos en el sitio real, ver qué no se lee o no
+  se dibuja, compararlos con Office real (Windows) y decir si el archivo mismo está mal armado.
+- **BUSCARV** «da un resultado incorrecto cuando la condición es verdadera» (coincidencia aproximada) y **fórmulas que
+  se duplican**; **imagen que al arrastrarla se encoge contra las orillas**; **botones que desaparecen al elegir
+  opciones de accesibilidad** (contraste alto, letra grande, colores forzados). Cada uno con su prueba.
+- **Imágenes que no cargan completas**: revisar con los archivos del dueño y con el almacén de binarios (precarga,
+  reintento, `srcImgOk`).
+
+**Prueba a fondo (después de lo anterior), web y en el A55 por adb (WebView con CDP: `pruebas/reales/cdp.mjs`):**
+colocar imágenes y arrastrarlas a todos lados (orillas, fuera de la hoja, girar, recortar), combinaciones raras, cada
+tipo de «Insertar» de los 4 editores, cada tamaño de página/diapositiva, letra, tabla y celda; deshacer/rehacer en
+medio; dos personas a la vez; sin red a la mitad. Escribir lo que se encuentre como scripts reutilizables
+(`pruebas/interfaz/exploracion_*.py`).
+
+**Después de la expo (cambian formatos o la interfaz; planearlo con el dueño):**
+- **Ajustes:** atajos de teclado personalizables; en el celular, vibración (háptica) y atajos; elegir **ruedita o la
+  lista clásica** (menú contextual de siempre) como preferencia.
+- **Idioma:** tomar el del sistema (hoy todo está en español); traducción de la interfaz (archivos de textos por idioma);
+  **detectar el idioma del documento** y corregir la ortografía desde la ruedita (sugerencias al tocar una palabra).
+- **Accesibilidad completa** (que no haya demanda): WCAG 2.2 AA en todas las pantallas (axe ya da 28/0 en las que se
+  prueban: ampliar a editores con contenido, lector de pantalla NVDA/TalkBack, solo teclado, colores forzados, zoom
+  400 %), y lo que pide la ley mexicana (Ley General para la Inclusión de las Personas con Discapacidad) — investigar con
+  fuentes primarias antes de afirmar.
+- **Archivos más ligeros:** medir cuánto pesa un `.nom` vacío y por qué (cabecera, diccionario, JSON del estado, ids de
+  CRDT por letra); proponer un formato binario (varint, tablas de estilos por número, ids comprimidos) con su versión de
+  formato y lectura de los viejos. Lo que pidió el dueño («cada letra un bit y cada formato un byte») no es posible tal
+  cual (una letra necesita al menos ~5-8 bits y la edición en vivo necesita un id por letra), pero sí se puede acercar
+  mucho: explicarle con números.
+- **Imágenes lo más ligeras posible sin perderlas:** al importar, convertir a WebP/AVIF con calidad alta, tamaño según
+  cómo se ve, original solo para descargar a Office; carga diferida y reintentos.
+- **Lo que nos hace distintos de Google Docs** (para la presentación): sin Internet con un teléfono que comparte, espacios
+  cifrados de extremo a extremo, recibo de quién escribió qué, fidelidad con Office medida contra Office real, gratis y
+  libre (GPL-3.0), sin IA que escriba por ti, funciona en la red de la escuela. Preparar 1 diapositiva y una demo de 1 min.
+- **Seguridad pedida:** qué datos y uuids ve cada quien (revisar cada respuesta de la API por papel), sanear cada campo
+  que entra (barrido por ruta), pantallas de error propias para cada caso (404, 413, 426, 429, sin red, servidor caído),
+  e índices en las consultas principales (H2/JDBC: `RepositorioUsuariosJdbc`, revisar `schema-h2.sql`).
+- Tareas largas de 150-270 ms al abrir Office grandes; visor de PDF (módulo aparte, decisión del dueño); decisiones de
+  §P.2 del plan privado.
+
+### 6.4 Archivos de esta sesión
+
+`trabajo/expo27/`: `vivo*/` (salidas de las suites por versión), `tiempos/`, `pres/cmp` (fidelidad de la presentación),
+`barridos/` (barridos de código), `demo.txt` (contraseñas de demo, privado), `office/` (Office grandes), `herr/`
+(generadores). Scripts nuevos en el repo: `pruebas/interfaz/{legibilidad,prueba_tiempos,prueba_armados,prueba_demo}.py`,
+`app/src/test/js/office-armado.test.js`. Presentación: `7-PRESENTACION/fuentes/{a_nom,comparar_nom,techo,fidelidad,descargar_nom}.py`
+(la carpeta 7-PRESENTACION no está en git, por decisión anterior).
