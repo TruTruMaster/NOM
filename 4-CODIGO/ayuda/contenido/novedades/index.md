@@ -11,6 +11,11 @@ version: 0.23.6
 - **«Solo puede ver» dentro de un espacio:** quien solo puede ver recibe lo mismo que el enlace para ver: lo que se ve
   en el documento, sin lo borrado, los comentarios, las notas del orador ni el historial de versiones (como en Google
   Docs). Si alguien deshace un borrado mientras lo ve, su copia se vuelve a cargar sola. Quien edita no nota cambios.
+- **Espacios cifrados de extremo a extremo:** tu equipo comprueba que la llave que recibe es de verdad la del espacio
+  antes de usarla, y la reparte quien puede editar.
+- **Archivos de Office y documentos compartidos:** un archivo dañado o armado a propósito ya no traba la página, y las
+  diapositivas y hojas solo usan colores, medidas e imágenes válidos.
+- **Teléfono que comparte:** revisa lo que recibe igual que el servidor de la nube.
 
 ## 0.23.5 — noviembre de 2026
 
