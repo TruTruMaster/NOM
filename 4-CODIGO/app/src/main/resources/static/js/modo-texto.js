@@ -83,11 +83,12 @@
   // redondeado a medio punto (medido en Word 2024: Calibri 11 → 7, 12 → 8; Aptos 11 → 6.5, 12 → 7). Las demás, 0.65.
   const SUP = { "NOM A": 0.6001, "NOM AD": 0.6001, "NOM AN": 0.6001, "NOM PL": 0.6006, "NOM IM": 0.5278, "NOM BH": 0.5996, "NOM IF": 0.6 };
   const primeraDe = (f) => { const m = /^'([^']+)'/.exec(cssFuente(f || "Calibri")); return m ? m[1] : ""; };
-  function supFuente(f) { return SUP[primeraDe(f)] || 0.6499; }
+  const deTabla = (t, k, def) => (Object.hasOwn(t, k) && t[k]) || def;   // (un nombre de fuente del archivo no lee de Object)
+  function supFuente(f) { return deTabla(SUP, primeraDe(f), 0.6499); }
   /** Alto natural del renglón de una fuente de Office (para el interlineado de Word); 1.2 si no se conoce. */
-  function altoFuente(f) { return ALTO[primeraDe(f)] || 1.2; }
+  function altoFuente(f) { return deTabla(ALTO, primeraDe(f), 1.2); }
   /** Ancho del espacio de una fuente (en em). */
-  function espacioFuente(f) { return ESPACIO[primeraDe(f)] || 0.25; }
+  function espacioFuente(f) { return deTabla(ESPACIO, primeraDe(f), 0.25); }
   /** Familia genérica de una fuente que no conocemos, por su nombre (una con remates no debe caer en una de palo seco). */
   function generica(nombre) {
     const n = nombre.toLowerCase();
@@ -151,11 +152,11 @@
   const cssFuente = (f) => {
     const n = String(f).replace(/['";{}<>\\]/g, "").trim(), k = n.toLowerCase();
     // primero la equivalente de las mismas medidas (si existe), aunque la fuente también esté en FUENTES
-    if (MEDIDAS[k]) return `'${MEDIDAS[k]}',` + (FUENTES[f] || `'${n}',` + (PARECIDAS[k] || generica(n)));
-    if (FUENTES[f]) return FUENTES[f];
+    if (Object.hasOwn(MEDIDAS, k)) return `'${MEDIDAS[k]}',` + (Object.hasOwn(FUENTES, f) ? FUENTES[f] : `'${n}',` + (Object.hasOwn(PARECIDAS, k) ? PARECIDAS[k] : generica(n)));
+    if (Object.hasOwn(FUENTES, f)) return FUENTES[f];
     const conocida = Object.keys(FUENTES).find((x) => x.toLowerCase() === k);
     if (conocida) return FUENTES[conocida];
-    return `'${n}',` + (PARECIDAS[k] || generica(n));
+    return `'${n}',` + (Object.hasOwn(PARECIDAS, k) ? PARECIDAS[k] : generica(n));
   };
   // Borde de párrafo: "grosor estilo color lados" (puntos; lados: s superior, i inferior, z izquierda, d derecha).
   const RE_BORDE = /^(\d+(?:\.\d+)?) (solid|double|dotted|dashed) (#[0-9A-Fa-f]{6}) ([sizd]{1,4})$/;
@@ -2938,11 +2939,14 @@
       // (Word deja hasta 63 columnas; filas, las de un documento largo)
       const dimTabla = (b) => ({ filas: Math.min(Math.max(1, b.filasTexto || 3), 3000), cols: Math.min(Math.max(1, b.colsTexto || 3), 63) });
       function combinadasTabla(b) {
-        const spans = {}, cubiertas = new Set();
+        const spans = {}, cubiertas = new Set(), dim = dimTabla(b);
         for (const k in b) {
           if (!k.startsWith("m:") || !/^\d+x\d+$/.test(String(b[k] || ""))) continue;
-          const p = FT().parseRef(k.slice(2)), [w, h] = String(b[k]).split("x").map(Number);
-          if (!p || w * h <= 1) continue;
+          const p = FT().parseRef(k.slice(2));
+          if (!p || p.c >= dim.cols || p.f >= dim.filas) continue;
+          // (una combinada que dice salirse de la tabla se corta en su borde: un archivo armado no traba la página)
+          const [w0, h0] = String(b[k]).split("x").map(Number), w = Math.min(w0, dim.cols - p.c), h = Math.min(h0, dim.filas - p.f);
+          if (w * h <= 1) continue;
           spans[k.slice(2)] = [w, h];
           for (let f = p.f; f < p.f + h; f++) for (let c = p.c; c < p.c + w; c++) if (c !== p.c || f !== p.f) cubiertas.add(FT().ref(c, f));
         }

@@ -2222,13 +2222,13 @@
     ESNUMERO: ["valor", "VERDADERO si es un número."], ESTEXTO: ["valor", "VERDADERO si es texto."], Y: ["lógico1; [lógico2]; …", "VERDADERO si todo se cumple."],
     O: ["lógico1; [lógico2]; …", "VERDADERO si algo se cumple."], NO: ["lógico", "Lo contrario."],
     CONCATENAR: ["texto1; [texto2]; …", "Une textos."], CONCAT: ["texto1; [texto2]; …", "Une textos."], UNIRCADENAS: ["separador; ignorar_vacías; texto1; …", "Une textos con un separador."],
-    MAYUSC: ["texto", "En MAYÚSCULAS."], MINUSC: ["texto", "En minúsculas."], NOMPROPIO: ["texto", "Cada Palabra Con Mayúscula."], LARGO: ["texto", "Cuántos caracteres tiene."],
-    IZQUIERDA: ["texto; [n]", "Los primeros caracteres."], DERECHA: ["texto; [n]", "Los últimos caracteres."], EXTRAE: ["texto; inicio; n", "Caracteres desde una posición."],
+    MAYUSC: ["texto", "En MAYÚSCULAS."], MINUSC: ["texto", "En minúsculas."], NOMPROPIO: ["texto", "Cada Palabra Con Mayúscula."], LARGO: ["texto", "Cuántas letras, números y espacios tiene."],
+    IZQUIERDA: ["texto; [n]", "Las primeras n letras (o números)."], DERECHA: ["texto; [n]", "Las últimas n letras (o números)."], EXTRAE: ["texto; inicio; n", "Un pedazo del texto desde una posición."],
     ESPACIOS: ["texto", "Quita los espacios de más."], SUSTITUIR: ["texto; texto_viejo; texto_nuevo; [instancia]", "Cambia un texto por otro."],
-    REEMPLAZAR: ["texto; inicio; n; texto_nuevo", "Reemplaza caracteres por posición."], ENCONTRAR: ["buscado; dentro_de; [inicio]", "Dónde está un texto (distingue mayúsculas)."],
+    REEMPLAZAR: ["texto; inicio; n; texto_nuevo", "Cambia un pedazo del texto según su posición."], ENCONTRAR: ["buscado; dentro_de; [inicio]", "Dónde está un texto (distingue mayúsculas)."],
     HALLAR: ["buscado; dentro_de; [inicio]", "Dónde está un texto."], TEXTO: ["valor; formato", "Un número con formato (\"0.00\", \"dd/mm/aaaa\")."],
     VALOR: ["texto", "Convierte texto en número."], REPETIR: ["texto; veces", "Repite un texto."], IGUAL: ["texto1; texto2", "VERDADERO si son idénticos."],
-    CARACTER: ["número", "El carácter de ese código."],
+    CARACTER: ["número", "La letra o el signo de ese código."],
     HOY: ["", "La fecha de hoy."], AHORA: ["", "La fecha y la hora de ahora."], FECHA: ["año; mes; día", "Arma una fecha."], DIAS: ["fecha_final; fecha_inicial", "Días entre dos fechas."],
     "AÑO": ["fecha", "El año."], MES: ["fecha", "El mes (1 a 12)."], DIA: ["fecha", "El día del mes."], DIASEM: ["fecha; [tipo]", "Día de la semana (1 = domingo; tipo 2: 1 = lunes)."],
     "FIN.MES": ["fecha; meses", "El último día del mes."], "FECHA.MES": ["fecha; meses", "La misma fecha unos meses después."],
@@ -2253,8 +2253,8 @@
     XO: ["lógico1; [lógico2]; …", "VERDADERO si se cumple una cantidad impar de condiciones."], N: ["valor", "El valor como número (el texto vale 0)."],
     T: ["valor", "El valor si es texto; si no, vacío."], TIPO: ["valor", "1 número, 2 texto, 4 lógico, 16 error."],
     TEXTOANTES: ["texto; separador; [cuál]", "Lo que está antes del separador."], TEXTODESPUES: ["texto; separador; [cuál]", "Lo que está después del separador."],
-    LIMPIAR: ["texto", "Quita los caracteres que no se imprimen."], CODIGO: ["texto", "El número del primer carácter."], UNICODE: ["texto", "El número Unicode del primer carácter."],
-    UNICAR: ["número", "El carácter Unicode de ese número."], MONEDA: ["número; [decimales]", "El número como texto con $ y comas."],
+    LIMPIAR: ["texto", "Quita los signos invisibles que no se imprimen."], CODIGO: ["texto", "El código de la primera letra."], UNICODE: ["texto", "El código Unicode de la primera letra."],
+    UNICAR: ["número", "La letra o el signo Unicode de ese número."], MONEDA: ["número; [decimales]", "El número como texto con $ y comas."],
     DECIMAL: ["número; [decimales]; [sin_comas]", "El número como texto con decimales fijos."], "NUMERO.ROMANO": ["número", "El número en romano (hasta 3999)."],
     "MULTIPLO.SUPERIOR": ["número; múltiplo", "Redondea hacia arriba al múltiplo más cercano."], "MULTIPLO.INFERIOR": ["número; múltiplo", "Redondea hacia abajo al múltiplo más cercano."],
     "MULTIPLO.SUPERIOR.MAT": ["número; [múltiplo]; [modo]", "Hacia arriba al múltiplo (o al entero) más cercano."], "MULTIPLO.INFERIOR.MAT": ["número; [múltiplo]; [modo]", "Hacia abajo al múltiplo (o al entero) más cercano."],
@@ -3214,7 +3214,7 @@
       if (c === "[") {
         const j = sec.indexOf("]", i), dentro = sec.slice(i + 1, j < 0 ? sec.length : j); i = j < 0 ? sec.length : j + 1;
         let m;
-        if (COLOR_XL[dentro.toLowerCase()]) color = COLOR_XL[dentro.toLowerCase()];
+        if (Object.hasOwn(COLOR_XL, dentro.toLowerCase())) color = COLOR_XL[dentro.toLowerCase()];
         else if ((m = /^(?:color|color)\s*(\d+)$/i.exec(dentro))) color = "#" + (PALETA_XL[+m[1] - 1] || "000000");
         else if ((m = /^(<=|>=|<>|<|>|=)\s*(-?[\d.]+(?:E[+-]?\d+)?)$/i.exec(dentro))) cond = { op: m[1], n: +m[2] };
         else if ((m = /^\$([^-\]]*)(?:-[0-9A-Za-z-]+)?$/.exec(dentro))) { if (m[1]) p.push({ t: "lit", v: m[1] }); }

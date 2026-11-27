@@ -21,7 +21,9 @@ def r(m,u,b=None,t=None):
 def ok(n,c): res.append((n,c)); print(("OK   " if c else "FALLA"),n,flush=True)
 tk={}
 for n in ("a","b","c"):
-    s=r("POST","/api/cuentas/registro",{"nombre":f"humo_{SUF}_{n}","contrasena":CL,"acepto":"2026-11-13"}); ok(f"registro {n} ({s[0]})",s[0] in(200,201))
+    # (con un identificador de equipo, como la página: el tope de cuentas nuevas por red no lo gastan las pruebas)
+    eq="".join(random.choice(string.ascii_letters+string.digits) for _ in range(24))
+    s=r("POST","/api/cuentas/registro",{"nombre":f"humo_{SUF}_{n}","contrasena":CL,"acepto":"2026-11-13","equipo":eq}); ok(f"registro {n} ({s[0]})",s[0] in(200,201))
     s=r("POST","/api/cuentas/sesion",{"nombre":f"humo_{SUF}_{n}","contrasena":CL}); ok(f"sesión {n}",s[0]==200); tk[n]=s[1]["token"]
 ok("mal contraseña 401",r("POST","/api/cuentas/sesion",{"nombre":f"humo_{SUF}_a","contrasena":"otra-cosa-123"})[0]==401)
 alm=r("GET","/api/cuentas/almacenamiento",t=tk["a"]); ok(f"almacenamiento con cuota {alm[1].get('cuota') if alm[0]==200 else alm}",alm[0]==200)
@@ -63,6 +65,12 @@ def destino(u):
     except urllib.error.HTTPError as e: return e.code,e.headers.get("Location") or ""
 at=destino("/app"); ok(f"atajo /app ({at[0]})",at[0]==302 and at[1].endswith("/releases/latest/download/NOM.apk"))
 at=destino("/codigo"); ok(f"atajo /codigo ({at[0]})",at[0]==302 and at[1]=="https://github.com/TruTruMaster/NOM")
+# La página llega comprimida (en 3G lenta, 4.2 MB sin comprimir tardaban casi 2 min en mostrar «Entrar»).
+def comprimido(u):
+    q=urllib.request.Request(B+u,headers=dict(AG,**{"Accept-Encoding":"gzip, br"}))
+    with urllib.request.urlopen(q,timeout=60) as x: return (x.headers.get("Content-Encoding") or "").lower()
+for u in ("/js/ooxml.js","/css/nom.css","/"):
+    ce=comprimido(u); ok(f"{u} llega comprimido ({ce or 'sin comprimir'})",ce in("gzip","br"))
 ok("borrar doc a papelera",r("DELETE",f"/api/documentos/{d}",t=tk["a"])[0]==200)
 for n in ("a","b","c"):
     ok(f"borrar cuenta {n}",r("POST","/api/cuentas/eliminar",{"contrasena":CL,"confirmacion":"BORRAR"},tk[n])[0]==200)

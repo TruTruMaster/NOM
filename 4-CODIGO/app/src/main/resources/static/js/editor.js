@@ -216,7 +216,7 @@
           <button class="icono-btn solo-escritorio" data-a="paleta" aria-label="Buscar o ir a" data-micro="Buscar o ir a|Documentos, espacios y acciones.|Ctrl K">${ico("search")}</button>
           <button class="icono-btn" ${enLocal || ed.soloVer ? "hidden" : ""} data-a="comentarios" aria-label="Comentarios" data-micro="Comentarios|Comentarios y sugerencias del documento. Funcionan aunque no haya Internet.">${ico("message-square")}</button>
           <button class="icono-btn solo-escritorio" ${enLocal || ed.soloVer ? "hidden" : ""} data-a="historial" aria-label="Historial de versiones" data-micro="Historial de versiones|Consulta y restaura versiones anteriores.">${ico("history")}</button>
-          <button class="icono-btn" data-a="mas" aria-label="Más opciones" data-micro="Más opciones|Exportar, guardar versión, enfoque y más.">${ico("more-horizontal")}</button>
+          <button class="icono-btn" data-a="mas" aria-label="Más opciones" data-micro="Más opciones|Descargar, guardar versión, enfoque y más.">${ico("more-horizontal")}</button>
         </header>
         <div class="ed-herramientas" role="toolbar" aria-label="Herramientas" data-herr></div>
         <div class="ed-lienzo" data-lienzo tabindex="-1"></div>
@@ -260,11 +260,23 @@
     // ------------------------------------------------------------ herramientas
     // Cada modo aporta las suyas; deshacer/rehacer e historial son comunes. Con permiso de solo
     // lectura solo quedan las que no cambian el documento (buscar, enfoque y exportar).
+    // Nombres cortos que se ven en el celular debajo de los íconos que no son universales (los de formato de
+    // Word —negrita, listas, alinear—, la lupa, el bote y deshacer se reconocen solos). Sin cambiar el orden.
+    const CORTAS = {
+      TEXTO: { insertar: "Insertar", sugerir: "Sugerir", comentar: "Comentar", investigar: "Investigar" },
+      HOJA: { suma: "Suma", funciones: "Funciones", filtro: "Filtrar", fijar: "Fijar", grafica: "Gráfica", combinar: "Combinar", insertar: "Filas" },
+      PRESENTACION: { nueva: "Nueva", texto: "Texto", figura: "Figuras", imagen: "Imagen", insertar: "Insertar", diseno: "Diseño", transicion: "Transición",
+        animacion: "Animación", capas: "Capas", notas: "Notas", comentar: "Comentar", presentar: "Presentar" },
+      DIAGRAMA: { puntero: "Mover", nota: "Nota", "mas-figuras": "Figuras", texto: "Texto", conector: "Conector", imagen: "Imagen", iconos: "Íconos",
+        listos: "Listos", capas: "Capas", cuadricula: "Imán", comentar: "Comentar" },
+    };
+    // En la computadora, «Insertar» del texto lleva su nombre a la vista como en la presentación.
+    const ETQ_ESCRITORIO = { TEXTO: { insertar: true } };
     function pintarHerramientas() {
       const deModo = ed.modoApi.herramientas ? ed.modoApi.herramientas(ed) : [];
       const comunes = [
         // El modo enfoque vive en «Más opciones» (y en Ctrl+.): un solo lugar para cada cosa.
-        { id: "exportar", icono: "download", micro: "Exportar|Guarda una copia en otro formato.", fn: exportar },
+        { id: "exportar", icono: "download", micro: "Descargar|Guarda una copia en otro formato.", fn: exportar },
         { id: "ayuda", icono: "circle-help", micro: "Ayuda de este editor|Cómo usar el editor de " + MODOS[tipo].nombre.toLowerCase() + ".", fn: () => NOM.ayuda("editores/" + { TEXTO: "texto", HOJA: "hoja", PRESENTACION: "presentacion", DIAGRAMA: "diagrama" }[tipo]), clase: "solo-escritorio" },
       ];
       const items = ed.soloLectura ? [
@@ -287,9 +299,12 @@
         if (it === "|") return ed.herr.append(html(`<span class="sep"></span>`));
         if (it === "->") return ed.herr.append(html(`<span class="relleno"></span>`));
         if (it.html) { const n = html(it.html); ed.herr.append(n); it.montar && it.montar(n); return; }
-        // etq: el nombre va a la vista junto al ícono (true = el título del micro-texto). En el celular no cabe.
-        const etq = it.etq === true ? it.micro.split("|")[0] : it.etq;
-        const b = html(`<button class="icono-btn ${etq ? "con-etq" : ""} ${it.clase || ""}" data-micro="${esc(it.micro)}" aria-label="${esc(it.micro.split("|")[0])}">${ico(it.icono)}${etq ? `<span class="etq">${esc(etq)}</span>` : ""}</button>`);
+        // etq: el nombre va a la vista junto al ícono (true = el título del micro-texto). En el celular, debajo del
+        // ícono va un nombre corto (`corta`) en los que no se entienden con el puro ícono (GUIA §2 regla 3).
+        const nom = (it.micro || "").split("|")[0];
+        const etq = it.etq === true || (it.etq == null && ETQ_ESCRITORIO[tipo] && ETQ_ESCRITORIO[tipo][it.id]) ? nom : it.etq;
+        const corta = it.corta || (CORTAS[tipo] && CORTAS[tipo][it.id]) || "";
+        const b = html(`<button class="icono-btn ${etq ? "con-etq" : ""} ${corta ? "con-corta" : ""} ${it.clase || ""}" data-micro="${esc(it.micro)}" aria-label="${esc(nom)}">${ico(it.icono)}${etq ? `<span class="etq">${esc(etq)}</span>` : ""}${corta ? `<span class="corta" aria-hidden="true">${esc(corta)}</span>` : ""}</button>`);
         b.addEventListener("pointerdown", (e) => { if (it.mantenerFoco !== false) e.preventDefault(); });
         b.onclick = (e) => it.fn(e, b);
         b._it = it;
@@ -342,7 +357,7 @@
       s.className = "estado-sync " + t[2];
       s.innerHTML = `${t[0]}<span class="solo-escritorio">${t[1]}</span>`;
       s.setAttribute("data-micro", ed.local && ed.destino ? "Se sube al volver la red|Lo creaste sin Internet dentro de " + (ed.destino.nombre || "un espacio") + ". Se guarda aquí, cifrado, y se sube solo cuando haya conexión."
-        : ed.local ? "Solo en este equipo|Se guarda automáticamente " + NOM.aqui().en + ", pero si " + NOM.aqui().borrar + " se pierde. Descárgalo (Exportar → .nom) o crea una cuenta y súbelo a un espacio."
+        : ed.local ? "Solo en este equipo|Se guarda automáticamente " + NOM.aqui().en + ", pero si " + NOM.aqui().borrar + " se pierde. Descárgalo (Descargar → .nom) o crea una cuenta y súbelo a un espacio."
         : ed.soloLectura ? "Solo ver|Tu permiso deja ver el documento, no cambiarlo."
         : e === "lleno" ? "Sin espacio en la nube|El propietario del espacio usó toda su cuota. Tus cambios se quedan en este equipo; liberen versiones viejas en Almacenamiento."
         : e === "sin-red" ? "Sin conexión|Sigue trabajando: tus cambios se guardan en este equipo y se envían solos al volver la red."
@@ -659,7 +674,7 @@
         ed.destino = null;
         aviso("Listo: ya está en el espacio", { tipo: "ok" });
         location.hash = "#/doc/" + d.id;
-      } catch (e) { aviso(e.red ? "Todavía no hay conexión con el servidor" : e.message, { tipo: e.red ? "aviso" : "error" }); }
+      } catch (e) { aviso(e.red ? "Todavía no hay conexión. Revisa el Wi-Fi o los datos." : e.message, { tipo: e.red ? "aviso" : "error" }); }
       subiendo = false;
     }
     const quitarRedDestino = ed.destino ? api.alCambiarRed(() => pintarAvisos()) : null;
@@ -735,7 +750,7 @@
 
     // ------------------------------------------------------------ versiones (CU-23)
     async function historial() {
-      if (enLocal) return aviso("El historial de versiones necesita una cuenta. Sin cuenta, descarga copias con Exportar → .nom", { tipo: "info", ms: 5000 });
+      if (enLocal) return aviso("El historial de versiones necesita una cuenta. Sin cuenta, descarga copias con Descargar → .nom", { tipo: "info", ms: 5000 });
       const lateral = $("[data-lateral]", vista);
       if (lateral.firstChild) { cerrarHistorial(); return; }
       lateral.innerHTML = `<div class="cajon"><div class="cajon-cab"><h3>Historial</h3>
@@ -868,7 +883,7 @@
           <p class="suave chico">Quien lo abra en Office o aquí tendrá que escribirla. Si la olvidas, no hay forma de recuperar el archivo.</p>
           <div class="campo"><label for="exp-c1">Contraseña</label><div class="entrada"><input id="exp-c1" type="password" data-c1 autocomplete="new-password" maxlength="255"></div></div>
           <div class="campo"><label for="exp-c2">Escríbela otra vez</label><div class="entrada"><input id="exp-c2" type="password" data-c2 autocomplete="new-password" maxlength="255"></div></div></details>` : ""}</div>`);
-      const h = hoja({ titulo: "Exportar", icono: "download", cuerpo });
+      const h = hoja({ titulo: "Descargar", icono: "download", cuerpo });
       $$("[data-f]", cuerpo).forEach((b) => (b.onclick = async () => {
         try {
           let opc;

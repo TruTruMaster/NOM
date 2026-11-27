@@ -36,7 +36,7 @@
   function recuperar(nombre) {
     const cuerpo = html(`<form class="col" novalidate>
       <p class="suave" style="font-weight:400">Usa el código que te dio NOM al crear la cuenta (o el último que generaste en Ajustes).</p>
-      <p class="suave chico" style="font-weight:400">${ico("hard-drive", "ico-s")} Lo que está en tus espacios no cambia. Lo que solo está guardado en un equipo (documentos de “${esc(NOM.etiquetaEquipo())}” y cambios sin enviar) va cifrado con tu contraseña de ahora: al entrar con la nueva te la pediremos una vez para recuperarlo, así que si la recuerdas, mejor cámbiala desde tu cuenta.</p>
+      <p class="suave chico" style="font-weight:400">${ico("hard-drive", "ico-s")} Lo que está en tus espacios no cambia. Lo que solo está guardado en un equipo (documentos de “${esc(NOM.etiquetaEquipo())}” y cambios sin enviar) va protegido con tu contraseña de ahora: al entrar con la nueva te la pediremos una vez para recuperarlo, así que si la recuerdas, mejor cámbiala desde tu cuenta.</p>
       <div class="alerta" data-alerta hidden role="alert"></div>
       <div class="campo"><label for="rn">Usuario</label><div class="entrada">${ico("user")}<input id="rn" name="nombre" autocomplete="username" autocapitalize="none" value="${esc(nombre || "")}"></div></div>
       <div class="campo"><label for="rk">Código de recuperación</label><div class="entrada">${ico("key-round")}<input id="rk" name="codigo" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="ABCD-EFGH-JKMN-PQRS"></div></div>
@@ -134,7 +134,7 @@
         <div class="lista-item">${ico("trash-2")}<span class="crece"><b>Se borran ${nEsp === null ? "tus espacios" : nEsp === 1 ? "tu espacio" : "tus " + nEsp + " espacios"}${nDoc ? " y " + (nDoc === 1 ? "su documento" : "sus " + nDoc + " documentos") : ""}</b><small>Con todas sus versiones, también para las personas con quienes los compartes. Si quieres conservar algo, descárgalo antes.</small></span></div>
         <div class="lista-item">${ico("log-out")}<span class="crece"><b>Sales de los espacios de otras personas</b><small>Lo que escribiste ahí se queda: es de ese espacio.</small></span></div>
         <div class="lista-item">${ico(api.empaquetada ? "smartphone" : "hard-drive")}<span class="crece"><b>Se borra lo tuyo de este equipo</b><small>Los documentos de “${esc(NOM.etiquetaEquipo())}” y los cambios sin enviar de esta cuenta.</small></span></div>
-        <div class="lista-item">${ico("archive")}<span class="crece"><b>Los respaldos se borran solos</b><small>El servidor guarda copias de los últimos días: tus datos desaparecen de ellas a más tardar en 14 días.</small></span></div>
+        <div class="lista-item">${ico("archive")}<span class="crece"><b>Los respaldos se borran solos</b><small>NOM guarda copias de los últimos días: tus datos desaparecen de ellas a más tardar en 14 días.</small></span></div>
       </div>
       <div class="alerta" data-alerta hidden role="alert"></div>
       <input type="text" name="usuario" autocomplete="username" value="${esc(u.nombre || "")}" hidden>
@@ -187,7 +187,7 @@
     if (r.docs) partes.push(r.docs === 1 ? "1 documento" : r.docs + " documentos");
     if (r.colas) partes.push("cambios sin enviar de " + (r.colas === 1 ? "1 documento" : r.colas + " documentos"));
     const cuerpo = html(`<form class="col" novalidate>
-      <p style="font-weight:400">En este equipo hay <b>${esc(partes.join(" y "))}</b> que se guardaron con tu contraseña anterior. Siguen aquí, cifrados: escribe esa contraseña para recuperarlos.</p>
+      <p style="font-weight:400">En este equipo hay <b>${esc(partes.join(" y "))}</b> que se guardaron con tu contraseña anterior. Siguen aquí, protegidos: escribe esa contraseña para recuperarlos.</p>
       <div class="alerta" data-alerta hidden role="alert"></div>
       <div class="campo"><label for="va">Tu contraseña anterior</label><div class="entrada">${ico("lock")}<input id="va" name="anterior" type="password" autocomplete="off" autofocus></div>
         <div class="ayuda">No se envía a ningún lado: solo abre lo guardado en este equipo.</div></div>
@@ -393,7 +393,7 @@
       const dir = api.empaquetada ? api.servidor() : location.origin;
       const equipo = (dir.replace(/^https?:\/\//i, "").match(/^\[[^\]]*\]|^[^/:]+/) || [""])[0].toLowerCase();
       if (/^http:/i.test(dir) && !/^(localhost|127(\.\d+){3}|\[::1\])$/.test(equipo))
-        f.append(html(`<p class="servidor-pie" data-sin-cifrar>${ico("triangle-alert", "ico-s")}<span><b>Conexión sin cifrar (red local).</b> Úsala solo en un Wi-Fi de confianza: quien esté en la misma red podría ver lo que se envía.</span></p>`));
+        f.append(html(`<p class="servidor-pie" data-sin-cifrar>${ico("triangle-alert", "ico-s")}<span><b>Conexión sin protección (mismo Wi-Fi).</b> Úsala solo en un Wi-Fi de confianza: quien esté en el mismo Wi-Fi podría ver lo que se envía.</span></p>`));
       // En la app: a qué servidor se conecta, dicho en palabras, y cómo cambiarlo (para equipos que
       // usan NOM en su propia red, sin Internet).
       if (NOM.anfitrion && NOM.anfitrion.esLocal()) {
@@ -420,7 +420,7 @@
         // En un navegador normal (no la app): un enlace para descargar la app de Android. El
         // archivo lo entrega la red de GitHub (Fastly), no la conexión del servidor, y
         // ".../releases/latest/..." trae siempre la versión más reciente que se haya publicado.
-        f.append(html(`<p class="servidor-pie">${ico("smartphone", "ico-s")}<span>¿Usas Android? <a href="https://github.com/TruTruMaster/NOM/releases/latest/download/NOM.apk" rel="noopener" data-micro="Descargar la app para Android|Se descarga desde la red de GitHub, así que no gasta los datos del servidor. Ábrela en el teléfono para instalarla; trae siempre la versión más reciente."><b>Descarga la app</b></a> · siempre la más reciente</span></p>`));
+        f.append(html(`<p class="servidor-pie">${ico("smartphone", "ico-s")}<span>¿Usas Android? <a href="https://github.com/TruTruMaster/NOM/releases/latest/download/NOM.apk" rel="noopener" data-micro="Descargar la app para Android|Se descarga desde la red de GitHub, así que no gasta el Internet de NOM. Ábrela en el teléfono para instalarla; trae siempre la versión más reciente."><b>Descarga la app</b></a> · siempre la más reciente</span></p>`));
       }
     }
 
@@ -464,7 +464,7 @@
       api.fijarSesion(r.token, r.usuario);
       // La contraseña abre la bóveda cifrada de esta cuenta en este equipo (y no se guarda).
       try { await NOM.boveda.abrir(r.usuario.id, contrasena); }
-      catch (e) { console.error(e); NOM.aviso("Este navegador no permite guardar documentos cifrados; se trabajará solo en línea.", { tipo: "aviso", ms: 6000 }); }
+      catch (e) { console.error(e); NOM.aviso("Este navegador no permite guardar documentos protegidos en este equipo: se trabajará solo con Internet.", { tipo: "aviso", ms: 6000 }); }
       NOM.aplicarPreferencias(r.preferencias);
       // Fase 15: el par de llaves de la cuenta (se crea la primera vez) y la privada a la bóveda.
       if (NOM.e2e) {

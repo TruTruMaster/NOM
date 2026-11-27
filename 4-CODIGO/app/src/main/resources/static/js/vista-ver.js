@@ -12,7 +12,7 @@
         <div class="crece ver-titulo"><b data-nombre>Abriendo…</b><small class="suave" data-sub></small></div>
         <button class="btn chico" type="button" data-imprimir hidden>${ico("download", "ico-s")} <span>Imprimir o guardar PDF</span></button></header>
       <main class="ver-cuerpo" data-cuerpo><div class="esqueleto" style="height:60vh;border-radius:var(--r-l)"></div></main>
-      <footer class="ver-pie suave">Hecho con NOM · Solo lectura</footer></div>`;
+      <footer class="ver-pie suave">Hecho con NOM · Solo para ver</footer></div>`;
     const cuerpo = $("[data-cuerpo]", raiz);
     let r;
     // Fase 15: un documento cifrado trae su llave después de «~» (nunca llega al servidor).

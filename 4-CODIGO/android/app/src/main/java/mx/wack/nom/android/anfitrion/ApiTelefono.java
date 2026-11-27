@@ -78,6 +78,8 @@ final class ApiTelefono {
 
     private static Respuesta creado(Object cuerpo) { return Respuesta.json(201, cuerpo); }
 
+    /** La red de quien pide para los topes de cuentas: una IPv6 de Internet cuenta por su /64 (como en la computadora). */
+    static String red(Peticion p) { return mx.wack.nom.core.servicio.Hosts.agruparRedPublica(p.origen); }
     private static Map<String, Object> cuerpo(Peticion p) { return cuerpo(p, MAX_PEQUENO); }
 
     @SuppressWarnings("unchecked")
@@ -237,16 +239,17 @@ final class ApiTelefono {
         // Volver a entrar con el alias que este equipo ya tenía (su llave), aunque el código haya vencido.
         if (r.equals("/api/cuentas/alias/entrar") && m.equals("POST")) {
             Map<String, Object> c = cuerpo(p);
-            // El alias del dueño solo entra desde este mismo teléfono.
+            // El alias del dueño solo entra desde este mismo teléfono. Desde otro equipo se contesta igual que con una
+            // llave equivocada (sin decir cuál es el id del dueño).
             if (p.origen != null && cuentas.porId(texto(c, "id")).map(cu -> cu.dueno).orElse(false))
-                throw ErrorNom.prohibido("Ese alias solo entra desde el teléfono que comparte");
-            Sesion s = cuentas.entrarAlias(texto(c, "id"), texto(c, "llave"), p.origen);
+                throw new ErrorNom(ErrorNom.SIN_SESION, "Este equipo ya no tiene ese alias. Entra con uno nuevo.");
+            Sesion s = cuentas.entrarAlias(texto(c, "id"), texto(c, "llave"), red(p));
             return ok(yo(cuentas.porId(s.usuarioId).orElseThrow(), s.token, s.expira));
         }
         // A.2 Quien sí tiene Internet presenta el pase que le dio la nube.
         if (r.equals("/api/cuentas/pase/entrar") && m.equals("POST")) {
             if (!pases.aceptaPases()) throw ErrorNom.prohibido("Este teléfono no tiene la llave de ninguna nube");
-            cuentas.limitarPases(p.origen);
+            cuentas.limitarPases(red(p));
             Sesion s = cuentas.desdePase(pases.verificar(texto(cuerpo(p), "pase")));
             return ok(yo(cuentas.porId(s.usuarioId).orElseThrow(), s.token, s.expira));
         }
@@ -255,7 +258,7 @@ final class ApiTelefono {
             final String codigo = x.group(1);
             return ok(topes.conTopeNoExiste(p.origen, () -> {
                 Map<String, Object> c = cuerpo(p);
-                return espacios.entrarConAlias(codigo, texto(c, "id"), texto(c, "llave"), p.origen);
+                return espacios.entrarConAlias(codigo, texto(c, "id"), texto(c, "llave"), red(p));
             }));
         }
         // Enlaces para unirse (QR), recibos y proyeccion: sin sesion (como en ConfigWeb).
@@ -265,7 +268,7 @@ final class ApiTelefono {
         }
         if ((x = coincide("/api/enlaces/" + ID + "/invitado", r)) != null && m.equals("POST")) {
             final String codigo = x.group(1);
-            return ok(topes.conTopeNoExiste(p.origen, () -> espacios.entrarComoInvitado(codigo, texto(cuerpo(p), "apodo"), p.origen)));
+            return ok(topes.conTopeNoExiste(p.origen, () -> espacios.entrarComoInvitado(codigo, texto(cuerpo(p), "apodo"), red(p))));
         }
         if (r.equals("/api/recibos/verificar") && m.equals("POST")) return ok(documentos.verificarRecibo(cuerpo(p, MAX_RECIBO)));
         if ((x = coincide("/api/proyeccion/" + ID, r)) != null && m.equals("GET")) {
@@ -329,11 +332,11 @@ final class ApiTelefono {
         if (r.equals("/api/cuentas/yo") && m.equals("GET")) return ok(yo(u, null, 0));
         if (r.equals("/api/cuentas/contrasena") && m.equals("PUT")) {
             Map<String, Object> c = cuerpo(p);
-            Sesion s = cuentas.cambiarContrasena(u, texto(c, "actual"), texto(c, "nueva"), p.origen);
+            Sesion s = cuentas.cambiarContrasena(u, texto(c, "actual"), texto(c, "nueva"), red(p));
             return ok(yo(u, s.token, s.expira));
         }
         if (r.equals("/api/cuentas/eliminar") && m.equals("POST")) {
-            cuentas.confirmarParaBorrar(u, texto(cuerpo(p), "contrasena"), p.origen);
+            cuentas.confirmarParaBorrar(u, texto(cuerpo(p), "contrasena"), red(p));
             return ok(documentos.eliminarCuenta(u));
         }
         if (r.equals("/api/cuentas/boleto") && m.equals("POST")) return ok(Map.of("boleto", cuentas.boleto(token)));

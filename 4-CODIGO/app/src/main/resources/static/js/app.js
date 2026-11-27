@@ -71,7 +71,7 @@
         <span class="crece"></span>
         <div class="riel-titulo">Guardado</div>
         <a class="riel-item" href="#/dispositivo" ${actual === "dispositivo" ? 'aria-current="page"' : ""} data-micro="${esc(NOM.etiquetaEquipo())}|Lo guardado aquí para abrirlo sin Internet y cuánto ocupa.${api.empaquetada ? " También: compartir sin Internet desde este teléfono." : ""}">${ico(api.empaquetada ? "smartphone" : "hard-drive")} ${esc(api.empaquetada ? "En este teléfono" : "En este equipo")}</a>
-        ${u.invitado ? "" : `<button class="riel-item" data-a="almacen" data-micro="En el servidor|Lo de tus espacios: cuánto ocupa en ${esc(NOM.vistaEspacios.nombreServidor())} y cuánto te queda.">${ico("cloud")} En el servidor</button>`}`}
+        ${u.invitado ? "" : `<button class="riel-item" data-a="almacen" data-micro="Tu almacenamiento|Lo de tus espacios: cuánto ocupa en ${esc(NOM.vistaEspacios.nombreServidor())} y cuánto te queda.">${ico("cloud")} Tu almacenamiento</button>`}`}
         <div class="riel-pie">
           ${avatar(u)}
           <div class="crece"><div class="recorta" style="font-weight:600;font-size:14px">${esc(u.nombre || "")}</div><div class="chico suave recorta" ${sinCuenta ? "" : "data-red-texto"}>${sinCuenta ? "Solo en este equipo" : api.enLinea ? "Conectado" : "Sin conexión"}</div>${!sinCuenta && NOM.tipoCuenta(u) ? `<div class="chico suave recorta">${esc(NOM.tipoCuenta(u))}</div>` : !sinCuenta && u.empresa ? `<div class="chico suave recorta">${esc(u.empresa)}</div>` : ""}</div>
@@ -110,7 +110,7 @@
     ] : [
       { titulo: u.nombre + (NOM.tipoCuenta(u) ? " · " + NOM.tipoCuenta(u) : u.empresa ? " · " + u.empresa : "") },
       { texto: NOM.etiquetaEquipo(), icono: api.empaquetada ? "smartphone" : "hard-drive", fn: () => { location.hash = "#/dispositivo"; } },
-      ...(u.invitado ? [] : [{ texto: "En el servidor (tu almacenamiento)", icono: "cloud", fn: () => NOM.vistaEspacios.miAlmacenamiento() }]),
+      ...(u.invitado ? [] : [{ texto: "Tu almacenamiento", icono: "cloud", fn: () => NOM.vistaEspacios.miAlmacenamiento() }]),
       { texto: "Ajustes y preferencias", icono: "settings", fn: NOM.vistaEspacios.preferencias },
       ...(NOM.instalar && NOM.instalar.disponible() ? [{ texto: "Instalar en esta computadora", icono: "monitor-down", fn: () => NOM.instalar.pedir() }] : []),
       { texto: "Ayuda", icono: "circle-help", fn: () => NOM.ayuda("") },
@@ -285,7 +285,7 @@
     NOM.guardar("nom.versionAvisada", { clave, dia: hoy });
     const ver = /^[0-9]+(?:\.[0-9]+){1,3}$/.test(String(info.version || "")) ? String(info.version) : "";
     if (suya < mia) {
-      NOM.aviso(`Este servidor tiene una versión anterior de NOM${ver && suya ? " (" + ver + ")" : ""} que esta app (${NOM.VERSION}). Puedes trabajar, pero lo que importes de Word, Excel o PowerPoint puede verse distinto en la página hasta que actualicen el servidor.`, { tipo: "aviso", ms: 12000 });
+      NOM.aviso(`Te conectas a un NOM más viejo${ver && suya ? " (" + ver + ")" : ""} que esta app (${NOM.VERSION}). Puedes trabajar, pero lo que importes de Word, Excel o PowerPoint puede verse distinto en la página hasta que lo actualicen.`, { tipo: "aviso", ms: 12000 });
     } else {
       NOM.aviso(`Hay una versión más nueva de la app (${ver || "nueva"}; tienes la ${NOM.VERSION}). Actualízala para ver los documentos igual que en la página.`,
         { tipo: "aviso", ms: 15000, accion: { texto: "Descargar", fn: () => { location.href = "https://github.com/TruTruMaster/NOM/releases/latest/download/NOM.apk"; } } });

@@ -69,9 +69,15 @@
 .ed-herramientas .icono-btn.con-etq { width: auto; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px 0 8px; font-size: 14px; font-weight: 600; white-space: nowrap; }
 .ed-herramientas .icono-btn.destacado { background: var(--acento); color: var(--sobre-acento); padding: 0 14px 0 10px; }
 .ed-herramientas .icono-btn.destacado:hover { background: var(--acento-claro); }
+.ed-herramientas .icono-btn .corta { display: none; }
 @media (max-width: 860px) {
   .ed-herramientas .icono-btn.con-etq { display: inline-grid; padding: 0; }
   .ed-herramientas .icono-btn.con-etq .etq { display: none; }
+  /* nombre corto debajo del ícono (los que no se entienden solos); la barra se desliza de lado, nada se esconde */
+  .ed-herramientas .icono-btn.con-corta { display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; width: auto; min-width: 44px; padding: 0 4px; }
+  .ed-herramientas .icono-btn.con-corta .corta { display: block; font-size: 11px; font-weight: 600; line-height: 1; white-space: nowrap; }
+  .ed-herramientas .icono-btn.con-corta .ico { width: 18px; height: 18px; }
 }
 .color-punto { width: 18px; height: 18px; border-radius: var(--r-xs); border: 2px solid var(--sup); box-shadow: 0 0 0 1px var(--borde-fuerte); }
 

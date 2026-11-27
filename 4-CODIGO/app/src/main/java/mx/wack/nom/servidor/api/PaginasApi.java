@@ -66,7 +66,8 @@ public class PaginasApi {
         if (html == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         html = mx.wack.nom.core.servicio.PaginasLimpias.sinPoliticaEnMeta(html);   // (la política va en la cabecera)
         html = Buscadores.cabecera(html, Buscadores.base(req), "");
-        String etiqueta = "\"" + Integer.toHexString(html.hashCode()) + "\"";
+        // Débil (W/): Tomcat no comprime una respuesta con etiqueta fuerte, y la portada pesa ~70 KB.
+        String etiqueta = "W/\"" + Integer.toHexString(html.hashCode()) + "\"";
         if (new ServletWebRequest(req).checkNotModified(etiqueta)) return ResponseEntity.status(HttpStatus.NOT_MODIFIED).eTag(etiqueta).build();
         return ResponseEntity.ok().contentType(HTML).eTag(etiqueta).cacheControl(org.springframework.http.CacheControl.noCache().noTransform()).body(html);
     }

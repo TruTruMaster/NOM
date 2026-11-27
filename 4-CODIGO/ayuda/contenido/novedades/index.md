@@ -4,8 +4,20 @@ descripcion: Qué cambió en cada versión, en palabras sencillas.
 orden: 1
 aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-26
-version: 0.23.6
+version: 0.23.7
 ---
+## 0.23.7 — noviembre de 2026
+
+- **Palabras de todos los días:** los avisos y botones que todavía decían «servidor», «cifrado», «solo lectura» o «red
+  local» ahora dicen «NOM en Internet», «protegido con tu contraseña», «solo puede ver» o «el mismo Wi-Fi». En el menú,
+  «En el servidor» se llama ahora **Tu almacenamiento**.
+- **En el celular, cada herramienta con su nombre:** las que no se entienden con el puro dibujo (Insertar, Comentar,
+  Fijar, Combinar, Capas, Notas…) llevan su nombre debajo. El orden de la barra no cambió.
+- **Importar Word, Excel o PowerPoint:** mientras se sube el archivo el botón dice «Subiendo…» y no se puede tocar dos
+  veces.
+- **Archivos de Office armados a propósito:** más revisiones para que no traben la página.
+- **Teléfono que comparte:** cuenta los intentos de entrar igual que NOM en Internet.
+
 ## 0.23.6 — noviembre de 2026
 
 - **«Solo puede ver» dentro de un espacio:** quien solo puede ver recibe lo mismo que el enlace para ver: lo que se ve

@@ -282,7 +282,7 @@
     };
     const n = src.length;
     let ip = 0, buf = 0, cnt = 0, ultimo = 0;
-    const mal = () => { throw new Error("Los datos comprimidos están dañados"); };
+    const mal = () => { throw new Error("El archivo está dañado"); };
     while (!ultimo) {
       while (cnt < 3) { buf |= src[ip++] << cnt; cnt += 8; }
       ultimo = buf & 1; const tipo = (buf >>> 1) & 3; buf >>>= 3; cnt -= 3;

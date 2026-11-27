@@ -34,7 +34,8 @@ Censo 2020): poco más de la secundaria. Por eso cada palabra cuenta.
   mouse no existe en el celular ([NN/g, Icon Usability](https://www.nngroup.com/articles/icon-usability/);
   [NN/g, Tooltips](https://nngroup.com/articles/tooltip-guidelines)).
 - Mantener presionado es un **gesto oculto**: nada en la pantalla avisa que existe
-  ([Norman y Nielsen, Gestural Interfaces](https://ignorethecode.net/blog/2010/05/30/nielsen_and_norman_on_gestures/)).
+  (Norman y Nielsen, 2010, «Gestural interfaces: a step backward in usability», *Interactions* 17(5), 46-49,
+  [doi:10.1145/1836216.1836228](https://doi.org/10.1145/1836216.1836228)).
   Por eso la ruedita siempre tiene otro camino visible (la barra, el menú "Más") y un consejo la
   primera vez.
 - Esconder las opciones en un menú reduce cuánto las encuentra la gente; en computadora, mucho más
@@ -48,10 +49,11 @@ Censo 2020): poco más de la secundaria. Por eso cada palabra cuenta.
 - La gente pasa casi todo su tiempo en otras apps y espera que la nuestra funcione igual
   ([NN/g, Mental Models](https://www.nngroup.com/articles/mental-models/)). Por eso "Compartir"
   junta todo, como en Google Docs, y unirse con un código es como entrar a un grupo de WhatsApp.
-- Cada opción de más hace más lenta la decisión
-  ([ley de Hick](https://lawsofux.com/hicks-law/)). Mostrar primero lo esencial y el resto
-  después ayuda, pero cada capa extra también cuesta
-  ([UX Magazine](https://uxmag.com/articles/balancing-cognitive-load-and-discoverability)).
+- Cada opción de más hace más lenta la decisión: el tiempo crece con el logaritmo del número de opciones
+  (Hick, 1952, *Quarterly Journal of Experimental Psychology* 4(1), 11-26,
+  [doi:10.1080/17470215208416600](https://doi.org/10.1080/17470215208416600)). Mostrar primero lo esencial y el
+  resto después ayuda, pero cada capa extra también cuesta
+  ([NN/g, Progressive Disclosure](https://www.nngroup.com/articles/progressive-disclosure/)).
 
 ### Ayuda y errores
 
@@ -67,8 +69,10 @@ Censo 2020): poco más de la secundaria. Por eso cada palabra cuenta.
 - Letra de al menos 16 px, buen contraste, botones grandes, errores claros y aceptar varias formas
   de escribir los datos ([NN/g, Usability for Seniors](https://www.nngroup.com/articles/usability-for-senior-citizens/),
   123 personas de 65 años o más).
-- Con la edad, los azules y amarillos se ven más pálidos: no usarlos claros para texto importante
-  ([guía de diseño para adultos mayores](https://uxdesign.cc/a-guide-to-interface-design-for-older-adults-31109468d46d)).
+- Con la edad cuesta más distinguir los azules de los amarillos y de los verdes: en un estudio con 865 personas
+  mayores, casi nadie menor de 70 años tenía problemas con los colores, pero después aumentan rápido y la mayoría son
+  de azul-amarillo (Schneck, Haegerstrom-Portnoy, Lott y Brabyn, 2014, *Optometry and Vision Science* 91(3),
+  284-290). No usar azules ni amarillos claros para texto importante.
 - Que cada quien pueda **agrandar la letra**.
 
 ### Niñas y niños
@@ -80,7 +84,8 @@ Censo 2020): poco más de la secundaria. Por eso cada palabra cuenta.
 
 - Texto con contraste de al menos **4.5:1**; bordes y controles, 3:1; botones de al menos 24 px
   (WCAG 2.2) y mejor **44 px** para el dedo ([WebAIM](https://webaim.org/articles/contrast/)).
-- Alrededor de 1 de cada 12 hombres no distingue bien algunos colores: **nunca solo el color**
+- Alrededor de 1 de cada 12 hombres (8 % en poblaciones de origen europeo; Birch, 2012, *JOSA A* 29(3), 313-320) no
+  distingue bien algunos colores: **nunca solo el color**
   para decir algo; siempre con texto o ícono.
 
 ---
@@ -90,8 +95,10 @@ Censo 2020): poco más de la secundaria. Por eso cada palabra cuenta.
 1. **Palabras de todos los días.** Usar el glosario de abajo. Frases cortas, en "tú". Nada de
    "servidor", "red local", "sincronizar", "LAN", "cifrado", "token" en lo que ve la gente.
 2. **Un verbo en cada botón** que diga lo que pasa.
-3. **Todo ícono con su nombre.** Si no cabe, el nombre aparece al mantenerlo presionado (y al pasar
-   el mouse), pero lo esencial nunca vive solo ahí.
+3. **Todo ícono con su nombre.** Los que no se entienden solos llevan su nombre a la vista: completo en la
+   computadora, corto debajo del ícono en el celular. Solo los que todos reconocen (los de formato que son iguales
+   en Word, la lupa, el bote, deshacer) pueden ir sin él; su nombre aparece al mantenerlos presionados (y al pasar el
+   mouse).
 4. **Un solo lugar para cada cosa.** Si una acción aparece en tres sitios de la misma pantalla,
    dejar uno.
 5. **Primero lo frecuente.** Lo raro o técnico va en "Más" u "Opciones avanzadas".
@@ -122,6 +129,8 @@ Censo 2020): poco más de la secundaria. Por eso cada palabra cuenta.
 | Archivos en este dispositivo | Guardado en este equipo (en la app: Este teléfono) |
 | Empresa u organización | Escuela, empresa o grupo |
 | caracteres | letras o números |
+| Cifrado (en general) | protegido con tu contraseña · se acepta **cifrado de extremo a extremo** como nombre de esa función: es la frase que ya muestra WhatsApp |
+| En el servidor (almacenamiento) | Tu almacenamiento |
 | Bienvenido (masculino) | Hola de nuevo · Ya estás en NOM |
 
 ---
@@ -155,11 +164,28 @@ Censo 2020): poco más de la secundaria. Por eso cada palabra cuenta.
 - Cerca de 50 textos más, sin "servidor", "red local", "sincronizar" ni "solo lectura" (ver el
   glosario). Los mensajes de error del servidor usan las mismas palabras.
 
+- **27 de noviembre de 2026: medir el lenguaje, no suponerlo.** `pruebas/interfaz/legibilidad.py` saca todos los
+  textos que se ven (plantillas de `static/js`, `index.html` y la ayuda) y calcula el índice de Flesch-Szigriszt con la
+  escala INFLESZ (Barrio-Cantalejo et al., 2008, *An. Sist. Sanit. Navar.* 31(2), 135-152,
+  [doi:10.4321/S1137-66272008000300004](https://doi.org/10.4321/S1137-66272008000300004)): la interfaz en conjunto da
+  **76.4 («bastante fácil»)** y la ayuda **80.9 («muy fácil»)**; la meta es 65 o más. También busca las palabras del
+  glosario que no deben verse: había **49** en la interfaz (servidor, cifrado, solo lectura, red local, exportar,
+  caracteres) y se cambiaron por las de todos los días; quedan las de las funciones de hoja (ver abajo).
+- **Íconos con nombre en el celular:** la regla 3 decía «todo ícono con su nombre», pero la barra del editor en el
+  celular era de solo íconos (DISENO-UI §8). Ahora los que no se entienden solos llevan un nombre corto debajo
+  (Insertar, Comentar, Sugerir, Investigar, Fijar, Combinar, Filas, Gráfica, Capas, Notas, Imán…), sin cambiar el
+  orden.
+- **Fuentes primarias** en lugar de resúmenes de blogs (Hick 1952; Norman y Nielsen 2010; Schneck et al. 2014; en
+  DISENO-UI, Fitts, Miller, Doherty y Thadhani, Leroy, Mark et al.).
+- **Prueba con personas:** hoja lista en `ENTREGA/Prueba_con_personas.docx` (las tareas de §5, dónde anotar si lo
+  logró, cuánto tardó y en qué palabra se atoró, y el cuestionario SUS de Brooke, 1996, con su cálculo).
+
 ---
 
 ## 5. Pendiente
 
-- **Probar con personas reales**, con cinco de cada grupo: niñas y niños de 10 a 12 años, personas
+- **Probar con personas reales** (hoja lista: `ENTREGA/Prueba_con_personas.docx`; resultados y puntaje SUS aquí
+  cuando se haga), con cinco de cada grupo: niñas y niños de 10 a 12 años, personas
   de 65 años o más y personas con poca experiencia en computadoras. Tareas: crear un espacio,
   invitar con el código, entrar con el código desde otro celular, escribir un párrafo, comentar y
   descargar en Word. Medir quién lo logra, cuánto tarda y en qué palabra se atora.

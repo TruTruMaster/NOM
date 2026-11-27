@@ -85,7 +85,7 @@
     return r;
   }
   async function descifrar(llave, b) {
-    if (!b || !b.length || (b[0] !== 1 && b[0] !== 2)) throw new Error("Formato de archivo cifrado no válido");
+    if (!b || !b.length || (b[0] !== 1 && b[0] !== 2)) throw new Error("El archivo protegido está dañado: no se puede abrir");
     const alg = b[0] === 1 ? "gcm" : "ctr", n = alg === "gcm" ? 12 : 16;
     if (b.length < 1 + n) throw new Error("Archivo cifrado incompleto");
     return C().descifrar(llave, { alg, iv: b.subarray(1, 1 + n), ct: b.subarray(1 + n) });
@@ -205,7 +205,7 @@
     const p = subirUno(reg);
     if (esperar) {
       const ok = await p;
-      if (!ok && hayAlmacen === false) throw Object.assign(new Error("Este servidor no tiene almacén de archivos"), { sinAlmacen: true });
+      if (!ok && hayAlmacen === false) throw Object.assign(new Error("Este NOM no puede guardar archivos aparte"), { sinAlmacen: true });
       if (!ok) {
         // Quien espera va a crear un documento con esto: sin subirlo, no lo crea (se guarda en este equipo con los
         // datos dentro). Que no se quede pendiente de subir, salvo que ya lo estuviera por otra cosa.

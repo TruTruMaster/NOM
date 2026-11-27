@@ -83,7 +83,7 @@ def hacer_pptx(d):
 
 ESPERADO = {
     "acc.docx": {("error", "Falta texto alternativo"): 1, ("error", "Falta el encabezado de la tabla"): 1, ("consejo", "Se salta un nivel de título"): 1,
-                 ("advertencia", "Caracteres en blanco repetidos (renglones vacíos para acomodar)"): 1, ("advertencia", "Caracteres en blanco repetidos (espacios para acomodar)"): 1,
+                 ("advertencia", "Renglones vacíos repetidos (para acomodar)"): 1, ("advertencia", "Espacios repetidos (para acomodar)"): 1,
                  ("advertencia", "Texto de vínculo poco claro"): 1,
                  # (la letra gris y el Título 3 de la plantilla de python-docx: #4F81BD da 4.0 a 1 contra el blanco)
                  ("advertencia", "Texto con poco contraste"): 2},

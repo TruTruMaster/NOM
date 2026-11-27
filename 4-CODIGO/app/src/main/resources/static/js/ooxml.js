@@ -1858,7 +1858,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     // para que «Actualizar campos» encuentre su texto y su página. Los demás (_GoBack, los del índice…) no hace falta.
     const marcadoresUsados = new Set();
     String(xmlDoc || "").replace(/(?:REF|PAGEREF|NOTEREF)\s+([A-Za-z_][\w]*)/g, (m, n) => { marcadoresUsados.add(n); return m; });
-    const nombreMarcador = {};   // id → nombre (bookmarkEnd solo trae el id)
+    const nombreMarcador = Object.create(null);   // id → nombre (bookmarkEnd solo trae el id)
     if (!xmlDoc) throw new Error("El archivo no parece un documento de Word (.docx)");
     const P = (t) => new DOMParser().parseFromString(t, "application/xml");
     const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -1868,7 +1868,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     const activo = (n) => !!n && !["0", "false", "none"].includes(val(n) || "1");
     // relaciones
     const relsTxt = await z.texto("word/_rels/document.xml.rels");
-    const rels = {};
+    const rels = Object.create(null);
     if (relsTxt) [...P(relsTxt).getElementsByTagName("Relationship")].forEach((r) => (rels[r.getAttribute("Id")] = r.getAttribute("Target")));
     const at = (n, k) => (n ? n.getAttributeNS(W, k) || n.getAttribute("w:" + k) : null);
     const rutaDe = (destino) => (destino.startsWith("/") ? destino.slice(1) : "word/" + destino.replace(/^\.\//, ""));
@@ -1904,11 +1904,11 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       }
     }
     // numeración: numId → abstract → formato por nivel (y el texto de cada nivel: «%1.», «Capítulo %1», «%1.%2»)
-    const formatoNum = {}, textoNum = {};
+    const formatoNum = Object.create(null), textoNum = Object.create(null);
     // 8.2 Notas al pie: id → texto.
-    const notasPie = {};
+    const notasPie = Object.create(null);
     // Notas al final (endnotes.xml): id → texto; se numeran aparte (i, ii, iii… como Word, o el formato del archivo)
-    const notasFin = {};
+    const notasFin = Object.create(null);
     const finTxt = await z.texto("word/endnotes.xml");
     if (finTxt) [...P(finTxt).getElementsByTagNameNS(W, "endnote")].forEach((fn) => { const id = fn.getAttributeNS(W, "id") || fn.getAttribute("w:id"); if (+id > 0) notasFin[id] = [...fn.getElementsByTagNameNS(W, "t")].map((t) => t.textContent).join("").trim(); });
     const notasTxt = await z.texto("word/footnotes.xml");
@@ -1921,16 +1921,16 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     }
     const numTxt = await z.texto("word/numbering.xml");
     if (numTxt) {
-      const d = P(numTxt), abs = {};
-      const absTxt = {};
+      const d = P(numTxt), abs = Object.create(null);
+      const absTxt = Object.create(null);
       [...d.getElementsByTagNameNS(W, "abstractNum")].forEach((a) => {
         const id = a.getAttributeNS(W, "abstractNumId") || a.getAttribute("w:abstractNumId");
-        abs[id] = {}; absTxt[id] = {};
+        abs[id] = Object.create(null); absTxt[id] = Object.create(null);
         hijos(a, "lvl").forEach((l) => { const k = l.getAttributeNS(W, "ilvl") || l.getAttribute("w:ilvl"); abs[id][k] = val(hijo(l, "numFmt")); absTxt[id][k] = val(hijo(l, "lvlText")); });
       });
-      [...d.getElementsByTagNameNS(W, "num")].forEach((nn) => { const nid = nn.getAttributeNS(W, "numId") || nn.getAttribute("w:numId"), a = val(hijo(nn, "abstractNumId")); formatoNum[nid] = abs[a] || {}; textoNum[nid] = absTxt[a] || {}; });
+      [...d.getElementsByTagNameNS(W, "num")].forEach((nn) => { const nid = nn.getAttributeNS(W, "numId") || nn.getAttribute("w:numId"), a = val(hijo(nn, "abstractNumId")); formatoNum[nid] = abs[a] || Object.create(null); textoNum[nid] = absTxt[a] || Object.create(null); });
     }
-    const medios = {};
+    const medios = Object.create(null);
     async function imagenDe(rid) {
       const destino = rels[rid];
       if (!destino) return null;
@@ -4315,7 +4315,7 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
       const dn = hsL.find((h) => O.local(h.n) === "definedNames");
       const hijosDn = dn ? O.hijosXml(libroTxt, dn.ci, dn.cf) : [];
       const norm = (t) => String(t || "").replace(/^=/, "").replace(/_xlfn\.|_xlpm\.|_xlws\./g, "").replace(/\s+/g, "");
-      const orig = {};
+      const orig = Object.create(null);
       hijosDn.forEach((h) => {
         const nm = O.attr(libroTxt, h, "name") || "", txt = libroTxt.slice(h.i, h.f);
         if (/^_xlnm\./i.test(nm) || O.attr(libroTxt, h, "localSheetId") != null || /\shidden\s*=\s*"(1|true)"/.test(txt.slice(0, txt.indexOf(">")))) return;
@@ -4694,7 +4694,7 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
     const todos = (n, nombre) => (n ? [...n.getElementsByTagNameNS("*", nombre)] : []);
     const at = (n, a) => (n ? n.getAttribute(a) : null);
     const rels = P(z.texto("xl/_rels/workbook.xml.rels") || "<Relationships/>");
-    const destino = {};
+    const destino = Object.create(null);
     todos(rels, "Relationship").forEach((r) => (destino[at(r, "Id")] = at(r, "Target")));
     // Textos compartidos.
     const sst = z.texto("xl/sharedStrings.xml");
@@ -5115,7 +5115,7 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
     }
     const hojaRef = (n) => (/^[A-Za-z_][A-Za-z0-9_.]*$/.test(n) ? n : "'" + n.replace(/'/g, "''") + "'");
     // Nombres definidos del libro (IVA = 0.16, Ventas = Datos!$A$1:$G$61…) y el orden de las hojas (referencias 3D)
-    const nombresXl = {};
+    const nombresXl = Object.create(null);
     if (V >= 2) todos(P(libro), "definedName").forEach((d) => {
       const n = at(d, "name") || "";
       if (!n || /^_xlnm\./i.test(n) || at(d, "localSheetId") != null) return;
@@ -5267,7 +5267,7 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
       });
       todos(doc, "mergeCell").forEach((m) => {
         const [a, b] = String(at(m, "ref") || "").split(":").map((r) => F().parseRef(r));
-        if (a && b && a.f < MAX_F && a.c < MAX_C) campos["m:" + F().ref(a.c, a.f)] = `${b.c - a.c + 1}x${b.f - a.f + 1}`;
+        if (a && b && a.f < MAX_F && a.c < MAX_C) campos["m:" + F().ref(a.c, a.f)] = `${Math.min(b.c, MAX_C - 1) - a.c + 1}x${Math.min(b.f, MAX_F - 1) - a.f + 1}`;
       });
       todos(doc, "col").forEach((c) => {
         const w = +at(c, "width"), min = +at(c, "min"), max = Math.min(+at(c, "max"), MAX_C);

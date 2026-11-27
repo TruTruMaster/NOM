@@ -1716,11 +1716,12 @@
         const spans = new Map();
         cubiertas = new Map();
         if (!t) return spans;
+        const maxC = Math.min(MAX_COLS, nCols(t)), maxF = Math.min(MAX_FILAS, nFilas(t));
         for (const k in t) {
           if (!k.startsWith("m:") || !t[k]) continue;
           const r = F().parseRef(k.slice(2)), m = medida(t[k]);
-          if (!r || !m) continue;
-          const w = m[0], h = conFilas ? m[1] : 1;
+          if (!r || !m || r.c >= maxC || r.f >= maxF) continue;
+          const w = Math.min(m[0], maxC - r.c), h = conFilas ? Math.min(m[1], maxF - r.f) : 1;
           if (w * h <= 1) continue;
           spans.set(k.slice(2), { cs: w, rs: h });
           for (let f = r.f; f < r.f + h; f++) for (let c = r.c; c < r.c + w; c++) if (c !== r.c || f !== r.f) cubiertas.set(F().ref(c, f), k.slice(2));

@@ -51,6 +51,24 @@ public final class Hosts {
         return conocidos.contains(h);
     }
 
+    /**
+     * Para los topes de cuentas (como Origen.agrupar en la computadora): una IPv6 de Internet cuenta por su /64; las
+     * IPv4 (también ::ffff:a.b.c.d), las IPv6 de la red local (fe80::/10, fc00::/7) y lo que no es una IP quedan como
+     * llegan, para que los equipos del mismo Wi-Fi no compartan un solo tope.
+     */
+    public static String agruparRedPublica(String ip) {
+        if (ip == null || ip.indexOf(':') < 0 || !ip.matches("[0-9a-fA-F:.%a-zA-Z0-9_]{2,64}")) return ip;
+        try {
+            java.net.InetAddress a = java.net.InetAddress.getByName(ip.replaceFirst("%.*$", ""));
+            byte[] b = a.getAddress();
+            if (b.length == 4) return a.getHostAddress();
+            if (a.isLoopbackAddress() || a.isLinkLocalAddress() || a.isAnyLocalAddress() || (b[0] & 0xfe) == 0xfc) return ip;
+        } catch (Exception e) {
+            return ip;
+        }
+        return agruparRed(ip);
+    }
+
     /** Agrupa una dirección IPv6 por su prefijo /64 (los demás valores salen igual). */
     public static String agruparRed(String ip) {
         if (ip == null || !ip.contains(":")) return ip;

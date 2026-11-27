@@ -74,7 +74,7 @@
       }
     } else if (r.origen && !api().mismoServidor(r.origen, location.origin)) {
       const nombreDestino = r.origen.replace(/^https?:\/\//, "");
-      if (!(await confirmar("Otro lugar", `Ese código lleva a ${nombreDestino}, que es otro servidor distinto a este. ¿Quieres abrirlo?`, { si: "Abrir" }))) return;
+      if (!(await confirmar("Otro lugar", `Ese código lleva a ${nombreDestino}, que es otro NOM distinto a este. ¿Quieres abrirlo?`, { si: "Abrir" }))) return;
       location.href = r.url;
       return;
     }
@@ -151,7 +151,7 @@
         <div class="crece"><span class="etiqueta">Te invitan a</span><h2 style="margin-top:2px">${esc(info.espacio)}</h2>
           <span class="suave chico" style="font-weight:500">de ${esc(info.propietario)} · ${esc(permisoTxt(info.permiso))} · el código sirve hasta el ${esc(new Date(info.caduca).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}</span></div>
       </div>
-      ${info.e2e ? `<div class="alerta ${info.sinLlave ? "aviso" : "info"} chico">${ico("lock-keyhole")}<span>Espacio <b>cifrado de extremo a extremo</b>.${info.sinLlave ? " Este código no trae la llave: entra con el QR o la dirección completa, o pide a alguien del espacio que lo abra después." : " La llave viene en el código QR y no pasa por el servidor."}</span></div>` : ""}
+      ${info.e2e ? `<div class="alerta ${info.sinLlave ? "aviso" : "info"} chico">${ico("lock-keyhole")}<span>Espacio <b>cifrado de extremo a extremo</b>.${info.sinLlave ? " Este código no trae la llave: entra con el QR o la dirección completa, o pide a alguien del espacio que lo abra después." : " La llave viene en el código QR: el equipo que guarda el espacio nunca la ve."}</span></div>` : ""}
       ${telefono ? `<div class="alerta info chico">${ico("smartphone")}<span>Este espacio está en un <b>teléfono que comparte</b>, sin Internet. Aquí no se crean cuentas: entra con un alias, o con tu cuenta si este equipo tiene Internet.</span>${NOM.botonAyuda("sin-internet/alias", "Alias al azar")}</div>` : ""}
       <div class="alerta error" data-err hidden></div>
       ${conSesion && !aliasAjeno ? `<button class="btn primario ancho" data-entrar>${ico("log-in")} Entrar como ${esc(u.nombre || "")}</button>

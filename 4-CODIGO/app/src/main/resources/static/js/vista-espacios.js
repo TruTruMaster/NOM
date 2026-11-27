@@ -90,7 +90,7 @@
     const dir = api.empaquetada ? api.servidor() : location.origin;
     const equipo = (dir.replace(/^https?:\/\//i, "").match(/^\[[^\]]*\]|^[^/:]+/) || [""])[0].toLowerCase();
     if (/(^|\.)nom\.dpdns\.org$|(^|\.)nom\.qd\.je$|\.ts\.net$/.test(equipo)) return "NOM en Internet";
-    if (/^(localhost|127(\.\d+){3}|\[::1\])$/.test(equipo)) return "este equipo (es el servidor)";
+    if (/^(localhost|127(\.\d+){3}|\[::1\])$/.test(equipo)) return "este equipo (es el que comparte)";
     return "el equipo " + equipo;
   }
 
@@ -106,7 +106,7 @@
     if (!caja || (api.usuario() || {}).invitado) return;
     const a = await usoServidor();
     if (!a || !caja.isConnected) return;
-    const b = html(`<button type="button" class="almacen-linea caja" data-micro="Tu almacenamiento|Cuánto ocupan tus espacios en el servidor y cuánto te queda. Toca para ver el detalle.">
+    const b = html(`<button type="button" class="almacen-linea caja" data-micro="Tu almacenamiento|Cuánto ocupan tus espacios y cuánto te queda. Toca para ver el detalle.">
       <span class="modo-insignia" style="background:var(--acento-tenue);color:var(--acento-tinta)">${ico("cloud")}</span>
       <span class="crece"><b>Guardados en ${esc(nombreServidor())}</b><small>Los ves en cualquier equipo con tu cuenta. Aquí solo se guardan documentos de NOM, comprimidos.</small></span>
       <span class="almacen-uso"><span class="chip ${claseUso(a)}" data-uso>${esc(textoUso(a))}</span>${a.cuota > 0 ? `<span class="barra-uso"><i style="width:${Math.min(100, Math.max(1, (a.uso / a.cuota) * 100))}%"></i></span>` : ""}</span>
@@ -120,7 +120,7 @@
     const cuerpo = html(`<div class="col"><div class="esqueleto" style="height:160px"></div></div>`);
     const h = hoja({ titulo: "Tu almacenamiento", icono: "cloud", cuerpo, ancha: true });
     const a = (ya && ya.espacios ? ya : null) || await usoServidor();
-    if (!a) { cuerpo.innerHTML = `<div class="alerta error">${ico("wifi-off")}<span>No se pudo consultar el servidor. Revisa la conexión e intenta de nuevo.</span></div>`; return; }
+    if (!a) { cuerpo.innerHTML = `<div class="alerta error">${ico("wifi-off")}<span>No se pudo ver cuánto ocupas. Revisa la conexión e intenta de nuevo.</span></div>`; return; }
     const libre = a.cuota > 0 ? Math.max(0, a.cuota - a.uso) : 0;
     const max = Math.max(1, ...a.espacios.map((e) => e.bytes));
     const locales = NOM.local.lista().length;
@@ -516,7 +516,7 @@
     const pie = html(`<div style="display:contents"><button type="button" class="btn" data-importar>${ico("upload")} Importar archivo</button>${esp && NOM.datos ? `<button type="button" class="btn" data-mas-crear aria-label="Más formas de crear" data-micro="Más|Reporte desde datos (CSV o Excel) y datos públicos.">${ico("more-horizontal")}</button>` : ""}<span class="crece solo-escritorio"></span><button class="btn primario" data-crear>Crear documento</button></div>`);
     const h = hoja({ titulo: esp ? "Nuevo documento" : "Nuevo documento (en este equipo)", cuerpo, pie, ancha: true });
     if (!esp) cuerpo.prepend(html(api.token()
-      ? `<div class="alerta aviso">${ico("hard-drive")}<span>Este documento se guarda <b>solo ${NOM.aqui().en}</b>, cifrado con tu contraseña: no se ve en tus otros equipos. Después puedes pasarlo a un espacio.</span></div>`
+      ? `<div class="alerta aviso">${ico("hard-drive")}<span>Este documento se guarda <b>solo ${NOM.aqui().en}</b>, protegido con tu contraseña: no se ve en tus otros equipos. Después puedes pasarlo a un espacio.</span></div>`
       : `<div class="alerta aviso">${ico("hard-drive")}<span>Sin cuenta, el documento se guarda <b>solo ${NOM.aqui().en}</b>. Si ${NOM.aqui().borrar} se pierde, salvo que lo descargues.</span></div>`));
     // 8.5 Las plantillas que guardó el equipo en este espacio salen primero (con su marca).
     let listaEsp = esp && esp.lista ? esp.lista : null;
@@ -563,11 +563,17 @@
       { texto: "Reporte desde datos (CSV o Excel)…", icono: "bar-chart", fn: async () => { const f = await NOM.formatos.elegirArchivo(".csv,.tsv,.xlsx"); if (!f) return; h.cerrar(true); NOM.datos.reporteDeDatos({ espacio: esp, local: false }, { archivo: f }); } },
       { texto: "Datos públicos (Wikidata)…", icono: "globe", fn: () => { h.cerrar(true); NOM.datos.datosPublicos(esp); } },
     ]);
-    $("[data-importar]", pie).onclick = async () => {
+    $("[data-importar]", pie).onclick = async (ev) => {
       const f = await NOM.formatos.elegirArchivo(NOM.formatos.ACEPTAR.join(","));
       if (!f) return;
+      // Un archivo grande tarda en subir (sus imágenes van aparte): el botón dice qué pasa y no se puede tocar dos veces.
+      const btn = ev.currentTarget || $("[data-importar]", pie), antes = btn.innerHTML;
+      btn.disabled = true; btn.innerHTML = `<span class="cargando"></span> Abriendo “${esc(f.name.length > 28 ? f.name.slice(0, 27) + "…" : f.name)}”…`;
+      const fin = NOM.cargando ? NOM.cargando.empezar() : () => {};
+      const listo = () => { fin(); if (btn.isConnected) { btn.disabled = false; btn.innerHTML = antes; } };
       try {
         const r = await NOM.formatos.importar(f);
+        if (esp && btn.isConnected) btn.innerHTML = `<span class="cargando"></span> Subiendo… puede tardar un poco`;
         if (!esp) {
           const d = NOM.local.crear(r.nombre, r.modo, r.ops);
           h.cerrar(true);
@@ -586,6 +592,7 @@
         }
         aviso(r.aviso || `“${r.nombre}” importado`, { tipo: r.aviso ? "aviso" : "ok", ms: 5000 });
       } catch (err) { aviso(err.message, { tipo: "error", ms: 6000 }); }
+      finally { listo(); }
     };
   }
 
@@ -625,7 +632,7 @@
       if (donde) nuevoDocumento(donde === "local" ? null : donde);
     }));
     const mover = $("[data-mover-local]", cont);
-    if (mover) mover.onclick = () => { const n = NOM.local.moverACuenta(); aviso(`${n} documento(s) ahora están cifrados en tu cuenta`, { tipo: "ok" }); seccionLocal(cont, conCuenta); };
+    if (mover) mover.onclick = () => { const n = NOM.local.moverACuenta(); aviso(`${n} documento(s) ya están en tu cuenta, protegidos con tu contraseña`, { tipo: "ok" }); seccionLocal(cont, conCuenta); };
     const imp = $("[data-importar-local]", cont);
     if (imp) imp.onclick = async () => {
       const f = await NOM.formatos.elegirArchivo(NOM.formatos.ACEPTAR.join(","));
@@ -1075,7 +1082,7 @@
     $("[data-a=chat]", cont).onclick = () => NOM.chat.abrir(d);
     // Fase 15: espacio cifrado. Sin la llave no se puede leer; con ella, se reparte a quien le falte.
     if (d.e2e) {
-      if (d.sinLlave) cont.querySelector(".encabezado").after(html(`<div class="alerta aviso" style="margin-bottom:12px">${ico("lock-keyhole")}<span>Este espacio está <b>cifrado de extremo a extremo</b> y este equipo todavía no tiene su llave: ábrelo con el código QR o la dirección de invitación completa, o pide a alguien del espacio que lo abra (la app le da la llave a quien le falte). ${NOM.botonAyuda("cuentas/extremo-a-extremo", "Espacios cifrados")}</span></div>`));
+      if (d.sinLlave) cont.querySelector(".encabezado").after(html(`<div class="alerta aviso" style="margin-bottom:12px">${ico("lock-keyhole")}<span>Este espacio está <b>cifrado de extremo a extremo</b> y este equipo todavía no tiene su llave: ábrelo con el código QR o la dirección de invitación completa, o pide a alguien del espacio que lo abra (la app le da la llave a quien le falte). ${NOM.botonAyuda("cuentas/extremo-a-extremo", "Espacios cifrados de extremo a extremo")}</span></div>`));
       else NOM.e2e.repartir(d.id).catch(() => {});
     }
     $("[data-a=mas-espacio]", cont).onclick = (e) => NOM.menu(e.currentTarget, [
@@ -1124,7 +1131,7 @@
     try { r = await api.post(`/api/documentos/${doc.id}/enlace-ver`); } catch (e) { return aviso(e.message, { tipo: "error" }); }
     const kd = NOM.e2e ? await NOM.e2e.llaveDocTexto(doc.id) : "";
     const url = location.origin + location.pathname + "#/ver/" + r.enlace + (kd ? "~" + kd : "");
-    const cuerpo = html(`<div class="col"><p style="margin:0">Quien tenga este enlace ve <b>${esc(doc.nombre)}</b> en solo lectura, <b>sin cuenta</b> y sin los comentarios. Sirve para compartirlo con familias o con otro grupo. Lo puedes quitar cuando quieras.</p>
+    const cuerpo = html(`<div class="col"><p style="margin:0">Quien tenga este enlace ve <b>${esc(doc.nombre)}</b> sin poder cambiarlo, <b>sin cuenta</b> y sin los comentarios. Sirve para compartirlo con familias o con otro grupo. Lo puedes quitar cuando quieras.</p>
       <div class="entrada">${ico("link-2")}<input readonly value="${esc(url)}" data-url aria-label="Enlace para ver"></div>
       <div class="pv-qr" style="align-self:center">${NOM.qr ? NOM.qr.svg(url, { titulo: "QR para ver el documento" }) : ""}</div></div>`);
     const pie = html(`<div style="display:contents"><button class="btn peligro" type="button" data-quitar>${ico("link-2-off")} Quitar el enlace</button><span class="crece"></span><button class="btn primario" type="button" data-copiar>${ico("copy")} Copiar enlace</button></div>`);
@@ -1195,7 +1202,7 @@
     if (pie) {
       $("[data-cambiar]", pie).onclick = () => { f.hidden = false; f.contrasena.focus(); };
       $("[data-ahora]", pie).onclick = async (e) => { const b = e.currentTarget; b.disabled = true; try { mostrar(await api.post(`/api/espacios/${esp.id}/sincronia`, {}, { ms: 120000 })); listo && listo(); } catch (x) { aviso(x.message, { tipo: "error" }); } b.disabled = false; };
-      $("[data-quitar]", pie).onclick = async () => { if (!(await confirmar("Desconectar", "Ya no se copiará este espacio. Lo copiado se queda en los dos servidores.", { si: "Desconectar" }))) return; try { await api.delete(`/api/espacios/${esp.id}/sincronia`); h.cerrar(); listo && listo(); } catch (x) { aviso(x.message, { tipo: "error" }); } };
+      $("[data-quitar]", pie).onclick = async () => { if (!(await confirmar("Desconectar", "Ya no se copiará este espacio. Lo que ya se copió se queda en los dos lugares.", { si: "Desconectar" }))) return; try { await api.delete(`/api/espacios/${esp.id}/sincronia`); h.cerrar(); listo && listo(); } catch (x) { aviso(x.message, { tipo: "error" }); } };
     }
   }
 
@@ -1223,7 +1230,7 @@
         const datos = ext === "docx" ? NOM.ooxml.docx(doc) : ext === "xlsx" ? NOM.ooxml.xlsx(doc) : NOM.ooxml.pptx(doc, modo === "DIAGRAMA");
         archivos.push({ nombre: nombreUnico(d.nombre, ext), datos });
       }
-      archivos.push({ nombre: "LEEME.txt", datos: `Espacio "${esp.nombre}" exportado de NOM el ${new Date().toLocaleString("es-MX")}.\r\n${lista.length} documento(s): texto en .docx (Word), hojas en .xlsx (Excel), presentaciones y diagramas en .pptx (PowerPoint).\r\n` });
+      archivos.push({ nombre: "LEEME.txt", datos: `Espacio "${esp.nombre}" descargado de NOM el ${new Date().toLocaleString("es-MX")}.\r\n${lista.length} documento(s): texto en .docx (Word), hojas en .xlsx (Excel), presentaciones y diagramas en .pptx (PowerPoint).\r\n` });
       NOM.formatos.descargarBytes(NOM.formatos.limpioNombre(esp.nombre) + ".zip", "application/zip", NOM.ooxml.zip(archivos));
       cerrar();
       aviso(`Listo: ${lista.length} documento(s) en el .zip`, { tipo: "ok" });

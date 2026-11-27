@@ -599,7 +599,7 @@
       $$("[data-z]", zoomCtl).forEach((b) => (b.onclick = () => (b.dataset.z === "ajustar" ? ajustar() : zoomEn(b.dataset.z === "+" ? 1.2 : 1 / 1.2))));
     } else {
       // 5.1 Alejar para ver la mesa de trabajo alrededor de la diapositiva (lo que quede fuera no se presenta ni se exporta).
-      zoomCtl = html(`<div class="zoom-ctl"><button class="icono-btn" data-z="-" aria-label="Alejar" data-micro="Alejar|Para ver la mesa de trabajo: lo que dejes fuera de la diapositiva no se presenta ni se exporta.|Ctrl+rueda">${ico("zoom-out")}</button><span data-zv>100%</span><button class="icono-btn" data-z="+" aria-label="Acercar" data-micro="Acercar||Ctrl+rueda">${ico("zoom-in")}</button><button class="icono-btn" data-z="ajustar" aria-label="Ajustar" data-micro="Ajustar|La diapositiva completa en pantalla.">${ico("maximize-2")}</button></div>`);
+      zoomCtl = html(`<div class="zoom-ctl"><button class="icono-btn" data-z="-" aria-label="Alejar" data-micro="Alejar|Para ver la mesa de trabajo: lo que dejes fuera de la diapositiva no se presenta ni se descarga.|Ctrl+rueda">${ico("zoom-out")}</button><span data-zv>100%</span><button class="icono-btn" data-z="+" aria-label="Acercar" data-micro="Acercar||Ctrl+rueda">${ico("zoom-in")}</button><button class="icono-btn" data-z="ajustar" aria-label="Ajustar" data-micro="Ajustar|La diapositiva completa en pantalla.">${ico("maximize-2")}</button></div>`);
       capa.append(zoomCtl);
       $$("[data-z]", zoomCtl).forEach((b) => (b.onclick = () => (b.dataset.z === "ajustar" ? ((zoomD = 1), (panD = { x: 0, y: 0 }), aplicarVista()) : zoomDiapo(b.dataset.z === "+" ? 1.2 : 1 / 1.2))));
     }
@@ -718,7 +718,7 @@
       // (los renglones de los cuadros de PowerPoint, a la altura donde los pone PowerPoint)
       if (acotado && NOM.diapo && NOM.diapo.ajustarRenglones) NOM.diapo.ajustarRenglones(mundo);
       if (editando) {
-        const el = mundo.querySelector(`[data-id="${editando}"] .txt, [data-id="${editando}"] .libre-texto`), be = doc().bloque(editando);
+        const el = mundo.querySelector(`[data-id="${CSS.escape(editando)}"] .txt, [data-id="${CSS.escape(editando)}"] .libre-texto`), be = doc().bloque(editando);
         if (el && be && be.tipo === "forma" && COMPARTIMENTOS.has(be.figura)) { el.textContent = be.texto || ""; el.classList.add("cm-editando"); }
         if (el) activarEdicion(el, false);
       }
@@ -751,7 +751,7 @@
       svg.innerHTML = cs.map((c) => `<g data-conector="${esc(c.id)}">${svgConector(c, mapa[c.desde], mapa[c.hasta], Object.assign({ sel: c.id === selConector, toque: true }, base))}</g>`).join("");
     }
     function moverVisual(id, b) {
-      const el = mundo.querySelector(`.bl[data-id="${id}"]`);
+      const el = mundo.querySelector(`.bl[data-id="${CSS.escape(id)}"]`);
       if (!el) return;
       Object.assign(el.style, { left: b.x + "px", top: b.y + "px", width: b.w + "px", height: b.h + "px" });
       if (b.rot != null) el.style.transform = b.rot ? `rotate(${b.rot}deg)` : "";
@@ -826,7 +826,7 @@
       const nuevo = Math.max(8, Math.min(160, Math.round(actual + delta * Math.max(2, actual * 0.12))));
       try { document.execCommand("styleWithCSS", false, false); } catch (e) { /* no importa */ }
       document.execCommand("fontSize", false, "7");
-      const el = editando && mundo.querySelector(`[data-id="${editando}"] .txt, [data-id="${editando}"] .libre-texto`);
+      const el = editando && mundo.querySelector(`[data-id="${CSS.escape(editando)}"] .txt, [data-id="${CSS.escape(editando)}"] .libre-texto`);
       if (el) $$('font[size="7"]', el).forEach((f) => { const sp = document.createElement("span"); sp.style.fontSize = nuevo + "px"; while (f.firstChild) sp.append(f.firstChild); f.replaceWith(sp); });
     }
     function pintarBarraTexto(el) {
@@ -903,7 +903,7 @@
       if (!puedoEditar(b)) { aviso(motivoAjeno(b), { tipo: "info" }); return; }
       editando = id;
       barra.hidden = true;
-      const el = mundo.querySelector(`[data-id="${id}"] .txt, [data-id="${id}"] .libre-texto`);
+      const el = mundo.querySelector(`[data-id="${CSS.escape(id)}"] .txt, [data-id="${CSS.escape(id)}"] .libre-texto`);
       // 8.4 Clase y entidad: se editan como texto simple (una línea por atributo o método).
       if (el && b.tipo === "forma" && COMPARTIMENTOS.has(b.figura)) { el.textContent = b.texto || ""; el.classList.add("cm-editando"); }
       if (el) activarEdicion(el);
@@ -912,7 +912,7 @@
       if (!editando) return;
       const id = editando; editando = null;
       barraTexto.hidden = true;
-      const el = mundo.querySelector(`[data-id="${id}"] .txt, [data-id="${id}"] .libre-texto`);
+      const el = mundo.querySelector(`[data-id="${CSS.escape(id)}"] .txt, [data-id="${CSS.escape(id)}"] .libre-texto`);
       if (!el) return;
       el.contentEditable = "false";
       const b = doc().bloque(id);
@@ -1618,7 +1618,7 @@
         else for (const k of [0, 90, 180, 270, 360]) if (Math.abs(a - k) < 4) a = k % 360;
         gesto.rot = Math.round(a) % 360;
         moverVisual(gesto.id, Object.assign({}, porId(gesto.id), { rot: gesto.rot }));
-        const el = mundo.querySelector(`.bl[data-id="${gesto.id}"] [data-girar]`);
+        const el = mundo.querySelector(`.bl[data-id="${CSS.escape(gesto.id)}"] [data-girar]`);
         if (el) el.dataset.grados = gesto.rot + "°";
         barra.hidden = true;
       } else if (gesto.tipo === "marco") {

@@ -39,7 +39,7 @@
   }
   async function descifrarBytes(llave, texto) {
     const b = deB64(texto.slice(PREFIJO.length));
-    if (!b.length || (b[0] !== 1 && b[0] !== 2)) throw new Error("Formato cifrado no válido");
+    if (!b.length || (b[0] !== 1 && b[0] !== 2)) throw new Error("Lo protegido está dañado: no se puede abrir");
     const alg = b[0] === 1 ? "gcm" : "ctr", n = alg === "gcm" ? 12 : 16;
     if (b.length < 1 + n) throw new Error("Datos cifrados incompletos");
     return C().descifrar(llave, { alg, iv: b.subarray(1, 1 + n), ct: b.subarray(1 + n) });
@@ -399,7 +399,7 @@
     if (!cuerpo || typeof cuerpo !== "object") return cuerpo;
     let m;
     if (metodo === "POST" && ruta === "/api/espacios" && cuerpo.e2e) {
-      if (!hayWebCrypto() || !recordado("publica")) throw new Error("Para crear un espacio cifrado hace falta la app o una conexión segura (https), y entrar con tu contraseña.");
+      if (!hayWebCrypto() || !recordado("publica")) throw new Error("Para crear un espacio cifrado de extremo a extremo hace falta la app o una conexión segura (https), y entrar con tu contraseña.");
       const k = C().azar(32);
       const r = Object.assign({}, cuerpo, { nombre: await cifrarValor(k, cuerpo.nombre), llave: await envolverPara(recordado("publica"), k) });
       r._llave = k;

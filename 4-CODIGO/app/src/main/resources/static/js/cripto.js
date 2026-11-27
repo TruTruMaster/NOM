@@ -182,7 +182,7 @@
     const ct = sobre.ct.subarray(0, sobre.ct.length - 32), tag = sobre.ct.subarray(sobre.ct.length - 32);
     const esperado = hmac(km, unir(sobre.iv, ct));
     let dif = 0; for (let i = 0; i < 32; i++) dif |= esperado[i] ^ tag[i];
-    if (dif) throw new Error("Datos alterados o llave incorrecta");
+    if (dif) throw new Error("La llave no abre esto o los datos cambiaron");
     return aesCtr(llave, sobre.iv, ct);
   }
 

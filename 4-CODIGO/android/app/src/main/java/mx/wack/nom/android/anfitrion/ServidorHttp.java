@@ -289,11 +289,14 @@ final class ServidorHttp {
             }
         }
         String l;
-        int nCabeceras = 0;
+        int nCabeceras = 0, bytesCabeceras = 0;
         long hasta = System.currentTimeMillis() + 20_000;
         while ((l = linea(in, hasta)) != null && !l.isEmpty()) {
             if (System.currentTimeMillis() > hasta) throw new ErrorHttp(408, "Petición demasiado lenta");
             if (++nCabeceras > 100) throw new ErrorHttp(400, "Demasiadas cabeceras");
+            // Todas las cabeceras juntas, como Tomcat en la computadora (8 KB); aquí 32 KB por si un navegador manda de más.
+            bytesCabeceras += l.length() + 2;
+            if (bytesCabeceras > 32 * 1024) throw new ErrorHttp(431, "Cabeceras demasiado grandes");
             int i = l.indexOf(':');
             if (i <= 0) throw new ErrorHttp(400, "Petición no válida");
             String k = l.substring(0, i).trim().toLowerCase(Locale.ROOT);
@@ -475,6 +478,7 @@ final class ServidorHttp {
             case 421: return "Misdirected Request";
             case 423: return "Locked";
             case 429: return "Too Many Requests";
+            case 431: return "Request Header Fields Too Large";
             case 501: return "Not Implemented";
             case 503: return "Service Unavailable";
             default: return c >= 500 ? "Internal Server Error" : "OK";

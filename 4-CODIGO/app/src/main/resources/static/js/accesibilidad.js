@@ -45,9 +45,9 @@
       const nv = Object.prototype.hasOwnProperty.call(NIVEL, p.pa.estilo) ? NIVEL[p.pa.estilo] : 0;
       if (nv) { if (nivelAnt && nv > nivelAnt + 1) out.push({ nivel: "consejo", regla: "Se salta un nivel de título", donde, ir: { parrafo: i } }); nivelAnt = nv; }
       // renglones vacíos seguidos para acomodar
-      if (!texto.trim() && !p.tramos.some((t) => t.e)) { vacios++; if (vacios === 3) out.push({ nivel: "advertencia", regla: "Caracteres en blanco repetidos (renglones vacíos para acomodar)", donde: `Párrafo ${i + 1}`, ir: { parrafo: i } }); }
+      if (!texto.trim() && !p.tramos.some((t) => t.e)) { vacios++; if (vacios === 3) out.push({ nivel: "advertencia", regla: "Renglones vacíos repetidos (para acomodar)", donde: `Párrafo ${i + 1}`, ir: { parrafo: i } }); }
       else vacios = 0;
-      if (/\S {3,}\S/.test(texto)) out.push({ nivel: "advertencia", regla: "Caracteres en blanco repetidos (espacios para acomodar)", donde, ir: { parrafo: i } });
+      if (/\S {3,}\S/.test(texto)) out.push({ nivel: "advertencia", regla: "Espacios repetidos (para acomodar)", donde, ir: { parrafo: i } });
       p.tramos.forEach((t) => {
         if (t.e) {
           const e = t.e, tipo = e.tipo;

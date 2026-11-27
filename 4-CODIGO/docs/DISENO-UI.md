@@ -43,17 +43,17 @@ en lo mismo: base neutra, un color de marca, pocos radios y pocas sombras defini
 
 | Principio | Qué dice | Cómo se aplica |
 |---|---|---|
-| **Atributos preatentivos** | El color, la forma y la posición se procesan antes de la atención consciente (≈ 200–250 ms). | Cada modo tiene un color fijo en todo el sistema: Texto azul, Hoja verde, Presentación naranja, Diagrama violeta. Se reconoce el tipo de documento sin leer. `--m-texto`, `--m-hoja`… |
-| **Efecto Von Restorff** | Lo que es distinto a su entorno se recuerda y se encuentra primero ([Laws of UX](https://lawsofux.com/)). | Un solo color de marca (azul noche) y se usa para **una** acción principal por pantalla: "Entrar", "Nuevo espacio", "Nuevo documento", "Presentar". Todo lo demás es neutro. |
-| **Efecto estético-usabilidad** | Lo atractivo se percibe como más fácil de usar y la gente tolera mejor fallas menores ([Laws of UX](https://lawsofux.com/)). | Una sola tipografía (Nunito) con pocos pesos, espaciado en múltiplos de 4/8 y una escala fija de radios. |
+| **Atributos preatentivos** | El color, la forma y la posición se distinguen de un vistazo, en menos de 200–250 ms y sin buscar uno por uno (Healey y Enns, 2012). | Cada modo tiene un color fijo en todo el sistema: Texto azul, Hoja verde, Presentación naranja, Diagrama violeta. Se reconoce el tipo de documento sin leer. `--m-texto`, `--m-hoja`… |
+| **Efecto Von Restorff** | Lo que es distinto a su entorno se recuerda mejor (von Restorff, 1933). | Un solo color de marca (azul noche) y se usa para **una** acción principal por pantalla: "Entrar", "Nuevo espacio", "Nuevo documento", "Presentar". Todo lo demás es neutro. |
+| **Efecto estético-usabilidad** | Lo que se ve ordenado y atractivo se *juzga* más fácil de usar, antes y después de usarlo (Kurosu y Kashimura, 1995, con 26 diseños de cajero automático; Tractinsky, Katz e Ikar, 2000). Es un juicio, no una medida de qué tan fácil es: por eso no sustituye a las pruebas con personas. | Una sola tipografía (Nunito) con pocos pesos, espaciado en múltiplos de 4/8 y una escala fija de radios. |
 | **Gestalt: región común y proximidad** | Lo que comparte un contorno se lee como un grupo. | Cada espacio, documento y ajuste es una tarjeta; los controles relacionados van juntos (segmentados de 2–4 opciones). |
-| **Efecto Zeigarnik** | Las tareas inconclusas se recuerdan más y la gente quiere cerrarlas. | En Inicio, lo primero es **Recientes**: los últimos documentos abiertos. `vista-espacios.js · inicio()` |
+| **Reconocer en vez de recordar, y lo reciente primero** | Es más fácil elegir algo que se ve que acordarse de dónde estaba (Nielsen, 1994). Al navegar, la mayoría de las visitas son a algo ya visto (58 % en Tauscher y Greenberg, 1997, con 23 personas durante 6 semanas) y lo más visitado suele ser lo más reciente. | En Inicio, lo primero es **Recientes**: los últimos documentos abiertos. `vista-espacios.js · inicio()`. (Antes esto se justificaba con el efecto Zeigarnik; se quitó porque su parte de memoria no se replica: Ghibellini y Meier, 2025.) |
 
 ## 3. Familiar: que no haya que aprender nada nuevo
 
 **Ley de Jakob:** la gente pasa la mayor parte de su tiempo en *otros*
 programas y espera que el tuyo funcione igual
-([Laws of UX](https://lawsofux.com/)). Por eso cada modo imita al programa que
+(Nielsen, 2000, *End of Web Design*). Por eso cada modo imita al programa que
 ya conocen los docentes:
 
 | Modo | Se parece a | Detalles que lo hacen familiar |
@@ -70,32 +70,31 @@ Supr (borra).
 
 | Principio | Qué dice | Cómo se aplica |
 |---|---|---|
-| **Ley de Hick** | El tiempo de decisión crece con el número de opciones ([Laws of UX](https://lawsofux.com/)). | La barra de herramientas muestra **solo las del modo activo**, en el orden en que se usan; las que no se explican con el ícono llevan su nombre a la vista (rastro de información, NN/g). En la computadora nada queda escondido: si no cabe, la barra baja a un segundo renglón. Opciones raras van a un menú "…". Los segmentados nunca pasan de 4 opciones. |
-| **Carga cognitiva / memoria de trabajo** | La memoria de trabajo maneja ≈ 4 bloques a la vez. | Cuatro modos, tres secciones en móvil (Inicio, Unirse, Ajustes), un solo campo obligatorio extra al registrarse. Entrar es una sola columna con un botón principal. |
+| **Ley de Hick** | El tiempo para elegir crece con el logaritmo del número de opciones igual de probables (Hick, 1952; Hyman, 1953). Vale para opciones conocidas; si hay que leerlas una por una, crece más. | La barra de herramientas muestra **solo las del modo activo**, en el orden en que se usan; las que no se explican con el ícono llevan su nombre a la vista (rastro de información, NN/g). En la computadora nada queda escondido: si no cabe, la barra baja a un segundo renglón. Opciones raras van a un menú "…". Los segmentados nunca pasan de 4 opciones. |
+| **Carga cognitiva / memoria de trabajo** | La memoria de trabajo maneja ≈ 4 bloques a la vez (Cowan, 2001). | Cuatro modos, tres secciones en móvil (Inicio, Unirse, Ajustes), un solo campo obligatorio extra al registrarse. Entrar es una sola columna con un botón principal. |
 | **Divulgación progresiva** | Mostrar lo avanzado solo cuando se necesita. | La dirección manual del servidor está plegada bajo "¿No aparece?"; las funciones de hoja, en un menú. |
-| **Ley de Fitts** | Un objetivo grande y cercano se alcanza más rápido. | Objetivos táctiles ≥ 44 px. En móvil la navegación y las herramientas están **abajo, al alcance del pulgar**, y el botón flotante "+" en la esquina. |
+| **Ley de Fitts** | El tiempo para tocar un objetivo crece con la distancia y baja con su tamaño (Fitts, 1954). | Objetivos táctiles ≥ 44 px. En móvil la navegación y las herramientas están **abajo, al alcance del pulgar**, y el botón flotante "+" en la esquina. |
 | **Prevención de errores** | Es mejor evitar el error que explicarlo. | Validación al momento con el mensaje junto al campo; medidor de fuerza de contraseña; aviso de Bloq Mayús; confirmación antes de borrar o depurar. |
 
 ## 5. Fluido: respuesta y movimiento
 
 | Principio | Qué dice | Cómo se aplica |
 |---|---|---|
-| **Umbrales de respuesta (Nielsen)** | 0.1 s se siente instantáneo; 1 s es el límite antes de perder el hilo ([SAP Fiori, motion](https://www.sap.com/design-system/fiori-design-web/v1-120/foundations/visual/motion-design)). | Cada cambio se **aplica en local primero** y se envía después (CRDT); escribir nunca espera a la red. Medido: 42 ms entre que un equipo envía y otro recibe. |
-| **Umbral de Doherty** | La productividad sube cuando la respuesta baja de ≈ 400 ms ([Laws of UX](https://lawsofux.com/)). | Esqueletos de carga en lugar de pantallas en blanco; si la red tarda más de 2.5 s, el indicador ya dice "Sin conexión" en vez de dejar esperando. |
+| **Umbrales de respuesta** | 0.1 s se siente instantáneo; 1 s es el límite antes de perder el hilo; 10 s, el de mantener la atención (Miller, 1968; Card, Robertson y Mackinlay, 1991; Nielsen, 1993). | Cada cambio se **aplica en local primero** y se envía después (CRDT); escribir nunca espera a la red. Medido en el sitio real (27-nov-2026, `prueba_tiempos.py`): ver §16. |
+| **Umbral de Doherty** | En el informe de IBM de Doherty y Thadhani (1982), las transacciones por hora suben mucho cuando la respuesta del sistema baja de 1 s; los resúmenes lo redondean a «menos de 400 ms», cifra que no sale de un experimento controlado. NOM usa la meta más estricta de las dos. | Esqueletos de carga en lugar de pantallas en blanco; si la red tarda más de 2.5 s, el indicador ya dice "Sin conexión" en vez de dejar esperando. |
 | **Duración del movimiento** | Microinteracciones ≤ 150 ms; movimientos pequeños 150–250 ms ([SAP Fiori](https://www.sap.com/design-system/fiori-design-web/v1-120/foundations/visual/motion-design), [Val Head](https://valhead.com/?p=2978)). | Tokens `--t-micro` 90 ms, `--t-corto` 140 ms, `--t-largo` 200 ms. Una sola curva (`--suave`), sin rebote. |
 | **Respeto al movimiento reducido** | Las animaciones pueden marear a algunas personas. | La preferencia de la app "Reducir movimiento" (Ajustes o Ctrl+K) pone todas las duraciones en 1 ms. Ya no se toma la del sistema: muchos teléfonos tienen las animaciones del sistema apagadas (opciones de desarrollador, ahorro de batería) y la app se veía distinta en el celular que en la computadora. |
-| **Regla pico-final** | Se recuerda el momento más intenso y el final. | Al crear cuenta aparece una palomita que se traza; al guardar, "Versión N guardada". |
+| **Regla pico-final** | Al recordar una experiencia pesan más el momento más intenso y el final que su duración (Kahneman, Fredrickson, Schreiber y Redelmeier, 1993). | Al crear cuenta aparece una palomita que se traza; al guardar, "Versión N guardada". |
 | **El movimiento explica** | Si quitar una animación no cambia lo que se entiende, sobra. | Las pantallas aparecen ya armadas (sin cascadas). Solo se anima lo que cambia de estado: una ventana que se abre, un aviso que llega, el cajón de versiones. Al cambiar de tema los colores se funden en un instante. No hay pantalla de saludo al entrar: se llega directo al trabajo. |
 
 ## 6. Un entorno enfocado, sin distracciones
 
 **Lo que dice la investigación.** Cambiar de tarea deja *residuo atencional*:
-parte de la mente se queda en lo anterior, sobre todo si quedó incompleto
-(Leroy, 2009). Tras una interrupción, la gente tarda en volver a la tarea
-original y suele pasar por otras dos antes; el número exacto de minutos está en
-discusión entre fuentes, pero el costo en estrés y esfuerzo sí se repite
-([resumen 1](https://blog.saner.ai/context-switching-statistics/),
-[resumen 2](https://concepts.dsebastien.net/concept/task-switching-cost/)).
+parte de la mente se queda en lo anterior, sobre todo si quedó incompleto, y la
+siguiente tarea sale peor (Leroy, 2009, cuatro experimentos). Con interrupciones
+la gente termina igual de rápido pero con más estrés, frustración y esfuerzo
+(Mark, Gudith y Klocke, 2008, 48 personas). El «23 minutos para volver» que repiten
+los blogs no sale de esos estudios: no se usa.
 NOM nació justo para quitar el cambio entre programas.
 
 | Decisión | Dónde |
@@ -105,7 +104,7 @@ NOM nació justo para quitar el cambio entre programas.
 | **Modo enfoque** (Ctrl+.): oculta barras, pasa a pantalla completa y atenúa todo menos el párrafo que escribes. | `.editor.enfoque.atenuar` |
 | Avisos **abajo, sin sonido, sin bloquear**, máximo 3, se van solos. Nunca hay ventanas emergentes por algo que no pediste. | `nucleo.js · aviso` |
 | La presencia de otros se ve **en el borde del bloque** que editan (color + nombre), no como notificación. | `editor.js · pintarPresencia` |
-| Longitud de línea de 50–75 caracteres (`max-width: 70ch`): la lectura más cómoda. | `.b-texto` |
+| Longitud de línea de 45–75 letras (`max-width: 70ch`), la que recomienda la tipografía clásica (Bringhurst); en pantalla, las líneas más largas se leen un poco más rápido, pero las medianas son las que la gente prefiere (Dyson, 2004). | `.b-texto` |
 | El editor de texto en escritorio se abre **ya con el cursor puesto** en el primer párrafo vacío. | `modo-texto.js` |
 
 ## 7. Micro-textos (CU-22)
@@ -120,9 +119,9 @@ prolongada no se ejecuta la acción, así explorar nunca causa un cambio.
 
 | | Navegador (escritorio) | Móvil (navegador o app Android) |
 |---|---|---|
-| Navegación | Riel lateral: Inicio, tus espacios y Unirse arriba; lo guardado (en este equipo, en el servidor) abajo | Barra superior + pestañas pegadas al borde de abajo + botón "+" |
+| Navegación | Riel lateral: Inicio, tus espacios y Unirse arriba; lo guardado (en este equipo, tu almacenamiento) abajo | Barra superior + pestañas pegadas al borde de abajo + botón "+" |
 | Hojas (modales) | Centradas | Suben desde abajo, con agarradera |
-| Herramientas del editor | Arriba, con nombre en las que lo necesitan; botones de 32 px (cursor) | **Abajo**, sobre el teclado (la app usa `adjustResize`); solo íconos de 44 px |
+| Herramientas del editor | Arriba, con nombre en las que lo necesitan; botones de 32 px (cursor) | **Abajo**, sobre el teclado (la app usa `adjustResize`); botones de 44 px; los íconos que no se entienden solos llevan un nombre corto debajo (desde la 0.23.7) y la barra se desliza de lado |
 | Tipo de documento | Etiqueta de color junto al nombre (no se cambia después de crearlo) | Igual |
 | Diapositivas | Miniaturas a la izquierda | Tira horizontal abajo |
 
@@ -284,6 +283,24 @@ responde. Tres ideas:
   notificación y botón Detener, Wi-Fi y procesador despiertos mientras sirve; si Android cierra
   la app, al abrirla se vuelve a encender si la app usaba este teléfono.
 
+## 16. Qué se cambió (27 de noviembre de 2026)
+
+- **Fuentes primarias.** Los resúmenes de blogs (Laws of UX, saner.ai, dsebastien) se cambiaron por los artículos
+  originales (Hick 1952, Fitts 1954, Miller 1968, Doherty y Thadhani 1982, Leroy 2009, Mark et al. 2008 y los de la
+  lista de abajo). Dos afirmaciones se corrigieron al leer la fuente: el «umbral de Doherty» de 400 ms no sale de un
+  experimento (el informe muestra la mejora por debajo de 1 s), y el efecto estético-usabilidad mide lo que la gente
+  *cree*, no lo fácil que es.
+- **Recientes primero** ya no se justifica con el efecto Zeigarnik (su parte de memoria no se replica en el
+  metaanálisis de Ghibellini y Meier, 2025), sino con reconocer en vez de recordar y con que la mayoría de las visitas
+  son a lo ya visto (Tauscher y Greenberg, 1997).
+- **Íconos con nombre en el celular** (resuelve la contradicción entre GUIA §2 regla 3 y §8 de aquí): en la barra del
+  editor, los íconos que no se entienden solos (Insertar, Comentar, Sugerir, Investigar, Fijar, Combinar, Capas,
+  Notas, Imán…) llevan debajo un nombre corto de 11 px; los de formato que son iguales en Word (negrita, listas,
+  alinear), la lupa, el bote y deshacer siguen solo con ícono y su nombre al mantenerlos presionados. El orden no
+  cambió. En la computadora, «Insertar» del texto lleva su nombre a la vista como en la presentación.
+- **Tiempos medidos en el sitio real** con `pruebas/interfaz/prueba_tiempos.py` (tabla en el relevo de la expo,
+  `docs/RELEVO-26NOV-NOCHE-3.md` §4).
+
 ## Fuentes
 
 - Lindgaard, Fernandes, Dudek y Brown — *Attention web designers: You have 50 milliseconds to make a good first impression!* (Behaviour & Information Technology, 2006).
@@ -291,10 +308,28 @@ responde. Tres ideas:
 - Fogg et al. — *How do people evaluate a web site's credibility?* (Stanford, 2,684 participantes): https://advocacy.consumerreports.org/research/how-do-people-evaluate-a-web-sites-credibility
 - NN/g — Information Scent, Vertical Navigation y 5 Principles of Visual Design: https://www.nngroup.com/articles/information-scent/ · https://www.nngroup.com/articles/vertical-nav/ · https://www.nngroup.com/articles/principles-visual-design/
 
-- Laws of UX (Jakob, Hick, Fitts, Doherty, Von Restorff, estético-usabilidad): https://lawsofux.com/
+- Hick, W. E. (1952). On the rate of gain of information. *Quarterly Journal of Experimental Psychology*, 4(1), 11–26. https://doi.org/10.1080/17470215208416600
+- Hyman, R. (1953). Stimulus information as a determinant of reaction time. *Journal of Experimental Psychology*, 45(3), 188–196.
+- Fitts, P. M. (1954). The information capacity of the human motor system in controlling the amplitude of movement. *Journal of Experimental Psychology*, 47(6), 381–391. https://doi.org/10.1037/h0055392
+- Miller, R. B. (1968). Response time in man-computer conversational transactions. *AFIPS Fall Joint Computer Conference*, 267–277. https://doi.org/10.1145/1476589.1476628
+- Card, S. K., Robertson, G. G. y Mackinlay, J. D. (1991). The information visualizer, an information workspace. *CHI '91*, 181–188.
+- Nielsen, J. (1993). *Usability Engineering*, cap. 5 (tiempos de respuesta). Morgan Kaufmann.
+- Doherty, W. J. y Thadhani, A. J. (1982). *The economic value of rapid response time* (GE20-0752-0). IBM. https://www.vm.ibm.com/devpages/jelliott/evrrt1.html
+- Nielsen, J. (1994). Enhancing the explanatory power of usability heuristics. *CHI '94*, 152–158 (reconocer en vez de recordar).
+- Nielsen, J. (2000). End of Web Design. Nielsen Norman Group: https://www.nngroup.com/articles/end-of-web-design/ (ley de Jakob).
+- Tauscher, L. y Greenberg, S. (1997). Revisitation patterns in World Wide Web navigation. *CHI '97*, 399–406: https://chi1997.acm.org/proceedings/paper/sg.html
+- Ghibellini, R. y Meier, B. (2025). Interruption, recall and resumption: a meta-analysis of the Zeigarnik and Ovsiankina effects. *Humanities and Social Sciences Communications*, 12, 962. https://doi.org/10.1057/s41599-025-05000-w
+- Cowan, N. (2001). The magical number 4 in short-term memory. *Behavioral and Brain Sciences*, 24(1), 87–114.
+- von Restorff, H. (1933). Über die Wirkung von Bereichsbildungen im Spurenfeld. *Psychologische Forschung*, 18, 299–342.
+- Kurosu, M. y Kashimura, K. (1995). Apparent usability vs. inherent usability. *CHI '95 Conference Companion*, 292–293.
+- Tractinsky, N., Katz, A. S. e Ikar, D. (2000). What is beautiful is usable. *Interacting with Computers*, 13(2), 127–145.
+- Kahneman, D., Fredrickson, B. L., Schreiber, C. A. y Redelmeier, D. A. (1993). When more pain is preferred to less: Adding a better end. *Psychological Science*, 4(6), 401–405.
+- Healey, C. G. y Enns, J. T. (2012). Attention and visual memory in visualization and computer graphics. *IEEE Transactions on Visualization and Computer Graphics*, 18(7), 1170–1188.
+- Dyson, M. C. (2004). How physical text layout affects reading from screen. *Behaviour & Information Technology*, 23(6), 377–393.
 - SAP Fiori — Motion design (umbrales de 0.1 s y 1 s, duraciones por tamaño): https://www.sap.com/design-system/fiori-design-web/v1-120/foundations/visual/motion-design
 - Val Head — How fast should your UI animations be?: https://valhead.com/?p=2978
-- Costo del cambio de tarea y residuo atencional (Leroy 2009; Mark, Gudith y Klocke 2008): https://blog.saner.ai/context-switching-statistics/ · https://concepts.dsebastien.net/concept/task-switching-cost/
+- Leroy, S. (2009). Why is it so hard to do my work? The challenge of attention residue when switching between work tasks. *Organizational Behavior and Human Decision Processes*, 109(2), 168–181. https://doi.org/10.1016/j.obhdp.2009.04.002
+- Mark, G., Gudith, D. y Klocke, U. (2008). The cost of interrupted work: More speed and stress. *CHI '08*, 107–110.
 - Callahan, Hopkins, Weiser y Shneiderman — *An empirical comparison of pie vs. linear menus* (CHI 1988).
 - Kurtenbach y Buxton — *The limits of expert performance using hierarchic marking menus* (CHI 1993) y *User learning and performance with marking menus* (CHI 1994).
 - Roh, Jeon, Kim y Lee — *Replicated abstract data types: Building blocks for collaborative applications* (JPDC, 2011): el algoritmo RGA.

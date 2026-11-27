@@ -316,7 +316,7 @@
     while (Math.ceil((sectores.length + nFat) / 128) > nFat) nFat++;
     const fat0 = sectores.length;
     for (let i = 0; i < nFat; i++) fat.push(FATSEC);
-    if (nFat > 109) throw new Error("Archivo demasiado grande para cifrar aquí");
+    if (nFat > 109) throw new Error("El archivo es muy grande para ponerle contraseña aquí");
     const fatB = new Uint8Array(nFat * S).fill(0xff), fv = new DataView(fatB.buffer);
     fat.forEach((x, i) => fv.setUint32(i * 4, x, true));
     for (let i = 0; i < nFat; i++) sectores.push(fatB.subarray(i * S, (i + 1) * S));
@@ -358,7 +358,7 @@
     if (vMay === 4 && vMen === 4) {
       const x = new DOMParser().parseFromString(new TextDecoder().decode(info.subarray(8)), "application/xml");
       const kd = x.getElementsByTagNameNS("*", "keyData")[0], ek = x.getElementsByTagNameNS("*", "encryptedKey")[0], di = x.getElementsByTagNameNS("*", "dataIntegrity")[0];
-      if (!kd || !ek) throw new Error("Este archivo usa un cifrado que aquí no se reconoce (por certificado)");
+      if (!kd || !ek) throw new Error("Este archivo está protegido con un certificado: aquí solo se abren los protegidos con contraseña");
       const a = (n, k) => n.getAttribute(k);
       return { tipo: "agile", datos: { sal: b64(a(kd, "saltValue")), bits: +a(kd, "keyBits"), bloque: +a(kd, "blockSize"), hash: a(kd, "hashAlgorithm"), cifra: a(kd, "cipherAlgorithm"), cadena: a(kd, "cipherChaining") },
         clave: { sal: b64(a(ek, "saltValue")), bits: +a(ek, "keyBits"), bloque: +a(ek, "blockSize"), hash: a(ek, "hashAlgorithm"), vueltas: +a(ek, "spinCount"),
@@ -372,7 +372,7 @@
       const v = 12 + tamEnc, salT = dv.getUint32(v, true);
       return { tipo: "standard", alg: algId, bits: bits || 128, sal: info.slice(v + 4, v + 4 + salT), verif: info.slice(v + 4 + salT, v + 20 + salT), tamHash: dv.getUint32(v + 20 + salT, true), verifHash: info.slice(v + 24 + salT, v + 24 + salT + 32) };
     }
-    throw new Error(`Cifrado de Office versión ${vMay}.${vMen}: aquí no se reconoce`);
+    throw new Error(`Este archivo usa una protección de Office (versión ${vMay}.${vMen}) que aquí no se abre`);
   }
   /** La clave secreta del paquete si la contraseña es buena; null si no. */
   function claveAgile(inf, contrasena) {
@@ -426,7 +426,7 @@
     return zip;
   }
   const aleatorio = (n) => {
-    if (!(raiz.crypto && raiz.crypto.getRandomValues)) throw new Error("Este navegador no puede generar llaves seguras para cifrar el archivo");
+    if (!(raiz.crypto && raiz.crypto.getRandomValues)) throw new Error("Este navegador no puede ponerle contraseña al archivo");
     const r = new Uint8Array(n);
     raiz.crypto.getRandomValues(r);
     return r;

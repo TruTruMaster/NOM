@@ -27,7 +27,7 @@
       ok = NOM.guardar(clave(id), estado);
       if (!ok && !avisadoLleno) {
         avisadoLleno = true;
-        NOM.aviso(NOM.aqui().sinEspacio + " para este documento. Descárgalo (Exportar → .nom) para no perder cambios.", { tipo: "error", ms: 8000 });
+        NOM.aviso(NOM.aqui().sinEspacio + " para este documento. Descárgalo (Descargar → .nom) para no perder cambios.", { tipo: "error", ms: 8000 });
       }
       // Nombre y modo se copian al índice para listar sin abrir el documento.
       const d = estado.bloques._doc || {};
