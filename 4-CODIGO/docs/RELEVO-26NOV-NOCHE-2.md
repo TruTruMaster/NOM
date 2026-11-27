@@ -23,10 +23,6 @@ privado (§P); aquí va la cuenta neutra.
   antes en los 6 casos de arreglo).
 - **Teléfono y servidor parejos:** el teléfono exige `application/json` y no aparta memoria por lo que dice que traerá;
   el servidor topa los códigos inexistentes del enlace para ver y limita a 256 KB lo que llega a cuentas y enlaces.
-- **Ayudantes:** `nom-ds` salta solo al siguiente modelo gratis cuando uno se queda sin cuota (lista en
-  `~/.config/nom-ds/modelos`; hoy sirve `hy4-flash-free`, que hay que exigirle el formato del informe). agy en un
-  worktree fuera de `~/NOM` no puede leer `~/NOM/GEMINI.md` ni correr comandos: se le hace trabajar en `~/NOM` sobre
-  archivos que nadie más toca, después de hacer commit de lo propio.
 
 ## 3. Para el dueño
 
