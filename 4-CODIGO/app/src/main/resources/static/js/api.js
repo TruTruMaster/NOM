@@ -47,6 +47,9 @@
     fijarServidor(url) {
       url = normalizarBase(url);
       NOM.guardar("nom.servidor", url);
+      // ¿En la red local o en Internet? Lo de antes era del servidor anterior (la nube dice «no»): sin esto, al pasar a
+      // compartir desde este teléfono el QR para unirse no salía y el espacio decía «En Internet».
+      if (url) { api.lan = !api.esNube(url); NOM.guardar("nom.lan", api.lan); }
       return url;
     },
     token() { return NOM.leer("nom.token", null); },

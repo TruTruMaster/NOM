@@ -229,11 +229,11 @@
       const s = api().servidor();
       if (s && !/\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(s)) l.push(s);
     } else if (!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) l.push(location.origin);
-    if (api().lan !== false) {
-      (conexion && conexion.direcciones || []).forEach((ip) => l.push(`http://${ip}:${conexion.puerto}`));
-      // El teléfono como servidor: sus direcciones en el Wi-Fi o en su punto de acceso.
-      if (NOM.anfitrion && NOM.anfitrion.esLocal && NOM.anfitrion.esLocal()) (NOM.anfitrion.estado().direcciones || []).forEach((d) => l.push(d));
-    }
+    if (api().lan !== false) (conexion && conexion.direcciones || []).forEach((ip) => l.push(`http://${ip}:${conexion.puerto}`));
+    // El teléfono como servidor: sus direcciones en el Wi-Fi o en su punto de acceso. Siempre, aunque «lan» diga otra
+    // cosa: «lan» es lo que contestó el servidor al abrir la app (la nube dice false) y no cambia al pasar a compartir
+    // desde este teléfono; sin esto el QR no salía (A55, 27-nov).
+    if (NOM.anfitrion && NOM.anfitrion.esLocal && NOM.anfitrion.esLocal()) (NOM.anfitrion.estado().direcciones || []).forEach((d) => l.push(d));
     return [...new Set(l)];
   }
   const urlDe = (base, codigo, frag) => `${base}/unirse?c=${codigo}${frag || ""}`;
