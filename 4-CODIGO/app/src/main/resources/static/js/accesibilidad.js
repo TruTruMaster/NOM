@@ -128,7 +128,8 @@
     if (!lugar) return;
     if (lugar.parrafo != null) {
       const el = document.querySelectorAll(".wd-cuerpo > *")[lugar.parrafo];
-      if (el) { el.scrollIntoView({ block: "center", behavior: "smooth" }); el.classList.add("acc-marca"); setTimeout(() => el.classList.remove("acc-marca"), 1600); }
+      const quieto = document.documentElement && document.documentElement.dataset && document.documentElement.dataset.movimiento === "reducido";
+      if (el) { el.scrollIntoView({ block: "center", behavior: quieto ? "auto" : "smooth" }); el.classList.add("acc-marca"); setTimeout(() => el.classList.remove("acc-marca"), 1600); }
       return;
     }
     const api = ed.modoApi && ed.modoApi.api;
@@ -139,11 +140,27 @@
     }
   }
 
+  /** Marca en <html> cuando la persona navega con el teclado para mostrar controles que antes solo salían al pasar el mouse. */
+  function iniciarSoporteTeclado() {
+    if (typeof document === "undefined" || !document.addEventListener || !document.documentElement) return;
+    const raiz = document.documentElement;
+    document.addEventListener("keydown", (e) => {
+      if (!e) return;
+      if (e.key === "Tab" || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "Home" || e.key === "End") {
+        raiz.dataset.teclado = "1";
+      }
+    }, true);
+    document.addEventListener("pointerdown", (e) => {
+      if (e && e.pointerType === "mouse") delete raiz.dataset.teclado;
+    }, true);
+  }
+  iniciarSoporteTeclado();
+
   const ICONO = { error: "circle-x", advertencia: "triangle-alert", consejo: "lightbulb" }, TITULO = { error: "Errores", advertencia: "Advertencias", consejo: "Consejos" };
   /** El panel de Comprobar accesibilidad. */
   function abrir(ed) {
     const { html, esc, ico } = NOM;
-    const cuerpo = html(`<div class="col" style="gap:10px" data-lista></div>`);
+    const cuerpo = html(`<div class="col" style="gap:10px" data-lista aria-live="polite"></div>`);
     const pie = html(`<div style="display:contents"><button class="btn" data-otra type="button">Volver a revisar</button><span class="crece"></span><button class="btn primario" data-no type="button">Cerrar</button></div>`);
     const h = NOM.hoja({ titulo: "Comprobar accesibilidad", icono: "accessibility", cuerpo, pie, ancha: true });
     let lista = [];
@@ -163,5 +180,5 @@
     return lista;
   }
 
-  NOM.accesibilidad = { revisar, abrir, contraste };
+  NOM.accesibilidad = { revisar, abrir, contraste, ir };
 })();

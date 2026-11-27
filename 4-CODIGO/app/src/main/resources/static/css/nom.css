@@ -926,3 +926,365 @@ p, .sub, small { text-wrap: pretty; }
 .atajo-grabando { font-size: 13px; font-weight: 600; color: var(--acento-tinta); }
 @media (max-width: 560px) { .atajos-ed-fila { flex-wrap: wrap; } }
 @media (pointer: coarse) { .atajos-ed-acc .btn { min-height: 44px; } }
+
+/* =====================================================================
+   Accesibilidad completa (WCAG 2.2 AA y alto contraste del sistema)
+   Foco siempre visible y no tapado, objetivos mínimos 24/44 px, reflow a
+   320 px (zoom 400 %), colores forzados y mayor contraste. Solo variables.
+   ===================================================================== */
+
+/* 2.4.11 Foco no tapado por barras fijas o pegajosas */
+html {
+  scroll-padding-top: calc(var(--barra-alto) + var(--e4));
+  scroll-padding-bottom: calc(76px + env(safe-area-inset-bottom));
+}
+.contenido, .hoja-cuerpo, .paleta-lista, .chat-lista, .riel-lista {
+  scroll-padding-top: var(--e4);
+  scroll-padding-bottom: var(--e5);
+}
+
+/* 2.4.7 Foco visible siempre (outline con contraste >= 3:1 además del anillo) */
+:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+  box-shadow: var(--foco);
+}
+.entrada:focus-within {
+  outline: 2px solid var(--acento);
+  outline-offset: 1px;
+}
+.menu button:focus-visible,
+.paleta-item:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: -2px;
+}
+.interruptor input:focus-visible + span {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
+/* Segmentado visible también en calidad baja (evita box-shadow con none) */
+.segmentado { border: 1px solid var(--borde); }
+.segmentado button[aria-pressed="true"] {
+  border: 1px solid var(--borde-fuerte);
+  box-shadow: var(--sombra-1);
+}
+:root[data-calidad="baja"] .segmentado button[aria-pressed="true"] {
+  box-shadow: none;
+  border-color: var(--acento);
+}
+
+/* 2.5.8 Tamaño mínimo de objetivo: 24 x 24 px en escritorio, 44 x 44 px en táctil */
+.btn,
+.icono-btn,
+.segmentado button,
+.riel-item,
+.menu button,
+.enlace,
+.servidor-pie button,
+.anfitrion-pie button,
+.pie-legal a,
+.paleta-esc {
+  min-width: 24px;
+  min-height: 24px;
+}
+.acepto { min-height: 24px; }
+.acepto input { min-width: 20px; min-height: 20px; }
+
+@media (pointer: coarse) {
+  .btn,
+  .btn.chico,
+  .icono-btn,
+  .segmentado button,
+  .menu button,
+  .menu [role="menuitem"],
+  .riel-item,
+  .pestanas a,
+  .pestanas button,
+  .paleta-esc,
+  .servidor-pie button,
+  .anfitrion-pie button,
+  .pie-legal a {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .lista-item { min-height: 44px; }
+}
+
+/* Tarjetas de documento: acciones siempre visibles en pantallas táctiles y al navegar con teclado */
+@media (hover: none), (pointer: coarse) {
+  .doc-tarjeta .acciones { opacity: 1; }
+}
+.doc-tarjeta:focus .acciones,
+.doc-tarjeta:focus-visible .acciones,
+.doc-tarjeta:focus-within .acciones,
+:root[data-teclado="1"] .doc-tarjeta .acciones {
+  opacity: 1;
+}
+
+/* Letra grande y muy grande: ningún botón se recorta ni se sale de su barra o ventana */
+:root[data-letra] .btn {
+  white-space: normal;
+  text-align: center;
+  height: auto;
+  padding-top: var(--e1);
+  padding-bottom: var(--e1);
+}
+:root[data-letra] .hoja-pie { flex-wrap: wrap; }
+:root[data-letra] .hoja-pie .btn { min-width: 0; max-width: 100%; }
+:root[data-letra] .segmentado { flex-wrap: wrap; }
+:root[data-letra] .segmentado button {
+  min-height: 38px;
+  padding: var(--e1) var(--e3);
+  white-space: normal;
+  text-align: center;
+}
+:root[data-letra] .lista-item { flex-wrap: wrap; }
+:root[data-letra] .atajos-ed-fila { flex-wrap: wrap; }
+:root[data-letra] .barra-movil {
+  min-height: var(--barra-alto);
+  height: auto;
+  padding-top: var(--e1);
+  padding-bottom: var(--e1);
+}
+:root[data-letra] .pestanas {
+  min-height: calc(60px + env(safe-area-inset-bottom));
+  height: auto;
+}
+:root[data-letra] .riel { overflow-y: auto; }
+:root[data-letra] .riel-item,
+:root[data-letra] .menu button {
+  height: auto;
+  padding-top: var(--e1);
+  padding-bottom: var(--e1);
+}
+
+/* 1.4.10 Reflow a 320 px (zoom 400 %): sin barra horizontal en Inicio ni en Ajustes */
+@media (max-width: 400px) {
+  .contenido { padding: var(--e3) var(--e3) 140px; }
+  .encabezado { gap: var(--e2); }
+  .btn {
+    white-space: normal;
+    text-align: center;
+    max-width: 100%;
+    padding: var(--e1) var(--e3);
+  }
+  .barra-movil {
+    min-height: var(--barra-alto);
+    height: auto;
+    gap: var(--e1);
+    padding: var(--e1) var(--e2);
+  }
+  .hoja-cab { padding: var(--e3); }
+  .hoja-cuerpo { padding: var(--e2) var(--e3) var(--e4); }
+  .hoja-pie { padding: var(--e2) var(--e3); flex-wrap: wrap; }
+  .hoja-pie .btn { flex: 1 1 120px; min-width: 0; max-width: 100%; }
+  .segmentado { flex-wrap: wrap; width: 100%; }
+  .segmentado button,
+  .segmentado.lleno button {
+    flex: 1 1 auto;
+    white-space: normal;
+    text-align: center;
+    padding: var(--e1) var(--e2);
+  }
+  .lista-item { flex-wrap: wrap; gap: var(--e2); padding: var(--e2) var(--e3); }
+  .rejilla,
+  .doc-rejilla { grid-template-columns: 1fr !important; }
+  .modo-opciones { grid-template-columns: 1fr; }
+  .compartir-codigo .crece,
+  .almacen-linea .almacen-uso { min-width: 0; }
+  .atajos-ed-cab,
+  .atajos-ed-fila { flex-wrap: wrap; }
+  .atajos-ed-nom { flex: 1 1 100%; }
+}
+
+/* Mayor contraste del sistema (prefers-contrast: more) */
+@media (prefers-contrast: more) {
+  :root {
+    --borde: rgba(27, 28, 38, .38);
+    --borde-fuerte: rgba(27, 28, 38, .72);
+    --borde-campo: #2B2D3A;
+    --tinta: #000000;
+    --tinta-2: #1B1C26;
+    --tinta-suave: #2E303D;
+  }
+  :root[data-tema="oscuro"] {
+    --borde: rgba(236, 237, 242, .38);
+    --borde-fuerte: rgba(236, 237, 242, .72);
+    --borde-campo: #C7C9D4;
+    --tinta: #FFFFFF;
+    --tinta-2: #ECEDF2;
+    --tinta-suave: #D5D7E0;
+  }
+  .btn,
+  .entrada,
+  .segmentado,
+  .caja,
+  .hoja,
+  .menu,
+  .alerta,
+  .chip {
+    border-width: 1.5px;
+    border-color: var(--borde-fuerte);
+  }
+  .btn.plano,
+  .icono-btn {
+    border: 1.5px solid var(--borde);
+  }
+  .icono-btn[aria-pressed="true"],
+  .icono-btn.activo,
+  .segmentado button[aria-pressed="true"] {
+    border: 2px solid var(--acento);
+  }
+  .interruptor span {
+    border: 2px solid var(--tinta);
+  }
+  .doc-tarjeta .acciones { opacity: 1; }
+}
+
+/* Alto contraste / colores forzados del sistema (Windows High Contrast) */
+@media (forced-colors: active) {
+  :focus-visible,
+  .entrada:focus-within,
+  .interruptor input:focus-visible + span {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px !important;
+    box-shadow: none !important;
+  }
+  .ico,
+  svg.ico {
+    stroke: currentColor;
+  }
+  .btn {
+    border: 1px solid ButtonText;
+    background: ButtonFace;
+    color: ButtonText;
+  }
+  .btn:hover {
+    border-color: Highlight;
+    color: Highlight;
+  }
+  .btn.primario,
+  .btn.peligro.lleno {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+    border: 2px solid Highlight;
+  }
+  .btn.primario:hover,
+  .btn.peligro.lleno:hover {
+    background: ButtonFace;
+    color: Highlight;
+    border-color: Highlight;
+  }
+  .btn.plano,
+  .btn.primario-suave {
+    border: 1px solid ButtonText;
+    background: ButtonFace;
+    color: ButtonText;
+  }
+  .btn:disabled,
+  .icono-btn:disabled {
+    border-color: GrayText;
+    color: GrayText;
+    opacity: 1;
+  }
+  .icono-btn {
+    border: 1px solid ButtonText;
+    background: ButtonFace;
+    color: ButtonText;
+  }
+  .icono-btn:hover {
+    border-color: Highlight;
+    color: Highlight;
+  }
+  .icono-btn[aria-pressed="true"],
+  .icono-btn.activo {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+    border: 2px solid Highlight;
+  }
+  .segmentado {
+    border: 1px solid ButtonText;
+    background: Canvas;
+  }
+  .segmentado button {
+    border: 1px solid transparent;
+    background: ButtonFace;
+    color: ButtonText;
+  }
+  .segmentado button[aria-pressed="true"] {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+    border: 2px solid Highlight;
+  }
+  .interruptor span {
+    forced-color-adjust: none;
+    background: Canvas;
+    border: 2px solid ButtonText;
+  }
+  .interruptor span::after {
+    background: ButtonText;
+    box-shadow: none;
+  }
+  .interruptor input:checked + span {
+    background: Highlight;
+    border-color: Highlight;
+  }
+  .interruptor input:checked + span::after {
+    background: HighlightText;
+  }
+  .interruptor input:disabled + span {
+    border-color: GrayText;
+  }
+  .interruptor input:disabled + span::after {
+    background: GrayText;
+  }
+  .caja,
+  .hoja,
+  .menu,
+  .paleta,
+  .alerta,
+  .aviso,
+  .microtexto,
+  .consejo,
+  .lista-item,
+  .chip,
+  .entrada,
+  .barra-uso,
+  .medidor i {
+    border: 1px solid CanvasText;
+  }
+  .barra-uso i,
+  .medidor[data-n="1"] i:nth-child(-n+1),
+  .medidor[data-n="2"] i:nth-child(-n+2),
+  .medidor[data-n="3"] i:nth-child(-n+3),
+  .medidor[data-n="4"] i:nth-child(-n+4),
+  .carga i {
+    forced-color-adjust: none;
+    background: Highlight;
+  }
+  .menu button:hover,
+  .menu button:focus-visible,
+  .paleta-item.activo,
+  .riel-item[aria-current="page"],
+  .pestanas [aria-current="page"],
+  .modo-opcion[aria-pressed="true"],
+  .plantilla[aria-pressed="true"] {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+    border: 1px solid Highlight;
+  }
+  .menu button:focus-visible .ico,
+  .riel-item[aria-current="page"] .ico,
+  .pestanas [aria-current="page"] .ico {
+    color: HighlightText;
+  }
+  .doc-tarjeta .acciones { opacity: 1; }
+  .pasos-anillo .fondo { stroke: CanvasText; }
+  .pasos-anillo .avance { stroke: Highlight; }
+  .atajos-ed-fila.grabando { border: 2px solid Highlight; }
+}

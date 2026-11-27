@@ -40,10 +40,26 @@
     return !!(NOM.prefExtra && NOM.prefExtra.esLista && NOM.prefExtra.esLista());
   }
 
+  function siguienteHabil(items, desde, paso) {
+    const n = items.length;
+    for (let k = 0; k < n; k++) {
+      const j = (desde + paso * k + n * 2) % n;
+      if (items[j] && !items[j].off) return j;
+    }
+    return -1;
+  }
+
+  function restaurarFoco(anterior) {
+    if (anterior && anterior.focus && anterior.isConnected) {
+      try { anterior.focus({ preventScroll: true }); } catch (e) { /* elemento no enfocable */ }
+    }
+  }
+
   /** Versión en lista vertical (menú contextual clásico) con las mismas acciones y en el mismo orden. */
   function abrirLista(x, y, items, opc, interno) {
     const n = items.length;
     const v = visible();
+    const anterior = !interno ? document.activeElement : (opc._anterior || null);
     const velo = html(`<div class="rueda-velo rueda-velo-lista" role="presentation">
       <div class="menu rueda-lista${opc.padre ? " sub" : ""}" role="menu" aria-label="${esc(opc.titulo || "Acciones rápidas")}">
         ${opc.padre
@@ -67,13 +83,6 @@
     menu.style.top = py + "px";
 
     let elegido = -1, modo = opc.modo || "clic", soltado = null;
-    const siguienteHabil = (desde, paso) => {
-      for (let k = 0; k < n; k++) {
-        const j = (desde + paso * k + n * 2) % n;
-        if (items[j] && !items[j].off) return j;
-      }
-      return -1;
-    };
     function marcar(i, enfocar) {
       elegido = i;
       botones.forEach((b) => b.classList.toggle("activo", +b.dataset.i === i));
@@ -83,12 +92,12 @@
       const it = items[i];
       if (!it || it.off) return;
       if (opc.tactil !== false) vibrar("elegir");
-      if (it.sub) { abrir(x, y, it.sub, Object.assign({}, opc, { modo: "clic", titulo: it.texto, padre: { items, opc } }), true); return; }
+      if (it.sub) { abrir(x, y, it.sub, Object.assign({}, opc, { modo: "clic", titulo: it.texto, padre: { items, opc }, _anterior: anterior }), true); return; }
       cerrar();
       it.fn && it.fn();
       if (NOM.hito) NOM.hito("rueda");
     }
-    function atras() { if (opc.padre) abrir(x, y, opc.padre.items, opc.padre.opc, true); else cerrar(); }
+    function atras() { if (opc.padre) abrir(x, y, opc.padre.items, Object.assign({}, opc.padre.opc, { _anterior: anterior }), true); else cerrar(); }
     function mover(e) {
       if (e.pointerType !== "mouse") return;
       const b = e.target && e.target.closest && e.target.closest(".rueda-lista-item");
@@ -117,14 +126,14 @@
       if (/^[1-8]$/.test(e.key) && +e.key <= n) { e.preventDefault(); elegir(+e.key - 1); return; }
       if (e.key === "ArrowDown" || (e.key === "Tab" && !e.shiftKey)) {
         e.preventDefault();
-        marcar(siguienteHabil(elegido < 0 ? 0 : elegido + 1, 1), true);
+        marcar(siguienteHabil(items, elegido < 0 ? 0 : elegido + 1, 1), true);
       } else if (e.key === "ArrowUp" || (e.key === "Tab" && e.shiftKey)) {
         e.preventDefault();
-        marcar(siguienteHabil(elegido < 0 ? n - 1 : elegido - 1, -1), true);
+        marcar(siguienteHabil(items, elegido < 0 ? n - 1 : elegido - 1, -1), true);
       } else if (e.key === "Home") {
-        e.preventDefault(); marcar(siguienteHabil(0, 1), true);
+        e.preventDefault(); marcar(siguienteHabil(items, 0, 1), true);
       } else if (e.key === "End") {
-        e.preventDefault(); marcar(siguienteHabil(n - 1, -1), true);
+        e.preventDefault(); marcar(siguienteHabil(items, n - 1, -1), true);
       } else if (e.key === "ArrowRight" && elegido >= 0 && items[elegido] && items[elegido].sub) {
         e.preventDefault(); elegir(elegido);
       } else if (e.key === "Enter" || e.key === " ") {
@@ -157,10 +166,11 @@
         velo.classList.add("saliendo");
         saliendo = velo;
         setTimeout(() => { if (saliendo === velo) saliendo = null; velo.remove(); }, 170);
+        restaurarFoco(anterior);
         opc.alCerrar && opc.alCerrar();
       },
     };
-    const primero = siguienteHabil(0, 1);
+    const primero = siguienteHabil(items, 0, 1);
     if (primero >= 0) marcar(primero, true);
     if (!interno && opc.tactil !== false) vibrar("abrir");
     requestAnimationFrame(() => menu.classList.add("abierta"));
@@ -180,6 +190,14 @@
     return vv ? { x: vv.offsetLeft, y: vv.offsetTop, w: vv.width, h: vv.height } : { x: 0, y: 0, w: innerWidth, h: innerHeight };
   }
 
+  /** Caben 8: con más, las primeras 7 y «Más» con el resto (que a su vez se reparte igual). Antes se cortaba en 8 y lo
+      demás no se podía alcanzar (en la hoja, «Más › Otras» perdía Imagen, Fijar, Formato condicional, Tabla dinámica…). */
+  function paginar(items) {
+    items = (items || []).filter(Boolean);
+    if (items.length <= 8) return items;
+    return items.slice(0, 7).concat([{ texto: "Más", icono: "more-horizontal", sub: items.slice(7) }]);
+  }
+
   /**
    * Abre la rueda centrada en (x, y). items: [{ texto, icono | color, fn, off, marcado, mantener, sub: [...] }]
    * (hasta 8). opc.modo: "mantener" (se elige al soltar) o "clic". opc.alCerrar.
@@ -188,11 +206,12 @@
     if (saliendo) { saliendo.remove(); saliendo = null; }
     cerrar(!!interno);
     opc = opc || {};
-    items = items.filter(Boolean).slice(0, 8);
+    items = paginar(items);
     if (!items.length) return null;
     if (usarLista()) return abrirLista(x, y, items, opc, interno);
     const n = items.length;
     const v = visible();
+    const anterior = !interno ? document.activeElement : (opc._anterior || null);
     // Cerca de la orilla la rueda se recorre hacia adentro. Al mantener presionado, la dirección se
     // mide desde donde se puso el dedo (x0, y0), no desde el centro recorrido: si no, soltar sin
     // moverse elegía la acción que quedaba de ese lado (en el número de fila: "Fijar" o "Eliminar fila").
@@ -212,7 +231,7 @@
             ${it.color ? `<span class="rueda-muestra" style="background:${NOM.colorCss(it.color, "#5A5D6B")}"></span>` : ico(it.icono || "circle")}
             <small>${esc(it.corto || it.texto)}</small>${it.sub ? `<i class="rueda-mas"></i>` : ""}</button>`;
         }).join("")}
-        <div class="rueda-centro">${opc.padre ? ico("chevron-left", "ico-s") : ""}<span data-etq>${esc(opc.titulo || "Elige")}</span></div>
+        <div class="rueda-centro">${opc.padre ? ico("chevron-left", "ico-s") : ""}<span data-etq aria-live="polite">${esc(opc.titulo || "Elige")}</span></div>
       </div></div>`);
     document.body.append(velo);
     const rueda = velo.firstElementChild;
@@ -239,13 +258,13 @@
       if (!it || it.off) return;
       if (opc.tactil !== false) vibrar("elegir");
       // El submenú se abre en el mismo lugar; su centro regresa a la rueda anterior.
-      if (it.sub) { abrir(x, y, it.sub, Object.assign({}, opc, { modo: "clic", titulo: it.texto, padre: { items, opc } }), true); return; }
+      if (it.sub) { abrir(x, y, it.sub, Object.assign({}, opc, { modo: "clic", titulo: it.texto, padre: { items, opc }, _anterior: anterior }), true); return; }
       // Al hacer la acción la rueda se va.
       cerrar();
       it.fn && it.fn();
       if (NOM.hito) NOM.hito("rueda");
     }
-    function atras() { if (opc.padre) abrir(x, y, opc.padre.items, opc.padre.opc, true); else cerrar(); }
+    function atras() { if (opc.padre) abrir(x, y, opc.padre.items, Object.assign({}, opc.padre.opc, { _anterior: anterior }), true); else cerrar(); }
     function mover(e) { if (modo === "mantener" || e.pointerType === "mouse") marcar(porPunto(e.clientX, e.clientY, modo === "mantener")); }
     function soltar(e) {
       if (modo !== "mantener") return;
@@ -270,9 +289,22 @@
       if (e.key === "Escape") { e.preventDefault(); cerrar(); return; }
       if (e.key === "Backspace" && opc.padre) { e.preventDefault(); atras(); return; }
       if (/^[1-8]$/.test(e.key) && +e.key <= n) { e.preventDefault(); elegir(+e.key - 1); return; }
-      if (["ArrowRight", "ArrowDown", "Tab"].includes(e.key)) { e.preventDefault(); marcar((elegido + 1 + n) % n); }
-      else if (["ArrowLeft", "ArrowUp"].includes(e.key)) { e.preventDefault(); marcar((elegido - 1 + n) % n); }
-      else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (elegido >= 0) elegir(elegido); }
+      if (e.key === "ArrowRight" || e.key === "ArrowDown" || (e.key === "Tab" && !e.shiftKey)) {
+        e.preventDefault();
+        marcar(siguienteHabil(items, elegido < 0 ? 0 : elegido + 1, 1));
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowUp" || (e.key === "Tab" && e.shiftKey)) {
+        e.preventDefault();
+        marcar(siguienteHabil(items, elegido < 0 ? n - 1 : elegido - 1, -1));
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        marcar(siguienteHabil(items, 0, 1));
+      } else if (e.key === "End") {
+        e.preventDefault();
+        marcar(siguienteHabil(items, n - 1, -1));
+      } else if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        if (elegido >= 0) elegir(elegido);
+      }
       const b = velo.querySelector(`.rueda-item[data-i="${elegido}"]`);
       if (b) b.focus({ preventScroll: true });
     }
@@ -296,9 +328,20 @@
         document.body.style.userSelect = quitarSel;
         velo.classList.add(sinAviso ? "cambiando" : "saliendo");
         setTimeout(() => velo.remove(), sinAviso ? 90 : 170);
-        if (!sinAviso) opc.alCerrar && opc.alCerrar();
+        if (!sinAviso) {
+          restaurarFoco(anterior);
+          opc.alCerrar && opc.alCerrar();
+        }
       },
     };
+    if (opc.teclado) {
+      const primero = siguienteHabil(items, 0, 1);
+      if (primero >= 0) {
+        marcar(primero);
+        const b = velo.querySelector(`.rueda-item[data-i="${primero}"]`);
+        if (b) b.focus({ preventScroll: true });
+      }
+    }
     if (!interno && opc.tactil !== false) vibrar("abrir");
     requestAnimationFrame(() => rueda.classList.add("abierta"));
     return actual;
@@ -319,11 +362,11 @@
     opc = Object.assign({ izquierdo: true, tactil: true, ms: MANTENER_MS }, opc);
     let espera = null;
     const cancelar = () => { if (espera) { clearTimeout(espera.t); espera = null; } };
-    const abrirEn = (ev, x, y, modo, tactil) => {
+    const abrirEn = (ev, x, y, modo, tactil, teclado) => {
       opc.alPreparar && opc.alPreparar(ev);
       const l = items(ev);
       if (!l) return null;
-      const r = abrir(x, y, l, { modo, titulo: l.titulo || opc.titulo, tactil, alCerrar: opc.alCerrar ? () => opc.alCerrar(ev, tactil) : undefined });
+      const r = abrir(x, y, l, { modo, titulo: l.titulo || opc.titulo, tactil, teclado: !!teclado, alCerrar: opc.alCerrar ? () => opc.alCerrar(ev, tactil) : undefined });
       if (r && opc.alAbrir) opc.alAbrir(ev, tactil);
       return r;
     };
@@ -345,7 +388,7 @@
       // Teclado (tecla Menú o Mayús+F10): se abre donde está el cursor.
       if (e.button === 0 && e.clientX === 0 && e.clientY === 0) {
         const r = opc.puntoTeclado ? opc.puntoTeclado() : el.getBoundingClientRect();
-        abrirEn(e, r.left + (r.width || 0) / 2, r.top + (r.height || 0) / 2, "clic", false);
+        abrirEn(e, r.left + (r.width || 0) / 2, r.top + (r.height || 0) / 2, "clic", false, true);
       }
     });
     el.addEventListener("pointerdown", (e) => {
@@ -386,5 +429,5 @@
     el.addEventListener("scroll", cancelar, true);
   }
 
-  NOM.rueda = { abrir, cerrar: () => cerrar(), enlazar, abierta: () => !!actual };
+  NOM.rueda = { abrir, cerrar: () => cerrar(), enlazar, abierta: () => !!actual, _paginar: paginar };
 })();

@@ -1270,15 +1270,15 @@
     const cuerpo = html(`<div class="col">
       <div class="lista-item" style="padding:14px">${avatar(u, "g")}<span class="crece"><b>${esc(u.nombre)}</b><small>${esc(sinCuenta ? "Preferencias guardadas en este equipo" : u.empresa || "Sin organización")}</small></span></div>
       <div class="campo"><span class="etiqueta">Apariencia</span>
-        <div class="segmentado lleno" data-tema>${[["auto", "monitor", "Automático"], ["claro", "sun", "Claro"], ["oscuro", "moon", "Oscuro"]].map(([v, i, t]) => `<button type="button" data-v="${v}" aria-pressed="${p.tema === v}">${ico(i, "ico-s")} ${t}</button>`).join("")}</div></div>
+        <div class="segmentado lleno" role="group" aria-label="Apariencia" data-tema>${[["auto", "monitor", "Automático"], ["claro", "sun", "Claro"], ["oscuro", "moon", "Oscuro"]].map(([v, i, t]) => `<button type="button" data-v="${v}" aria-pressed="${p.tema === v}">${ico(i, "ico-s")} ${t}</button>`).join("")}</div></div>
       ${extra ? `<div class="campo"><span class="etiqueta">Idioma <span class="suave" style="font-weight:600">(en este equipo)</span></span>
-        <div class="segmentado lleno" data-idioma>${[["auto", "Automático"], ["es", "Español"], ["en", "English"]].map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${extra.idiomaInterfaz === v}">${t}</button>`).join("")}</div>
+        <div class="segmentado lleno" role="group" aria-label="Idioma" data-idioma>${[["auto", "Automático"], ["es", "Español"], ["en", "English"]].map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${extra.idiomaInterfaz === v}">${t}</button>`).join("")}</div>
         <div class="ayuda">Cambia los botones y menús de NOM. El texto de tus documentos no cambia.</div></div>` : ""}
       <div class="campo"><span class="etiqueta">Tamaño de la letra <span class="suave" style="font-weight:600">(en este equipo)</span></span>
-        <div class="segmentado lleno" data-letra>${[["normal", "Normal", 15], ["grande", "Grande", 17], ["muy-grande", "Muy grande", 19]].map(([v, t, pxTam]) => `<button type="button" data-v="${v}" aria-pressed="${(NOM.leer("nom.letra", "normal")) === v}" style="font-size:${pxTam}px">${t}</button>`).join("")}</div>
+        <div class="segmentado lleno" role="group" aria-label="Tamaño de la letra" data-letra>${[["normal", "Normal", 15], ["grande", "Grande", 17], ["muy-grande", "Muy grande", 19]].map(([v, t, pxTam]) => `<button type="button" data-v="${v}" aria-pressed="${(NOM.leer("nom.letra", "normal")) === v}" style="font-size:${pxTam}px">${t}</button>`).join("")}</div>
         <div class="ayuda">${api.empaquetada ? "Agranda el texto de toda la app." : "Agranda el texto de las listas, menús y ventanas. Para agrandar todo, usa Ctrl y + en el navegador."}</div></div>
       ${extra ? `<div class="campo"><span class="etiqueta">Al mantener presionado o clic derecho <span class="suave" style="font-weight:600">(en este equipo)</span></span>
-        <div class="segmentado lleno" data-menu-rapido>${[["rueda", "circle-dot", "Ruedita"], ["lista", "list", "Lista"]].map(([v, i, t]) => `<button type="button" data-v="${v}" aria-pressed="${extra.menuRapido === v}">${ico(i, "ico-s")} ${t}</button>`).join("")}</div>
+        <div class="segmentado lleno" role="group" aria-label="Al mantener presionado o clic derecho" data-menu-rapido>${[["rueda", "circle-dot", "Ruedita"], ["lista", "list", "Lista"]].map(([v, i, t]) => `<button type="button" data-v="${v}" aria-pressed="${extra.menuRapido === v}">${ico(i, "ico-s")} ${t}</button>`).join("")}</div>
         <div class="ayuda">Elige si las acciones rápidas salen en círculo o en una lista vertical.</div></div>` : ""}
       <div class="campo"><label class="etiqueta" for="pa">Guardar una versión automática cada <b data-va>${p.autoguardadoMin}</b> min</label>
         <input id="pa" type="range" min="1" max="60" value="${p.autoguardadoMin}" style="accent-color:var(--acento)"></div>
@@ -1292,7 +1292,7 @@
         <label class="lista-item">${ico("accessibility")}<span class="crece"><b>Dejar que mis extensiones cambien los colores <span class="suave" style="font-weight:600">(en este equipo)</span></b><small>Para modos oscuros, filtros de contraste o de color del navegador. El alto contraste del sistema siempre se respeta.</small></span><span class="interruptor"><input type="checkbox" data-ext ${NOM.leer("nom.extensiones", false) === true ? "checked" : ""}><span></span></span></label>
       </div>
       ${extra ? `<div class="campo" data-haptica-nivel-wrap ${extra.haptica ? "" : "hidden"}><span class="etiqueta">Intensidad de la vibración</span>
-        <div class="segmentado lleno" data-haptica-nivel>${[["suave", "Suave"], ["normal", "Normal"], ["fuerte", "Fuerte"]].map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${extra.hapticaNivel === v}">${t}</button>`).join("")}</div></div>
+        <div class="segmentado lleno" role="group" aria-label="Intensidad de la vibración" data-haptica-nivel>${[["suave", "Suave"], ["normal", "Normal"], ["fuerte", "Fuerte"]].map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${extra.hapticaNivel === v}">${t}</button>`).join("")}</div></div>
       <div data-ajustes-atajos></div>` : ""}
       ${sinCuenta ? "" : `<div class="lista-item">${ico("download")}<span class="crece"><b>Descargar los datos de mi cuenta</b><small>Lo que este servidor guarda de ti, en un archivo JSON (sin tu contraseña).</small></span><button type="button" class="btn chico" data-mis-datos>Descargar</button></div>`}
       ${sinCuenta || NOM.sinContrasena(u) ? "" : `<div class="lista-item">${ico("key-round")}<span class="crece"><b>Código para recuperar tu contraseña</b><small data-rec>${recuperacion === false ? "Aún no tienes uno: genéralo y guárdalo en un lugar seguro." : "Si olvidas tu contraseña, con él pones una nueva."}</small></span><button type="button" class="btn chico" data-recuperacion>${recuperacion === false ? "Generar" : "Generar otro"}</button></div>`}
@@ -1300,7 +1300,7 @@
     </div>`);
     // B-1: la versión, a la vista (también la del servidor, si es otra)
     if (NOM.acceso && !sinCuenta) NOM.acceso.infoServidor().then((i) => { const el = $("[data-version-servidor]", cuerpo); if (el && i && i.version && i.version !== NOM.VERSION) el.textContent = " · servidor " + i.version; }).catch(() => {});
-    const pie = html(`<div style="display:contents"><button class="btn plano" data-fabrica>Valores de fábrica</button><span class="crece"></span><button class="btn primario" data-guardar>Guardar</button></div>`);
+    const pie = html(`<div style="display:contents"><button type="button" class="btn plano" data-fabrica>Valores de fábrica</button><span class="crece"></span><button type="button" class="btn primario" data-guardar>Guardar</button></div>`);
     let guardado = false;
     let atajosCtrl = null;
     const original = Object.assign({}, p);

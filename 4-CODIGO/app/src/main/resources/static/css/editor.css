@@ -1588,3 +1588,373 @@
 .rueda-lista-muestra { width: 18px; height: 18px; border-radius: var(--r-xs); border: 1px solid var(--borde-fuerte); flex: none; forced-color-adjust: none; }
 :root[data-movimiento="reducido"] .rueda-lista { transition: none; }
 @media (pointer: coarse) { .rueda-lista-atras, .rueda-lista-item { min-height: 44px; } }
+
+/* =====================================================================
+   Accesibilidad completa (WCAG 2.2 AA y alto contraste del sistema)
+   Reglas nuevas para los editores, la ruedita y sus paneles. Solo variables.
+   ===================================================================== */
+
+/* 2.4.11 Foco no tapado en zonas desplazables de los editores */
+.ed-lienzo,
+.rejilla-hoja,
+.cajon-cuerpo,
+.miniaturas {
+  scroll-padding-top: var(--e6);
+  scroll-padding-bottom: var(--e7);
+}
+
+/* 2.4.7 Foco visible siempre en controles de editor, ruedita y botones flotantes */
+.rueda-item:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+  border-radius: var(--r-s);
+}
+.rueda-lista-atras:focus-visible,
+.rueda-lista-item:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: -2px;
+}
+.ao-ef:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+  box-shadow: var(--foco);
+}
+.editor.enfoque .salir-enfoque:focus-visible,
+.reproductor .salir:focus-visible,
+.reproductor.quieto .salir:focus-visible,
+.reproductor.quieto .pres-herr:focus-within {
+  opacity: 1;
+}
+
+/* Tema oscuro y claro: evitar botones o campos del mismo color que su fondo */
+:root[data-tema="claro"] .wd-lectura {
+  background: var(--sup);
+  color: var(--tinta);
+}
+:root[data-tema="oscuro"] .wd-lectura {
+  background: var(--fondo);
+  color: var(--tinta);
+}
+.wd-lectura-barra { border-bottom-color: var(--borde); }
+.proy-espera .entrada {
+  background: var(--sup-2);
+  color: var(--tinta);
+}
+:root[data-tema="oscuro"] .casilla.marcada {
+  color: var(--sobre-acento);
+}
+.qr-grande .qr-grande-x {
+  color: #15142A;
+  background: transparent;
+}
+.qr-grande .qr-grande-x:hover {
+  background: var(--sup-hundida);
+  color: var(--tinta);
+}
+
+/* Barras de editor con letra grande/muy grande o pantallas angostas: no recortar botones */
+.ed-barra {
+  min-height: var(--barra-alto);
+  height: auto;
+  padding-top: var(--e1);
+  padding-bottom: var(--e1);
+}
+.ed-nombre { min-width: 0; }
+:root[data-letra] .ed-barra {
+  flex-wrap: wrap;
+  row-gap: var(--e1);
+}
+:root[data-letra] .ed-herramientas .icono-btn.con-etq,
+:root[data-letra] .ed-herramientas .icono-btn.texto-btn,
+:root[data-letra] .ed-herramientas select,
+:root[data-letra] .ed-herramientas .mini-select {
+  min-height: 36px;
+  height: auto;
+}
+:root[data-letra] .wd-estado {
+  flex-wrap: wrap;
+  row-gap: var(--e1);
+}
+@media (max-width: 860px) {
+  .ed-barra {
+    min-height: var(--barra-alto);
+    height: auto;
+  }
+  .ed-titulos { flex: 1 1 0; min-width: 0; }
+  .ed-nombre { width: 100%; max-width: 100%; }
+  .wd-estado { flex-wrap: wrap; }
+}
+@media (max-width: 400px) {
+  .ed-barra { flex-wrap: wrap; gap: var(--e1); }
+  .barra-formula { flex-wrap: wrap; }
+  .zoom-ctl { right: var(--e2); bottom: var(--e2); }
+}
+
+/* 2.5.8 Tamaño mínimo de objetivo: 24 x 24 px en escritorio, 44 x 44 px en táctil */
+.casilla {
+  min-width: 24px;
+  min-height: 24px;
+  width: 24px;
+  height: 24px;
+}
+.lz-muestras { grid-template-columns: repeat(8, 1fr); }
+.lz-muestras button {
+  width: 24px !important;
+  min-width: 24px !important;
+  min-height: 24px !important;
+  height: 24px !important;
+}
+.desplegable-celda {
+  min-width: 24px;
+  min-height: 24px;
+  width: 24px;
+  height: 24px;
+}
+.esq-btn {
+  min-width: 24px;
+  min-height: 24px;
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+}
+.wd-vistas { transform: none; }
+.wd-vistas button { min-width: 28px; min-height: 28px; }
+.wd-e { min-height: 28px; }
+.wd-tab-ctl button { min-width: 28px; min-height: 28px; }
+.pestana-hoja { min-height: 32px; }
+.rueda-item { min-width: 56px; min-height: 44px; }
+
+@media (pointer: coarse) {
+  .ed-herramientas .icono-btn,
+  .ed-herramientas select,
+  .ed-herramientas .mini-select,
+  .wd-estado .icono-btn.chico,
+  .wd-tam .icono-btn.chico,
+  .wd-vistas button,
+  .wd-e,
+  .pestana-hoja,
+  .zoom-ctl .icono-btn,
+  .lz-barra .icono-btn,
+  .lz-color,
+  .lz-fila .icono-btn,
+  .wd-tab-ctl button,
+  .casilla,
+  .desplegable-celda,
+  .bl .enlazar,
+  .bl .girador,
+  .capa-nombre,
+  .chip-carpeta,
+  .mencion-op,
+  .ayuda-op {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .wd-paleta,
+  .lz-panel {
+    width: min(304px, calc(100vw - 16px));
+  }
+  .wd-muestras,
+  .lz-muestras {
+    grid-template-columns: repeat(6, 1fr);
+  }
+  .wd-muestras button,
+  .lz-muestras button {
+    width: 44px !important;
+    min-width: 44px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+  }
+}
+
+/* Mayor contraste del sistema (prefers-contrast: more) */
+@media (prefers-contrast: more) {
+  .ed-barra,
+  .ed-herramientas,
+  .lz-barra,
+  .zoom-ctl,
+  .rueda-fondo,
+  .rueda-centro,
+  .wd-estado,
+  .banda,
+  .estado-sync,
+  .chip-carpeta {
+    border-color: var(--borde-fuerte);
+  }
+  .rueda-sector { stroke: var(--borde-fuerte); stroke-width: 1.5; }
+  .pestana-hoja.activa {
+    border: 1.5px solid var(--acento);
+    box-shadow: none;
+  }
+  .editor.enfoque .salir-enfoque,
+  .pres-herr {
+    opacity: 1;
+  }
+}
+
+/* Alto contraste / colores forzados del sistema (Windows High Contrast) */
+@media (forced-colors: active) {
+  /* Controles de interfaz que viven dentro de un contenedor de documento con forced-color-adjust: none */
+  .zoom-ctl,
+  .lz-barra,
+  .lz-multiple,
+  .pista,
+  .pres-notas,
+  .wd-tab-ctl,
+  .esq-btn,
+  .desplegable-celda {
+    forced-color-adjust: auto;
+  }
+  .ed-herramientas .icono-btn.destacado {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+    border: 2px solid Highlight;
+  }
+  .ed-herramientas select,
+  .ed-herramientas .mini-select,
+  .barra-formula input,
+  .wd-buscar input,
+  .orden-docs select {
+    border: 1px solid ButtonText;
+    background: Field;
+    color: FieldText;
+  }
+  .estado-sync,
+  .banda,
+  .zoom-ctl,
+  .lz-barra,
+  .pista,
+  .wd-buscar,
+  .cajon,
+  .pres-notas,
+  .ayuda-fx {
+    border: 1px solid CanvasText;
+  }
+  .wd-e,
+  .pestana-hoja,
+  .wd-tab-ctl button,
+  .esq-btn,
+  .desplegable-celda,
+  .chip-carpeta,
+  .ecu-ayudas button,
+  .lz-disenos-lista button,
+  .lz-iconos button,
+  .ao-ef,
+  .dg-tarjeta,
+  .mencion-op,
+  .ayuda-op {
+    border: 1px solid ButtonText;
+    background: ButtonFace;
+    color: ButtonText;
+  }
+  .pestana-hoja.activa,
+  .chip-carpeta[aria-pressed="true"],
+  .ao-ef[aria-pressed="true"],
+  .version[aria-pressed="true"],
+  .capa-fila.sel,
+  .ayuda-op.on,
+  .mencion-op.activa {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+    border: 2px solid Highlight;
+  }
+  .casilla {
+    forced-color-adjust: none;
+    border: 2px solid ButtonText;
+    background: Canvas;
+    color: CanvasText;
+  }
+  .casilla.marcada {
+    background: Highlight;
+    border-color: Highlight;
+    color: HighlightText;
+  }
+  .rueda-fondo {
+    forced-color-adjust: none;
+    background: Canvas;
+    border: 2px solid CanvasText;
+  }
+  .rueda-sector {
+    forced-color-adjust: none;
+    fill: Canvas;
+    stroke: ButtonText;
+    stroke-width: 1.5;
+  }
+  .rueda-sector.activo {
+    fill: Highlight;
+    stroke: Highlight;
+  }
+  .rueda-sector.off {
+    fill: Canvas;
+    stroke: GrayText;
+  }
+  .rueda-item {
+    forced-color-adjust: none;
+    color: ButtonText;
+  }
+  .rueda-item .ico { stroke: currentColor; }
+  .rueda-item.activo { color: HighlightText; }
+  .rueda-item.off { color: GrayText; opacity: 1; }
+  .rueda-item.marcado::after { background: Highlight; }
+  .rueda-item.marcado.activo::after { background: HighlightText; }
+  .rueda-item:focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px;
+  }
+  .rueda-centro {
+    forced-color-adjust: none;
+    background: Canvas;
+    border: 2px solid CanvasText;
+    color: CanvasText;
+  }
+  .rueda-lista {
+    border: 2px solid CanvasText;
+    background: Canvas;
+  }
+  .rueda-lista-item,
+  .rueda-lista-atras {
+    color: ButtonText;
+    background: ButtonFace;
+    border: 1px solid transparent;
+  }
+  .rueda-lista-item.activo,
+  .rueda-lista-item:hover,
+  .rueda-lista-item:focus-visible,
+  .rueda-lista-atras:hover,
+  .rueda-lista-atras:focus-visible {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+    border-color: Highlight;
+  }
+  .rueda-lista-item.off { color: GrayText; opacity: 1; }
+  .bl .enlazar,
+  .bl .girador,
+  .bl .tirador {
+    forced-color-adjust: none;
+    background: ButtonFace;
+    color: ButtonText;
+    border: 2px solid Highlight;
+  }
+  .editor.enfoque .salir-enfoque,
+  .reproductor .salir,
+  .pres-herr,
+  .proy-barra {
+    opacity: 1;
+  }
+  .reproductor .salir,
+  .pres-herr .icono-btn,
+  .reproductor.lectura .pres-lectura .icono-btn {
+    border: 1px solid ButtonText;
+    background: ButtonFace;
+    color: ButtonText;
+  }
+  .pres-herr .icono-btn[aria-pressed="true"] {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+    border-color: Highlight;
+  }
+}

@@ -213,23 +213,26 @@
       activo = Math.min(activo, Math.max(0, vistos.length - 1));
       if (!vistos.length) {
         lista.innerHTML = `<div class="paleta-vacio">${ico("search")}<b>Nada con “${esc(q)}”</b><span>Prueba con otra palabra, o crea algo nuevo.</span></div>`;
+        input.removeAttribute("aria-activedescendant");
         return;
       }
       let grupo = null, h = "";
       vistos.forEach((it, i) => {
         if (!q.trim() && it.grupo !== grupo) { grupo = it.grupo; h += `<div class="paleta-grupo">${esc(grupo)}</div>`; }
-        h += `<button type="button" class="paleta-item ${i === activo ? "activo" : ""}" role="option" aria-selected="${i === activo}" data-i="${i}" style="--i:${Math.min(i, 12)}">
+        h += `<button type="button" id="paleta-op-${i}" class="paleta-item ${i === activo ? "activo" : ""}" role="option" aria-selected="${i === activo}" data-i="${i}" style="--i:${Math.min(i, 12)}">
           <span class="paleta-ico ${it.modo ? "modo-" + esc(it.modo) : ""}" ${it.color ? `style="background:${NOM.colorHex(it.color)};color:#fff"` : ""}>${ico(it.icono || "chevron-right")}</span>
           <span class="crece recorta"><b>${esc(it.texto)}</b>${it.sub2 ? `<small>${esc(it.sub2)}</small>` : ""}</span>
           ${it.marcado ? ico("check", "ico-s") : ""}${it.atajo ? `<kbd>${esc(it.atajo)}</kbd>` : ""}${it.sub ? ico("chevron-right", "ico-s") : ""}</button>`;
       });
       lista.innerHTML = h;
+      input.setAttribute("aria-activedescendant", "paleta-op-" + activo);
       const a = $(".paleta-item.activo", lista);
       if (a) a.scrollIntoView({ block: "nearest" });
     }
     function marcar(i) {
       activo = (i + vistos.length) % vistos.length;
       $$(".paleta-item", lista).forEach((b) => { const on = +b.dataset.i === activo; b.classList.toggle("activo", on); b.setAttribute("aria-selected", on); });
+      input.setAttribute("aria-activedescendant", "paleta-op-" + activo);
       const a = $(".paleta-item.activo", lista);
       if (a) a.scrollIntoView({ block: "nearest" });
     }
