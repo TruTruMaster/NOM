@@ -47,3 +47,15 @@ las 4:15 no pase sus pruebas en vivo no se publica (queda en una rama `pendiente
   (≈5 bits) y ≈3 bytes por cada cambio de formato; Office importado: Word 16 KB de 44, Excel 33 KB de 47, PowerPoint
   66 KB de 167. Guarda una foto comprimida (no los identificadores del CRDT), así que un formato v4 no ganaría casi
   nada y cambiar el formato hoy arriesgaría la expo: no se hizo (respuesta para el dueño en §3).
+- 00:00-03:20 — **Pausa por el límite de uso** (la sesión se detuvo ~3 h). Siguieron en segundo plano: PowerPoint y Excel y el
+  corrector de ortografía (B4).
+- 03:20 — Revisado y guardado: PowerPoint/Excel como Office (líneas, punteados, sombras, radar, burbujas, área apilada,
+  etiquetas de pastel/dona, nombres de una hoja); ortografía desde la ruedita (nspell + diccionarios libres, se bajan
+  solo al usarlos; la opción aparece solo con una palabra mal escrita, para no mover los 8 lugares de la ruedita);
+  imágenes que se vuelven a pedir al regresar la red o al llegar la llave (hallazgos del barrido en
+  `trabajo/expo27/barridos/ds-imagenes-carga.txt`; quedan para después: verificar la huella al guardar, TIFF/EMF+
+  que el navegador no dibuja, recorte de Word con la marca de espera de 1×1).
+- 03:22 — **0.24.0 publicada** (versionCode 53). Tanda 2 en vivo (antes de la 0.24.0): todo en verde salvo axe 55/11
+  (avatar con colores forzados + tema oscuro: regla CSS agregada para la versión final) y rastreo 638/4 (opciones de
+  «Más › Otras» que antes eran inalcanzables y ahora el rastreo alcanza en el 4.º nivel: son submenús, no errores).
+- `exploracion_errores.py` con la 0.24.0: **12/0** (antes 3/9).

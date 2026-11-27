@@ -1288,3 +1288,9 @@ html {
   .pasos-anillo .avance { stroke: Highlight; }
   .atajos-ed-fila.grabando { border: 2px solid Highlight; }
 }
+
+/* Colores forzados (alto contraste del sistema): el avatar con las iniciales usa los colores del sistema, no el color
+   de la persona (en tema oscuro las letras quedaban sin contraste; axe, 27-nov). */
+@media (forced-colors: active) {
+  .avatar { forced-color-adjust: none; background: Canvas !important; color: CanvasText !important; border: 1px solid CanvasText; }
+}

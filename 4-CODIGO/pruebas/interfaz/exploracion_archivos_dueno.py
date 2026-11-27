@@ -18,6 +18,7 @@ os.makedirs(SALIDA, exist_ok=True)
 cuenta_fija = os.environ.get("NOM_CUENTA")
 if cuenta_fija:
     u, c = cuenta_fija.split(":", 1)
+    N.CL = c   # (Pagina.entrar escribe N.CL como contraseña)
     s, r = N.api("POST", "/api/cuentas/sesion", {"nombre": u, "contrasena": c})
     C = {"nombre": u, "contrasena": c, "token": r["token"], "id": r["usuario"]["id"]}
     esp = next(x["id"] for x in N.api("GET", "/api/espacios", None, C["token"])[1] if x.get("nombre") == os.environ.get("NOM_ESPACIO", "Expo NOM"))
@@ -39,7 +40,7 @@ with sync_playwright() as pw:
         errores.clear(); r = informe[nombre] = {"errores": [], "imagenes_mal": [], "avisos": [], "capturas": []}
         print("==", nombre, flush=True)
         p.goto(N.B + "/#/espacio/" + esp); P.t(1500); P.cerrar_hojas()
-        P.ev("() => { const b = [...document.querySelectorAll('button, a')].find(x => /Nuevo documento|Crear documento/.test(x.textContent) && x.offsetParent); if (b) b.click(); else { const f = document.querySelector('[aria-label=\"Nuevo documento\"], .fab'); f && f.click(); } }")
+        P.ev("() => { const b = [...document.querySelectorAll('button, a')].find(x => /Nuevo documento|Crear documento/.test((x.getAttribute('aria-label') || '') + ' ' + x.textContent) && x.offsetParent); if (b) b.click(); else { const f = document.querySelector('[aria-label=\"Nuevo documento\"], .fab'); f && f.click(); } }")
         P.t(800)
         t0 = time.time()
         with p.expect_file_chooser(timeout=15000) as fc:
