@@ -121,7 +121,7 @@ public final class PaginasLimpias {
     /** La página de «esa dirección no existe» (404) o «algo falló» (500): con el aspecto de NOM y un camino para seguir. */
     public static String paginaError(int estado) {
         boolean noExiste = estado == 404;
-        String titulo = noExiste ? "Esta página no existe" : "Algo falló en el servidor";
+        String titulo = noExiste ? "Esta página no existe" : "Algo falló en NOM";
         String texto = noExiste ? "Puede que el enlace esté mal escrito o que la página ya no esté. Tus espacios y documentos siguen en el inicio."
                 : "No es algo que hayas hecho tú. Tu trabajo sigue guardado: vuelve a intentarlo en un momento.";
         return "<!doctype html><html lang=\"es\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"

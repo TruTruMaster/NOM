@@ -84,6 +84,6 @@ class PaginasLimpiasTest {
         String p = PaginasLimpias.paginaError(404);
         assertTrue(p.contains("Esta página no existe") && p.contains("href=\"/\"") && p.contains("lang=\"es\"") && p.contains("noindex"), p);
         assertFalse(p.contains("{\"error\""));
-        assertTrue(PaginasLimpias.paginaError(500).contains("Algo falló en el servidor"));
+        assertTrue(PaginasLimpias.paginaError(500).contains("Algo falló en NOM"));
     }
 }

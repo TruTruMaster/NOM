@@ -10,6 +10,7 @@
   const CLAVE = "nom.pref.extra";
   const NIVELES_HAPTICA = { suave: true, normal: true, fuerte: true };
   const MODOS_MENU = { rueda: true, lista: true };
+  const IDIOMAS_INTERFAZ = { auto: true, es: true, en: true };
 
   // Duraciones cortas (en milisegundos) por intensidad y tipo de toque.
   const HAPTICA_MS = {
@@ -94,7 +95,7 @@
 
   // ================================================================== lectura y guardado
   function fabrica() {
-    return { haptica: true, hapticaNivel: "normal", menuRapido: "rueda", atajos: {} };
+    return { haptica: true, hapticaNivel: "normal", menuRapido: "rueda", idiomaInterfaz: "auto", atajos: {} };
   }
 
   function limpiar(raw) {
@@ -103,6 +104,7 @@
     if (typeof raw.haptica === "boolean") base.haptica = raw.haptica;
     if (propio(NIVELES_HAPTICA, raw.hapticaNivel)) base.hapticaNivel = raw.hapticaNivel;
     if (propio(MODOS_MENU, raw.menuRapido)) base.menuRapido = raw.menuRapido;
+    if (propio(IDIOMAS_INTERFAZ, raw.idiomaInterfaz)) base.idiomaInterfaz = raw.idiomaInterfaz;
     if (raw.atajos && typeof raw.atajos === "object") {
       const limpio = {};
       for (const item of ATAJOS) {
@@ -131,6 +133,7 @@
     const limpio = limpiar(mezclado);
     if (NOM.guardar) NOM.guardar(CLAVE, limpio);
     else { try { localStorage.setItem(CLAVE, JSON.stringify(limpio)); } catch (e) { /* sin almacenamiento */ } }
+    if (NOM.idioma && NOM.idioma.aplicar && limpio.idiomaInterfaz !== actual.idiomaInterfaz) NOM.idioma.aplicar(limpio.idiomaInterfaz);
     return limpio;
   }
 
@@ -140,7 +143,7 @@
 
   function clonar(estado) {
     const e = limpiar(estado || leer());
-    return { haptica: e.haptica, hapticaNivel: e.hapticaNivel, menuRapido: e.menuRapido, atajos: Object.assign({}, e.atajos) };
+    return { haptica: e.haptica, hapticaNivel: e.hapticaNivel, menuRapido: e.menuRapido, idiomaInterfaz: e.idiomaInterfaz, atajos: Object.assign({}, e.atajos) };
   }
 
   // ================================================================== atajos: normalización y validación

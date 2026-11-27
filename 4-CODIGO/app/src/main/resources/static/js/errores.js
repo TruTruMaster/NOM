@@ -11,15 +11,15 @@
     401: "Tu sesión terminó. Vuelve a entrar con tu usuario y contraseña.",
     403: "No tienes permiso para hacer esto. Pídeselo a quien administra el espacio.",
     404: "No lo encontramos: puede que lo hayan borrado o que ya no tengas acceso.",
-    408: "El servidor tardó demasiado en contestar. Vuelve a intentarlo en un momento.",
+    408: "NOM tardó demasiado en contestar. Vuelve a intentarlo en un momento.",
     409: "Alguien más lo cambió al mismo tiempo. Vuelve a abrirlo e intenta de nuevo.",
     413: "El archivo es demasiado grande para subirlo. Prueba con uno más pequeño o divídelo en partes.",
     415: "Ese tipo de archivo no se puede usar aquí.",
-    423: "Este espacio está cifrado y en este equipo falta su llave. Entra con tu contraseña para abrirlo.",
+    423: "Este espacio está protegido con tu contraseña y en este equipo falta su llave. Vuelve a entrar con tu contraseña para abrirlo.",
     429: "Hiciste muchos intentos seguidos. Espera un minuto y vuelve a intentarlo.",
-    500: "Algo falló en el servidor de NOM. Tu trabajo sigue en este equipo: vuelve a intentarlo en un momento.",
+    500: "Algo falló en NOM. No es algo que hayas hecho tú: tu trabajo sigue en este equipo. Vuelve a intentarlo en un momento.",
   };
-  const CAIDO = "El servidor de NOM no responde (puede estar reiniciándose o sin Internet). Lo que hagas se guarda en este equipo y se manda cuando vuelva.";
+  const CAIDO = "NOM en Internet no responde (puede estar reiniciándose o sin conexión). Lo que hagas se guarda en este equipo y se manda cuando vuelva.";
 
   /** ¿La respuesta dice que el servidor no está (la Pi apagada o sin Internet: Cloudflare contesta 502/503/504/52x
       con su propia página)? Un 503 de NOM trae su mensaje en JSON: ese no cuenta. */

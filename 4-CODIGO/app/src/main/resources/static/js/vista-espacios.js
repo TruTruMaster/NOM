@@ -1271,6 +1271,9 @@
       <div class="lista-item" style="padding:14px">${avatar(u, "g")}<span class="crece"><b>${esc(u.nombre)}</b><small>${esc(sinCuenta ? "Preferencias guardadas en este equipo" : u.empresa || "Sin organización")}</small></span></div>
       <div class="campo"><span class="etiqueta">Apariencia</span>
         <div class="segmentado lleno" data-tema>${[["auto", "monitor", "Automático"], ["claro", "sun", "Claro"], ["oscuro", "moon", "Oscuro"]].map(([v, i, t]) => `<button type="button" data-v="${v}" aria-pressed="${p.tema === v}">${ico(i, "ico-s")} ${t}</button>`).join("")}</div></div>
+      ${extra ? `<div class="campo"><span class="etiqueta">Idioma <span class="suave" style="font-weight:600">(en este equipo)</span></span>
+        <div class="segmentado lleno" data-idioma>${[["auto", "Automático"], ["es", "Español"], ["en", "English"]].map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${extra.idiomaInterfaz === v}">${t}</button>`).join("")}</div>
+        <div class="ayuda">Cambia los botones y menús de NOM. El texto de tus documentos no cambia.</div></div>` : ""}
       <div class="campo"><span class="etiqueta">Tamaño de la letra <span class="suave" style="font-weight:600">(en este equipo)</span></span>
         <div class="segmentado lleno" data-letra>${[["normal", "Normal", 15], ["grande", "Grande", 17], ["muy-grande", "Muy grande", 19]].map(([v, t, pxTam]) => `<button type="button" data-v="${v}" aria-pressed="${(NOM.leer("nom.letra", "normal")) === v}" style="font-size:${pxTam}px">${t}</button>`).join("")}</div>
         <div class="ayuda">${api.empaquetada ? "Agranda el texto de toda la app." : "Agranda el texto de las listas, menús y ventanas. Para agrandar todo, usa Ctrl y + en el navegador."}</div></div>
@@ -1301,8 +1304,9 @@
     let guardado = false;
     let atajosCtrl = null;
     const original = Object.assign({}, p);
-    // Si se cierra sin guardar, se deshace la vista previa del tema y se suelta cualquier captura de teclas.
-    const h = hoja({ titulo: "Ajustes y preferencias", icono: "settings", cuerpo, pie, alCerrar: () => { atajosCtrl && atajosCtrl.desmontar(); if (!guardado) NOM.aplicarPreferencias(original); } });
+    const idiomaOriginal = extra ? extra.idiomaInterfaz : null;
+    // Si se cierra sin guardar, se deshace la vista previa del tema y del idioma, y se suelta cualquier captura de teclas.
+    const h = hoja({ titulo: "Ajustes y preferencias", icono: "settings", cuerpo, pie, alCerrar: () => { atajosCtrl && atajosCtrl.desmontar(); if (!guardado) { NOM.aplicarPreferencias(original); if (idiomaOriginal && NOM.idioma && NOM.idioma.aplicar) NOM.idioma.aplicar(idiomaOriginal); } } });
     const misDatos = $("[data-mis-datos]", cuerpo);
     if (misDatos) misDatos.onclick = async () => {
       try {
@@ -1322,6 +1326,11 @@
     $$("[data-tema] button", cuerpo).forEach((b) => (b.onclick = () => { $$("[data-tema] button", cuerpo).forEach((x) => x.setAttribute("aria-pressed", x === b)); NOM.aplicarPreferencias(leerForm()); }));
     $$("[data-letra] button", cuerpo).forEach((b) => (b.onclick = () => { $$("[data-letra] button", cuerpo).forEach((x) => x.setAttribute("aria-pressed", x === b)); NOM.aplicarLetra(b.dataset.v); }));
     if (extra) {
+      $$("[data-idioma] button", cuerpo).forEach((b) => (b.onclick = () => {
+        $$("[data-idioma] button", cuerpo).forEach((x) => x.setAttribute("aria-pressed", x === b));
+        extra.idiomaInterfaz = b.dataset.v;
+        if (NOM.idioma && NOM.idioma.aplicar) NOM.idioma.aplicar(extra.idiomaInterfaz);
+      }));
       $$("[data-menu-rapido] button", cuerpo).forEach((b) => (b.onclick = () => {
         $$("[data-menu-rapido] button", cuerpo).forEach((x) => x.setAttribute("aria-pressed", x === b));
         extra.menuRapido = b.dataset.v;

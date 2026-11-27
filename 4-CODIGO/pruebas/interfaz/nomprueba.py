@@ -2,6 +2,17 @@
 import json, os, time, urllib.request, random, string
 from playwright.sync_api import sync_playwright
 B = os.environ.get("NOM_BASE", "https://www.nom.qd.je")   # sitio real por omisión (orden del dueño, 25-nov)
+# Los navegadores de prueba hablan español de México, como los equipos de la escuela: desde la 0.23.10 la interfaz toma el
+# idioma del sistema («Automático») y Chromium de Playwright dice «en-US». Una prueba que quiera otro idioma pasa locale=.
+try:
+    from playwright.sync_api._generated import Browser as _Navegador
+    if not getattr(_Navegador, "_nom_es", False):
+        _nuevo_ctx, _nueva_pag = _Navegador.new_context, _Navegador.new_page
+        _Navegador.new_context = lambda self, *a, **k: _nuevo_ctx(self, *a, **dict({"locale": "es-MX"}, **k))
+        _Navegador.new_page = lambda self, *a, **k: _nueva_pag(self, *a, **dict({"locale": "es-MX"}, **k))
+        _Navegador._nom_es = True
+except Exception:
+    pass
 CL = "Clave-Segura-123"
 _VERSION = []
 def version():
