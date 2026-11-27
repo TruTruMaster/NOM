@@ -102,8 +102,11 @@
   let ctx = {};
   /** De qué contexto vino cada huella (si se usa en varios documentos abiertos). */
   const ctxDe = new Map();
+  /** Cuántas veces se ha reintentado cada imagen que no se pudo mostrar todavía. */
+  let intentos = new WeakMap();
   function contexto(c) {
     ctx = Object.assign({}, c || {});
+    intentos = new WeakMap();   // (con la llave o el espacio nuevos, cada imagen pendiente vuelve a tener todos sus intentos)
     // lo que se quiso dibujar antes de saber de dónde bajarlo: otra vez
     setTimeout(() => { if (typeof document !== "undefined" && document.body) reintentar(document.body); }, 0);
     return ctx;
@@ -184,9 +187,12 @@
       for (const r of todos) if (r && r.h && (!objetivo || !r.uid || r.uid === objetivo)) await idbDel(r.h);
     }
   }
-  window.addEventListener("online", () => { subirPendientes(); });
+  // Al volver la red: se sube lo pendiente y se vuelven a pedir las imágenes que se quedaron esperando (antes se
+  // rendían para siempre tras 6 intentos y quedaban en blanco hasta recargar la página).
+  const alVolverRed = () => { subirPendientes(); intentos = new WeakMap(); if (typeof document !== "undefined" && document.body) resolverTodo(document.body); };
+  window.addEventListener("online", () => setTimeout(alVolverRed, 300));
   // (algunos WebView no mandan «online»: la API avisa cuando una petición vuelve a salir bien)
-  if (NOM.api && NOM.api.alCambiarRed) NOM.api.alCambiarRed((ok) => { if (ok) setTimeout(() => { subirPendientes(); }, 500); });
+  if (NOM.api && NOM.api.alCambiarRed) NOM.api.alCambiarRed((ok) => { if (ok) setTimeout(alVolverRed, 500); });
 
   /**
    * Guarda unos bytes en el almacén del espacio y devuelve su referencia. c: { espacio, llave }.
@@ -454,8 +460,6 @@
       if (v && v.charCodeAt(0) === 100 && NOM.emf && NOM.emf.esDatos(v)) el.setAttribute(a, NOM.emf.paraVer(v));
     }
   }
-  /** Cuántas veces se ha reintentado cada imagen que no se pudo mostrar todavía. */
-  const intentos = new WeakMap();
   function resolverEl(el) {
     if (!el || el.nodeType !== 1 || !el.getAttribute) return;
     metaEl(el);
@@ -477,7 +481,8 @@
         // tardó): otra vez en un rato, mientras la imagen siga en pantalla.
         if (c2.falta && el.isConnected) {
           const n = (intentos.get(el) || 0) + 1;
-          if (n <= 6) { intentos.set(el, n); setTimeout(() => { if (el.isConnected) resolverEl(el); }, 1000 * 2 ** (n - 1)); }
+          // (1, 2, 4… hasta 1 min entre intentos; unos 15 intentos ≈ 10 min; al volver la red se empieza otra vez)
+          if (n <= 15) { intentos.set(el, n); setTimeout(() => { if (el.isConnected) resolverEl(el); }, Math.min(60000, 1000 * 2 ** (n - 1))); }
         }
       });
     }
