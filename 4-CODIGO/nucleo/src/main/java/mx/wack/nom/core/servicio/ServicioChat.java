@@ -73,7 +73,8 @@ public class ServicioChat {
         topes.exigir("e|" + espacioId, 120, "Hay muchos mensajes a la vez en este espacio: espera un momento");
         Object texto = c.get("texto");
         Object adj = c.get("adjunto");
-        String t = texto == null ? "" : String.valueOf(texto);
+        // (sin caracteres de control ni marcas que cambian la dirección del texto, como los nombres; los renglones se quedan)
+        String t = texto == null ? "" : Textos.limpioConRenglones(String.valueOf(texto));
         if (t.length() > MAX_TEXTO * 2) throw ErrorNom.invalido("El mensaje es demasiado largo", "texto");
         if (e.e2e && !t.isEmpty() && !ServicioEspacios.cifrado(t)) throw ErrorNom.invalido("En un espacio cifrado los mensajes se cifran en tu equipo (actualiza la app)", "texto");
         if (t.isBlank() && !(adj instanceof Map)) throw ErrorNom.invalido("Escribe un mensaje", "texto");

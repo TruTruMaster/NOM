@@ -36,6 +36,18 @@ public final class Textos {
         return sb.toString();
     }
 
+    /** Un mensaje de varios renglones (el chat): como {@link #limpio}, pero conserva los saltos de renglón y el tabulador. */
+    public static String limpioConRenglones(String s) {
+        if (s == null) return null;
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); ) {
+            int c = s.codePointAt(i);
+            if (c == '\n' || c == '\t' || !quitar(c)) sb.appendCodePoint(c);
+            i += Character.charCount(c);
+        }
+        return sb.length() == s.length() ? s : sb.toString();
+    }
+
     /** Los primeros `max` caracteres (unidades de Java) sin dejar medio carácter al final. */
     public static String cortar(String s, int max) {
         if (s == null || s.length() <= max) return s;
