@@ -94,10 +94,10 @@ with sync_playwright() as pw:
     enl = N.api("POST", f"/api/documentos/{d}/enlace-ver", {}, A["token"])[1]["enlace"]
     pv = nav.new_context(viewport={"width": 1366, "height": 900}).new_page(); pv.on("pageerror", lambda e: err.append("ver: " + str(e)[:200]))
     pv.goto(N.B + "/#/ver/" + enl); pv.wait_for_timeout(6000)
-    v = pv.evaluate("""() => { const e = document.querySelector('.wd-imagen'); if (!e) return null; const r = e.getBoundingClientRect(), c = document.querySelector('.wd-pagina, .wd-cuerpo').getBoundingClientRect(); const i = e.querySelector('img');
-      return { x: Math.round(r.left - c.left), y: Math.round(r.top - c.top), w: Math.round(r.width), libre: e.classList.contains('libre'), cargada: !!(i && i.complete && i.naturalWidth > 0) }; }""")
+    v = pv.evaluate("""() => { const f = document.querySelector('iframe.ver-marco'), dd = f ? f.contentDocument : document; const i = dd.querySelector('img'); if (!i) return null; const e = i.closest('span[style*="position:absolute"]') || i; const r = e.getBoundingClientRect(), p = (e.closest('p') || dd.body).getBoundingClientRect(); const c = { left: p.left, top: p.top };
+      return { x: Math.round(r.left - c.left), y: Math.round(r.top - c.top), w: Math.round(r.width), libre: e !== i, cargada: !!(i && i.complete && i.naturalWidth > 0) }; }""")
     a5 = PA.ev(EST)
-    check("enlace para ver: la foto libre en el mismo lugar que en el editor y cargada", v and abs(v["x"] - a5["x"]) <= 4 and abs(v["y"] - a5["y"]) <= 4 and v["cargada"], [a5, v])
+    check("enlace para ver: la foto libre, desde su párrafo como en el editor, girada y cargada", v and v["libre"] and abs(v["x"] - a5["bx"]) <= 4 and abs(v["y"] - a5["by"]) <= 4 and v["cargada"] and v["w"] == a5["w"], [a5, v])
     pv.screenshot(path=f"{SALIDA}/4-enlace-ver.png")
     check("sin errores de JavaScript", not err, err[:4])
     nav.close()

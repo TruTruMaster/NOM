@@ -96,7 +96,9 @@
       const img = rot && H
         ? `<span style="display:inline-block;position:relative;width:${lado ? H : W}px;height:${lado ? W : H}px"><img src="${src}" alt="${alt}" style="position:absolute;left:50%;top:50%;width:${W}px;max-width:none;transform:translate(-50%,-50%) rotate(${rot}deg)"></span>`
         : `<img src="${src}" alt="${alt}" style="${e.libre ? "max-width:none" : "max-width:100%"};width:${W}px${rot ? `;transform:rotate(${rot}deg)` : ""}">`;
-      return `<figure style="margin:0;display:inline-block;${libre}">${img}${e.pie ? `<figcaption style="font-style:italic;text-align:center">${NOM.esc(e.pie)}</figcaption>` : ""}</figure>`;
+      // (un <span>, no <figure>: un <figure> dentro de un <p> no es válido y el navegador lo saca del párrafo, y la imagen
+      // libre quedaba medida desde la página y no desde su párrafo)
+      return `<span style="margin:0;display:inline-block;vertical-align:bottom;${libre}">${img}${e.pie ? `<span style="display:block;font-style:italic;text-align:center">${NOM.esc(e.pie)}</span>` : ""}</span>`;
     }
     if (e.tipo === "tabla") {
       let h = `<table style="border-collapse:collapse">`;
