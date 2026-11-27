@@ -59,3 +59,39 @@ las 4:15 no pase sus pruebas en vivo no se publica (queda en una rama `pendiente
   (avatar con colores forzados + tema oscuro: regla CSS agregada para la versión final) y rastreo 638/4 (opciones de
   «Más › Otras» que antes eran inalcanzables y ahora el rastreo alcanza en el 4.º nivel: son submenús, no errores).
 - `exploracion_errores.py` con la 0.24.0: **12/0** (antes 3/9).
+- 03:28 — APK 0.24.0 (versionCode 53, certificado `2ef146f6…`) en el A55 y el emulador; release `v0.24.0` en GitHub
+  (SHA-256 `419a36d8…`); `git push` hecho. El A55 quedó en NOM en Internet, cuenta `expo_profe`, idioma **Español**
+  (su sistema está en inglés: con «Automático» la app salía en inglés) y abre la presentación, el PowerPoint del dueño
+  y la hoja sin avisos (`reales/a55_expo.py` 3/0).
+- Los 6 archivos del dueño quedaron importados en «Expo NOM» (`expo_profe`): los 3 `test_features` sin errores ni
+  imágenes rotas (Word 9 páginas como Word, Excel 10 hojas visibles, PowerPoint 13 diapositivas).
+
+## 2. Qué quedó fuera y por qué
+
+- **Formato `.nom` v4:** no hace falta (ya pesa 0.61 bytes por letra) y cambiar el formato la noche antes era el mayor
+  riesgo. Imágenes a WebP/AVIF al importar: no se hizo (el original de Office se guarda para descargar igual; convertir
+  sin perder fidelidad necesita su propia prueba contra Office real).
+- Imágenes (barrido): verificar la huella al guardar en el equipo, TIFF/EMF+ que el navegador no dibuja (sale vacío),
+  recorte de Word calculado con la marca de espera (1×1).
+- Seguridad (plan privado §Q.2): ids de otros miembros que ven lectores e invitados, `usoPropietario`, binarios de otro
+  documento con el enlace en espacios cifrados, validar el formato de las llaves.
+- Diferencias finas que quedan en el Word del dueño: índice con números de página guardados por Word, partición de
+  la tabla con fila de alto exacto, «Distribuida». En PowerPoint: sombras con desenfoque aproximado.
+- Rastreo: 4 opciones de «Más › Otras › Más» de la hoja se marcan porque el rastreo llega a un 4.º nivel (son
+  submenús); `prueba_axe` ampliada: queda el texto de muestra «Escribe aquí» en las miniaturas con tema oscuro.
+- Traducción al inglés: quedan textos sueltos («hace un momento», la barra de estado del texto, la ayuda y lo legal).
+
+## 3. Para el dueño (expo)
+
+- **Mostrar:** la presentación (`expo_profe` › «Expo NOM» › «Presentación del proyecto (NOM)», Presentar/F5) y los 3
+  `test_features` (Word, Excel, PowerPoint). Los 3 `*_stress_test_max` están dañados según Office real (Word solo
+  abre el .docx reparándolo; Excel y PowerPoint no abren los otros dos): NOM los abre, pero no son buen ejemplo.
+- **La laptop de la casa no llega a www.nom.qd.je** desde el 26-nov 23:10 (el módem le cortó el camino a Cloudflare; el
+  teléfono y la Pi sí llegan). En la escuela es otra red. Si en casa hace falta: `NOM_PROXY=socks5://127.0.0.1:1080`
+  para las pruebas, o reiniciar el Wi-Fi/módem.
+- **Archivos más ligeros («cada letra un bit, cada formato un byte»):** medido en vivo, un `.nom` vacío pesa 41 bytes;
+  texto real, 0.61 bytes por letra (≈5 bits: no se puede 1 bit, un alfabeto de 60+ letras necesita al menos ~5-6 bits
+  sin contexto) y ≈3 bytes por cada cambio de formato (cerca de «un byte»); un Word de 44 KB queda en 16 KB.
+- **Idioma:** «Automático» toma el del equipo; en un teléfono en inglés la app sale en inglés. Para la demo, Ajustes ›
+  Idioma › Español (ya está así en el A55).
+- Antes de salir: recargar www.nom.qd.je con Ctrl+Mayús+R en la laptop de la expo.
