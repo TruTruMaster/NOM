@@ -4,8 +4,25 @@ descripcion: Qué cambió en cada versión, en palabras sencillas.
 orden: 1
 aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-26
-version: 0.23.10
+version: 0.24.0
 ---
+## 0.24.0 — noviembre de 2026
+
+- **Ajustes nuevos:** cambia los atajos de teclado (o vuelve a los de siempre), elige entre la **ruedita** y la **lista
+  clásica** al hacer clic derecho o mantener presionado, y en el celular, que vibre al tocar.
+- **Idioma:** NOM usa el idioma de tu equipo (español o inglés), o el que elijas en Ajustes. El texto de tus documentos
+  no cambia.
+- **Ortografía:** en un texto, una palabra mal escrita muestra «Ortografía» en la ruedita con sugerencias.
+- **Hoja de cálculo:** BUSCARV, BUSCARH, COINCIDIR y BUSCARX dan lo mismo que Excel; una fórmula ya no se duplica al
+  escribirla en la barra de fórmulas ni al cortar y pegar.
+- **Imágenes:** ya no se encogen al arrastrarlas contra la orilla, y si no se pudieron bajar se vuelven a pedir solas
+  cuando regresa la red.
+- **Office:** Word, Excel y PowerPoint importados más parecidos a Office (pies de página con sus campos, casillas,
+  índice, líneas punteadas, sombras, gráficas de radar y burbujas).
+- **Accesibilidad:** foco visible, botones más fáciles de tocar y nada se esconde con letra grande, tema oscuro o alto
+  contraste.
+- **Errores más claros:** cada error dice qué pasó y qué hacer.
+
 ## 0.23.10 — noviembre de 2026
 
 - **Buscar en los documentos del espacio** ahora encuentra lo que dice un Word importado (antes solo lo encontraba por

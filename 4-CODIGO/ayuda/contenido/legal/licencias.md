@@ -25,6 +25,9 @@ versión modificada, debe ir con su código fuente y bajo la misma licencia.
 | Spring Boot | El servidor | Apache-2.0 |
 | H2 Database | La base de cuentas en el servidor propio | MPL-2.0 (o EPL-1.0) |
 | qrcode-generator (Kazuhiko Arase) | Dibujar los códigos QR | MIT |
+| nspell (Titus Wormer) | Revisar la ortografía en el editor de texto | MIT (`js/vendor/ortografia/nspell/LICENSE`) |
+| Diccionario de español de LibreOffice (Santiago Bosio y comunidad) | Ortografía en español | GPL-3.0 o LGPL-3.0 o MPL-1.1 (`js/vendor/ortografia/es/LICENSE`) |
+| Diccionario de inglés de SCOWL/Hunspell (dictionary-en) | Ortografía en inglés | MIT y BSD (`js/vendor/ortografia/en/LICENSE`) |
 | jsQR (Cosmo Wolfe) | Leer QR con la cámara | Apache-2.0 |
 | Íconos Lucide | Los íconos | ISC (partes MIT, de Feather) |
 | desugar_jdk_libs (Google) | Funciones de Java en Android viejos | GPL-2.0 con excepción de enlace (Classpath) |
