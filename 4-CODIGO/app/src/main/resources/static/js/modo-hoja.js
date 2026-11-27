@@ -405,8 +405,10 @@
       /** Como Excel: con el cursor en una tabla (o con varias filas elegidas) se ordena SOLO esa tabla o ese rango, moviendo
           sus celdas (para todos; Ctrl+Z lo deshace). Sin tabla ni rango, el orden es de la vista (solo para ti). Antes siempre
           se ordenaba la vista de toda la hoja: con una tabla elegida se revolvían las demás filas y sus números (27-nov). */
+      let zonaMenu = null;
       const ordenar = (c, asc) => {
-        const r = zonaParaOrdenar(c);
+        const r = zonaMenu && Date.now() - zonaMenu.t < 120000 ? zonaMenu.r : zonaParaOrdenar(c);
+        zonaMenu = null;
         if (r && !ed.soloLectura) return ordenarZona(r, c, asc);
         cambiarVista((v) => { v.orden = { c, asc }; });
       };
@@ -417,8 +419,10 @@
         // (una sola columna elegida: ordenarla sola separaría cada dato de su fila; queda el orden de la vista)
         if (r.f2 > r.f1 && r.c2 > r.c1) {
           // (una primera fila de títulos no se ordena: texto arriba y números abajo en la columna, como lo detecta Excel)
-          const col = c >= r.c1 && c <= r.c2 ? c : r.c1, ev = evaluar();
-          const titulo = !F().esNum(ev.valor(col, r.f1)) && String(crudo(col, r.f1)) !== "" && [...Array(r.f2 - r.f1)].some((_, k) => F().esNum(ev.valor(col, r.f1 + 1 + k)));
+          const ev = evaluar();
+          const titulo = [...Array(r.c2 - r.c1 + 1)].some((_, j) => { const cc = r.c1 + j;
+            return !F().esNum(ev.valor(cc, r.f1)) && String(crudo(cc, r.f1)) !== "" && [...Array(r.f2 - r.f1)].some((_, k) => F().esNum(ev.valor(cc, r.f1 + 1 + k))); })
+            || !!(t["n:" + F().ref(r.c1, r.f1)] && !t["n:" + F().ref(r.c1, r.f1 + 1)]);   // (o la primera fila en negritas y la segunda no)
           return { c1: r.c1, c2: r.c2, f1: r.f1 + (titulo ? 1 : 0), f2: r.f2 };
         }
         return null;
@@ -4166,6 +4170,8 @@
         pintarSeleccion();
       }
       function menuColumna(anc, c) {
+        // (la tabla o el rango que estaba elegido ANTES de que el menú elija la columna entera: es lo que se ordena)
+        zonaMenu = { r: zonaParaOrdenar(c), t: Date.now() };
         elegirColumna(c);
         const l = accionesColumna(c);
         NOM.menu(anc, [{ titulo: "Columna " + F().colLetra(c) }, ...l.flatMap((x) => (x.sub ? x.sub.map((y) => Object.assign({}, y, { texto: (x.texto === "Más" ? "" : x.texto + ": ") + y.texto })) : [x])).filter((x) => !x.off)]);
