@@ -12,7 +12,14 @@
 (function () {
   "use strict";
   const NOM = window.NOM;
-  const { esc, ico, html, $, $$, aviso } = NOM;
+  const { esc, ico, html, $, $$, aviso, colorHex } = NOM;
+  /** Un color del documento solo si de verdad es un color (también hsl() y las variables del tema); si no, el de omisión. */
+  const COLOR_CSS = /^(#[0-9A-Fa-f]{3,8}|(rgba?|hsla?)\([\d\s.,%+-]+\)|[A-Za-z]{1,30}|var\(--[\w-]{1,40}\))$/;
+  const colorCss = (v, def = "") => (typeof v === "string" && COLOR_CSS.test(v.trim()) ? v.trim() : def);
+  const num = (v, d = 0) => { if (v === "" || v == null || typeof v === "boolean") return d; const n = Number(v); return Number.isFinite(n) ? n : d; };
+  const idCss = (v) => String(v == null ? "" : v).replace(/[^A-Za-z0-9_-]/g, "");
+  // Una imagen del documento solo de este equipo o de este servidor (como esSrcImg de diapositivas.js), nunca de otro sitio.
+  const srcImgOk = (s) => typeof s === "string" && (/^(data:image\/|blob:|\/api\/)/i.test(s) || !!(NOM.binarios && NOM.binarios.esRef(s)));
   const ANCHO = 960, ALTO = 540;
   /** 8.3 Tamaño de la diapositiva del documento (16:9, 4:3, carta, cartel…). */
   const tamDoc = (d) => (NOM.diapo && d ? NOM.diapo.tam(d) : { w: ANCHO, h: ALTO });
@@ -30,8 +37,6 @@
     return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
   };
   const oscuro = (c) => luz(c) < 0.5;
-  /** Un color que viene del documento solo se usa si de verdad es un color (nada de texto suelto en el estilo). */
-  const colorCss = (c) => /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\)|[a-z]{3,20})$/i.test(String(c || ""));
 
   // ------------------------------------------------------------ figuras
   const FIGURAS = [
@@ -82,7 +87,7 @@
     }
     return `<div class="cm-nombre">${esc(nombre)}</div><div class="cm-sec">${resto.map(fila).join("<br>")}</div>`;
   }
-  const n2 = (v) => +v.toFixed(2);
+  const n2 = (v) => (Number.isFinite(v) ? +v.toFixed(2) : 0);
   /** Trazo SVG de una figura en una caja de w × h (radio: esquinas del rectángulo). */
   function ruta(f, w, h, r) {
     const p = (pts) => "M" + pts.map(([x, y]) => `${n2(x)},${n2(y)}`).join(" L") + " Z";
@@ -139,19 +144,16 @@
   /** Relleno, borde y adornos de una figura ya resueltos (los usa también exportar). */
   function estiloFigura(b) {
     const f = b.figura || "rect", lineal = esLinea(f);
-    const relleno = lineal || b.relleno === false ? null : colorSeguro(b.color, "#E7E5EE");
-    const ancho = lineal ? (+b.bordeAncho || 3) : +b.bordeAncho || (CON_CONTORNO.has(f) ? 2 : 0);
-    const trazo = ancho ? colorSeguro(b.borde, lineal ? "#4A4854" : "#2B2A33") : null;
-    return { f, lineal, relleno, ancho, trazo, radio: b.radio != null ? +b.radio : f === "rect" ? 14 : f === "burbuja" ? 14 : 0, estilo: b.bordeEstilo || "solido",
+    const relleno = lineal || b.relleno === false ? null : colorCss(b.color, "#E7E5EE");
+    const ba = Math.max(0, num(b.bordeAncho, 0));
+    const ancho = lineal ? (ba || 3) : ba || (CON_CONTORNO.has(f) ? 2 : 0);
+    const trazo = ancho ? colorCss(b.borde, lineal ? "#4A4854" : "#2B2A33") : null;
+    return { f, lineal, relleno, ancho, trazo, radio: b.radio != null ? num(b.radio, 0) : f === "rect" ? 14 : f === "burbuja" ? 14 : 0, estilo: b.bordeEstilo || "solido",
       prst: b.prst && NOM.geomOffice && NOM.geomOffice.tiene(b.prst) ? b.prst : null, av: b.av || null,
       // forma libre de Office (custGeom) y relleno con degradado o imagen (los de PowerPoint)
       cust: b.cust && Array.isArray(b.cust.p) && NOM.geomOffice ? b.cust : null, pintura: !lineal && b.relleno !== false && pinturaValida(b.pintura) ? b.pintura : null, id: b.id };
   }
   const COLOR_SVG = /^(#[0-9A-Fa-f]{6}|rgba\(\d+,\d+,\d+,[\d.]+\))$/;
-  /** Un color que puede ir dentro de un atributo o de un estilo (lo que trae un documento o un archivo de Office se
-      revisa antes). */
-  const COLOR_CSS = /^(#[0-9A-Fa-f]{3,8}|(rgba?|hsla?)\([\d\s.,%+-]+\)|[A-Za-z]{1,30}|var\(--[\w-]{1,40}\))$/;
-  const colorSeguro = (v, def) => (typeof v === "string" && COLOR_CSS.test(v.trim()) ? v.trim() : def);
   function pinturaValida(pt) {
     if (!pt || typeof pt !== "object") return false;
     if (pt.tipo === "img") return typeof pt.src === "string" && (/^(data:image\/|blob:|\/api\/)/.test(pt.src) || !!(NOM.binarios && NOM.binarios.esRef(pt.src)));
@@ -161,30 +163,31 @@
   }
   /** Definición SVG del relleno (degradado lineal o radial, o imagen estirada) de una forma de w × h. */
   function defPintura(pt, id, w, h) {
-    const paradas = () => pt.paradas.map(([o, c]) => `<stop offset="${n2(Math.max(0, Math.min(1, +o)))}" stop-color="${esc(c)}"/>`).join("");
+    const paradas = () => pt.paradas.map(([o, c]) => `<stop offset="${n2(Math.max(0, Math.min(1, num(o, 0))))}" stop-color="${esc(c)}"/>`).join("");
     if (pt.tipo === "trama") {
-      const pp = Math.max(0.25, Math.min(4, +pt.pp || 0.75)), lado = n2(pp * 8);
+      const pp = Math.max(0.25, Math.min(4, num(pt.pp, 0.75) || 0.75)), lado = n2(pp * 8);
       return `<pattern id="${esc(id)}" patternUnits="userSpaceOnUse" x="0" y="0" width="${lado}" height="${lado}"><rect width="${lado}" height="${lado}" fill="${esc(pt.bg)}"/><path d="${NOM.geomOffice.trama(pt.prst, pp)}" fill="${esc(pt.fg)}"/></pattern>`;
     }
     if (pt.tipo === "img") return `<pattern id="${esc(id)}" patternUnits="userSpaceOnUse" x="0" y="0" width="${n2(w)}" height="${n2(h)}"><image href="${esc(NOM.srcBin ? NOM.srcBin(pt.src) : pt.src)}" x="0" y="0" width="${n2(w)}" height="${n2(h)}" preserveAspectRatio="none"/></pattern>`;
     if (pt.tipo === "lin") {
       // como PowerPoint: el ángulo va en el sentido de las agujas del reloj y el degradado cubre toda la forma
-      const a = ((+pt.ang || 0) * Math.PI) / 180, cx = w / 2, cy = h / 2, L = (Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a))) / 2;
+      const a = (num(pt.ang, 0) * Math.PI) / 180, cx = w / 2, cy = h / 2, L = (Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a))) / 2;
       return `<linearGradient id="${esc(id)}" gradientUnits="userSpaceOnUse" x1="${n2(cx - L * Math.cos(a))}" y1="${n2(cy - L * Math.sin(a))}" x2="${n2(cx + L * Math.cos(a))}" y2="${n2(cy + L * Math.sin(a))}">${paradas()}</linearGradient>`;
     }
-    const cx = (+pt.cx || 0.5) * w, cy = (+pt.cy || 0.5) * h, r = Math.max(Math.hypot(cx, cy), Math.hypot(w - cx, cy), Math.hypot(cx, h - cy), Math.hypot(w - cx, h - cy));
+    const cx = (num(pt.cx, 0.5) || 0.5) * w, cy = (num(pt.cy, 0.5) || 0.5) * h, r = Math.max(Math.hypot(cx, cy), Math.hypot(w - cx, cy), Math.hypot(cx, h - cy), Math.hypot(w - cx, h - cy));
     return `<radialGradient id="${esc(id)}" gradientUnits="userSpaceOnUse" cx="${n2(cx)}" cy="${n2(cy)}" r="${n2(r)}">${paradas()}</radialGradient>`;
   }
   /** 8.4 Piezas de una figura: la principal (relleno y contorno) y sus adornos (doble borde, pestaña, centro). */
   function partesFigura(e, w, h) {
     // Forma de Office: su geometría exacta (con las caras más claras u oscuras que define Office), la de la norma
     // o una libre del archivo; con degradado o imagen, las caras normales usan esa pintura
+    const pid = idCss(e.id);
     if (e.prst || e.cust) {
       const tz = e.cust ? NOM.geomOffice.trazosDe(e.cust, w, h, e.av) : NOM.geomOffice.trazos(e.prst, w, h, e.av);
-      const normal = e.pintura ? `url(#pf-${e.id})` : e.relleno;
+      const normal = e.pintura ? `url(#pf-${pid})` : e.relleno;
       if (tz && tz.length) return tz.map((t) => ({ d: t.d, relleno: t.relleno === "none" || !e.relleno ? null : t.relleno === "norm" ? normal : NOM.geomOffice.matiz(e.relleno, t.relleno), trazo: t.contorno ? e.trazo : null, par: !!e.cust }));
     }
-    if (e.pintura) return [{ d: ruta(e.f, w, h, e.radio), relleno: `url(#pf-${e.id})`, trazo: e.trazo }];
+    if (e.pintura) return [{ d: ruta(e.f, w, h, e.radio), relleno: `url(#pf-${pid})`, trazo: e.trazo }];
     const r = [{ d: ruta(e.f, w, h, e.radio), relleno: e.relleno, trazo: e.trazo }];
     const contorno = (d) => r.push({ d, relleno: null, trazo: e.trazo });
     const elipse = (x, y, ew, eh) => `M${n2(x)},${n2(y + eh / 2)} A${n2(ew / 2)},${n2(eh / 2)} 0 1 0 ${n2(x + ew)},${n2(y + eh / 2)} A${n2(ew / 2)},${n2(eh / 2)} 0 1 0 ${n2(x)},${n2(y + eh / 2)} Z`;
@@ -197,7 +200,7 @@
   }
   /** Línea o conector de Office: en píxeles de verdad (sin estirar el trazo), de esquina a esquina, con sus puntas. */
   function svgLineaOffice(b) {
-    const w = Math.max(0, +b.w || 0), h = Math.max(0, +b.h || 0), ancho = Math.max(0.1, +b.bordeAncho || 1), color = colorSeguro(b.borde, "#000000");
+    const w = Math.max(0, num(b.w, 0)), h = Math.max(0, num(b.h, 0)), ancho = Math.max(0.1, num(b.bordeAncho, 1) || 1), color = colorCss(b.borde, "#000000");
     const tz = NOM.geomOffice.trazos(b.prst || "line", Math.max(w, 0.01), Math.max(h, 0.01), b.av) || [{ d: `M0,0L${n2(w)},${n2(h)}`, contorno: true }];
     const dash = b.bordeEstilo === "guiones" ? ` stroke-dasharray="${n2(ancho * 4)} ${n2(ancho * 3)}"` : b.bordeEstilo === "puntos" ? ` stroke-dasharray="${n2(ancho)} ${n2(ancho)}"` : "";
     const voltear = b.volteoH || b.volteoV ? ` transform="translate(${b.volteoH ? n2(w) : 0} ${b.volteoV ? n2(h) : 0}) scale(${b.volteoH ? -1 : 1} ${b.volteoV ? -1 : 1})"` : "";
@@ -208,7 +211,7 @@
       if (!pt || !pt.t) return "";
       let dx = x - x0, dy = y - y0;
       const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
-      const base = Math.max(ancho, 1), W = base * (TAM[pt.w] || 3), Ln = base * (TAM[pt.l] || 3), nx = (-dy * W) / 2, ny = (dx * W) / 2;
+      const base = Math.max(ancho, 1), W = base * (Object.hasOwn(TAM, pt.w) ? TAM[pt.w] : 3), Ln = base * (Object.hasOwn(TAM, pt.l) ? TAM[pt.l] : 3), nx = (-dy * W) / 2, ny = (dx * W) / 2;
       const bx = x - dx * Ln, by = y - dy * Ln, c = esc(color);
       if (pt.t === "oval") return `<ellipse cx="${n2(x)}" cy="${n2(y)}" rx="${n2(Ln / 2)}" ry="${n2(W / 2)}" transform="rotate(${n2((Math.atan2(dy, dx) * 180) / Math.PI)} ${n2(x)} ${n2(y)})" fill="${c}"/>`;
       if (pt.t === "diamond") return `<path d="M${n2(x + dx * Ln / 2)},${n2(y + dy * Ln / 2)} L${n2(x + nx)},${n2(y + ny)} L${n2(x - dx * Ln / 2)},${n2(y - dy * Ln / 2)} L${n2(x - nx)},${n2(y - ny)} Z" fill="${c}"/>`;
@@ -222,19 +225,19 @@
       puntas += puntaSvg(b.puntas.fin, q[q.length - 2], q[q.length - 1], q[q.length - 4], q[q.length - 3]);
     }
     const W = n2(Math.max(1, w)), H = n2(Math.max(1, h));
-    return `<svg class="forma-svg linea-office" width="${W}" height="${H}" style="width:${W}px;height:${H}px" aria-hidden="true"><g${voltear}>${tz.filter((t) => t.contorno !== false).map((t) => `<path d="${t.d}" fill="none" stroke="${esc(color)}" stroke-width="${ancho}"${dash} stroke-linecap="${b.bordeEstilo === "puntos" ? "round" : "butt"}" stroke-linejoin="round"/>`).join("")}${puntas}</g></svg>`;
+    return `<svg class="forma-svg linea-office" width="${W}" height="${H}" style="width:${W}px;height:${H}px" aria-hidden="true"><g${voltear}>${tz.filter((t) => t.contorno !== false).map((t) => `<path d="${esc(t.d)}" fill="none" stroke="${esc(color)}" stroke-width="${ancho}"${dash} stroke-linecap="${b.bordeEstilo === "puntos" ? "round" : "butt"}" stroke-linejoin="round"/>`).join("")}${puntas}</g></svg>`;
   }
   function svgFigura(b) {
     if (b.lineaOffice && NOM.geomOffice) return svgLineaOffice(b);
-    const w = Math.max(1, b.w || 1), h = Math.max(1, b.h || 1), e = estiloFigura(b);
+    const w = Math.max(1, num(b.w, 1) || 1), h = Math.max(1, num(b.h, 1) || 1), e = estiloFigura(b);
     const dash = e.estilo === "guiones" ? ` stroke-dasharray="${e.ancho * 3} ${e.ancho * 2}"` : e.estilo === "puntos" ? ` stroke-dasharray="0 ${e.ancho * 2}"` : "";
     const tapa = e.estilo === "puntos" || e.f === "actor" ? "round" : "butt";
-    const voltear = b.volteoH || b.volteoV ? ` transform="translate(${b.volteoH ? w : 0} ${b.volteoV ? h : 0}) scale(${b.volteoH ? -1 : 1} ${b.volteoV ? -1 : 1})"` : "";
+    const voltear = b.volteoH || b.volteoV ? ` transform="translate(${b.volteoH ? n2(w) : 0} ${b.volteoV ? n2(h) : 0}) scale(${b.volteoH ? -1 : 1} ${b.volteoV ? -1 : 1})"` : "";
     let extra = "";
     if (e.f === "nota") { const k = Math.min(w, h) * 0.16; extra = `<path d="M${n2(w - k)},${n2(h)} L${n2(w - k)},${n2(h - k)} L${n2(w)},${n2(h - k)} Z" fill="rgba(0,0,0,.12)"/>`; }
     if (e.f === "linea-flecha") { const k = 6 + e.ancho * 2.2; extra = `<path d="M${n2(w - k)},${n2(h / 2 - k * 0.6)} L${n2(w)},${n2(h / 2)} L${n2(w - k)},${n2(h / 2 + k * 0.6)} Z" fill="${esc(e.trazo)}"/>`; }
-    const defs = e.pintura ? `<defs>${defPintura(e.pintura, "pf-" + e.id, w, h)}</defs>` : "";
-    const piezas = partesFigura(e, w, h).map((pz) => `<path d="${pz.d}"${pz.par ? ' fill-rule="evenodd"' : ""} fill="${pz.relleno ? esc(pz.relleno) : "none"}" stroke="${pz.trazo ? esc(pz.trazo) : "none"}" stroke-width="${e.ancho}"${pz.trazo ? dash : ""} stroke-linejoin="round" stroke-linecap="${tapa}" vector-effect="non-scaling-stroke"/>`).join("");
+    const defs = e.pintura ? `<defs>${defPintura(e.pintura, "pf-" + idCss(e.id), w, h)}</defs>` : "";
+    const piezas = partesFigura(e, w, h).map((pz) => `<path d="${esc(pz.d)}"${pz.par ? ' fill-rule="evenodd"' : ""} fill="${pz.relleno ? esc(pz.relleno) : "none"}" stroke="${pz.trazo ? esc(pz.trazo) : "none"}" stroke-width="${e.ancho}"${pz.trazo ? dash : ""} stroke-linejoin="round" stroke-linecap="${tapa}" vector-effect="non-scaling-stroke"/>`).join("");
     return `<svg class="forma-svg" viewBox="0 0 ${n2(w)} ${n2(h)}" preserveAspectRatio="none" aria-hidden="true">${defs}<g${voltear}>${piezas}${extra}</g></svg>`;
   }
   const ALIN = { izq: "left", centro: "center", der: "right" };
@@ -242,12 +245,14 @@
   const enNegrita = (b) => (b.tNegrita != null ? !!b.tNegrita : b.tipo === "forma" || b.estilo === "h1" || b.estilo === "h2");
   function estiloTexto(b, fondo) {
     const s = [];
-    if (b.tColor && colorCss(b.tColor)) s.push(`color:${b.tColor}`); else if (fondo && oscuro(fondo)) s.push("color:#fff");
-    if (b.tTam) s.push(`font-size:${+b.tTam}px`);
+    const tc = colorCss(b.tColor, "");
+    if (tc) s.push(`color:${tc}`); else if (fondo && oscuro(fondo)) s.push("color:#fff");
+    const tam = num(b.tTam, 0);
+    if (tam > 0) s.push(`font-size:${tam}px`);
     if (b.tNegrita === false) s.push("font-weight:500"); else if (b.tNegrita) s.push("font-weight:850");
     if (b.tCursiva) s.push("font-style:italic");
     if (b.tSubrayado) s.push("text-decoration:underline");
-    if (b.tAlin) s.push(`text-align:${ALIN[b.tAlin] || "center"}`);
+    if (b.tAlin) s.push(`text-align:${Object.hasOwn(ALIN, b.tAlin) ? ALIN[b.tAlin] : "center"}`);
     if (b.tFuente && NOM.textoRico) s.push(`font-family:${NOM.textoRico.cssFuente(b.tFuente)}`);
     return s.join(";");
   }
@@ -287,7 +292,7 @@
   /** Recorrido de una flecha entre dos figuras: el trazo, sus puntas y el punto medio (para el texto). */
   function rutaConector(a, b, c) {
     c = c || {};
-    const forma = c.ruta || "recta", g = Math.max(1, +c.grosor || 2);
+    const forma = c.ruta || "recta", g = Math.max(1, num(c.grosor, 2) || 2);
     const pIni = c.puntas === "inicio" || c.puntas === "ambas", pFin = !c.puntas || c.puntas === "fin" || c.puntas === "ambas";
     const L = 7 + g * 2.4, sepI = pIni ? 5 : 2, sepF = pFin ? 5 : 2;
     let pts;
@@ -336,16 +341,16 @@
   /** SVG de una flecha (lo usan el lienzo, la diapositiva al presentar y lo que se exporta). */
   function svgConector(c, a, b, opc) {
     opc = opc || {};
-    const r = rutaConector(a, b, c), g = Math.max(1, +c.grosor || 2);
-    const col = c.color && colorCss(c.color) ? c.color : opc.color || "#4A4854", fondo = opc.fondo || "#FFFFFF", tinta = opc.tinta || "#1F1E26";
+    const r = rutaConector(a, b, c), g = Math.max(1, num(c.grosor, 2) || 2);
+    const col = colorCss(c.color, opc.color || "#4A4854"), fondo = opc.fondo || "#FFFFFF", tinta = opc.tinta || "#1F1E26";
     const dash = c.estilo === "guiones" ? `stroke-dasharray:${g * 4} ${g * 3};` : c.estilo === "puntos" ? `stroke-dasharray:0.1 ${g * 2.6};stroke-linecap:round;` : "";
     let s = opc.toque ? `<path class="toque" d="${r.d}"/>` : "";
     if (opc.sel) s += `<path class="halo" d="${r.d}" style="stroke:var(--m-diag);stroke-width:${g + 8}px;opacity:.28;fill:none"/>`;
-    s += `<path class="linea" d="${r.d}" style="stroke:${col};stroke-width:${g}px;fill:none;${dash}"/>`;
-    r.puntas.forEach((pt) => (s += `<path class="punta" d="${pt.d}" style="fill:${pt.abierta ? "none" : pt.hueca ? fondo : col};stroke:${col};stroke-width:${pt.hueca ? Math.max(1.5, g * 0.8) : 1}px;stroke-linejoin:round;stroke-linecap:round"/>`));
+    s += `<path class="linea" d="${r.d}" style="stroke:${esc(col)};stroke-width:${g}px;fill:none;${dash}"/>`;
+    r.puntas.forEach((pt) => (s += `<path class="punta" d="${pt.d}" style="fill:${pt.abierta ? "none" : pt.hueca ? esc(fondo) : esc(col)};stroke:${esc(col)};stroke-width:${pt.hueca ? Math.max(1.5, g * 0.8) : 1}px;stroke-linejoin:round;stroke-linecap:round"/>`));
     const etiqueta = (t, x, y, chico) => {
       const tx = String(t).slice(0, 80), fs = chico ? 12 : 13, w = Math.min(340, tx.length * (chico ? 6.8 : 7.3) + (chico ? 10 : 18)), h = chico ? 20 : 24;
-      return `<g class="etq"><rect x="${n2(x - w / 2)}" y="${n2(y - h / 2)}" width="${n2(w)}" height="${h}" rx="${h / 2}" style="fill:${fondo};stroke:${chico ? "none" : col};stroke-width:1px"/><text x="${n2(x)}" y="${n2(y + fs * 0.35)}" text-anchor="middle" style="fill:${tinta};font:700 ${fs}px Nunito, system-ui, sans-serif">${esc(tx)}</text></g>`;
+      return `<g class="etq"><rect x="${n2(x - w / 2)}" y="${n2(y - h / 2)}" width="${n2(w)}" height="${h}" rx="${h / 2}" style="fill:${esc(fondo)};stroke:${chico ? "none" : esc(col)};stroke-width:1px"/><text x="${n2(x)}" y="${n2(y + fs * 0.35)}" text-anchor="middle" style="fill:${esc(tinta)};font:700 ${fs}px Nunito, system-ui, sans-serif">${esc(tx)}</text></g>`;
     };
     if (c.etiqueta) s += etiqueta(c.etiqueta, r.medio.x, r.medio.y);
     // Textos cerca de cada punta (por ejemplo, la cardinalidad 1 y N).
@@ -383,24 +388,27 @@
   }
   /** 8.3 Recorte, máscara (la foto dentro de una figura) y filtros de una imagen de la diapositiva. */
   function imagenLibre(b) {
+    if (!srcImgOk(b.src)) return "";
     const s = [], marco = [];
-    if (b.radio && !b.mascara) marco.push(`border-radius:${+b.radio}px`);
-    if (b.bordeAncho && !b.mascara) marco.push(`border:${+b.bordeAncho}px ${b.bordeEstilo === "guiones" ? "dashed" : b.bordeEstilo === "puntos" ? "dotted" : "solid"} ${colorSeguro(b.borde, "#2B2A33")}`);
-    if (b.mascara && b.w && b.h) marco.push(`clip-path:path('${ruta(b.mascara, b.w, b.h, 18)}')`);
+    const radio = num(b.radio, 0), ba = num(b.bordeAncho, 0), bw = num(b.w, 0), bh = num(b.h, 0);
+    if (radio && !b.mascara) marco.push(`border-radius:${radio}px`);
+    if (ba && !b.mascara) marco.push(`border:${ba}px ${b.bordeEstilo === "guiones" ? "dashed" : b.bordeEstilo === "puntos" ? "dotted" : "solid"} ${colorCss(b.borde, "#2B2A33")}`);
+    if (b.mascara && bw && bh) marco.push(`clip-path:path('${ruta(b.mascara, bw, bh, 18)}')`);
     const f = b.filtros || {};
-    const fl = [f.brillo != null && +f.brillo !== 100 ? `brightness(${+f.brillo}%)` : "", f.contraste != null && +f.contraste !== 100 ? `contrast(${+f.contraste}%)` : "",
-      f.saturacion != null && +f.saturacion !== 100 ? `saturate(${+f.saturacion}%)` : "", +f.gris ? `grayscale(${+f.gris}%)` : "", +f.sepia ? `sepia(${+f.sepia}%)` : "", +f.desenfoque ? `blur(${+f.desenfoque}px)` : ""].filter(Boolean).join(" ");
+    const br = num(f.brillo, 100), co = num(f.contraste, 100), sa = num(f.saturacion, 100), gr = num(f.gris, 0), sp = num(f.sepia, 0), ds = num(f.desenfoque, 0);
+    const fl = [br !== 100 ? `brightness(${br}%)` : "", co !== 100 ? `contrast(${co}%)` : "",
+      sa !== 100 ? `saturate(${sa}%)` : "", gr ? `grayscale(${gr}%)` : "", sp ? `sepia(${sp}%)` : "", ds ? `blur(${ds}px)` : ""].filter(Boolean).join(" ");
     if (fl) s.push(`filter:${fl}`);
     if (b.volteoH || b.volteoV) s.push(`transform:scale(${b.volteoH ? -1 : 1},${b.volteoV ? -1 : 1})`);
-    const r = b.recorte;
-    if (r && (r.iz || r.d || r.s || r.i)) {
+    const r = b.recorte, iz = r ? num(r.iz, 0) : 0, dd = r ? num(r.d, 0) : 0, ss = r ? num(r.s, 0) : 0, ii = r ? num(r.i, 0) : 0;
+    if (r && (iz || dd || ss || ii)) {
       // El recorte se dibuja con la imagen completa más grande, desplazada dentro del marco.
-      const fw = Math.max(0.05, 1 - (+r.iz || 0) - (+r.d || 0)), fh = Math.max(0.05, 1 - (+r.s || 0) - (+r.i || 0));
-      s.push(`position:absolute;max-width:none;width:${(100 / fw).toFixed(3)}%;height:${(100 / fh).toFixed(3)}%;left:${(-(+r.iz || 0) / fw * 100).toFixed(3)}%;top:${(-(+r.s || 0) / fh * 100).toFixed(3)}%;object-fit:fill`);
-      return `<div class="libre-imagen-marco" style="${marco.join(";")}"><img class="libre-imagen" src="${esc(NOM.srcBin ? NOM.srcBin(b.src) : b.src)}" alt="${esc(b.alt || "")}" draggable="false" style="${s.join(";")}"></div>`;
+      const fw = Math.max(0.05, 1 - iz - dd), fh = Math.max(0.05, 1 - ss - ii);
+      s.push(`position:absolute;max-width:none;width:${(100 / fw).toFixed(3)}%;height:${(100 / fh).toFixed(3)}%;left:${(-iz / fw * 100).toFixed(3)}%;top:${(-ss / fh * 100).toFixed(3)}%;object-fit:fill`);
+      return `<div class="libre-imagen-marco" style="${esc(marco.join(";"))}"><img class="libre-imagen" src="${esc(NOM.srcBin ? NOM.srcBin(b.src) : b.src)}" alt="${esc(b.alt || "")}" draggable="false" style="${esc(s.join(";"))}"></div>`;
     }
-    if (b.mascara) return `<div class="libre-imagen-marco" style="${marco.join(";")}"><img class="libre-imagen" src="${esc(NOM.srcBin ? NOM.srcBin(b.src) : b.src)}" alt="${esc(b.alt || "")}" draggable="false" style="object-fit:cover;border-radius:0;${s.join(";")}"></div>`;
-    return `<img class="libre-imagen" src="${esc(NOM.srcBin ? NOM.srcBin(b.src) : b.src)}" alt="${esc(b.alt || "")}" draggable="false" style="${marco.concat(s).join(";")}">`;
+    if (b.mascara) return `<div class="libre-imagen-marco" style="${esc(marco.join(";"))}"><img class="libre-imagen" src="${esc(NOM.srcBin ? NOM.srcBin(b.src) : b.src)}" alt="${esc(b.alt || "")}" draggable="false" style="object-fit:cover;border-radius:0;${esc(s.join(";"))}"></div>`;
+    return `<img class="libre-imagen" src="${esc(NOM.srcBin ? NOM.srcBin(b.src) : b.src)}" alt="${esc(b.alt || "")}" draggable="false" style="${esc(marco.concat(s).join(";"))}">`;
   }
   /**
    * El dibujo de un ícono: el de la biblioteca local si se conoce, o el guardado pero limpio (solo
@@ -430,14 +438,17 @@
   /** Texto importado de PowerPoint: márgenes internos, anclaje (arriba, en medio, abajo), columnas, sin ajuste
       y texto vertical, como PowerPoint (el formato de cada párrafo y tramo ya viene en su html). */
   function estiloPpt(c, extra) {
-    const n = (v) => Math.max(0, +v || 0);
+    const n = (v) => Math.max(0, num(v, 0));
     const [l, t, r, bb] = Array.isArray(c.ins) ? c.ins : [9.6, 4.8, 9.6, 4.8];
     let s = `padding:${n(t)}px ${n(r)}px ${n(bb)}px ${n(l)}px;`;
-    if (c.cols > 1) s += `column-count:${Math.min(16, Math.round(+c.cols))};column-gap:${n(c.espCol)}px;display:block;`;
+    const cols = num(c.cols, 0);
+    if (cols > 1) s += `column-count:${Math.min(16, Math.round(cols))};column-gap:${n(c.espCol)}px;display:block;`;
     if (c.ajusta === false) s += "white-space:pre;";
     // relleno y contorno propios del cuadro (el contorno va centrado en la orilla, como en PowerPoint)
-    if (c.fondo && /^(#[0-9A-Fa-f]{6}|rgba\(\d+,\d+,\d+,[\d.]+\))$/.test(c.fondo)) s += `background:${c.fondo};`;
-    if (Array.isArray(c.borde) && /^(#[0-9A-Fa-f]{6}|rgba\(\d+,\d+,\d+,[\d.]+\))$/.test(c.borde[1] || "")) { const w = Math.max(0.5, Math.min(20, +c.borde[0] || 1)); s += `outline:${w}px solid ${c.borde[1]};outline-offset:-${w / 2}px;`; }
+    const cf = colorCss(c.fondo, "");
+    if (cf) s += `background:${cf};`;
+    const cb = Array.isArray(c.borde) ? colorCss(c.borde[1], "") : "";
+    if (cb) { const w = Math.max(0.5, Math.min(20, num(c.borde[0], 1) || 1)); s += `outline:${w}px solid ${cb};outline-offset:-${w / 2}px;`; }
     if (c.vert === "vert" || c.vert === "eaVert") s += "writing-mode:vertical-rl;";
     else if (c.vert === "vert270") s += "writing-mode:vertical-rl;transform:rotate(180deg);";
     return s + (extra || "");
@@ -445,20 +456,20 @@
   const ANCLA = { t: "t", ctr: "ctr", b: "b", just: "t", dist: "t" };
   function contenido(b) {
     const D = NOM.diapo;
-    if (b.tipo === "texto" && b.ppt) return `<div class="libre-texto ppt" data-anc="${ANCLA[b.ppt.anc] || "t"}" data-estilo="${esc(b.estilo || "p")}" data-ph="${esc(b.ph || "Escribe aquí")}" style="${esc(estiloPpt(b.ppt))}">${D ? D.htmlRico(b.html) : htmlSeguro(b.html)}</div>`;
-    if (b.tipo === "texto") return `<div class="libre-texto" data-estilo="${esc(b.estilo || "p")}" data-ph="${esc(b.ph || "Escribe aquí")}" style="${estiloTexto(b)}">${D ? D.htmlRico(b.html) : htmlSeguro(b.html)}</div>`;
+    if (b.tipo === "texto" && b.ppt) return `<div class="libre-texto ppt" data-anc="${Object.hasOwn(ANCLA, b.ppt.anc) ? ANCLA[b.ppt.anc] : "t"}" data-estilo="${esc(b.estilo || "p")}" data-ph="${esc(b.ph || "Escribe aquí")}" style="${esc(estiloPpt(b.ppt))}">${D ? D.htmlRico(b.html) : htmlSeguro(b.html)}</div>`;
+    if (b.tipo === "texto") return `<div class="libre-texto" data-estilo="${esc(b.estilo || "p")}" data-ph="${esc(b.ph || "Escribe aquí")}" style="${esc(estiloTexto(b))}">${D ? D.htmlRico(b.html) : htmlSeguro(b.html)}</div>`;
     if (b.tipo === "forma") {
       const e = estiloFigura(b);
       const cm = COMPARTIMENTOS.has(e.f);
       const txt = cm ? compartimentos(e.f, b.texto) : b.html && D ? D.htmlRico(b.html) : esc(b.texto || "");
       if (b.ppt && !e.lineal) {
         // el texto de una forma de Office va en el rectángulo de texto de su geometría
-        const w = Math.max(1, b.w || 1), h = Math.max(1, b.h || 1);
+        const w = Math.max(1, num(b.w, 1) || 1), h = Math.max(1, num(b.h, 1) || 1);
         const rt = e.cust ? NOM.geomOffice.rectTextoDe(e.cust, w, h, e.av) : e.prst && NOM.geomOffice ? NOM.geomOffice.rectTexto(e.prst, w, h, e.av) : { l: 0, t: 0, r: w, b: h };
         const caja = `left:${n2(rt.l)}px;top:${n2(rt.t)}px;width:${n2(Math.max(1, rt.r - rt.l))}px;height:${n2(Math.max(1, rt.b - rt.t))}px;`;
-        return `<div class="forma ppt-forma" data-figura="${esc(e.f)}">${svgFigura(b)}<div class="txt ppt" data-anc="${ANCLA[b.ppt.anc] || "ctr"}" data-ph="Texto" style="${esc(estiloPpt(b.ppt, caja))}">${txt}</div></div>`;
+        return `<div class="forma ppt-forma" data-figura="${esc(e.f)}">${svgFigura(b)}<div class="txt ppt" data-anc="${Object.hasOwn(ANCLA, b.ppt.anc) ? ANCLA[b.ppt.anc] : "ctr"}" data-ph="Texto" style="${esc(estiloPpt(b.ppt, caja))}">${txt}</div></div>`;
       }
-      return `<div class="forma" data-figura="${esc(e.f)}"${cm ? ` style="--cm-borde:${esc(e.trazo || "#2B2A33")}"` : ""}>${svgFigura(b)}${e.lineal ? "" : `<div class="txt" data-ph="Texto" style="${estiloTexto(b, e.relleno)}">${txt}</div>`}</div>`;
+      return `<div class="forma" data-figura="${esc(e.f)}"${cm ? ` style="--cm-borde:${esc(e.trazo || "#2B2A33")}"` : ""}>${svgFigura(b)}${e.lineal ? "" : `<div class="txt" data-ph="Texto" style="${esc(estiloTexto(b, e.relleno))}">${txt}</div>`}</div>`;
     }
     if (b.tipo === "imagen") {
       if (!b.src) return `<div class="libre-hueco">${NOM.ico("image", "ico-l")}<span>${esc(b.ph || "Toca dos veces para poner una imagen")}</span></div>`;
@@ -477,15 +488,16 @@
       return `<div class="libre-tabla"><table>${filas || "<tr><td>Tabla vacía</td></tr>"}</table></div>`;
     }
     if (b.tipo === "grafica" && !b.hoja && D) return `<div class="libre-grafica${b.office ? " office" : ""}">${D.graficaHtml(b)}</div>`;
-    if (b.tipo === "icono") return `<svg class="libre-icono" viewBox="0 0 24 24" fill="none" stroke="${esc(b.color || "#2B2A33")}" stroke-width="${+b.grosor || 2}" stroke-linecap="round" stroke-linejoin="round" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${iconoSeguro(b)}</svg>`;
-    if (b.tipo === "ecuacion") return `<div class="libre-ecuacion" style="${estiloTexto(b)}">${NOM.ecuaciones ? NOM.ecuaciones.html(b.tex || "", true) : esc(b.tex || "")}</div>`;
+    if (b.tipo === "icono") return `<svg class="libre-icono" viewBox="0 0 24 24" fill="none" stroke="${colorCss(b.color, "#2B2A33")}" stroke-width="${num(b.grosor, 2) || 2}" stroke-linecap="round" stroke-linejoin="round" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${iconoSeguro(b)}</svg>`;
+    if (b.tipo === "ecuacion") return `<div class="libre-ecuacion" style="${esc(estiloTexto(b))}">${NOM.ecuaciones ? NOM.ecuaciones.html(b.tex || "", true) : esc(b.tex || "")}</div>`;
     return `<div class="libre-ajeno">${esc(b.tipo)}</div>`;
   }
   /** Estilo del contenedor del bloque: posición, capa, giro, opacidad. */
   function estiloBloque(b, i) {
-    let s = `left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px;z-index:${(b.z || 0) + (i || 0) + 1};`;
-    if (b.rot) s += `transform:rotate(${+b.rot}deg);`;
-    if (b.opacidad != null && b.opacidad < 1) s += `opacity:${+b.opacidad};`;
+    const x = num(b.x, 0), y = num(b.y, 0), w = num(b.w, 0), h = num(b.h, 0), z = num(b.z, 0), rot = num(b.rot, 0), op = num(b.opacidad, 1);
+    let s = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;z-index:${z + num(i, 0) + 1};`;
+    if (rot) s += `transform:rotate(${rot}deg);`;
+    if (op < 1) s += `opacity:${Math.max(0, op)};`;
     return s;
   }
   const clasesBloque = (b) => (b.sombra === true || (b.sombra == null && b.tipo === "forma" && !esLinea(b.figura)) ? " sombra" : "") + (b.bloqueado ? " bloqueado" : "") + (b.lineaOffice ? " linea-office" : "");
@@ -525,7 +537,7 @@
     const gotas = opc.gotero ? `<div class="fila lz-gotas">${window.EyeDropper && matchMedia("(pointer: fine)").matches ? `<button class="btn chico" data-gotas="pantalla">${ico("pipette", "ico-s")} Cuentagotas</button>` : ""}<button class="btn chico" data-gotas="figura">${ico("pipette", "ico-s")} Copiar de otra figura</button></div>` : "";
     const p = panel(ancla, `${opc.sinColor ? `<button class="lz-sin" data-c="">${ico("x", "ico-s")} ${esc(opc.sinColor)}</button>` : ""}
       <div class="lz-muestras">${COLORES.map((c) => `<button data-c="${c}" style="background:${c}" aria-label="${c}" ${String(actual).toUpperCase() === c ? 'aria-pressed="true"' : ""}></button>`).join("")}</div>
-      <label class="lz-otro">${ico("palette", "ico-s")} Color personalizado <input type="color" value="${/^#[0-9a-f]{6}$/i.test(actual || "") ? actual : "#5B5BD6"}"></label>${gotas}`, { titulo: opc.titulo || "Color" });
+      <label class="lz-otro">${ico("palette", "ico-s")} Color personalizado <input type="color" value="${colorHex(actual, "#5B5BD6")}"></label>${gotas}`, { titulo: opc.titulo || "Color" });
     p.addEventListener("click", (e) => {
       const g = e.target.closest("[data-gotas]");
       if (g) { p.cerrar(); opc.gotero(alElegir, g.dataset.gotas); return; }
@@ -534,7 +546,8 @@
     $("input", p).addEventListener("input", (e) => alElegir(e.target.value.toUpperCase()));
   }
   function deslizador(ancla, titulo, valor, min, max, paso, unidad, alCambiar) {
-    const p = panel(ancla, `<div class="lz-desl"><input type="range" min="${min}" max="${max}" step="${paso}" value="${valor}" aria-label="${esc(titulo)}"><output>${valor}${unidad}</output></div>`, { titulo });
+    const val = num(valor, min);
+    const p = panel(ancla, `<div class="lz-desl"><input type="range" min="${min}" max="${max}" step="${paso}" value="${val}" aria-label="${esc(titulo)}"><output>${val}${esc(unidad)}</output></div>`, { titulo });
     const r = $("input", p), o = $("output", p);
     r.addEventListener("input", () => { o.textContent = r.value + unidad; alCambiar(+r.value); });
     r.focus();
@@ -691,12 +704,12 @@
       if (acotado) { aplicarDiapo(); const t = W() + "x" + H(); if (t !== ultimoTam) { ultimoTam = t; aplicarVista(); } }
       $$(".bl", mundo).forEach((e) => e.remove());
       if (acotado && ed.pagina) { const capa = capaHeredada(doc(), ed.pagina); if (capa) mundo.insertAdjacentHTML("afterbegin", capa); }
-      const mapa = {};
+      const mapa = Object.create(null);
       for (const id of [...sel]) if (!bs.some((b) => b.id === id)) sel.delete(id);
       bs.filter((b) => b.tipo !== "conector").sort((a, b) => (a.z || 0) - (b.z || 0)).forEach((b, i) => {
         mapa[b.id] = b;
         const ajeno = motivoAjeno(b);
-        const el = html(`<div class="bl${b.sinPos ? " sin-pos" : ""}${sel.has(b.id) ? " sel" : ""}${clasesBloque(b)}${fuera(b) ? " fuera" : ""}${resaltados.has(b.id) ? " cambiado" : ""}${ajeno && !ed.soloLectura ? " ajeno" : ""}" data-id="${esc(b.id)}" data-tipo="${esc(b.tipo)}" style="${estiloBloque(b, i)}${b.dueno ? `--dueno:${esc(ed.colorDe(b.dueno))};` : ""}"${b.dueno ? ` data-dueno="${esc(ed.nombreDe(b.dueno))}"` : ""}>${contenido(b)}${b.medio ? `<span class="nm-medio-marca">${ico(b.medio.tipo === "audio" ? "volume-2" : "play", "ico-s")} ${b.medio.tipo === "audio" ? "Audio" : "Video"}</span>` : ""}${comentados.has(b.id) ? `<span class="lz-coment" title="Comentarios">${ico("message-square", "ico-s")}${comentados.get(b.id) > 1 ? comentados.get(b.id) : ""}</span>` : ""}</div>`);
+        const el = html(`<div class="bl${b.sinPos ? " sin-pos" : ""}${sel.has(b.id) ? " sel" : ""}${clasesBloque(b)}${fuera(b) ? " fuera" : ""}${resaltados.has(b.id) ? " cambiado" : ""}${ajeno && !ed.soloLectura ? " ajeno" : ""}" data-id="${esc(b.id)}" data-tipo="${esc(b.tipo)}" style="${estiloBloque(b, i)}${b.dueno ? `--dueno:${colorCss(ed.colorDe(b.dueno), "#6B6875")};` : ""}"${b.dueno ? ` data-dueno="${esc(ed.nombreDe(b.dueno))}"` : ""}>${contenido(b)}${b.medio ? `<span class="nm-medio-marca">${ico(b.medio.tipo === "audio" ? "volume-2" : "play", "ico-s")} ${b.medio.tipo === "audio" ? "Audio" : "Video"}</span>` : ""}${comentados.has(b.id) ? `<span class="lz-coment" title="Comentarios">${ico("message-square", "ico-s")}${comentados.get(b.id) > 1 ? comentados.get(b.id) : ""}</span>` : ""}</div>`);
         if (sel.size === 1 && sel.has(b.id) && !ed.soloLectura) adornos(el, b);
         mundo.append(el);
       });
@@ -745,14 +758,14 @@
     }
     function conectoresVisuales(cambios) {
       const bs = bloques().map((x) => (cambios[x.id] ? Object.assign({}, x, cambios[x.id]) : x));
-      const mapa = {};
+      const mapa = Object.create(null);
       bs.forEach((x) => (mapa[x.id] = x));
       pintarConectores(bs, mapa);
     }
     const cajaDe = (bs) => {
       if (!bs.length) return null;
-      const x1 = Math.min(...bs.map((b) => b.x)), y1 = Math.min(...bs.map((b) => b.y));
-      const x2 = Math.max(...bs.map((b) => b.x + b.w)), y2 = Math.max(...bs.map((b) => b.y + b.h));
+      const x1 = Math.min(...bs.map((b) => num(b.x, 0))), y1 = Math.min(...bs.map((b) => num(b.y, 0)));
+      const x2 = Math.max(...bs.map((b) => num(b.x, 0) + num(b.w, 0))), y2 = Math.max(...bs.map((b) => num(b.y, 0) + num(b.h, 0)));
       return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
     };
 
@@ -1023,7 +1036,7 @@
     }
     function pegarBloques(lista, desplazar) {
       if (!lista || !lista.length || ed.soloLectura) return;
-      const nuevos = {}, grupos = {};
+      const nuevos = Object.create(null), grupos = Object.create(null);
       lista.forEach((b) => (nuevos[b.id] = NOM.DocCRDT.nuevoId()));
       const zMax = Math.max(0, ...bloques().map((b) => b.z || 0));
       doc().lote(() => lista.forEach((b, i) => {
@@ -1156,7 +1169,7 @@
       const btn = (a, i, t) => `<button class="icono-btn" data-a="${a}" aria-label="${esc(t.split("|")[0])}" data-micro="${esc(t)}">${i}</button>`;
       if (!puedoEditar(c)) { barra.innerHTML = `<span class="lz-ajeno">${ico("lock", "ico-s")} ${esc(motivoAjeno(c) || "")}</span>`; barra.hidden = false; return; }
       barra.innerHTML = [
-        `<button class="lz-color" data-a="c-color" aria-label="Color de la flecha" data-micro="Color de la flecha" style="--c:${esc(c.color || (acotado ? "#4A4854" : "var(--tinta-2)"))}"><span></span></button>`,
+        `<button class="lz-color" data-a="c-color" aria-label="Color de la flecha" data-micro="Color de la flecha" style="--c:${colorCss(c.color, acotado ? "#4A4854" : "var(--tinta-2)")}"><span></span></button>`,
         btn("c-texto", ico("type"), "Texto de la flecha|En medio o cerca de cada punta (1, N…). También con doble clic."),
         btn("c-grosor", ico("minus"), "Grosor"),
         btn("c-estilo", ico("square-dashed"), "Estilo|Sólida, con guiones o con puntos."),
@@ -1244,22 +1257,22 @@
         barra.hidden = false;
         return;
       }
-      const relleno = formas.length && !esLinea(formas[0].figura) ? (formas[0].relleno === false ? "" : formas[0].color || "#E7E5EE") : null;
+      const relleno = formas.length && !esLinea(formas[0].figura) ? (formas[0].relleno === false ? "" : colorCss(formas[0].color, "#E7E5EE")) : null;
       const conTexto = formas.some((b) => !esLinea(b.figura)) || textos.length;
       const btn = (a, i, t, extra) => `<button class="icono-btn" data-a="${a}" aria-label="${esc(t)}" data-micro="${esc(t)}" ${extra || ""}>${i}</button>`;
       barra.innerHTML = bloq
         ? btn("bloquear", ico("lock-open"), "Desbloquear") + btn("duplicar", ico("copy"), "Duplicar|Ctrl+D")
         : [
-          relleno != null ? `<button class="lz-color" data-a="relleno" aria-label="Color de relleno" data-micro="Relleno|Color de la figura." style="--c:${relleno || "transparent"}"><span></span></button>` : "",
-          formas.length && esLinea(formas[0].figura) ? `<button class="lz-color" data-a="borde-color" aria-label="Color de la línea" data-micro="Color de la línea" style="--c:${formas[0].borde || "#4A4854"}"><span></span></button>` : "",
+          relleno != null ? `<button class="lz-color" data-a="relleno" aria-label="Color de relleno" data-micro="Relleno|Color de la figura." style="--c:${colorCss(relleno, "transparent")}"><span></span></button>` : "",
+          formas.length && esLinea(formas[0].figura) ? `<button class="lz-color" data-a="borde-color" aria-label="Color de la línea" data-micro="Color de la línea" style="--c:${colorCss(formas[0].borde, "#4A4854")}"><span></span></button>` : "",
           formas.length || imgs.length ? btn("borde", ico("square-dashed"), "Borde|Color, grosor y estilo del contorno.") : "",
-          conTexto ? btn("texto", `<b class="lz-a" style="--c:${(formas[0] || textos[0] || {}).tColor || "#2B2A33"}">A</b>`, "Texto|Tamaño, color, negrita y alineación.") : "",
+          conTexto ? btn("texto", `<b class="lz-a" style="--c:${colorCss((formas[0] || textos[0] || {}).tColor, "#2B2A33")}">A</b>`, "Texto|Tamaño, color, negrita y alineación.") : "",
           btn("opacidad", ico("blend"), "Transparencia"),
           (formas.some((b) => ["rect", "burbuja"].includes(b.figura || "rect")) || imgs.length) ? btn("esquinas", ico("esquina"), "Redondear esquinas") : "",
           btn("sombra", ico("sombra"), "Sombra", `aria-pressed="${b0.sombra === true || (b0.sombra == null && b0.tipo === "forma" && !esLinea(b0.figura))}"`),
           imgs.length === 1 && imgs[0].src ? btn("recortar", ico("scissors"), "Recortar") + btn("mascara", ico("shapes"), "Forma|La foto dentro de un círculo, estrella, corazón…") + btn("filtros", ico("blend"), "Filtros|Brillo, contraste, blanco y negro…") : "",
           bs.length === 1 && ((b0.tipo === "tabla" && b0.enDiapo) || (b0.tipo === "grafica" && !b0.hoja)) ? btn("datos", ico("table"), "Editar datos") : "",
-          bs.length === 1 && b0.tipo === "icono" ? btn("icono-color", `<span class="lz-color" style="--c:${esc(b0.color || "#2B2A33")}"><span></span></span>`, "Color del ícono") : "",
+          bs.length === 1 && b0.tipo === "icono" ? btn("icono-color", `<span class="lz-color" style="--c:${colorCss(b0.color, "#2B2A33")}"><span></span></span>`, "Color del ícono") : "",
           '<span class="sep"></span>',
           btn("posicion", ico("al-centro-h"), "Posición|Alinear, distribuir y orden de capas."),
           btn("girar", ico("rotate-cw"), "Girar 90°"),
@@ -1309,7 +1322,7 @@
       }
     });
     function menuBorde(ancla, b0, grupo) {
-      const p = panel(ancla, `<div class="lz-desl"><span>Grosor</span><input type="range" min="0" max="20" step="1" value="${+b0.bordeAncho || (b0.figura && esLinea(b0.figura) ? 3 : 0)}" data-g><output data-o></output></div>
+      const p = panel(ancla, `<div class="lz-desl"><span>Grosor</span><input type="range" min="0" max="20" step="1" value="${num(b0.bordeAncho, 0) || (b0.figura && esLinea(b0.figura) ? 3 : 0)}" data-g><output data-o></output></div>
         <div class="segmentado lleno lz-estilos" role="group" aria-label="Estilo">${[["solido", "Sólido"], ["guiones", "Guiones"], ["puntos", "Puntos"]].map(([v, t]) => `<button type="button" data-e="${v}" aria-pressed="${(b0.bordeEstilo || "solido") === v}">${t}</button>`).join("")}</div>
         <div class="lz-muestras">${COLORES.map((c) => `<button data-c="${c}" style="background:${c}" aria-label="${c}"></button>`).join("")}</div>`, { titulo: "Borde" });
       const g = $("[data-g]", p), o = $("[data-o]", p);
@@ -1326,8 +1339,8 @@
       const b = doc().bloque(id);
       if (!b || !b.src) return;
       const r = Object.assign({ iz: 0, d: 0, s: 0, i: 0 }, b.recorte || {});
-      const cuerpo = html(`<form class="col"><div class="wd-recorte-vista"><div class="lz-recorte-prev" style="width:280px;height:${Math.round(280 * ((b.h || 1) / (b.w || 1)))}px"></div></div>
-        ${[["s", "Arriba"], ["i", "Abajo"], ["iz", "Izquierda"], ["d", "Derecha"]].map(([k, t]) => `<div class="lz-desl"><span>${t}</span><input type="range" min="0" max="45" step="1" value="${Math.round(r[k] * 100)}" data-k="${k}"><output>${Math.round(r[k] * 100)}%</output></div>`).join("")}</form>`);
+      const cuerpo = html(`<form class="col"><div class="wd-recorte-vista"><div class="lz-recorte-prev" style="width:280px;height:${Math.round(280 * ((num(b.h, 1) || 1) / (num(b.w, 1) || 1)))}px"></div></div>
+        ${[["s", "Arriba"], ["i", "Abajo"], ["iz", "Izquierda"], ["d", "Derecha"]].map(([k, t]) => `<div class="lz-desl"><span>${t}</span><input type="range" min="0" max="45" step="1" value="${Math.round(num(r[k], 0) * 100)}" data-k="${k}"><output>${Math.round(num(r[k], 0) * 100)}%</output></div>`).join("")}</form>`);
       const pie = html(`<div style="display:contents"><button class="btn" type="button" data-quitar>Sin recorte</button><span class="crece"></span><button class="btn" type="button" data-no>Cancelar</button><button class="btn primario" data-si>Recortar</button></div>`);
       const hj = NOM.hoja({ titulo: "Recortar imagen", icono: "scissors", cuerpo, pie });
       const prev = $(".lz-recorte-prev", cuerpo);
@@ -1349,8 +1362,10 @@
     function filtrosImagen(ancla, id) {
       const b = doc().bloque(id);
       if (!b) return;
-      const f = Object.assign({ brillo: 100, contraste: 100, saturacion: 100, gris: 0, sepia: 0, desenfoque: 0 }, b.filtros || {});
-      const PRE = { normal: { brillo: 100, contraste: 100, saturacion: 100, gris: 0, sepia: 0, desenfoque: 0 }, bn: { gris: 100 }, sepia: { sepia: 80 }, vivido: { saturacion: 160, contraste: 110 }, suave: { brillo: 108, contraste: 90, saturacion: 80 }, oscuro: { brillo: 80, contraste: 115 } };
+      const defF = { brillo: 100, contraste: 100, saturacion: 100, gris: 0, sepia: 0, desenfoque: 0 };
+      const f0 = b.filtros || {};
+      const f = { brillo: num(f0.brillo, 100), contraste: num(f0.contraste, 100), saturacion: num(f0.saturacion, 100), gris: num(f0.gris, 0), sepia: num(f0.sepia, 0), desenfoque: num(f0.desenfoque, 0) };
+      const PRE = { normal: defF, bn: { gris: 100 }, sepia: { sepia: 80 }, vivido: { saturacion: 160, contraste: 110 }, suave: { brillo: 108, contraste: 90, saturacion: 80 }, oscuro: { brillo: 80, contraste: 115 } };
       const p = panel(ancla, `<div class="fila lz-fila" style="flex-wrap:wrap">${[["normal", "Normal"], ["bn", "B/N"], ["sepia", "Sepia"], ["vivido", "Vívido"], ["suave", "Suave"], ["oscuro", "Oscuro"]].map(([k, t]) => `<button class="btn chico" data-pre="${k}">${t}</button>`).join("")}</div>
         ${[["brillo", "Brillo", 30, 170, "%"], ["contraste", "Contraste", 30, 170, "%"], ["saturacion", "Color", 0, 200, "%"], ["gris", "Gris", 0, 100, "%"], ["sepia", "Sepia", 0, 100, "%"], ["desenfoque", "Desenfoque", 0, 10, " px"]].map(([k, t, mi, ma, u]) => `<div class="lz-desl"><span>${t}</span><input type="range" min="${mi}" max="${ma}" step="1" value="${f[k]}" data-f="${k}"><output>${f[k]}${u}</output></div>`).join("")}`, { titulo: "Filtros" });
       const guardar = () => { const neutro = f.brillo === 100 && f.contraste === 100 && f.saturacion === 100 && !f.gris && !f.sepia && !f.desenfoque; doc().cambiar(id, { filtros: neutro ? null : Object.assign({}, f) }, { grupo: "filtros-" + id }); render(); };
@@ -1365,7 +1380,7 @@
       p.addEventListener("click", (e) => { const x = e.target.closest("[data-m]"); if (!x) return; p.cerrar(); doc().cambiar(id, { mascara: x.dataset.m || null }); render(); });
     }
     function menuTexto(ancla, b0, grupo) {
-      const tam = b0.tTam || (b0.tipo === "texto" ? (b0.estilo === "h1" ? 44 : b0.estilo === "h2" ? 30 : 22) : 16);
+      const tam = num(b0.tTam, 0) || (b0.tipo === "texto" ? (b0.estilo === "h1" ? 44 : b0.estilo === "h2" ? 30 : 22) : 16);
       const p = panel(ancla, `<div class="lz-desl"><span>Tamaño</span><input type="range" min="8" max="120" step="1" value="${tam}" data-t><output data-o>${tam} px</output></div>
         <div class="fila lz-fila"><button class="icono-btn" data-n="tNegrita" aria-pressed="${enNegrita(b0)}" aria-label="Negrita">${ico("bold")}</button>
           <button class="icono-btn" data-n="tCursiva" aria-pressed="${!!b0.tCursiva}" aria-label="Cursiva">${ico("italic")}</button>
@@ -1841,7 +1856,7 @@
           const aj = motivoAjeno(b);
           return `<div class="capa-fila${sel.has(b.id) ? " sel" : ""}${b.oculto ? " oculta" : ""}" data-c="${esc(b.id)}">
             <button class="icono-btn chico capa-asa" data-asa aria-label="Mover de capa" ${aj ? "disabled" : ""}>${ico("grip-vertical", "ico-s")}</button>
-            <button class="capa-nombre crece" data-elegir>${ico(icono(b), "ico-s")}<span class="recorta">${esc(nombre(b))}</span>${b.dueno ? `<span class="chip chico" style="--c:${esc(ed.colorDe(b.dueno))}">${esc(ed.nombreDe(b.dueno))}</span>` : ""}${b.maestro ? ico("crown", "ico-s") : ""}${fuera(b) ? `<span class="chip chico">fuera</span>` : ""}</button>
+            <button class="capa-nombre crece" data-elegir>${ico(icono(b), "ico-s")}<span class="recorta">${esc(nombre(b))}</span>${b.dueno ? `<span class="chip chico" style="--c:${colorCss(ed.colorDe(b.dueno), "#6B6875")}">${esc(ed.nombreDe(b.dueno))}</span>` : ""}${b.maestro ? ico("crown", "ico-s") : ""}${fuera(b) ? `<span class="chip chico">fuera</span>` : ""}</button>
             <button class="icono-btn chico" data-ojo aria-label="${b.oculto ? "Mostrar" : "Ocultar"}" aria-pressed="${!!b.oculto}" ${aj ? "disabled" : ""} data-micro="${b.oculto ? "Mostrar" : "Ocultar"}|Lo oculto no se ve, no se presenta ni se exporta.">${ico(b.oculto ? "eye-off" : "eye", "ico-s")}</button>
             <button class="icono-btn chico" data-candado aria-label="${b.bloqueado ? "Desbloquear" : "Bloquear"}" aria-pressed="${!!b.bloqueado}" ${aj ? "disabled" : ""}>${ico(b.bloqueado ? "lock" : "lock-open", "ico-s")}</button></div>`;
         }).join("") : `<p class="suave">Esta ${acotado ? "diapositiva" : "página"} está vacía.</p>`;
@@ -2106,7 +2121,7 @@
           const du = lienzo.duenoPagina(p), cambios = ed.resaltando && ed.cambiosVisita && (ed.cambiosVisita.bloques || []).some((id) => doc().valor(id, "pagina") === p);
           const T = tamDoc(doc()), oc = oculta(p);
           return `<button class="mini${oc ? " oculta" : ""}" data-p="${esc(p)}" aria-current="${p === ed.pagina}" aria-label="Diapositiva ${i + 1}${oc ? " (oculta)" : ""}" style="aspect-ratio:${T.w} / ${T.h}"><span class="num">${i + 1}${oc ? ico("eye-off", "ico-s") : ""}</span>
-            <div class="mini-cont diapo-mini" style="${NOM.diapo ? NOM.diapo.estiloDiapo(doc(), p) : ""}">${htmlDiapositiva(doc(), p)}</div>${du ? `<span class="mini-dueno" style="--c:${esc(ed.colorDe(du))}">${esc(ed.nombreDe(du))}</span>` : ""}${cambios ? `<span class="mini-cambio" title="Cambió desde tu última visita"></span>` : ""}${tieneTransicion(doc(), p) ? `<span class="mini-trans" title="Con transición">${ico("sparkles", "ico-s")}</span>` : ""}</button>`;
+            <div class="mini-cont diapo-mini" style="${NOM.diapo ? esc(NOM.diapo.estiloDiapo(doc(), p)) : ""}">${htmlDiapositiva(doc(), p)}</div>${du ? `<span class="mini-dueno" style="--c:${colorCss(ed.colorDe(du), "#6B6875")}">${esc(ed.nombreDe(du))}</span>` : ""}${cambios ? `<span class="mini-cambio" title="Cambió desde tu última visita"></span>` : ""}${tieneTransicion(doc(), p) ? `<span class="mini-trans" title="Con transición">${ico("sparkles", "ico-s")}</span>` : ""}</button>`;
         };
         minis.innerHTML = grupos.map(({ sc, d }) => {
           if (!sc) return d.map(miniHtml).join("");
@@ -2277,7 +2292,7 @@
         const h = NOM.hoja({ titulo: "Página de notas", icono: "sticky-note", cuerpo, pie, ancha: true, alCerrar: () => pintarNotas() });
         const pags = doc().paginas();
         cuerpo.innerHTML = pags.map((p, i) => `<div class="nota-pagina" data-p="${esc(p)}" style="width:${anchoHoja}px;aspect-ratio:8.5 / 11">
-          <div class="nota-diapo" style="width:${Math.round(T.w * k)}px;height:${Math.round(T.h * k)}px"><div class="mini-cont diapo-mini" style="position:absolute;left:0;top:0;width:${T.w}px;height:${T.h}px;transform-origin:0 0;transform:scale(${k});${NOM.diapo ? NOM.diapo.estiloDiapo(doc(), p) : ""}">${htmlDiapositiva(doc(), p)}</div></div>
+          <div class="nota-diapo" style="width:${Math.round(T.w * k)}px;height:${Math.round(T.h * k)}px"><div class="mini-cont diapo-mini" style="position:absolute;left:0;top:0;width:${T.w}px;height:${T.h}px;transform-origin:0 0;transform:scale(${k});${NOM.diapo ? esc(NOM.diapo.estiloDiapo(doc(), p)) : ""}">${htmlDiapositiva(doc(), p)}</div></div>
           <textarea class="nota-texto" data-nota="${esc(p)}" aria-label="Notas de la diapositiva ${i + 1}" ${ed.soloLectura ? "readonly" : ""} placeholder="Haz clic para agregar notas">${esc(doc().valor("_doc", "nota:" + p) || "")}</textarea>
           <span class="nota-num chico suave">${i + 1}</span></div>`).join("");
         $$("[data-nota]", cuerpo).forEach((ta) => (ta.oninput = () => { if (!ed.soloLectura) doc().cambiar("_doc", { ["nota:" + ta.dataset.nota]: ta.value || null }); }));
@@ -2318,7 +2333,7 @@
           cuerpo.innerHTML = grupos.map(({ sc, d }) => (sc ? `<div class="clas-seccion">${esc(sc.nombre || "Sección")} <span class="suave chico">(${d.length})</span></div>` : "")
             + `<div class="clas-fila">${d.map((p) => { const i = pags.indexOf(p), oc = oculta(p);
               return `<div class="clas-item${p === elegida ? " elegida" : ""}${oc ? " oculta" : ""}" draggable="${ed.soloLectura ? "false" : "true"}" data-p="${esc(p)}" role="button" aria-label="Diapositiva ${i + 1}${oc ? " (oculta)" : ""}">`
-                + `<div class="clas-mini" style="width:${ancho}px;height:${Math.round(T.h * k)}px"><div class="mini-cont diapo-mini" style="position:absolute;left:0;top:0;width:${T.w}px;height:${T.h}px;transform-origin:0 0;transform:scale(${k});${NOM.diapo ? NOM.diapo.estiloDiapo(doc(), p) : ""}">${htmlDiapositiva(doc(), p)}</div></div>`
+                + `<div class="clas-mini" style="width:${ancho}px;height:${Math.round(T.h * k)}px"><div class="mini-cont diapo-mini" style="position:absolute;left:0;top:0;width:${T.w}px;height:${T.h}px;transform-origin:0 0;transform:scale(${k});${NOM.diapo ? esc(NOM.diapo.estiloDiapo(doc(), p)) : ""}">${htmlDiapositiva(doc(), p)}</div></div>`
                 + `<span class="chico">${i + 1}${oc ? " · oculta" : ""}</span></div>`; }).join("")}</div>`).join("");
           $$(".clas-item", cuerpo).forEach((it) => {
             it.onclick = () => { elegida = it.dataset.p; $$(".clas-item", cuerpo).forEach((x) => x.classList.toggle("elegida", x === it)); cuerpo.focus({ preventScroll: true }); };
@@ -2433,7 +2448,7 @@
           const cs = listaAnim().filter((x) => x.id === id).map((x) => A.caminoDe(x)).filter((c) => c && c.pts.length > 1);
           if (!cs.length) return;
           const T = tamDoc(doc()), cx = el.offsetLeft + el.offsetWidth / 2, cy = el.offsetTop + el.offsetHeight / 2;
-          const r = (v) => Math.round(v * 10) / 10;
+          const r = (v) => (Number.isFinite(v) ? Math.round(v * 10) / 10 : 0);
           const dib = cs.map((c) => {
             const ps = c.pts.map(([x, y]) => [r(cx + x * T.w), r(cy + y * T.h)]), u = ps[ps.length - 1];
             return `<polyline points="${ps.map((q) => q.join(",")).join(" ")}"/><circle class="ini" cx="${ps[0][0]}" cy="${ps[0][1]}" r="5"/><circle class="fin" cx="${u[0]}" cy="${u[1]}" r="5"/>`;
@@ -2644,7 +2659,7 @@
           <label class="fila" style="gap:8px"><input type="checkbox" data-anim ${c.sinAnimacion ? "checked" : ""}> Presentar sin animaciones</label>
           <fieldset class="col" style="border:0;padding:0;gap:6px"><legend>«Desde el principio» muestra</legend>
             <label class="fila" style="gap:8px"><input type="radio" name="cf-r" value="todas" ${!c.rango && c.personalizada == null ? "checked" : ""}> Todas las diapositivas</label>
-            <label class="fila" style="gap:8px;align-items:center;flex-wrap:wrap"><input type="radio" name="cf-r" value="rango" ${c.rango ? "checked" : ""}> Desde <input class="input" type="number" min="1" max="${n}" data-desde value="${c.rango ? c.rango[0] : 1}" style="width:5.5em"> hasta <input class="input" type="number" min="1" max="${n}" data-hasta value="${c.rango ? c.rango[1] : n}" style="width:5.5em"></label>
+            <label class="fila" style="gap:8px;align-items:center;flex-wrap:wrap"><input type="radio" name="cf-r" value="rango" ${c.rango ? "checked" : ""}> Desde <input class="input" type="number" min="1" max="${n}" data-desde value="${c.rango ? num(c.rango[0], 1) : 1}" style="width:5.5em"> hasta <input class="input" type="number" min="1" max="${n}" data-hasta value="${c.rango ? num(c.rango[1], n) : n}" style="width:5.5em"></label>
             ${pers.length ? `<label class="fila" style="gap:8px;align-items:center;flex-wrap:wrap"><input type="radio" name="cf-r" value="pers" ${c.personalizada != null ? "checked" : ""}> La personalizada <select class="input" data-pers>${pers.map((q) => `<option value="${esc(String(q.id))}" ${String(q.id) === String(c.personalizada) ? "selected" : ""}>${esc(q.nombre || "sin nombre")}</option>`).join("")}</select></label>` : ""}
           </fieldset></form>`);
         const pie = html(`<div style="display:contents"><button class="btn" data-no type="button">Cancelar</button><button class="btn primario" data-si>Aceptar</button></div>`);
@@ -2762,7 +2777,7 @@
     const pasos = [[]];
     let ini = 0, fin = 0;
     lista.forEach((x) => {
-      const dur = Math.max(100, Math.min(10000, +x.dur || 500)), ret = Math.max(0, Math.min(20000, +x.retraso || 0));
+      const dur = Math.max(100, Math.min(10000, num(x.dur, 500) || 500)), ret = Math.max(0, Math.min(20000, num(x.retraso, 0)));
       let t;
       if ((x.inicio || "clic") === "clic") { pasos.push([]); t = ret; fin = 0; }
       else if (x.inicio === "con") t = ini + ret;
@@ -2776,7 +2791,7 @@
   const pasosDe = (doc, p) => pasosAnim(listaAnimaciones(doc, p, bloquesPresentables(doc, p))).length - 1;
   /** Cómo está cada bloque en el paso k: oculto o no, y la animación que corre ahora. final: sin animar. */
   function estadoAnimaciones(doc, p, k, final) {
-    const bs = bloquesPresentables(doc, p), pasos = pasosAnim(listaAnimaciones(doc, p, bs)), e = {};
+    const bs = bloquesPresentables(doc, p), pasos = pasosAnim(listaAnimaciones(doc, p, bs)), e = Object.create(null);
     const de = (id) => (e[id] = e[id] || { oculto: false, anim: [] });
     pasos.forEach((ps, j) => ps.forEach((x) => {
       const s = de(x.id);
@@ -2805,7 +2820,8 @@
     const bs = bloquesPresentables(doc, p);
     const est = paso == null ? null : estadoAnimaciones(doc, p, paso, opc && opc.final).estado;
     // 8.4 Las flechas entre figuras (un diagrama dentro de la diapositiva) van debajo de todo.
-    const porId = Object.fromEntries(bs.map((b) => [b.id, b])), T = tamDoc(doc);
+    const porId = Object.create(null), T = tamDoc(doc);
+    bs.forEach((b) => (porId[b.id] = b));
     const oculto = (id) => est && est[id] && est[id].oculto && !est[id].anim.length;
     const cs = doc.deLaPagina(p).filter((c) => c.tipo === "conector" && porId[c.desde] && porId[c.hasta] && !oculto(c.desde) && !oculto(c.hasta));
     const flechas = cs.length ? `<svg class="capa-conectores" width="${T.w}" height="${T.h}" style="z-index:0" aria-hidden="true">${cs.map((c) => svgConector(c, porId[c.desde], porId[c.hasta])).join("")}</svg>` : "";
@@ -2813,7 +2829,7 @@
       const s = est && est[b.id];
       if (s && s.oculto && !s.anim.length) return "";
       // Varias animaciones del mismo bloque en el mismo paso (entrada y énfasis…) van juntas.
-      const st = s && s.anim.length ? `animation-name:${s.anim.map((x) => `a-${x.tipo}-${x.efecto}`).join(",")};animation-duration:${s.anim.map((x) => x.dur + "ms").join(",")};animation-delay:${s.anim.map((x) => x.t + "ms").join(",")};animation-fill-mode:both;animation-timing-function:cubic-bezier(.2,.8,.2,1);` : "";
+      const st = s && s.anim.length ? `animation-name:${s.anim.map((x) => `a-${idCss(x.tipo)}-${idCss(x.efecto)}`).join(",")};animation-duration:${s.anim.map((x) => num(x.dur, 500) + "ms").join(",")};animation-delay:${s.anim.map((x) => num(x.t, 0) + "ms").join(",")};animation-fill-mode:both;animation-timing-function:cubic-bezier(.2,.8,.2,1);` : "";
       // (el texto de PowerPoint no se recorta en el borde de su cuadro: PowerPoint lo deja salir)
       return `<div class="bl${clasesBloque(b)}${s && s.anim.length ? " animando" : ""}${b.accion ? " con-accion" : ""}${b.medio ? " con-medio" : ""}" data-id="${esc(b.id)}" style="${estiloBloque(b)}overflow:${b.tipo === "forma" || b.ppt || b.office ? "visible" : "hidden"};${st}">${contenido(b)}</div>`;
     }).join("");
@@ -2822,12 +2838,14 @@
   /** Color de un nombre del tema de Office (accent1, tx1, hlink…): el del archivo importado o el del tema de NOM. */
   function colorTemaOffice(doc, n) {
     const es = doc.valor("_doc", "esquemaOffice");
-    if (es && es[n]) return "#" + String(es[n]).replace("#", "");
-    if (es) { const alias = { tx1: "dk1", bg1: "lt1", tx2: "dk2", bg2: "lt2" }[n]; if (alias && es[alias]) return "#" + es[alias]; }
+    if (es && Object.hasOwn(es, n) && es[n]) return "#" + String(es[n]).replace("#", "");
+    const ALIAS = { tx1: "dk1", bg1: "lt1", tx2: "dk2", bg2: "lt2" };
+    if (es && Object.hasOwn(ALIAS, n) && Object.hasOwn(es, ALIAS[n]) && es[ALIAS[n]]) return "#" + es[ALIAS[n]];
     const te = NOM.diapo && NOM.diapo.tema(doc), ac = te ? te.acentos : ["#4472C4", "#ED7D31", "#A5A5A5", "#FFC000"];
     const fondo = te && te.fondo && te.fondo.color ? te.fondo.color : "#FFFFFF";
-    return { accent1: ac[0], accent2: ac[1], accent3: ac[2], accent4: ac[3], accent5: ac[0], accent6: ac[1], hlink: ac[0], folHlink: ac[3],
-      dk1: te ? te.texto : "#000000", tx1: te ? te.texto : "#000000", lt1: fondo, bg1: fondo, dk2: te ? te.titulo : "#44546A", tx2: te ? te.titulo : "#44546A", lt2: "#E7E6E6", bg2: "#E7E6E6" }[n] || null;
+    const def = { accent1: ac[0], accent2: ac[1], accent3: ac[2], accent4: ac[3], accent5: ac[0], accent6: ac[1], hlink: ac[0], folHlink: ac[3],
+      dk1: te ? te.texto : "#000000", tx1: te ? te.texto : "#000000", lt1: fondo, bg1: fondo, dk2: te ? te.titulo : "#44546A", tx2: te ? te.titulo : "#44546A", lt2: "#E7E6E6", bg2: "#E7E6E6" };
+    return Object.hasOwn(def, n) ? def[n] : null;
   }
   /**
    * El motor de animaciones de PowerPoint sobre una diapositiva ya pintada con htmlDiapositiva(doc, p) (todo a la

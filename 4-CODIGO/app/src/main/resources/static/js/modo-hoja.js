@@ -21,7 +21,13 @@
 (function () {
   "use strict";
   const NOM = window.NOM;
-  const { esc, ico, html, $, $$, aviso } = NOM;
+  const { esc, ico, html, $, $$, aviso, colorCss } = NOM;
+  const num = (v, d = 0) => { if (v === "" || v == null || typeof v === "boolean") return d; const n = Number(v); return Number.isFinite(n) ? n : d; };
+  // Una imagen del documento solo de este equipo o de este servidor (como esSrcImg de diapositivas.js), nunca de otro sitio.
+  const srcImgOk = (s) => typeof s === "string" && (/^(data:image\/|blob:|\/api\/)/i.test(s) || !!(NOM.binarios && NOM.binarios.esRef(s)));
+  const MAX_FILAS = 1048576, MAX_COLS = 16384;
+  const nFilas = (tb) => Math.max(1, Math.min(MAX_FILAS, Math.floor(num(tb && tb.filas, 30) || 30)));
+  const nCols = (tb) => Math.max(1, Math.min(MAX_COLS, Math.floor(num(tb && tb.cols, 10) || 10)));
   const F = () => NOM.formulas;
   const G = () => NOM.graficas;
 
@@ -51,7 +57,7 @@
   function svgTrama(nombre, fg) {
     const k = nombre + fg;
     if (!svgsTrama.has(k)) {
-      const filas = (TRAMAS_XL[nombre] || TRAMAS_XL.mediumGray).split("|");
+      const filas = (Object.hasOwn(TRAMAS_XL, nombre) ? TRAMAS_XL[nombre] : TRAMAS_XL.mediumGray).split("|");
       let d = "";
       for (let y = 0; y < 8; y++) { const fila = filas[y % filas.length]; for (let x = 0; x < 8; x++) if (fila[x] === "#") d += `M${x} ${y}h1v1h-1z`; }
       svgsTrama.set(k, `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" shape-rendering="crispEdges"><path d="${d}" fill="${HEX6.test(fg) ? fg : "#000000"}"/></svg>`);
@@ -60,11 +66,11 @@
   }
   /** Degradado de Excel «desde el centro» (o desde una esquina): del rectángulo interior hacia cada orilla. */
   function svgDegradadoXl(g) {
-    const n = (x) => Math.max(0, Math.min(100, (+x || 0) * 100));
+    const n = (x) => Math.max(0, Math.min(100, num(x, 0) * 100));
     const L = n(g.l), R = Math.max(L, n(g.r)), T = n(g.t), B = Math.max(T, n(g.b));
     const pr = (Array.isArray(g.p) ? g.p : []).filter((q) => Array.isArray(q) && HEX6.test(q[1] || ""));
     if (!pr.length) return "";
-    const o = (q) => Math.max(0, Math.min(1, +q[0] || 0));
+    const o = (q) => Math.max(0, Math.min(1, num(q[0], 0)));
     const paradas = pr.map((q) => `<stop offset="${o(q)}" stop-color="${q[1]}"/>`).join("");
     const lg = (id, x1, y1, x2, y2) => `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${paradas}</linearGradient>`;
     // de lado a lado: hacia la izquierda desde L, el color interior entre L y R, hacia la derecha desde R (sin huecos
@@ -281,19 +287,19 @@
       // Modo Excel (libro importado de Excel): anchos y altos exactos de Excel, la fuente del libro, etc.
       const xl = () => (t && t.xl) || null;
       const ancho = (c) => {
-        const L = F().colLetra(c), aw = +(t && t["aw:" + L]);
+        const L = F().colLetra(c), aw = num(t && t["aw:" + L], 0);
         const X = xl();
         if (t && t["ow:" + L]) return 0;   // (oculta: a mano o por un grupo contraído)
         if (!X) return aw || ANCHO;
-        const ap = +t["ap:" + L];
+        const ap = num(t["ap:" + L], 0);
         if (ap && aw && Math.abs(aw - (ap + 5)) <= 2) return ap;   // el de Excel (nadie lo cambió aquí)
-        return aw || X.w0 || 64;
+        return aw || num(X.w0, 64) || 64;
       };
       const alto = (f) => {
-        const h = +(t && t["ah:" + (f + 1)]) || 0;
+        const h = num(t && t["ah:" + (f + 1)], 0);
         const X = xl();
         if (!X || h) return h;
-        return +t["ahx:" + (f + 1)] || X.h0 || 20;
+        return num(t["ahx:" + (f + 1)], 0) || num(X.h0, 20) || 20;
       };
 
       // ------------------------------------------------------------ 4.1 vista personal (filtro y orden)
@@ -313,14 +319,14 @@
       function pareceEncabezado() {
         if (!t) return false;
         let texto = 0, n = 0;
-        for (let c = 0; c < (t.cols || 10); c++) {
+        for (let c = 0; c < nCols(t); c++) {
           const v = crudo(c, 0);
           if (v === "" || String(v).startsWith("=")) continue;
           n++; if (isNaN(parseFloat(v))) texto++;
         }
         return n > 0 && texto === n;
       }
-      const conDatos = (f) => { for (let c = 0; c < (t.cols || 10); c++) if (crudo(c, f) !== "") return true; return false; };
+      const conDatos = (f) => { for (let c = 0; c < nCols(t); c++) if (crudo(c, f) !== "") return true; return false; };
       function pasa(v, filtro) {
         const txt = F().formatear(v);
         if (filtro.valores) return filtro.valores.includes(txt);
@@ -328,7 +334,7 @@
         return true;
       }
       function calcularVisibles(ev, minFilas) {
-        const n = t ? Math.max(t.filas || 30, minFilas || 0) : 0;
+        const n = t ? Math.min(MAX_FILAS, Math.max(nFilas(t), Math.floor(num(minFilas, 0)))) : 0;
         let todas = Array.from({ length: n }, (_, i) => i);
         todas = todas.filter((i) => !t["oh:" + (i + 1)]);   // filas ocultas (de Excel, o de un grupo contraído)
         const v = vistaActual();
@@ -351,8 +357,8 @@
       function pintarBanda() {
         const v = vistaActual();
         if (!v || !t) { bandaFiltro.hidden = true; return; }
-        const enc = v.encabezado ? 1 : 0, n = t.filas || 30;
-        const total = Array.from({ length: n - enc }, (_, i) => i + enc).filter(conDatos).length;
+        const enc = v.encabezado ? 1 : 0, n = nFilas(t);
+        const total = Array.from({ length: Math.max(0, n - enc) }, (_, i) => i + enc).filter(conDatos).length;
         const vistas2 = visibles.slice(enc).filter(conDatos).length;
         const propia = !!vistaPropia();
         const partes = [];
@@ -809,11 +815,11 @@
       // t.lo: [{ id, n (nombre), c1, f1, c2, f2, estilo, enc, tot, rayasF, rayasC, primeraC, ultimaC, filtro }]. El estilo se
       // pinta en vivo (capaLo) con la misma lógica que el importador de Excel (NOM.ooxml.tablaXl); lo propio de cada celda gana.
       const tablasLo = () => (t && Array.isArray(t.lo) ? t.lo : []);
-      let capaLo = {}, hayLo = false;
+      let capaLo = Object.create(null), hayLo = false;
       const vt = (k) => { const v = t[k]; return v != null && v !== "" && v !== false ? v : capaLo[k]; };
       const temaLibro = () => (t && t.xl && Array.isArray(t.xl.tema) ? t.xl.tema : null);
       function calcularCapaLo() {
-        capaLo = {};
+        capaLo = Object.create(null);
         const lista = tablasLo(), pvs = dinamicas();
         hayLo = !!(lista.length || pvs.length);
         if (!hayLo || !NOM.ooxml || !NOM.ooxml.tablaXl) return;
@@ -924,11 +930,13 @@
       /** La muestra de un estilo de tabla (5 columnas, encabezado y 4 filas), como en la galería de Excel. */
       function muestraLo(estilo, opc) {
         const lo = Object.assign({ c1: 0, f1: 0, c2: 4, f2: 4, estilo, enc: 1, tot: 0, rayasF: true }, opc || {}), capa = NOM.ooxml.tablaXl.pintar(lo, {}, temaLibro());
+        const LADO = { a: "top", b: "bottom", i: "left", d: "right" };
         let h = "";
         for (let f = 0; f <= 4; f++) for (let c = 0; c <= 4; c++) {
-          const ref = F().ref(c, f), st = [`background:${capa["r:" + ref] || "#FFFFFF"}`];
-          String(capa["bx:" + ref] || "").split(";").filter(Boolean).forEach((q) => { const [l, e, k] = q.split(":"); const lado = { a: "top", b: "bottom", i: "left", d: "right" }[l]; if (lado) st.push(`border-${lado}:${e === "medium" || e === "thick" || e === "double" ? 2 : 1}px solid ${k}`); });
-          h += `<i style="${st.join(";")}">${f === 0 || capa["n:" + ref] ? `<b style="background:${capa["k:" + ref] || "#000000"}"></b>` : `<b style="background:${capa["k:" + ref] || "#000000"};opacity:.45"></b>`}</i>`;
+          const ref = F().ref(c, f), st = [`background:${colorCss(capa["r:" + ref], "#FFFFFF")}`];
+          String(capa["bx:" + ref] || "").split(";").filter(Boolean).forEach((q) => { const [l, e, k] = q.split(":"); const lado = Object.hasOwn(LADO, l) ? LADO[l] : null, col = colorCss(k, ""); if (lado && col) st.push(`border-${lado}:${e === "medium" || e === "thick" || e === "double" ? 2 : 1}px solid ${col}`); });
+          const ck = colorCss(capa["k:" + ref], "#000000");
+          h += `<i style="${st.join(";")}">${f === 0 || capa["n:" + ref] ? `<b style="background:${ck}"></b>` : `<b style="background:${ck};opacity:.45"></b>`}</i>`;
         }
         return `<span class="lo-muestra" aria-hidden="true">${h}</span>`;
       }
@@ -1141,14 +1149,15 @@
       }
       /** El dibujo de un minigráfico en una celda de w×h px (SVG, como lo pinta Excel). */
       function svgMg(g, vals, w, h) {
-        const c = g.c || {}, serie = c.serie || "#376092";
+        const c = g.c || {}, serie = colorCss(c.serie, "#376092");
+        const cAlto = colorCss(c.alto, ""), cBajo = colorCss(c.bajo, ""), cPrim = colorCss(c.prim, ""), cUlt = colorCss(c.ult, ""), cNeg = colorCss(c.neg, ""), cMarc = colorCss(c.marc, "");
         if (g.vacias === "zero") vals = vals.map((v) => (v == null ? 0 : v));
         const nums = vals.filter((v) => v != null);
         if (!nums.length || w < 6 || h < 6) return "";
         const n = vals.length, min = Math.min(...nums), max = Math.max(...nums);
         const iMax = vals.indexOf(max), iMin = vals.indexOf(min), iPri = vals.findIndex((v) => v != null), iUlt = vals.length - 1 - [...vals].reverse().findIndex((v) => v != null);
         // el color de cada punto: el bajo, el alto, el primero, el último y los negativos se marcan si el grupo lo pide
-        const colorDe = (i, base) => (g.alto && i === iMax && c.alto ? c.alto : g.bajo && i === iMin && c.bajo ? c.bajo : g.prim && i === iPri && c.prim ? c.prim : g.ult && i === iUlt && c.ult ? c.ult : g.neg && vals[i] < 0 && c.neg ? c.neg : base);
+        const colorDe = (i, base) => (g.alto && i === iMax && cAlto ? cAlto : g.bajo && i === iMin && cBajo ? cBajo : g.prim && i === iPri && cPrim ? cPrim : g.ult && i === iUlt && cUlt ? cUlt : g.neg && vals[i] < 0 && cNeg ? cNeg : base);
         // (medido en Excel 2024: 1/8 del alto arriba y abajo, 3 px a los lados; cada punto o barra al centro de su espacio, las
         // barras del 70 % de él; la base, el cero si hay negativos y si no, el mínimo —una raya de 1 px—)
         const pX = 3, pY = Math.max(2, Math.round(h / 8)), slot = (w - 2 * pX) / n, Xc = (i) => pX + slot * (i + 0.5);
@@ -1159,13 +1168,13 @@
           let actual = [];
           vals.forEach((v, i) => { if (v == null) { if (g.vacias !== "span" && actual.length) { tramos.push(actual); actual = []; } return; } actual.push([Xc(i), Y(v)]); });
           if (actual.length) tramos.push(actual);
-          const sw = Math.max(0.5, ((+g.grosor || 0.75) * 96) / 72);
+          const sw = Math.max(0.5, ((num(g.grosor, 0.75) || 0.75) * 96) / 72);
           cuerpo += tramos.map((t2) => (t2.length === 1 ? "" : `<polyline points="${t2.map((q) => q[0].toFixed(2) + "," + q[1].toFixed(2)).join(" ")}" fill="none" stroke="${serie}" stroke-width="${sw.toFixed(2)}" stroke-linejoin="round" stroke-linecap="round"/>`)).join("");
           const r = Math.max(1.75, sw);
           vals.forEach((v, i) => {
             if (v == null) return;
             const k = colorDe(i, null);
-            if (g.marcas || k) cuerpo += `<circle cx="${Xc(i).toFixed(2)}" cy="${Y(v).toFixed(2)}" r="${r.toFixed(2)}" fill="${k || c.marc || serie}"/>`;
+            if (g.marcas || k) cuerpo += `<circle cx="${Xc(i).toFixed(2)}" cy="${Y(v).toFixed(2)}" r="${r.toFixed(2)}" fill="${k || cMarc || serie}"/>`;
           });
         } else {
           const ancho = Math.max(1, slot * 0.7), x0 = (i) => Xc(i) - ancho / 2;
@@ -1615,8 +1624,8 @@
       function ordenarDeVerdad(c, asc) {
         if (ed.soloLectura || !t) return;
         const ev = evaluar();
-        const enc = pareceEncabezado() ? 1 : 0, n = t.filas || 30, cols = t.cols || 10;
-        const filas = Array.from({ length: n - enc }, (_, i) => i + enc).filter(conDatos);
+        const enc = pareceEncabezado() ? 1 : 0, n = nFilas(t), cols = nCols(t);
+        const filas = Array.from({ length: Math.max(0, n - enc) }, (_, i) => i + enc).filter(conDatos);
         if (filas.some((f) => { for (let k = 0; k < cols; k++) if (String(crudo(k, f)).startsWith("=")) return true; return false; }))
           return aviso("Hay fórmulas en esas filas: usa el orden de la vista (no cambia las celdas) para no romperlas", { tipo: "aviso", ms: 5000 });
         const orden = filas.slice().sort((a, b) => { const x = ev.valor(c, a), y = ev.valor(c, b); return (F().esNum(x) && F().esNum(y) ? +x - +y : String(F().formatear(x)).localeCompare(String(F().formatear(y)), "es", { numeric: true })) * (asc ? 1 : -1); });
@@ -1634,7 +1643,7 @@
       function dialogoFiltro(c) {
         const ev = evaluar(), v = vistaActual() || {}, enc = v.encabezado != null ? v.encabezado : pareceEncabezado();
         const valores = new Map();
-        for (let f = enc ? 1 : 0; f < (t.filas || 30); f++) { if (!conDatos(f)) continue; const x = F().formatear(ev.valor(c, f)); valores.set(x, (valores.get(x) || 0) + 1); }
+        for (let f = enc ? 1 : 0; f < nFilas(t); f++) { if (!conDatos(f)) continue; const x = F().formatear(ev.valor(c, f)); valores.set(x, (valores.get(x) || 0) + 1); }
         const lista = [...valores.entries()].sort((a, b) => a[0].localeCompare(b[0], "es", { numeric: true })).slice(0, 300);
         const actual = (v.filtros || {})[c];
         const cuerpo = html(`<div class="col">
@@ -1749,19 +1758,19 @@
       // las diagonales: guiones como los de Excel, en píxeles de pantalla
       const BX_GUION = { hair: "1 1", dotted: "1 1", dashed: "3 1", dashDot: "3 1 1 1", dashDotDot: "3 1 1 1 1 1", mediumDashed: "6 2", mediumDashDot: "6 2 2 2", mediumDashDotDot: "6 2 2 2 2 2", slantDashDot: "6 2 2 2" };
       function svgDiagonal(u, w) {
-        const linea = (x, x1, y1, x2, y2) => (x ? `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${x[1]}" stroke-width="${x[0] === "double" ? 1 : BX_ANCHO[x[0]] || 1}"${BX_GUION[x[0]] ? ` stroke-dasharray="${BX_GUION[x[0]]}"` : ""}/>` : "");
+        const linea = (x, x1, y1, x2, y2) => (x ? `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${x[1]}" stroke-width="${x[0] === "double" ? 1 : (Object.hasOwn(BX_ANCHO, x[0]) ? BX_ANCHO[x[0]] : 1)}"${Object.hasOwn(BX_GUION, x[0]) ? ` stroke-dasharray="${BX_GUION[x[0]]}"` : ""}/>` : "");
         return `<svg xmlns="http://www.w3.org/2000/svg">${linea(u, "0", "100%", "100%", "0")}${linea(w, "0", "0", "100%", "100%")}</svg>`;
       }
       function ladosBx(ref) {
         const x = vt("bx:" + ref);
         if (!x) return null;
-        const o = {};
-        String(x).split(";").forEach((q) => { const [l, e, k] = q.split(":"); if (l && BX_ANCHO[e] && /^#[0-9A-Fa-f]{6}$/.test(k || "")) o[l] = [e, k]; });
+        const o = Object.create(null);
+        String(x).split(";").forEach((q) => { const [l, e, k] = q.split(":"); if (l && Object.hasOwn(BX_ANCHO, e) && /^#[0-9A-Fa-f]{6}$/.test(k || "")) o[l] = [e, k]; });
         return o;
       }
-      const pesoBx = (x) => (x ? BX_ANCHO[x[0]] * 10 + (x[0] === "double" ? 5 : 0) + (BX_CSS[x[0]] ? 0 : 1) : 0);
+      const pesoBx = (x) => (x ? (Object.hasOwn(BX_ANCHO, x[0]) ? BX_ANCHO[x[0]] : 0) * 10 + (x[0] === "double" ? 5 : 0) + (Object.hasOwn(BX_CSS, x[0]) ? 0 : 1) : 0);
       const mejorBx = (a, b) => (pesoBx(b) > pesoBx(a) ? b : a || b || null);
-      const cssBx1 = (x) => `1px ${x[0] === "double" ? "solid" : BX_CSS[x[0]] || "solid"} ${x[1]}`;
+      const cssBx1 = (x) => `1px ${x[0] === "double" ? "solid" : (Object.hasOwn(BX_CSS, x[0]) ? BX_CSS[x[0]] : "solid")} ${x[1]}`;
 
       // ------------------------------------------------------------ formato condicional de Excel (cfx, modo Excel)
       // Cada regla con la semántica de Excel: prioridad, «detener si es verdad», reglas de valor, texto, fórmula,
@@ -1769,7 +1778,7 @@
       function prepararCfx(ev) {
         const reglasX = Array.isArray(t.cfx) ? t.cfx.slice().sort((a, b) => (a.p || 0) - (b.p || 0)) : [];
         if (!reglasX.length) return null;
-        const maxF = t.filas || 30, maxC = t.cols || 10;
+        const maxF = nFilas(t), maxC = nCols(t);
         const prep = reglasX.map((rg) => {
           const rangos = (rg.r || []).map((x) => { const [a, b] = String(x).replace(/\$/g, "").split(":").map((q) => F().parseRef(q)); return a ? { c1: a.c, f1: a.f, c2: (b || a).c, f2: (b || a).f } : null; }).filter(Boolean);
           const o = { rg, rangos, c0: rangos[0] ? rangos[0].c1 : 0, f0: rangos[0] ? rangos[0].f1 : 0, cache: new Map() };
@@ -1899,8 +1908,9 @@
               }
               if (ok && rg.d) {
                 const d = rg.d;
-                if (d.f && !r.fondo) r.fondo = d.f;
-                if (d.k && !r.color) r.color = d.k;
+                const df = colorCss(d.f, ""), dk = colorCss(d.k, "");
+                if (df && !r.fondo) r.fondo = df;
+                if (dk && !r.color) r.color = dk;
                 if (d.b != null && r.negrita == null) r.negrita = !!d.b;
                 if (d.i != null && r.cursiva == null) r.cursiva = !!d.i;
                 if (d.u && r.subrayado == null) r.subrayado = true;
@@ -1976,7 +1986,7 @@
         const viejo = rej.querySelector(".xl-dibujos");
         if (viejo) viejo.remove();
         // (lo que trae el archivo de Excel y las imágenes puestas aquí, en su celda)
-        const lista = (Array.isArray(t.dib) ? t.dib : []).concat(imagenesHoja().map((b) => ({ tipo: "imagen", nom: b.id, alt: b.alt, src: b.src, a: { de: { c: +(b.de && b.de.c) || 0, f: +(b.de && b.de.f) || 0, dc: +b.dx || 0, df: +b.dy || 0 }, w: b.w, h: b.h } })));
+        const lista = (Array.isArray(t.dib) ? t.dib : []).concat(imagenesHoja().map((b) => ({ tipo: "imagen", nom: b.id, alt: b.alt, src: b.src, a: { de: { c: num(b.de && b.de.c, 0), f: num(b.de && b.de.f, 0), dc: num(b.dx, 0), df: num(b.dy, 0) }, w: num(b.w, 1) || 1, h: num(b.h, 1) || 1 } })));
         const tabla = rej.querySelector("table");
         if (!lista.length || !tabla) return;
         // dónde empieza cada columna y cada fila, tal como se dibujaron (las ocultas miden 0)
@@ -1984,20 +1994,22 @@
         const yFila = (f) => { const tr = tabla.querySelector(`tr[data-fila="${f}"]`); if (tr) return tr.offsetTop; const filas = [...tabla.querySelectorAll("tr[data-fila]")]; const sig = filas.find((x) => +x.dataset.fila > f); if (sig) return sig.offsetTop; const ult = filas[filas.length - 1]; return ult ? ult.offsetTop + ult.offsetHeight + (f - +ult.dataset.fila - 1) * 20 : 0; };
         const caja = (a) => {
           if (!a) return null;
-          if (a.abs) return { x: xCol(0) + a.abs.x, y: yFila(0) + a.abs.y, w: a.abs.w, h: a.abs.h };
-          const x = xCol(a.de.c) + a.de.dc, y = yFila(a.de.f) + a.de.df;
-          if (a.a) return { x, y, w: Math.max(1, xCol(a.a.c) + a.a.dc - x), h: Math.max(1, yFila(a.a.f) + a.a.df - y) };
-          return { x, y, w: a.w || 1, h: a.h || 1 };
+          if (a.abs) return { x: xCol(0) + num(a.abs.x, 0), y: yFila(0) + num(a.abs.y, 0), w: Math.max(0, num(a.abs.w, 0)), h: Math.max(0, num(a.abs.h, 0)) };
+          if (!a.de) return null;
+          const x = xCol(num(a.de.c, 0)) + num(a.de.dc, 0), y = yFila(num(a.de.f, 0)) + num(a.de.df, 0);
+          if (a.a) return { x, y, w: Math.max(1, xCol(num(a.a.c, 0)) + num(a.a.dc, 0) - x), h: Math.max(1, yFila(num(a.a.f, 0)) + num(a.a.df, 0) - y) };
+          return { x, y, w: Math.max(0, num(a.w, 1) || 1), h: Math.max(0, num(a.h, 1) || 1) };
         };
         const grupos = [];
-        const fam = (n) => (NOM.textoRico ? NOM.textoRico.cssFuente(n) : n);
+        const fam = (n) => (NOM.textoRico ? NOM.textoRico.cssFuente(n) : String(n || "").replace(/['";{}<>\\]/g, "").trim());
+        const AL_DIB = { ctr: "center", r: "right", just: "justify" };
         const piezas = lista.map((d, i) => {
           let r;
           if (d.tipo === "grupo-ini") {
             if (d.a && d.a.grupo != null) {
               // grupo dentro de grupo: su caja en el espacio del de afuera, y su propio espacio para sus hijos
               const g = grupos[d.a.grupo], c2 = d.a.caja;
-              grupos[i] = g && c2 ? Object.assign({ x: g.x + ((c2.x - g.chx) / g.cx) * g.w, y: g.y + ((c2.y - g.chy) / g.cy) * g.h, w: (c2.w / g.cx) * g.w, h: (c2.h / g.cy) * g.h }, d.sub, { giro: (d.sub.giro || 0) + (g.giro || 0) }) : null;
+              grupos[i] = g && c2 ? Object.assign({ x: g.x + ((num(c2.x, 0) - num(g.chx, 0)) / (num(g.cx, 1) || 1)) * g.w, y: g.y + ((num(c2.y, 0) - num(g.chy, 0)) / (num(g.cy, 1) || 1)) * g.h, w: (num(c2.w, 0) / (num(g.cx, 1) || 1)) * g.w, h: (num(c2.h, 0) / (num(g.cy, 1) || 1)) * g.h }, d.sub, { giro: num(d.sub && d.sub.giro, 0) + num(g.giro, 0) }) : null;
               return "";
             }
             r = caja(d.a); grupos[i] = r && Object.assign({}, r, d.sub); return "";
@@ -2007,21 +2019,26 @@
             const g = grupos[d.a.grupo], c2 = d.a.caja;
             if (!g || !c2) return "";
             // (un SmartArt de Excel: sus formas en EMU a escala 1:1 desde la esquina del marco)
-            r = g.emu && !(g.cx > 0) ? { x: g.x + c2.x / 9525, y: g.y + c2.y / 9525, w: c2.w / 9525, h: c2.h / 9525 } : { x: g.x + ((c2.x - g.chx) / g.cx) * g.w, y: g.y + ((c2.y - g.chy) / g.cy) * g.h, w: (c2.w / g.cx) * g.w, h: (c2.h / g.cy) * g.h };
-            if (g.giro) {
+            r = g.emu && !(num(g.cx, 0) > 0) ? { x: g.x + num(c2.x, 0) / 9525, y: g.y + num(c2.y, 0) / 9525, w: num(c2.w, 0) / 9525, h: num(c2.h, 0) / 9525 } : { x: g.x + ((num(c2.x, 0) - num(g.chx, 0)) / (num(g.cx, 1) || 1)) * g.w, y: g.y + ((num(c2.y, 0) - num(g.chy, 0)) / (num(g.cy, 1) || 1)) * g.h, w: (num(c2.w, 0) / (num(g.cx, 1) || 1)) * g.w, h: (num(c2.h, 0) / (num(g.cy, 1) || 1)) * g.h };
+            const gg = num(g.giro, 0);
+            if (gg) {
               // el centro del hijo gira con el grupo alrededor del centro del grupo
-              const a2 = (g.giro * Math.PI) / 180, gx = g.x + g.w / 2, gy = g.y + g.h / 2, cx = r.x + r.w / 2 - gx, cy = r.y + r.h / 2 - gy;
+              const a2 = (gg * Math.PI) / 180, gx = g.x + g.w / 2, gy = g.y + g.h / 2, cx = r.x + r.w / 2 - gx, cy = r.y + r.h / 2 - gy;
               r.x = gx + cx * Math.cos(a2) - cy * Math.sin(a2) - r.w / 2; r.y = gy + cx * Math.sin(a2) + cy * Math.cos(a2) - r.h / 2;
-              giroG = g.giro;
+              giroG = gg;
             }
           } else r = caja(d.a);
           if (!r) return "";
-          const giro = (+d.giro || 0) + giroG;
+          r = { x: num(r.x, 0), y: num(r.y, 0), w: Math.max(0, num(r.w, 0)), h: Math.max(0, num(r.h, 0)) };
+          const giro = num(d.giro, 0) + giroG;
           const tr = giro || d.vH || d.vV ? `transform:rotate(${giro}deg) scale(${d.vH ? -1 : 1},${d.vV ? -1 : 1});` : "";
           const st = `left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px;${tr}`;
           if (d.tipo === "imagen") {
-            const rc = d.recorte || [0, 0, 0, 0], kw = 1 / Math.max(0.01, 1 - rc[0] - rc[2]), kh = 1 / Math.max(0.01, 1 - rc[1] - rc[3]);
-            const bordeI = d.linea && d.linea.c ? `outline:${Math.max(0.5, (d.linea.w || 0.75) * (96 / 72))}px solid ${esc(d.linea.c)};outline-offset:-${Math.max(0.25, ((d.linea.w || 0.75) * (96 / 72)) / 2)}px;` : "";
+            if (!srcImgOk(d.src)) return "";
+            const rc0 = Array.isArray(d.recorte) ? d.recorte : [0, 0, 0, 0], rc = [num(rc0[0], 0), num(rc0[1], 0), num(rc0[2], 0), num(rc0[3], 0)];
+            const kw = 1 / Math.max(0.01, 1 - rc[0] - rc[2]), kh = 1 / Math.max(0.01, 1 - rc[1] - rc[3]);
+            const lc = d.linea ? colorCss(d.linea.c, "") : "", lw = d.linea ? (num(d.linea.w, 0.75) || 0.75) : 0.75;
+            const bordeI = lc ? `outline:${Math.max(0.5, lw * (96 / 72))}px solid ${lc};outline-offset:-${Math.max(0.25, (lw * (96 / 72)) / 2)}px;` : "";
             return `<div class="xl-dib${d.nom ? " nom-img" : ""}"${d.nom ? ` data-img="${esc(d.nom)}" role="img" aria-label="${esc(d.alt || "Imagen")}"` : ""} style="${st}overflow:hidden;${bordeI}"><img src="${esc(NOM.srcBin ? NOM.srcBin(d.src) : d.src)}" alt="" style="position:absolute;left:${-rc[0] * kw * 100}%;top:${-rc[1] * kh * 100}%;width:${kw * 100}%;height:${kh * 100}%;max-width:none"></div>`;
           }
           if (d.tipo === "grafica" && NOM.graficaOffice) {
@@ -2053,12 +2070,16 @@
           if (d.tipo === "forma" || d.tipo === "linea") {
             const tz = NOM.geomOffice ? NOM.geomOffice.trazos(d.prst || "rect", Math.max(0.01, r.w), Math.max(0.01, r.h), d.av || null) : null;
             const rt = NOM.geomOffice && d.texto ? NOM.geomOffice.rectTexto(d.prst || "rect", Math.max(0.01, r.w), Math.max(0.01, r.h), d.av || null) : { l: 0, t: 0, r: r.w, b: r.h };
-            const ins = Array.isArray(d.ins) ? d.ins : [9.6, 4.8, 9.6, 4.8], le = d.letra || {};
-            const efectos = (le.contorno ? `-webkit-text-stroke:${Math.max(0.5, le.contorno.w * (96 / 72) * 0.6)}px ${esc(le.contorno.c)};paint-order:stroke fill;` : "") + (le.sombra ? `text-shadow:${(Math.cos((le.sombra.ang * Math.PI) / 180) * le.sombra.d * 96 / 72).toFixed(1)}px ${(Math.sin((le.sombra.ang * Math.PI) / 180) * le.sombra.d * 96 / 72).toFixed(1)}px ${(le.sombra.b * 96 / 72).toFixed(1)}px ${esc(le.sombra.c)};` : "") + (le.f ? `font-family:${esc(fam(le.f))};` : "") + (le.i ? "font-style:italic;" : "");
-            const ln = d.linea && !d.linea.no ? d.linea : null, rel = d.relleno && d.relleno !== "none" ? d.relleno : null;
-            const trazos = (tz || [{ d: `M0,0H${r.w}V${r.h}H0Z`, relleno: "norm", contorno: true }]).map((z2) => `<path d="${z2.d}" fill="${z2.relleno === "none" || !rel || d.tipo === "linea" ? "none" : esc(rel)}" stroke="${ln && z2.contorno !== false ? esc(ln.c) : "none"}" stroke-width="${ln ? ln.w * (96 / 72) : 0}"${ln && ln.guion ? ` stroke-dasharray="${ln.w * 4} ${ln.w * 3}"` : ""}/>`).join("");
-            const caja2 = `left:${rt.l}px;top:${rt.t}px;width:${Math.max(1, rt.r - rt.l)}px;height:${Math.max(1, rt.b - rt.t)}px;padding:${ins[1]}px ${ins[2]}px ${ins[3]}px ${ins[0]}px;`;
-            const txt = d.texto ? `<div class="xl-dib-txt" style="${caja2}justify-content:${d.ancla === "ctr" ? "center" : d.ancla === "b" ? "flex-end" : "flex-start"};font-size:${le.tam || 11}pt;color:${esc(le.c || "#000")};${le.b ? "font-weight:700;" : ""}${efectos}${d.ajusta === false ? "white-space:pre;" : ""}">${d.texto.map((p2) => `<div style="text-align:${{ ctr: "center", r: "right", just: "justify" }[p2.al] || "left"}">${esc(p2.t) || "&nbsp;"}</div>`).join("")}</div>` : "";
+            const ins0 = Array.isArray(d.ins) ? d.ins : [9.6, 4.8, 9.6, 4.8], ins = [num(ins0[0], 9.6), num(ins0[1], 4.8), num(ins0[2], 9.6), num(ins0[3], 4.8)], le = d.letra || {};
+            const ctC = le.contorno ? colorCss(le.contorno.c, "") : "", smC = le.sombra ? colorCss(le.sombra.c, "") : "";
+            const smAng = le.sombra ? num(le.sombra.ang, 0) : 0, smD = le.sombra ? num(le.sombra.d, 0) : 0, smB = le.sombra ? num(le.sombra.b, 0) : 0;
+            const efectos = (ctC ? `-webkit-text-stroke:${Math.max(0.5, num(le.contorno.w, 0.75) * (96 / 72) * 0.6)}px ${ctC};paint-order:stroke fill;` : "") + (smC ? `text-shadow:${(Math.cos((smAng * Math.PI) / 180) * smD * 96 / 72).toFixed(1)}px ${(Math.sin((smAng * Math.PI) / 180) * smD * 96 / 72).toFixed(1)}px ${(smB * 96 / 72).toFixed(1)}px ${smC};` : "") + (le.f ? `font-family:${esc(fam(le.f))};` : "") + (le.i ? "font-style:italic;" : "");
+            const ln = d.linea && !d.linea.no ? d.linea : null, lnC = ln ? colorCss(ln.c, "") : "", lnW = ln ? Math.max(0, num(ln.w, 0)) : 0;
+            const rel = d.relleno && d.relleno !== "none" ? colorCss(d.relleno, "") : null;
+            const trazos = (tz || [{ d: `M0,0H${r.w}V${r.h}H0Z`, relleno: "norm", contorno: true }]).map((z2) => `<path d="${esc(z2.d)}" fill="${z2.relleno === "none" || !rel || d.tipo === "linea" ? "none" : rel}" stroke="${lnC && z2.contorno !== false ? lnC : "none"}" stroke-width="${lnC ? lnW * (96 / 72) : 0}"${lnC && ln.guion ? ` stroke-dasharray="${lnW * 4} ${lnW * 3}"` : ""}/>`).join("");
+            const rtl = num(rt.l, 0), rtt = num(rt.t, 0), rtr = num(rt.r, r.w), rtb = num(rt.b, r.h);
+            const caja2 = `left:${rtl}px;top:${rtt}px;width:${Math.max(1, rtr - rtl)}px;height:${Math.max(1, rtb - rtt)}px;padding:${ins[1]}px ${ins[2]}px ${ins[3]}px ${ins[0]}px;`;
+            const txt = Array.isArray(d.texto) ? `<div class="xl-dib-txt" style="${caja2}justify-content:${d.ancla === "ctr" ? "center" : d.ancla === "b" ? "flex-end" : "flex-start"};font-size:${num(le.tam, 11) || 11}pt;color:${colorCss(le.c, "#000")};${le.b ? "font-weight:700;" : ""}${efectos}${d.ajusta === false ? "white-space:pre;" : ""}">${d.texto.map((p2) => `<div style="text-align:${Object.hasOwn(AL_DIB, p2.al) ? AL_DIB[p2.al] : "left"}">${esc(p2.t) || "&nbsp;"}</div>`).join("")}</div>` : "";
             return `<div class="xl-dib" style="${st}"><svg width="${r.w}" height="${r.h}" style="position:absolute;inset:0;overflow:visible">${trazos}</svg>${txt}</div>`;
           }
           return "";
@@ -2085,21 +2106,21 @@
       function aspectoBase(c, f, ev, conds, cfx) {
         const ref = F().ref(c, f), v = ev.valor(c, f), fmt = t["f:" + ref];
         const st = [];
-        let color = vt("k:" + ref) || "", fondo = vt("r:" + ref) || "", negrita = !!vt("n:" + ref);
-        if (capaLo["sgp:" + ref]) st.push(`padding-left:${2 + 9 * capaLo["sgp:" + ref]}px`);   // (los elementos de adentro de una tabla dinámica, como Excel)
-        for (const rg of conds) if (dentro(rg.r, c, f) && cumple(rg, v)) { if (rg.color) color = rg.color; if (rg.fondo) fondo = rg.fondo; if (rg.negrita) negrita = true; break; }
+        let color = colorCss(vt("k:" + ref), ""), fondo = colorCss(vt("r:" + ref), ""), negrita = !!vt("n:" + ref);
+        if (capaLo["sgp:" + ref]) st.push(`padding-left:${2 + 9 * num(capaLo["sgp:" + ref], 0)}px`);   // (los elementos de adentro de una tabla dinámica, como Excel)
+        for (const rg of conds) if (dentro(rg.r, c, f) && cumple(rg, v)) { const rc = colorCss(rg.color, ""), rf = colorCss(rg.fondo, ""); if (rc) color = rc; if (rf) fondo = rf; if (rg.negrita) negrita = true; break; }
         // formato condicional de Excel: gana sobre el formato propio de la celda (como en Excel)
         const cx = cfx ? cfx.de(c, f) : null, capas = [], tams = [], pos = [];
         if (cx) {
-          if (cx.fondo) fondo = cx.fondo;
-          if (cx.color) color = cx.color;
+          if (cx.fondo) fondo = colorCss(cx.fondo, fondo);
+          if (cx.color) color = colorCss(cx.color, color);
           if (cx.negrita != null) negrita = cx.negrita;
           if (cx.cursiva) st.push("font-style:italic");
           if (cx.subrayado || cx.tachado) st.push("text-decoration-line:" + [cx.subrayado ? "underline" : "", cx.tachado ? "line-through" : ""].filter(Boolean).join(" "));
           if (cx.icono) { capas.push(urlSvg(svgIcono(cx.icono.set, cx.icono.i, cx.icono.n))); tams.push("16px 16px"); pos.push("2px 50%"); }
           if (cx.barra) {
             // barra de datos: de 2 px a la izquierda, con su largo entre el mínimo y el máximo de Excel (en % del ancho)
-            const b = cx.barra, lmin = (b.min || 0) / 100, lmax = (b.max == null ? 100 : b.max) / 100;
+            const b = cx.barra, lmin = num(b.min, 0) / 100, lmax = (b.max == null ? 100 : num(b.max, 100)) / 100;
             const largo = b.conEje ? Math.abs(b.x) / (b.hi - b.lo) : lmin + (lmax - lmin) * b.k;
             const ini = b.conEje ? (b.x < 0 ? b.eje - largo : b.eje) : 0;
             const col = /^#[0-9A-F]{6}$/i.test(b.c || "") ? b.c : "#638EC6";
@@ -2114,20 +2135,20 @@
         // bordes en diagonal de Excel (sobre el relleno; en una combinada, de esquina a esquina de toda ella)
         const yoBx = xl() ? ladosBx(ref) : null;
         if (yoBx && (yoBx.u || yoBx.w)) { capas.push(urlSvg(svgDiagonal(yoBx.u, yoBx.w))); tams.push("100% 100%"); pos.push("0 0"); }
-        const rx = xl() && fondo === (t["r:" + ref] || "") ? t["rx:" + ref] : null;
+        const rx = xl() && fondo === colorCss(t["r:" + ref], "") ? t["rx:" + ref] : null;
         let mosaico = false;
-        if (rx && rx.t && TRAMAS_XL[rx.t]) { capas.push(urlSvg(svgTrama(rx.t, rx.fg))); tams.push("8px 8px"); pos.push(`${-(faseX % 8)}px ${-(faseY % 8)}px`); mosaico = true; }
+        if (rx && rx.t && Object.hasOwn(TRAMAS_XL, rx.t)) { capas.push(urlSvg(svgTrama(rx.t, rx.fg))); tams.push("8px 8px"); pos.push(`${-(faseX % 8)}px ${-(faseY % 8)}px`); mosaico = true; }
         else if (rx && rx.g === "lin" && Array.isArray(rx.p) && rx.p.length && rx.p.every((q) => Array.isArray(q) && HEX6.test(q[1] || ""))) {
-          capas.push(`linear-gradient(${((+rx.deg || 0) + 90) % 360}deg, ${rx.p.map((q) => `${q[1]} ${(Math.max(0, Math.min(1, +q[0] || 0)) * 100).toFixed(1)}%`).join(", ")})`); tams.push("100% 100%"); pos.push("0 0");
+          capas.push(`linear-gradient(${((num(rx.deg, 0) + 90) % 360)}deg, ${rx.p.map((q) => `${q[1]} ${(Math.max(0, Math.min(1, num(q[0], 0))) * 100).toFixed(1)}%`).join(", ")})`); tams.push("100% 100%"); pos.push("0 0");
         } else if (rx && rx.g === "path") { const sv = svgDegradadoXl(rx); if (sv) { capas.push(urlSvg(sv)); tams.push("100% 100%"); pos.push("0 0"); } }
         if (capas.length) st.push(`background-image:${capas.join(",")};background-size:${tams.join(",")};background-position:${pos.join(",")};background-repeat:${capas.map((_, i) => (mosaico && i === capas.length - 1 ? "repeat" : "no-repeat")).join(",")}`);
         if (color) st.push("color:" + color);
         if (fondo) st.push("background-color:" + fondo);
         const al = t["al:" + ref];
-        if (al && ALIN[al]) st.push("text-align:" + ALIN[al]);
+        if (al && Object.hasOwn(ALIN, al)) st.push("text-align:" + ALIN[al]);
         if (t["aj:" + ref]) st.push("white-space:normal;word-break:break-word;line-height:1.25;text-overflow:clip");
-        const tl = +t["tl:" + ref];
-        if (tl) st.push("font-size:" + tl + "pt");
+        const tl = num(t["tl:" + ref], 0);
+        if (tl > 0) st.push("font-size:" + tl + "pt");
         const tf = t["tf:" + ref];
         if (tf && NOM.textoRico) st.push("font-family:" + NOM.textoRico.cssFuente(tf));
         const bd = String(t["bd:" + ref] || "");
@@ -2165,29 +2186,31 @@
         if (X && F().formatoXL) {
           // Como Excel: el color que pide el formato ([Rojo]…), el relleno «*» (contabilidad) y la letra exacta
           let r; try { r = F().formatoXL(v, fmt); } catch (e) { r = { t: F().aplicarFormato(v, fmt) }; }
-          if (r.color) st.push("color:" + r.color);
-          const tp = +t["tp:" + ref], tlv = +t["tl:" + ref];
-          if (tp && (!tlv || Math.abs(tlv - Math.round((tp / 1.0476) * 2) / 2) < 0.01)) st.push("font-size:" + tp + "pt");
-          else if (tlv) st.push("font-size:" + Math.round(tlv * 1.0476 * 2) / 2 + "pt");
+          const fc = colorCss(r.color, "");
+          if (fc) st.push("color:" + fc);
+          const tp = num(t["tp:" + ref], 0), tlv = num(t["tl:" + ref], 0);
+          if (tp > 0 && (!tlv || Math.abs(tlv - Math.round((tp / 1.0476) * 2) / 2) < 0.01)) st.push("font-size:" + tp + "pt");
+          else if (tlv > 0) st.push("font-size:" + Math.round(tlv * 1.0476 * 2) / 2 + "pt");
           const esN = F().esNum(v) && !String(cr).startsWith("'") && fmt !== "@", esB = typeof v === "boolean", esE = v instanceof F().ErrorF;
           // La alineación de Excel (ax:): rellenar, justificar, distribuido, centrar en la selección, vertical, giro,
           // sangría y reducir hasta ajustar. «General»: número a la derecha, lógico o error al centro, texto a la izquierda.
           const ax = t["ax:" + ref] || null, hx = ax && ax.h;
-          let alH = al && ALIN[al] ? ALIN[al] : esN ? "right" : esB || esE ? "center" : "left";
+          let alH = al && Object.hasOwn(ALIN, al) ? ALIN[al] : esN ? "right" : esB || esE ? "center" : "left";
           if (hx === "justify") alH = "justify";
           else if (hx === "distributed" || hx === "centerContinuous") alH = "center";
-          else if (ax && ax.r && !al && !esN) alH = ax.r === 90 ? "right" : ax.r === 255 ? "center" : "left";   // girado: como Excel
+          else if (ax && ax.r && !al && !esN) alH = num(ax.r, 0) === 90 ? "right" : num(ax.r, 0) === 255 ? "center" : "left";   // girado: como Excel
           if (!al || hx || (ax && ax.r)) st.push("text-align:" + alH);
           if (hx === "distributed" && /\s/.test(String(r.t || "").trim())) st.push("text-align:justify;text-align-last:justify");
-          const va = ax && ax.v ? { top: "t", center: "m", justify: "j", distributed: "d" }[ax.v] || "b" : "b";
+          const VA = { top: "t", center: "m", justify: "j", distributed: "d" };
+          const va = ax && Object.hasOwn(VA, ax.v) ? VA[ax.v] : "b";
           if (va !== "b") st.push("vertical-align:" + (va === "m" || va === "d" ? "middle" : "top"));
           // sangría: 9 px por nivel, del lado de la alineación (de los dos lados en «distribuido»)
-          const sangria = ax && ax.i ? ax.i * 9 : 0;
+          const sangria = ax && ax.i ? Math.max(0, num(ax.i, 0)) * 9 : 0;
           if (sangria && (alH === "right" || hx === "distributed")) st.push(`padding-right:${2 + sangria}px`);
           if (sangria && alH !== "right") st.push(`padding-left:${2 + sangria}px`);
           // justificar y distribuido (en horizontal o en vertical) ajustan el texto, aunque la celda no lo pida
           const ajusta = !!t["aj:" + ref] || hx === "justify" || hx === "distributed" || va === "j" || va === "d";
-          if (ajusta) st.push("line-height:" + ((+X.h0 || 20) / ((+X.tam || 11) * 4 / 3)).toFixed(4));
+          if (ajusta) st.push("line-height:" + ((num(X.h0, 20) || 20) / ((num(X.tam, 11) || 11) * 4 / 3)).toFixed(4));
           return { v, txt: cx && cx.ocultar ? "" : r.t, relleno: r.relleno, gato: r.gato && !(cx && cx.ocultar), st: st.join(";"), negrita, num: esN, err: esE, formula: cr.startsWith("=") ? cr : "", ajusta, ax, alH, va, sangria };
         }
         return { v, txt: F().aplicarFormato(v, fmt), st: st.join(";"), negrita, num: F().esNum(v), err: v instanceof F().ErrorF, formula: cr.startsWith("=") ? cr : "" };
@@ -2212,8 +2235,8 @@
       // ------------------------------------------------------------ esquema (Datos → Agrupar), como Excel
       // Cada fila (ol:n) y columna (olc:LETRA) agrupada lleva su nivel (1 a 7); la de resumen va abajo o a la derecha del
       // grupo y lleva el botón para contraerlo (+/−); contraer oculta las filas (oh:) o columnas (ow:) del grupo.
-      const nivelF = (f) => +(t && t["ol:" + (f + 1)]) || 0;
-      const nivelC = (c) => +(t && t["olc:" + F().colLetra(c)]) || 0;
+      const nivelF = (f) => Math.max(0, Math.min(7, Math.floor(num(t && t["ol:" + (f + 1)], 0))));
+      const nivelC = (c) => Math.max(0, Math.min(7, Math.floor(num(t && t["olc:" + F().colLetra(c)], 0))));
       const ocultaF = (f) => !!(t && t["oh:" + (f + 1)]);
       const ocultaC = (c) => !!(t && t["ow:" + F().colLetra(c)]);
       const resumenF = (f) => { const a = f > 0 ? nivelF(f - 1) : 0; return a > nivelF(f) ? a : 0; };
@@ -2242,13 +2265,13 @@
         cambiarT(campos);
       }
       /** Filas o columnas, según lo elegido: columnas si se eligieron columnas enteras (como Excel). */
-      const ejeElegido = () => { const r = rango(); return r.f1 === 0 && r.f2 >= (t.filas || 30) - 1 && !(r.c1 === 0 && r.c2 >= (t.cols || 10) - 1) ? "c" : "f"; };
+      const ejeElegido = () => { const r = rango(); return r.f1 === 0 && r.f2 >= nFilas(t) - 1 && !(r.c1 === 0 && r.c2 >= nCols(t) - 1) ? "c" : "f"; };
       /** Ver hasta el nivel k (los botones 1, 2, 3…): se ven las filas o columnas de nivel menor que k. */
       function mostrarNivel(eje, k) {
         if (!t) return;
         const campos = {};
-        if (eje === "f") for (let f = 0; f < (t.filas || 30); f++) { const n = nivelF(f); if (n) campos["oh:" + (f + 1)] = n >= k ? true : null; }
-        else for (let c = 0; c < (t.cols || 10); c++) { const n = nivelC(c); if (n) campos["ow:" + F().colLetra(c)] = n >= k ? true : null; }
+        if (eje === "f") for (let f = 0; f < nFilas(t); f++) { const n = nivelF(f); if (n) campos["oh:" + (f + 1)] = n >= k ? true : null; }
+        else for (let c = 0; c < nCols(t); c++) { const n = nivelC(c); if (n) campos["ow:" + F().colLetra(c)] = n >= k ? true : null; }
         cambiarT(campos, { origen: "esquema" });
       }
       /** Ocultar o mostrar el detalle del grupo donde está la celda elegida (Datos → Ocultar detalle). */
@@ -2256,7 +2279,7 @@
         if (!t) return;
         const eje = nivelF(sel.f) ? "f" : nivelC(sel.c) ? "c" : null;
         if (!eje) return aviso("La celda no está dentro de un grupo", { tipo: "aviso" });
-        const nivel = eje === "f" ? nivelF : nivelC, i = eje === "f" ? sel.f : sel.c, n = nivel(i), lim = eje === "f" ? t.filas || 30 : t.cols || 10;
+        const nivel = eje === "f" ? nivelF : nivelC, i = eje === "f" ? sel.f : sel.c, n = nivel(i), lim = eje === "f" ? nFilas(t) : nCols(t);
         let a = i, b = i;
         while (a > 0 && nivel(a - 1) >= n) a--;
         while (b + 1 < lim && nivel(b + 1) >= n) b++;
@@ -2280,7 +2303,7 @@
         const b = $("[data-esquema]", raiz);
         if (!b || !t) return;
         let mf = 0, mc = 0;
-        for (const k of Object.keys(t)) { if (k.startsWith("ol:")) mf = Math.max(mf, +t[k] || 0); else if (k.startsWith("olc:")) mc = Math.max(mc, +t[k] || 0); }
+        for (const k of Object.keys(t)) { if (k.startsWith("ol:")) mf = Math.min(7, Math.max(mf, Math.floor(num(t[k], 0)))); else if (k.startsWith("olc:")) mc = Math.min(7, Math.max(mc, Math.floor(num(t[k], 0)))); }
         b.hidden = !mf && !mc;
         if (b.hidden) { b.innerHTML = ""; return; }
         const botones = (eje, m) => Array.from({ length: m + 1 }, (_, i) => `<button type="button" class="btn chico" data-nivel-${eje}="${i + 1}" aria-label="Ver hasta el nivel ${i + 1}">${i + 1}</button>`).join("");
@@ -2299,7 +2322,7 @@
         pintarEsquema();
         // lo que derraman las fórmulas de matrices también se ve aunque pase del tamaño de la hoja
         const ext = extensionDerrames(ev);
-        const cols = Math.max(t.cols || 10, ext.cols);
+        const cols = Math.min(MAX_COLS, Math.max(nCols(t), Math.floor(num(ext.cols, 0))));
         const r = rango();
         visibles = calcularVisibles(ev, ext.filas);
         const v = vistaActual() || {};
@@ -2310,7 +2333,7 @@
         const cfx = X ? prepararCfx(ev) : null;
         // (en modo Excel la tabla mide justo la suma de sus columnas: si se estira, reparte el sobrante y ninguna mide lo de Excel)
         const anchoTotal = X ? 46 + Array.from({ length: cols }, (_, c) => ancho(c)).reduce((a, b) => a + b, 0) : 0;
-        const estXl = X ? ` class="xl${X.rejilla ? "" : " sin-rejilla"}" style="width:${anchoTotal}px;--xl-fuente:${esc(NOM.textoRico ? NOM.textoRico.cssFuente(X.fuente) : X.fuente)};--xl-tam:${+X.tam || 11}pt"${X.rtl ? ' dir="rtl"' : ""}` : "";
+        const estXl = X ? ` class="xl${X.rejilla ? "" : " sin-rejilla"}" style="width:${anchoTotal}px;--xl-fuente:${esc(NOM.textoRico ? NOM.textoRico.cssFuente(X.fuente) : String(X.fuente || "").replace(/['";{}<>\\]/g, ""))};--xl-tam:${num(X.tam, 11) || 11}pt"${X.rtl ? ' dir="rtl"' : ""}` : "";
         let h = `<table${estXl}><colgroup><col style="width:46px">${Array.from({ length: cols }, (_, c) => `<col style="width:${ancho(c)}px">`).join("")}</colgroup>
           <thead><tr><th data-todo title="Elegir todo"></th>${Array.from({ length: cols }, (_, c) => `<th data-col="${c}" class="${c >= r.c1 && c <= r.c2 ? "activa" : ""}${v.orden && v.orden.c === c ? " ordenada" : ""}${(v.filtros || {})[c] ? " filtrada" : ""}${esqClaseC(c)}">${F().colLetra(c)}${esqBotonC(c)}${ed.soloLectura ? "" : `<span class="redim-c" data-redim-c="${c}" aria-hidden="true"></span>`}</th>`).join("")}</tr></thead><tbody>`;
         const x0s = []; { let x = 0; for (let c = 0; c < cols; c++) { x0s.push(x); x += ancho(c); } }
@@ -2334,12 +2357,12 @@
               // relleno «*» (contabilidad): lo de la izquierda pegado a la izquierda y el número a la derecha
               if (a.relleno != null && a.txt.includes("\u0000")) { const [iz, de] = a.txt.split("\u0000"); contenido = `<span class="xl-rell"><span>${esc(iz)}</span><span>${esc(de)}</span></span>`; }
 
-              const ax = a.ax, hx = ax && ax.h;
-              if (ax && ax.r && a.txt && !a.gato) {
+              const ax = a.ax, hx = ax && ax.h, rGiro = ax ? num(ax.r, 0) : 0;
+              if (rGiro && a.txt && !a.gato) {
                 // texto girado (de 1 a 90: hacia arriba; de 91 a 180: hacia abajo) o apilado (255), como Excel;
                 // la caja del girado se mide después de pintar (ajustarComoExcel)
-                contenido = ax.r === 255 ? `<span class="xl-apilado">${[...a.txt].map((ch) => (ch === " " ? "&nbsp;" : esc(ch))).join("<br>")}</span>`
-                  : `<span class="xl-giro" data-giro="${ax.r <= 90 ? -ax.r : ax.r - 90}"><span>${contenido}</span></span>`;
+                contenido = rGiro === 255 ? `<span class="xl-apilado">${[...a.txt].map((ch) => (ch === " " ? "&nbsp;" : esc(ch))).join("<br>")}</span>`
+                  : `<span class="xl-giro" data-giro="${rGiro <= 90 ? -rGiro : rGiro - 90}"><span>${contenido}</span></span>`;
               } else if ((hx === "fill" || (ax && ax.s)) && a.txt && !a.gato && a.relleno == null) {
                 // «rellenar» repite el texto hasta llenar la celda; «reducir hasta ajustar» achica la letra hasta que cabe
                 extra += hx === "fill" ? " xl-llenar" : " xl-reducir";
@@ -2400,7 +2423,7 @@
         const cr = String((tb && tb["c:" + F().ref(c, f)]) || "");
         const aqui = [], otras = [];
         if (!cr.startsWith("=")) return { aqui, otras };
-        const filas = tb.filas || 30, cols = tb.cols || 10, propia = normalH(F().nombreDeHoja(doc(), tb));
+        const filas = nFilas(tb), cols = nCols(tb), propia = normalH(F().nombreDeHoja(doc(), tb));
         const agregar = (r) => {
           let c1, f1, c2, f2;
           if (r.tipo === "col") { c1 = r.a.c; c2 = r.b.c; f1 = 0; f2 = filas - 1; }
@@ -3409,7 +3432,7 @@
         if (!t) return;
         const ev = evaluar();
         let max = 40;
-        for (let f = 0; f < (t.filas || 30); f++) {
+        for (let f = 0; f < nFilas(t); f++) {
           const ref = F().ref(c, f);
           if (!crudo(c, f) || t["m:" + ref]) continue;
           const tl = +t["tl:" + ref] || 10.5;
@@ -3730,7 +3753,7 @@
         const r0 = textoRango(rango().c1 === rango().c2 && rango().f1 === rango().f2 ? (regionDe(sel.c, sel.f) || rango()) : rango());
         let color = "#C00000", fondo = "#F4CCCC";
         const cuerpo = html(`<form class="col">
-          ${lista.length ? `<div class="lista">${lista.map((x) => `<div class="lista-item"><span class="muestra-cf" style="color:${esc(x.color || "inherit")};background:${esc(x.fondo || "transparent")}">Aa</span><span class="crece"><b>${esc(x.rango)}</b><small>${esc((OPS.find((o) => o[0] === x.op) || ["", x.op])[1])} ${esc(x.v1 == null ? "" : x.v1)}${x.op === "entre" ? " y " + esc(x.v2) : ""}</small></span><button type="button" class="icono-btn chico" data-quitar="${esc(x.id)}" aria-label="Quitar regla">${ico("trash-2", "ico-s")}</button></div>`).join("")}</div><hr>` : ""}
+          ${lista.length ? `<div class="lista">${lista.map((x) => `<div class="lista-item"><span class="muestra-cf" style="color:${colorCss(x.color, "inherit")};background:${colorCss(x.fondo, "transparent")}">Aa</span><span class="crece"><b>${esc(x.rango)}</b><small>${esc((OPS.find((o) => o[0] === x.op) || ["", x.op])[1])} ${esc(x.v1 == null ? "" : x.v1)}${x.op === "entre" ? " y " + esc(x.v2) : ""}</small></span><button type="button" class="icono-btn chico" data-quitar="${esc(x.id)}" aria-label="Quitar regla">${ico("trash-2", "ico-s")}</button></div>`).join("")}</div><hr>` : ""}
           <b>Nueva regla</b>
           <div class="campo"><label>Celdas</label><div class="entrada"><input data-rango value="${esc(r0)}" spellcheck="false"></div></div>
           <div class="fila"><div class="campo crece"><label>Si el valor…</label><div class="entrada"><select data-op>${OPS.map(([v, tx]) => `<option value="${v}">${tx}</option>`).join("")}</select></div></div>
@@ -3857,7 +3880,7 @@
         const re = patron(), formulas = $("[data-formulas]", panel).checked, ev = evaluar();
         hallazgos = [];
         if (re) {
-          for (const f of visibles) for (let c = 0; c < (t.cols || 10); c++) {
+          for (const f of visibles) for (let c = 0; c < nCols(t); c++) {
             const crudoV = String(crudo(c, f));
             if (!crudoV) continue;
             const donde = crudoV.startsWith("=") ? (formulas ? crudoV : String(F().aplicarFormato(ev.valor(c, f), prop("f", c, f)))) : crudoV;
