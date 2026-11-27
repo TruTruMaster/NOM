@@ -252,7 +252,7 @@ test("integración: index.html, sw.js, licencias y modo-texto.js", () => {
 
   const modoTexto = fs.readFileSync(path.join(dirStatic, "js/modo-texto.js"), "utf8");
   assert.ok(modoTexto.includes("NOM.ortografia"), "modo-texto.js usa NOM.ortografia");
-  assert.ok(modoTexto.includes("Ortografía…"), "modo-texto.js muestra 'Ortografía…' antes de cargar");
+  assert.ok(modoTexto.includes("NOM.ortografia.cargar(idi).catch") && !modoTexto.includes("Ortografía…"), "sin diccionario: se baja en segundo plano y la ruedita queda igual (sin «Ortografía…»)");
   assert.ok(modoTexto.includes("Agregar al diccionario"), "modo-texto.js ofrece 'Agregar al diccionario'");
   assert.ok(modoTexto.includes("Sin conexión: el diccionario no se pudo bajar"), "modo-texto.js avisa sin conexión");
 });
