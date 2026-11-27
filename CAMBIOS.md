@@ -2,6 +2,40 @@
 
 Lo que cambió en cada versión, en corto (es la página «Novedades» de la ayuda; la escribe `4-CODIGO/ayuda/generar.py`). El diario completo, día por día, está en `LOG.md`.
 
+## 0.23.10 — noviembre de 2026
+
+- **Buscar en los documentos del espacio** ahora encuentra lo que dice un Word importado (antes solo lo encontraba por
+  su nombre o por sus tablas).
+- **Todos con la misma versión:** NOM en Internet y el teléfono que comparte solo trabajan con la app o la página de
+  su misma versión, para que una versión distinta no dañe el trabajo de los demás. Con otra versión sale «Actualiza
+  NOM» (recargar la página o descargar la app) y, mientras, lo que hagas se guarda en tu equipo.
+- **Dónde se guarda:** al crear o importar un documento dentro de un espacio puedes elegir «En el espacio» o «Solo en
+  este navegador / teléfono».
+
+## 0.23.9 — noviembre de 2026
+
+- **Descargar en HTML, Markdown o SVG:** lo descargado solo lleva las imágenes del propio documento y sus colores y
+  medidas tal como son; un documento armado a propósito ya no traba la página al descargarlo.
+- **Importar un CSV muy largo** (cientos de miles de filas) ya no falla.
+
+## 0.23.8 — noviembre de 2026
+
+- **Presentar a pantalla completa:** los botones del puntero láser y la pluma, el número de diapositiva y el botón para
+  salir se esconden a los 3 segundos sin mover el mouse, para que nada tape la diapositiva. Vuelven al mover el mouse o
+  tocar la pantalla. Las teclas (flechas, Esc, L, P) funcionan igual.
+
+## 0.23.7 — noviembre de 2026
+
+- **Palabras de todos los días:** los avisos y botones que todavía decían «servidor», «cifrado», «solo lectura» o «red
+  local» ahora dicen «NOM en Internet», «protegido con tu contraseña», «solo puede ver» o «el mismo Wi-Fi». En el menú,
+  «En el servidor» se llama ahora **Tu almacenamiento**.
+- **En el celular, cada herramienta con su nombre:** las que no se entienden con el puro dibujo (Insertar, Comentar,
+  Fijar, Combinar, Capas, Notas…) llevan su nombre debajo. El orden de la barra no cambió.
+- **Importar Word, Excel o PowerPoint:** mientras se sube el archivo el botón dice «Subiendo…» y no se puede tocar dos
+  veces.
+- **Archivos de Office armados a propósito:** más revisiones para que no traben la página.
+- **Teléfono que comparte:** cuenta los intentos de entrar igual que NOM en Internet.
+
 ## 0.23.6 — noviembre de 2026
 
 - **«Solo puede ver» dentro de un espacio:** quien solo puede ver recibe lo mismo que el enlace para ver: lo que se ve
