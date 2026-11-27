@@ -4,8 +4,14 @@ descripcion: Qué cambió en cada versión, en palabras sencillas.
 orden: 1
 aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-26
-version: 0.23.8
+version: 0.23.9
 ---
+## 0.23.9 — noviembre de 2026
+
+- **Descargar en HTML, Markdown o SVG:** lo descargado solo lleva las imágenes del propio documento y sus colores y
+  medidas tal como son; un documento armado a propósito ya no traba la página al descargarlo.
+- **Importar un CSV muy largo** (cientos de miles de filas) ya no falla.
+
 ## 0.23.8 — noviembre de 2026
 
 - **Presentar a pantalla completa:** los botones del puntero láser y la pluma, el número de diapositiva y el botón para

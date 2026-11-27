@@ -88,14 +88,20 @@
     const crc = new DataView(u.buffer, u.byteOffset + u.length - 4, 4).getUint32(0, true);
     if (C().crc32(u.subarray(0, u.length - 4)) !== crc) throw new Error("El archivo está dañado (no coincide su suma de comprobación)");
     const p = { i: 5 }, n = leeVarint(u, p);
-    const flujo = C().inflar(u.subarray(p.i, p.i + n), { dic: DIC, grande: !!(u[4] & 1) });
+    // (un .nom armado no puede pedir más memoria de la razonable: 400 MB por parte y 800 MB en total)
+    const MAX_PARTE = 400 * 1024 * 1024; let total = 0;
+    const flujo = C().inflar(u.subarray(p.i, p.i + n), { dic: DIC, grande: !!(u[4] & 1), max: MAX_PARTE });
+    total += flujo.length;
     let crudo = p.i + n;
     const q = { i: 0 }, nj = leeVarint(flujo, q);
     const json = JSON.parse(dec.decode(flujo.subarray(q.i, q.i + nj)));
     let dentro = q.i + nj;
     const adjuntos = (json["~"] || []).map(([largo, modo, real]) => {
       if (modo === 1) { const a = u.subarray(crudo, crudo + largo); crudo += largo; return a; }
-      if (modo === 2) { const a = C().inflar(u.subarray(crudo, crudo + largo), { tam: real }); crudo += largo; return a; }
+      if (modo === 2) {
+        const a = C().inflar(u.subarray(crudo, crudo + largo), { tam: real, max: Math.max(1, Math.min(MAX_PARTE, 800 * 1024 * 1024 - total)) });
+        total += a.length; crudo += largo; return a;
+      }
       const a = flujo.subarray(dentro, dentro + largo); dentro += largo; return a;
     });
     delete json["~"];

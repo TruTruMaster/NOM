@@ -27,11 +27,38 @@
   - Guías: fuentes primarias, Zeigarnik fuera, contradicción de los íconos resuelta, `DISENO-UI.md` §16 y
     `GUIA-FACIL-DE-USAR.md` §4 con lo cambiado. Hoja para el dueño: `ENTREGA/Prueba_con_personas.docx`.
 
+- 18:50 — **0.23.7 publicada en la Pi** (humo 39/39, con la compresión). Todas las suites en vivo en verde sobre la
+  0.23.7 (ver §3). Commit `044f6ef` (sin subir a GitHub todavía).
+- 19:25 — **0.23.8 publicada en la Pi**: al presentar, botones y contador se esconden a los 3 s sin mover el mouse
+  (comprobado en vivo). Commit `ac29f75`.
+
+### La presentación de la expo dentro de NOM (pedido del dueño, 26-nov 19:00)
+
+Decisión del dueño: **nada de importar PDF a los editores** (son para crear y editar; un visor de PDF sería otro
+módulo, después). En su lugar, la presentación del proyecto (que era HTML impreso a PDF) se pasó a una **presentación
+de NOM editable** y se presenta desde el apartado de presentaciones.
+
+- `7-PRESENTACION/fuentes/a_nom.py`: cada diapositiva = fondo sin texto (dibujado al doble) + cada texto como cuadro de
+  texto de NOM en su lugar exacto (Nunito, tamaño, peso, color, espaciado, mismos cortes de línea). `comparar_nom.py`
+  (NOM en modo Presentar contra el PDF), `techo.py` y `fidelidad.py` (tolerancia de 1 px) para medirlo;
+  `descargar_nom.py` baja el `.nom` y el `.pptx` por la misma ruta que el botón «Descargar».
+- Dónde está: cuenta `expo_profe`, espacio «Expo NOM», «Presentación del proyecto (NOM)». Archivos:
+  `7-PRESENTACION/5IM7_WACK_Presentacion.nom` y `.pptx` (15 diapositivas; el .pptx abre con el texto editable).
+- **Fidelidad medida** (15 diapositivas, 1280 × 720, tolerancia de 1 px): NOM contra el PDF **98.60 %** (peor 97.44 %);
+  NOM contra el HTML original **98.92 %**; el techo (el HTML contra su propio PDF, dos programas distintos) es 99.67 %.
+  Sin errores de JavaScript. Lo que falta para el 100 % son corrimientos de 1 px del texto.
+- Para presentar: abrir el documento → «Presentar» (F5) → flechas, clic o deslizar; Esc sale.
+
 ## 2. Matriz de funciones (A)
 
 (en construcción)
 
 ## 3. Resultados de las pruebas en vivo (B)
+
+**Con la 0.23.7** (salidas en `trabajo/expo27/vivo2/`): humo 39/39 · funciones 202/0 · celular 205/0 · Firefox 202/0 ·
+extremo a extremo 33/0 · sin Internet 32/0 · red 24/0 (después de poner al día el texto que busca) · presentación 10/0 ·
+pres1, pptx2, diag1 y 85 sin errores de JavaScript · ayuda 24/0 · axe 28/0 · accesibilidad 7/7 · rastreo 632 acciones
+bien, 0 mal (los «?» son paneles que cambian al usarlos).
 
 Contra www.nom.qd.je con la 0.23.6 (antes de los cambios de esta sesión), salidas en `trabajo/expo27/vivo/`:
 `humo.py` 36/36 · funciones 202/0 · funciones en celular 205/0 · extremo a extremo 33/0 · sin Internet 32/0 ·
@@ -58,7 +85,12 @@ Fijar hasta A: el menú no volvió a aparecer al reabrirlo; por revisar).
 
 Lo que no cumple: (1) la subida va una por una (original + cada imagen) y está limitada por la subida de la casa;
 ahora al menos se ve «Subiendo…». (2) Tareas de 150-270 ms al pintar los documentos grandes importados (no en los
-normales). 3G lenta: pendiente.
+normales).
+
+3G lenta (perfil «Slow 3G» de Chromium: 2 s de latencia, 400 kb/s), **antes de comprimir**: primera carga 111 s
+(4.2 MB), con caché 2.1 s, entrar 2.3 s, abrir un documento ~2.0 s (una ida y vuelta de 2 s), tecla → pantalla 24 ms,
+cambio en vivo 1.3 s, ninguna tarea > 100 ms. Desde la 0.23.7 la página va comprimida (`ooxml.js` 611 → 188 KB):
+volver a medir la primera carga.
 
 ## 5. Para el dueño
 

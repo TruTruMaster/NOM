@@ -17,7 +17,14 @@
   const MAX_BYTES = 10 * 1024 * 1024;
 
   // ------------------------------------------------------------ utilidades
-  const textoPlano = (h) => { const d = document.createElement("div"); d.innerHTML = h || ""; return d.textContent || ""; };
+  // (en una plantilla el HTML no se activa: un <img> del documento no se pide a ningún lado)
+  const textoPlano = (h) => { const t = document.createElement("template"); t.innerHTML = h || ""; return t.content.textContent || ""; };
+  // Lo que viene del documento y va a un archivo descargado: colores solo como color, imágenes solo de aquí.
+  const colorOk = (v) => /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\)|[a-z]{3,20})$/i.test(String(v || "").trim());
+  const srcOk = (s) => typeof s === "string" && (/^(data:image\/|blob:|\/api\/)/i.test(s) || !!(NOM.binarios && NOM.binarios.esRef && NOM.binarios.esRef(s)));
+  const num = (v, d) => (Number.isFinite(+v) ? +v : d);
+  // Las tablas de un texto: como mucho 3000 filas y 63 columnas (lo mismo que dibuja el editor, dimTabla).
+  const dimT = (e) => ({ f: Math.min(Math.max(1, num(e.filasTexto, 3) || 3), 3000), c: Math.min(Math.max(1, num(e.colsTexto, 3) || 3), 63) });
   function descargar(nombre, mime, contenido) {
     if (window.NomAndroid && window.NomAndroid.guardarArchivo) {
       const b64 = btoa(unescape(encodeURIComponent(contenido)));
@@ -79,20 +86,25 @@
   /** Notas al pie de la exportación a HTML (se listan al final). */
   let notasHtml = [];
   function objetoHtml(e, ps) {
-    if (e.tipo === "imagen") return e.src ? `<figure style="margin:0;display:inline-block"><img src="${NOM.esc(NOM.srcExport ? NOM.srcExport(e.src) : e.src)}" alt="${NOM.esc(e.alt || "")}" style="max-width:100%;width:${+e.w || 320}px">${e.pie ? `<figcaption style="font-style:italic;text-align:center">${NOM.esc(e.pie)}</figcaption>` : ""}</figure>` : "";
+    if (e.tipo === "imagen") return e.src && srcOk(e.src) ? `<figure style="margin:0;display:inline-block"><img src="${NOM.esc(NOM.srcExport ? NOM.srcExport(e.src) : e.src)}" alt="${NOM.esc(e.alt || "")}" style="max-width:100%;width:${+e.w || 320}px">${e.pie ? `<figcaption style="font-style:italic;text-align:center">${NOM.esc(e.pie)}</figcaption>` : ""}</figure>` : "";
     if (e.tipo === "tabla") {
       let h = `<table style="border-collapse:collapse">`;
       const tapadas = new Set();
-      for (const k in e) if (k.startsWith("m:") && /^\d+x\d+$/.test(String(e[k] || ""))) { const p = F().parseRef(k.slice(2)), [w, hh] = String(e[k]).split("x").map(Number); for (let f = p.f; f < p.f + hh; f++) for (let c = p.c; c < p.c + w; c++) if (c !== p.c || f !== p.f) tapadas.add(F().ref(c, f)); }
-      for (let f = 0; f < (e.filasTexto || 3); f++) {
+      const D = dimT(e);
+      for (const k in e) if (k.startsWith("m:") && /^\d+x\d+$/.test(String(e[k] || ""))) {
+        const p = F().parseRef(k.slice(2)); if (!p || p.f >= D.f || p.c >= D.c) continue;
+        const [w, hh] = String(e[k]).split("x").map(Number);
+        for (let f = p.f; f < Math.min(p.f + hh, D.f); f++) for (let c = p.c; c < Math.min(p.c + w, D.c); c++) if (c !== p.c || f !== p.f) tapadas.add(F().ref(c, f));
+      }
+      for (let f = 0; f < D.f; f++) {
         h += "<tr>";
-        for (let c = 0; c < (e.colsTexto || 3); c++) {
+        for (let c = 0; c < D.c; c++) {
           const r = F().ref(c, f);
           if (tapadas.has(r)) continue;
           const m = String(e["m:" + r] || "").split("x").map(Number);
-          const st = [e["r:" + r] ? `background:${e["r:" + r]}` : "", e["n:" + r] || (e.encabezado && f === 0) ? "font-weight:bold" : "", e["i:" + r] ? "font-style:italic" : "", e["k:" + r] ? `color:${e["k:" + r]}` : "",
+          const st = [e["r:" + r] && colorOk(e["r:" + r]) ? `background:${e["r:" + r]}` : "", e["n:" + r] || (e.encabezado && f === 0) ? "font-weight:bold" : "", e["i:" + r] ? "font-style:italic" : "", e["k:" + r] && colorOk(e["k:" + r]) ? `color:${e["k:" + r]}` : "",
             e["al:" + r] ? `text-align:${{ centro: "center", der: "right" }[e["al:" + r]] || "left"}` : "", e.bordes === "ninguno" ? "border:0" : "border:1px solid #8E8E8E", "padding:2pt 5pt"].filter(Boolean).join(";");
-          h += `<td style="${st}"${m[0] > 1 ? ` colspan="${m[0]}"` : ""}${m[1] > 1 ? ` rowspan="${m[1]}"` : ""}>${NOM.esc(e["c:" + r] || "")}</td>`;
+          h += `<td style="${NOM.esc(st)}"${m[0] > 1 ? ` colspan="${Math.min(m[0], D.c)}"` : ""}${m[1] > 1 ? ` rowspan="${Math.min(m[1], D.f)}"` : ""}>${NOM.esc(e["c:" + r] || "")}</td>`;
         }
         h += "</tr>";
       }
@@ -155,8 +167,9 @@ ${h}</body></html>`;
         const e = p.tramos[0].e;
         if (e.tipo === "tabla") {
           const filas = [];
-          for (let f = 0; f < (e.filasTexto || 3); f++) { const r = []; for (let c = 0; c < (e.colsTexto || 3); c++) r.push(String(e["c:" + F().ref(c, f)] || "").replace(/\|/g, "\\|").replace(/\n/g, " ")); filas.push("| " + r.join(" | ") + " |"); }
-          if (filas.length) filas.splice(1, 0, "|" + " --- |".repeat(e.colsTexto || 3));
+          const D = dimT(e);
+          for (let f = 0; f < D.f; f++) { const r = []; for (let c = 0; c < D.c; c++) r.push(String(e["c:" + F().ref(c, f)] || "").replace(/\|/g, "\\|").replace(/\n/g, " ")); filas.push("| " + r.join(" | ") + " |"); }
+          if (filas.length) filas.splice(1, 0, "|" + " --- |".repeat(D.c));
           out.push(filas.join("\n"));
         } else if (e.tipo === "linea" || e.tipo === "salto") out.push("---");
         else if (e.tipo === "imagen") out.push("![imagen](imagen-incrustada)");
@@ -195,10 +208,10 @@ ${h}</body></html>`;
       }
       if (b.tipo === "tabla") {
         // (las imágenes que flotan sobre una hoja de Excel van después de su tabla)
-        const imgs = Array.isArray(b.dib) ? b.dib.filter((d) => d && d.tipo === "imagen" && d.src).map((d) => `<p><img src="${NOM.esc(NOM.srcExport ? NOM.srcExport(d.src) : d.src)}" alt=""></p>`).join("") : "";
+        const imgs = Array.isArray(b.dib) ? b.dib.filter((d) => d && d.tipo === "imagen" && srcOk(d.src)).map((d) => `<p><img src="${NOM.esc(NOM.srcExport ? NOM.srcExport(d.src) : d.src)}" alt=""></p>`).join("") : "";
         return "<table>" + celdasDe(b).map((r) => "<tr>" + r.map((v) => `<td>${NOM.esc(v)}</td>`).join("") + "</tr>").join("") + "</table>" + imgs;
       }
-      if (b.tipo === "imagen") return `<p><img src="${NOM.esc(NOM.srcExport ? NOM.srcExport(b.src) : b.src)}" alt="${NOM.esc(b.alt || "")}"></p>`;
+      if (b.tipo === "imagen") return srcOk(b.src) ? `<p><img src="${NOM.esc(NOM.srcExport ? NOM.srcExport(b.src) : b.src)}" alt="${NOM.esc(b.alt || "")}"></p>` : "";
       if (b.tipo === "forma") return `<p><em>[${NOM.esc(b.figura)}]</em> ${NOM.esc(b.texto || "")}</p>`;
       return "";
     }).join("\n").replace(/<\/ul>\n<ul>/g, "\n");
@@ -249,7 +262,9 @@ ${partes}
     const lineas = doc.deLaPagina(pagina).filter((b) => b.tipo === "conector" && porId[b.desde] && porId[b.hasta]).map((c) => NOM.geometria.svgConector(c, porId[c.desde], porId[c.hasta]));
     const luz = (c) => { const n = parseInt(String(c || "#ffffff").slice(1), 16) || 0; return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; };
     const fuente = 'font-family="Nunito, Arial, sans-serif"';
-    const formas = bs.sort((a, b) => (a.z || 0) - (b.z || 0)).map((b) => {
+    const formas = bs.sort((a, b) => (a.z || 0) - (b.z || 0)).map((b0) => {
+      // (medidas siempre números: un valor armado no se cuela como atributo en el .svg descargado)
+      const b = Object.assign({}, b0, { x: num(b0.x, 0), y: num(b0.y, 0), w: num(b0.w, 0), h: num(b0.h, 0), rot: num(b0.rot, 0) });
       const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
       const giro = b.rot ? ` transform="rotate(${+b.rot} ${cx} ${cy})"` : "";
       const op = b.opacidad != null && b.opacidad < 1 ? ` opacity="${+b.opacidad}"` : "";
@@ -261,7 +276,7 @@ ${partes}
         const dash = e.estilo === "guiones" ? ` stroke-dasharray="${e.ancho * 3} ${e.ancho * 2}"` : e.estilo === "puntos" ? ` stroke-dasharray="0 ${e.ancho * 2}"` : "";
         const tapa = e.estilo === "puntos" || e.f === "actor" ? "round" : "butt";
         fig = `<g transform="translate(${b.x} ${b.y})${voltear}">${F.partesFigura(e, b.w, b.h).map((pz) => `<path d="${pz.d}" fill="${pz.relleno ? E(pz.relleno) : "none"}" stroke="${pz.trazo ? E(pz.trazo) : "none"}" stroke-width="${e.ancho}"${pz.trazo ? dash : ""} stroke-linejoin="round" stroke-linecap="${tapa}"/>`).join("")}</g>`;
-      } else if (b.tipo === "imagen" && b.src) fig = `<image href="${E(b.src)}" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" preserveAspectRatio="none"${voltear ? ` transform="translate(${b.x} ${b.y})${voltear} translate(${-b.x} ${-b.y})"` : ""}/>`;
+      } else if (b.tipo === "imagen" && srcOk(b.src)) fig = `<image href="${E(b.src)}" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" preserveAspectRatio="none"${voltear ? ` transform="translate(${b.x} ${b.y})${voltear} translate(${-b.x} ${-b.y})"` : ""}/>`;
       else if (b.tipo === "icono" && F) fig = `<svg x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" viewBox="0 0 24 24" fill="none" stroke="${E(b.color || "#2B2A33")}" stroke-width="${+b.grosor || 2}" stroke-linecap="round" stroke-linejoin="round">${F.iconoSeguro(b)}</svg>`;
       const colorT = b.tColor || (fondo && luz(fondo) < 0.5 ? "#FFFFFF" : "#1F1E26");
       const fs = +b.tTam || (b.tipo === "texto" ? 22 : 16), lh = fs * 1.3;
@@ -744,7 +759,7 @@ ${formas.join("\n")}
     if (ext === ".csv" || ext === ".tsv") {
       const sep = ext === ".tsv" ? "\t" : (texto.split("\n")[0].split(";").length > texto.split("\n")[0].split(",").length ? ";" : ",");
       const filas = parseCsv(texto, sep).filter((r) => r.some((c) => c !== ""));
-      const b = { id: NOM.DocCRDT.nuevoId(), tipo: "tabla", pagina: "p1", orden: 1, filas: Math.max(30, filas.length + 5), cols: Math.max(10, ...filas.map((r) => r.length)), x: 40, y: 40, w: 880, h: 300 };
+      const b = { id: NOM.DocCRDT.nuevoId(), tipo: "tabla", pagina: "p1", orden: 1, filas: Math.max(30, filas.length + 5), cols: filas.reduce((m, r) => Math.max(m, r.length), 10), x: 40, y: 40, w: 880, h: 300 };
       filas.forEach((r, f) => r.forEach((v, c) => { if (v !== "") b["c:" + F().ref(c, f)] = v; }));
       return { nombre, modo: "HOJA", ops: comoOps([b]), aviso };
     }
