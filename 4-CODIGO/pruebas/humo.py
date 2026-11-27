@@ -44,7 +44,7 @@ ok("guardar versión",r("POST",f"/api/documentos/{d}/versiones",{"nombre":"v1"},
 ok("ver versiones",r("GET",f"/api/documentos/{d}/versiones",t=tk["a"])[0]==200)
 bol=r("POST","/api/cuentas/boleto",{},tk["b"])[1]["boleto"]
 try:
-    x=urllib.request.urlopen(urllib.request.Request(B+f"/api/espacios/{e}/eventos?boleto={bol}&cliente=hb",headers=dict(AG,Accept="text/event-stream")),timeout=30); ok("canal en vivo abre",x.status==200); x.close()
+    x=urllib.request.urlopen(urllib.request.Request(B+f"/api/espacios/{e}/eventos?boleto={bol}&cliente=hb&v={VER}",headers=dict(AG,Accept="text/event-stream")),timeout=30); ok("canal en vivo abre",x.status==200); x.close()
 except Exception as ex: ok(f"canal en vivo abre ({ex})",False)
 ch=r("POST",f"/api/espacios/{e}/chat",{"texto":"hola equipo"},tk["b"]); ok(f"chat enviar ({ch[0]})",ch[0] in(200,201))
 ok("chat leer",r("GET",f"/api/espacios/{e}/chat",t=tk["a"])[0]==200)
