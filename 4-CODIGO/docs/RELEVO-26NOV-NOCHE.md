@@ -48,7 +48,7 @@ cuenta neutra.
 ## 5. Cómo seguir
 
 1. Si el dueño contesta lo de §3, hacerlo (es poco código: los lectores reciben `paraMirar` y no ven versiones).
-2. Los ayudantes se quedaron sin cuota a las 15:15 (DeepSeek: límite gratuito; agy: Gemini y respaldo). Cuando
+2. Los ayudantes se quedaron sin cuota a las 15:15. Cuando
    vuelvan, mandarles los barridos que quedaron pendientes (las tareas están escritas en el plan privado §O y en
    `trabajo/auditoria-26nov-noche/`): importadores de Office y vistas grandes de la página, y la comparación ruta por
    ruta del teléfono contra el servidor.
