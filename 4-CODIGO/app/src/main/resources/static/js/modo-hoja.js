@@ -402,7 +402,54 @@
         fn(base);
         guardarVista(base);
       }
-      const ordenar = (c, asc) => cambiarVista((v) => { v.orden = { c, asc }; });
+      /** Como Excel: con el cursor en una tabla (o con varias filas elegidas) se ordena SOLO esa tabla o ese rango, moviendo
+          sus celdas (para todos; Ctrl+Z lo deshace). Sin tabla ni rango, el orden es de la vista (solo para ti). Antes siempre
+          se ordenaba la vista de toda la hoja: con una tabla elegida se revolvían las demás filas y sus números (27-nov). */
+      const ordenar = (c, asc) => {
+        const r = zonaParaOrdenar(c);
+        if (r && !ed.soloLectura) return ordenarZona(r, c, asc);
+        cambiarVista((v) => { v.orden = { c, asc }; });
+      };
+      function zonaParaOrdenar(c) {
+        const lo = loEn(sel.c, sel.f);
+        if (lo) return { c1: lo.c1, c2: lo.c2, f1: lo.f1 + (lo.enc ? 1 : 0), f2: lo.f2 - (lo.tot ? 1 : 0) };
+        const r = rango();
+        // (una sola columna elegida: ordenarla sola separaría cada dato de su fila; queda el orden de la vista)
+        if (r.f2 > r.f1 && r.c2 > r.c1) {
+          // (una primera fila de títulos no se ordena: texto arriba y números abajo en la columna, como lo detecta Excel)
+          const col = c >= r.c1 && c <= r.c2 ? c : r.c1, ev = evaluar();
+          const titulo = !F().esNum(ev.valor(col, r.f1)) && String(crudo(col, r.f1)) !== "" && [...Array(r.f2 - r.f1)].some((_, k) => F().esNum(ev.valor(col, r.f1 + 1 + k)));
+          return { c1: r.c1, c2: r.c2, f1: r.f1 + (titulo ? 1 : 0), f2: r.f2 };
+        }
+        return null;
+      }
+      /** Ordena las filas [f1, f2] de las columnas [c1, c2] por la columna c, moviendo las celdas (y las fórmulas, con sus
+          referencias relativas ajustadas a su fila nueva). */
+      function ordenarZona(r, c, asc) {
+        if (r.f2 <= r.f1) return;
+        if (c < r.c1 || c > r.c2) c = r.c1;
+        const ev = evaluar(), k = asc ? 1 : -1, vacia = (x) => x === "" || x == null;
+        const filas = []; for (let f = r.f1; f <= r.f2; f++) filas.push(f);
+        const orden = filas.slice().sort((a, b) => {
+          const x = ev.valor(c, a), y = ev.valor(c, b);
+          if (vacia(x) || vacia(y)) return vacia(x) && vacia(y) ? a - b : vacia(x) ? 1 : -1;
+          if (F().esNum(x) && F().esNum(y)) return (+x - +y) * k || a - b;
+          return String(F().formatear(x)).localeCompare(String(F().formatear(y)), "es", { numeric: true, sensitivity: "base" }) * k || a - b;
+        });
+        const campos = {};
+        orden.forEach((origen, i) => {
+          const destino = filas[i];
+          if (origen === destino) return;
+          for (let cc = r.c1; cc <= r.c2; cc++) for (const p of PROPS.filter((x) => x !== "m")) {
+            let v = t[p + ":" + F().ref(cc, origen)];
+            if (p === "c" && typeof v === "string" && v.startsWith("=")) v = F().desplazar(v, 0, destino - origen);
+            const actual = t[p + ":" + F().ref(cc, destino)];
+            if ((v == null ? null : v) !== (actual == null ? null : actual)) campos[p + ":" + F().ref(cc, destino)] = v == null ? null : v;
+          }
+        });
+        if (Object.keys(campos).length) cambiarT(campos, { meta: { o: "r" } });
+        aviso(`Ordenadas las filas ${r.f1 + 1} a ${r.f2 + 1} por la columna ${F().colLetra(c)} (${asc ? "A → Z" : "Z → A"}). Ctrl+Z para deshacer`, { tipo: "ok" });
+      }
       const quitarFiltro = (c) => cambiarVista((v) => { delete v.filtros[c]; });
       /** Ordena las filas de verdad (para todos): reescribe las celdas en el orden nuevo. */
       /** La región de datos alrededor de una celda, como «región actual» de Excel: crece mientras haya algo junto. */

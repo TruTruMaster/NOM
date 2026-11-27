@@ -1939,7 +1939,11 @@
           Object.assign(img.style, { width: wFull + "px", maxWidth: "none", left: -iz * wFull + "px", top: -s * hFull + "px" });
           if (cuerpo.contains(caja)) programarPaginar();
         };
-        if (img.complete && img.naturalWidth) hacer(); else img.addEventListener("load", hacer, { once: true });
+        // (cada vez que carga: la foto del almacén llega después de la marca de espera de 1×1, y con la proporción de la
+        // marca la caja quedaba cuadrada y la foto deformada o cortada)
+        img._acomodar = hacer;
+        if (!img._conAcomodo) { img._conAcomodo = true; img.addEventListener("load", () => { if (img._acomodar) img._acomodar(); }); }
+        if (img.complete && img.naturalWidth) hacer();
       }
       function dialogoRecorte(id) {
         const it = sec().item(id), ref = it && it.e && it.e.ref, b = ref ? doc().bloque(ref) : null;

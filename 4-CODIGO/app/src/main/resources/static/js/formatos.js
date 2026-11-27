@@ -86,7 +86,18 @@
   /** Notas al pie de la exportación a HTML (se listan al final). */
   let notasHtml = [];
   function objetoHtml(e, ps) {
-    if (e.tipo === "imagen") return e.src && srcOk(e.src) ? `<figure style="margin:0;display:inline-block"><img src="${NOM.esc(NOM.srcExport ? NOM.srcExport(e.src) : e.src)}" alt="${NOM.esc(e.alt || "")}" style="max-width:100%;width:${+e.w || 320}px">${e.pie ? `<figcaption style="font-style:italic;text-align:center">${NOM.esc(e.pie)}</figcaption>` : ""}</figure>` : "";
+    if (e.tipo === "imagen") {
+      if (!e.src || !srcOk(e.src)) return "";
+      // Como en el editor: la imagen libre («delante del texto») en su lugar (x, y desde su párrafo) y girada; antes el
+      // enlace para ver y lo descargado en HTML la ponían en línea y sin girar (27-nov).
+      const W = +e.w || 320, H = +e.h || 0, rot = [90, 180, 270].includes(+e.rot) ? +e.rot : 0, lado = rot === 90 || rot === 270;
+      const src = NOM.esc(NOM.srcExport ? NOM.srcExport(e.src) : e.src), alt = NOM.esc(e.alt || "");
+      const libre = e.libre ? `position:absolute;left:${+e.x || 0}px;top:${+e.y || 0}px;z-index:${e.detras ? 0 : 2};` : "";
+      const img = rot && H
+        ? `<span style="display:inline-block;position:relative;width:${lado ? H : W}px;height:${lado ? W : H}px"><img src="${src}" alt="${alt}" style="position:absolute;left:50%;top:50%;width:${W}px;max-width:none;transform:translate(-50%,-50%) rotate(${rot}deg)"></span>`
+        : `<img src="${src}" alt="${alt}" style="${e.libre ? "max-width:none" : "max-width:100%"};width:${W}px${rot ? `;transform:rotate(${rot}deg)` : ""}">`;
+      return `<figure style="margin:0;display:inline-block;${libre}">${img}${e.pie ? `<figcaption style="font-style:italic;text-align:center">${NOM.esc(e.pie)}</figcaption>` : ""}</figure>`;
+    }
     if (e.tipo === "tabla") {
       let h = `<table style="border-collapse:collapse">`;
       const tapadas = new Set();
@@ -144,7 +155,7 @@
     cerrar();
     if (notasHtml.length) h += `<hr><ol class="notas">${notasHtml.map((t, i) => `<li id="nota-${i + 1}">${NOM.esc(t)} <a href="#ref-${i + 1}">↩</a></li>`).join("")}</ol>\n`;
     return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${NOM.esc(nombre)}</title>
-<style>body{font:11pt/1.15 Calibri,Carlito,"Segoe UI",Arial,sans-serif;max-width:6.5in;margin:1in auto;padding:0 1rem;color:#000}p{margin:0 0 8pt}h1,h2,h3{font-family:"Calibri Light",Carlito,Calibri,sans-serif;font-weight:normal;color:#2F5496;margin:12pt 0 0}h1{font-size:16pt}h2{font-size:13pt}h3{font-size:12pt;color:#1F3763}h1.titulo{font-size:28pt;color:#000}.subtitulo{color:#5A5A5A}blockquote{font-style:italic;color:#404040;text-align:center}pre{font:10pt "Courier New",monospace;background:#F3F3F3;padding:2pt 6pt;white-space:pre-wrap}table{border-collapse:collapse;width:100%}td{border:1px solid #8E8E8E;padding:2pt 5pt;vertical-align:top}a{color:#0563C1}</style>
+<style>body{font:11pt/1.15 Calibri,Carlito,"Segoe UI",Arial,sans-serif;max-width:6.5in;margin:1in auto;padding:0 1rem;color:#000}p,h1,h2,h3,blockquote,li,pre{position:relative}p{margin:0 0 8pt}h1,h2,h3{font-family:"Calibri Light",Carlito,Calibri,sans-serif;font-weight:normal;color:#2F5496;margin:12pt 0 0}h1{font-size:16pt}h2{font-size:13pt}h3{font-size:12pt;color:#1F3763}h1.titulo{font-size:28pt;color:#000}.subtitulo{color:#5A5A5A}blockquote{font-style:italic;color:#404040;text-align:center}pre{font:10pt "Courier New",monospace;background:#F3F3F3;padding:2pt 6pt;white-space:pre-wrap}table{border-collapse:collapse;width:100%}td{border:1px solid #8E8E8E;padding:2pt 5pt;vertical-align:top}a{color:#0563C1}</style>
 </head><body>
 ${h}</body></html>`;
   }
