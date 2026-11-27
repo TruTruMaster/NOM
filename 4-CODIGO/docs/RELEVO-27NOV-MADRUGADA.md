@@ -25,3 +25,25 @@ las 4:15 no pase sus pruebas en vivo no se publica (queda en una rama `pendiente
   humo.py lo entienden). En la escuela no aplica (otra red).
 
 ## 2. Qué falta (se actualiza en cada tanda)
+- 23:20 — Tanda 1 en vivo (por el puente): humo 42/42 · demo 10/0 · armados 9/0 · funciones 202/0 · celular 205/0 ·
+  Firefox 202/0 · extremo a extremo 33/0 · sin Internet 32/0 · red 24/0 · presentación 10/0 · ayuda 24/0 · pres1,
+  pptx2, diag1 y 85 sin errores de JavaScript. `exploracion_novedades.py` 19/0 (lista clásica, idioma inglés, BUSCARV
+  como Excel, barra de fórmulas sin duplicar, figura contra la orilla). `exploracion_errores.py` antes 3/9 (JSON crudo,
+  «error 5xx» a secas). Office real abre sin avisos lo que descarga NOM (Word, Excel, PowerPoint y la presentación).
+- 23:25 — Barrido de la API: qué ve cada papel en la API (13 puntos; detalle SOLO en el plan privado §Q.2). Arreglado hoy el
+  chat (`Textos.limpioConRenglones`); lo demás, con su decisión, en §Q.2.
+- 23:30 — Teléfono que comparte con el A55 real + la laptop (sin Internet, por el Wi-Fi): entrar con código, escribir
+  en los dos sentidos ✔; candado de versión en el teléfono (otra versión o sin versión → 426) ✔. Encontrado y
+  arreglado: el QR para unirse no salía al pasar de la nube a «compartir desde este teléfono» (`union.js`, `api.js`).
+- 23:35 — Logotipo horizontal decía «NOM-COLAB» (el proyecto se llama NOM desde el 25-nov): ahora solo NOM; la
+  presentación se volvió a generar y subir (cuenta `expo_profe`).
+- 23:40 — Imágenes en los 4 editores (`exploracion_imagenes.py`): no cambian de tamaño al arrastrarlas contra ninguna
+  orilla ni al deshacer/rehacer. Encontrado y arreglado: la ruedita cortaba los submenús a 8 opciones (en la hoja,
+  «Más › Otras» perdía Imagen, Fijar, Formato condicional, Tabla dinámica…): ahora 7 + «Más».
+- 23:42 — El asistente de edición se quedó sin cuota: se cambió a la otra cuenta (orden del dueño).
+- 23:50 — Tanda 2 publicada: accesibilidad WCAG 2.2 AA (`docs/ACCESIBILIDAD.md`), Word importado con sus campos de
+  pie de página, casillas, referencias e índice como Word, ruedita sin opciones perdidas, QR del teléfono, chat.
+- **El `.nom` ya es compacto** (medido en vivo con `medir_nom.py`): vacío 41-59 bytes; texto real 0.61 bytes por letra
+  (≈5 bits) y ≈3 bytes por cada cambio de formato; Office importado: Word 16 KB de 44, Excel 33 KB de 47, PowerPoint
+  66 KB de 167. Guarda una foto comprimida (no los identificadores del CRDT), así que un formato v4 no ganaría casi
+  nada y cambiar el formato hoy arriesgaría la expo: no se hizo (respuesta para el dueño en §3).
