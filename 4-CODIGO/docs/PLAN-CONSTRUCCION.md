@@ -798,6 +798,10 @@ para Investigar y Wikidata.
 
 ## Orden recomendado para la siguiente sesión
 
+**Desde el 27 de noviembre de 2026 (madrugada, antes de la expo):** empezar por `docs/RELEVO-27NOV-MADRUGADA.md` (todo lo
+pedido para la expo: atajos, idioma, accesibilidad, errores propios, los archivos del dueño contra Office real, el .nom).
+Antes: `docs/RELEVO-26NOV-NOCHE-3.md`.
+
 **Desde el 26 de noviembre de 2026 (noche, tercera sesión):** empezar por `docs/RELEVO-26NOV-NOCHE-3.md` (preparar la
 expo del 27-nov: matriz de funciones, pruebas en vivo, tiempos y guías). Antes: `docs/RELEVO-26NOV-NOCHE-2.md`.
 
