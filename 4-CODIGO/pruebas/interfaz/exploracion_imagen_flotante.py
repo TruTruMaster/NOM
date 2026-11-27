@@ -58,6 +58,11 @@ with sync_playwright() as pw:
     x0, y0 = org[0] + c["x"] + 100, org[1] + c["y"] + 80
     pa.mouse.click(x0, y0); PA.t(300); pa.mouse.move(x0, y0); pa.mouse.down(); pa.mouse.move(x0 + 80, y0 + 60, steps=8); pa.mouse.move(x0 + 160, y0 + 140, steps=8); pa.mouse.up(); PA.t(2500)
     a1, b1 = PA.ev(EST), PB.ev(EST)
+    if abs(a1["x"] - b1["x"]) > 3 or abs(a1["y"] - b1["y"]) > 3:
+        for k in range(8):   # (¿llega tarde o no llega?)
+            PB.t(1000); b1 = PB.ev(EST)
+            print(f"    B a los {k + 1} s más: dibujada en ({b1['x']}, {b1['y']}), dato ({b1['bx']}, {b1['by']})", flush=True)
+            if abs(a1["x"] - b1["x"]) <= 3 and abs(a1["y"] - b1["y"]) <= 3: break
     check("A movió la foto (cambió su posición en A)", abs(a1["x"] - c["x"]) > 50 or abs(a1["y"] - c["y"]) > 50, [c, a1])
     check("B ve la foto en la posición nueva sin recargar", abs(a1["x"] - b1["x"]) <= 3 and abs(a1["y"] - b1["y"]) <= 3, [a1, b1])
     pa.screenshot(path=f"{SALIDA}/1-a-movida.png"); pb.screenshot(path=f"{SALIDA}/1-b-movida.png")

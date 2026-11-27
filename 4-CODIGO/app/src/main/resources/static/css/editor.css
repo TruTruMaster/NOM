@@ -1958,3 +1958,8 @@
     border-color: Highlight;
   }
 }
+
+/* La pista del lienzo (diagramas y presentaciones) no se sale de la pantalla en el celular: se parte en renglones. */
+@media (max-width: 700px) {
+  .pista { white-space: normal; width: max-content; max-width: calc(100vw - 32px); text-align: center; }
+}
