@@ -222,6 +222,7 @@
     return o;
   }
   // ------------------------------------------------------------ leer un .zip (síncrono)
+  const MAX_PARTE = 256 * 1024 * 1024;
   /**
    * Abre un .zip en memoria: { nombres, tiene(n), bytes(n), texto(n) }. Descomprime cada parte la
    * primera vez que se pide (con el descompresor propio, así funciona igual en cualquier WebView).
@@ -258,7 +259,9 @@
       if (ctn && ctn !== "[Content_Types].xml") nuevoNombre.set(ctn, "[Content_Types].xml");
       const e = ctn && entradas.get(ctn);
       let ct = null;
-      try { ct = e ? dec.decode(e.metodo === 0 ? e.datos : C().inflar(e.datos, { tam: e.tam })) : null; } catch (x) { ct = null; }
+      if (e && (e.tam > MAX_PARTE || e.datos.length > MAX_PARTE)) throw new Error("El archivo trae una parte demasiado grande");
+      try { ct = e ? dec.decode(e.metodo === 0 ? e.datos : C().inflar(e.datos, { tam: e.tam, max: MAX_PARTE })) : null; }
+      catch (x) { if (x && x.muyGrande) throw x; ct = null; }
       if (ct) {
         const porMinus = new Map([...entradas.keys()].map((k) => [k.toLowerCase(), k]));
         const re = /PartName\s*=\s*["']\/?([^"'%]+)["']/g;
@@ -280,13 +283,14 @@
       const e = entradas.get(nombre);
       if (!e) return null;
       let r;
+      if (e.tam > MAX_PARTE || e.datos.length > MAX_PARTE) throw new Error("El archivo trae una parte demasiado grande");
       if (e.metodo === 0) r = e.datos;
       else if (e.metodo === 8) {
         // Una parte dañada (Office la abre igual, sin esa parte): se lee como si no estuviera y, al
         // escribir el archivo otra vez, se copia tal cual venía (crudo). Antes una sola parte así
         // tumbaba la exportación fiel y el .nom.
-        try { r = C().inflar(e.datos, { tam: e.tam }); }
-        catch (x) { e.danada = true; console.warn("Parte dañada en el archivo de Office:", nombre); r = null; }
+        try { r = C().inflar(e.datos, { tam: e.tam, max: MAX_PARTE }); }
+        catch (x) { if (x && x.muyGrande) throw x; e.danada = true; console.warn("Parte dañada en el archivo de Office:", nombre); r = null; }
       } else throw new Error("Compresión no soportada en " + nombre);
       listos.set(nombre, r);
       return r;

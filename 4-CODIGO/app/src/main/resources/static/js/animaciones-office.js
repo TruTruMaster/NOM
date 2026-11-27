@@ -63,9 +63,10 @@
     const s = String(txt == null ? "" : txt).replace(/\s+/g, "");
     let i = 0;
     const mal = () => { throw new Error("fórmula"); };
-    function prim() {
+    function prim(prof) {
+      if (prof > 200) mal();
       const c = s[i];
-      if (c === "(") { i++; const e = expr(); if (s[i] !== ")") mal(); i++; return e; }
+      if (c === "(") { i++; const e = expr(prof + 1); if (s[i] !== ")") mal(); i++; return e; }
       if (c === "$") { i++; return (v) => v.$; }
       if (c && /[\d.]/.test(c)) {
         const m = /^(\d+\.?\d*|\.\d+)(e[+-]?\d+)?/i.exec(s.slice(i)); if (!m) mal(); i += m[0].length;
@@ -77,7 +78,7 @@
       const id = m[0].toLowerCase();
       if (s[i] === "(" && FUNC[id]) {
         i++; const args = [];
-        if (s[i] !== ")") { args.push(expr()); while (s[i] === ",") { i++; args.push(expr()); } }
+        if (s[i] !== ")") { args.push(expr(prof + 1)); while (s[i] === ",") { i++; args.push(expr(prof + 1)); } }
         if (s[i] !== ")") mal(); i++;
         const fn = FUNC[id]; return (v) => fn(...args.map((a) => a(v)));
       }
@@ -85,29 +86,37 @@
       if (id === "e") return () => Math.E;
       return base ? (v) => +(v.base[id] || 0) : (v) => +(v.act[id] != null ? v.act[id] : v.base[id] || 0);
     }
-    function unario() { if (s[i] === "-") { i++; const a = unario(); return (v) => -a(v); } if (s[i] === "+") { i++; return unario(); } return potencia(); }
-    function potencia() { const a = prim(); if (s[i] === "^") { i++; const b = unario(); return (v) => Math.pow(a(v), b(v)); } return a; }
-    function termino() {
-      let a = unario();
+    function unario(prof) { if (prof > 200) mal(); if (s[i] === "-") { i++; const a = unario(prof + 1); return (v) => -a(v); } if (s[i] === "+") { i++; return unario(prof + 1); } return potencia(prof); }
+    function potencia(prof) { const a = prim(prof); if (s[i] === "^") { i++; const b = unario(prof + 1); return (v) => Math.pow(a(v), b(v)); } return a; }
+    function termino(prof) {
+      let a = unario(prof);
       while (s[i] === "*" || s[i] === "/" || s[i] === "%") {
-        const op = s[i++], b = unario(), x = a;
+        const op = s[i++], b = unario(prof), x = a;
         a = op === "*" ? (v) => x(v) * b(v) : op === "/" ? (v) => { const d = b(v); return d ? x(v) / d : 0; } : (v) => x(v) % b(v);
       }
       return a;
     }
-    function expr() {
-      let a = termino();
-      while (s[i] === "+" || s[i] === "-") { const op = s[i++], b = termino(), x = a; a = op === "+" ? (v) => x(v) + b(v) : (v) => x(v) - b(v); }
+    function expr(prof) {
+      if (prof > 200) mal();
+      let a = termino(prof);
+      while (s[i] === "+" || s[i] === "-") { const op = s[i++], b = termino(prof), x = a; a = op === "+" ? (v) => x(v) + b(v) : (v) => x(v) - b(v); }
       return a;
     }
     let f = null;
-    try { f = expr(); if (i < s.length) f = null; } catch (e) { f = null; }
+    try { f = expr(0); if (i < s.length) f = null; } catch (e) { f = null; }
     cacheF.set(txt, f);
     return f;
   }
   const valorNum = (txt, vars) => { const f = formula(txt); if (!f) { const n = parseFloat(txt); return isFinite(n) ? n : 0; } const r = f(vars); return isFinite(r) ? r : 0; };
 
   // ================================================================== colores
+  const colorCssVal = (v) => {
+    if (NOM.colorCss) return NOM.colorCss(v, "") || null;
+    const s = String(v == null ? "" : v).trim();
+    return /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(s) || /^rgba?\(\s*\d{1,3}%?\s*,\s*\d{1,3}%?\s*,\s*\d{1,3}%?(?:\s*,\s*(?:0|1|0?\.\d+|\d{1,3}%))?\s*\)$/i.test(s) || /^(?:transparent|currentcolor|[a-z]{3,20})$/i.test(s) ? s : null;
+  };
+  const fwVal = (v) => { const s = String(v == null ? "" : v).trim().toLowerCase(); return /^(?:normal|bold|bolder|lighter|[1-9]00)$/.test(s) ? s : null; };
+  const fsVal = (v) => { const s = String(v == null ? "" : v).trim().toLowerCase(); return /^(?:normal|italic|oblique)$/.test(s) ? s : null; };
   const hexRgb = (h) => { const m = /^#?([0-9a-f]{6})/i.exec(h || ""); if (!m) return null; const n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
   const rgbHex = (c) => "#" + c.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("").toUpperCase();
   function rgbHsl([r, g, b]) {
@@ -765,19 +774,19 @@
           case "r": case "style.rotation": case "ppt_r": e.r = +v; break;
           case "xshear": e.skx = +v; break;
           case "yshear": e.sky = +v; break;
-          case "style.color": e.color = v; break;
-          case "fillcolor": case "fillColor": case "fill.color": e.fill = v; break;
-          case "stroke.color": e.stroke = v; break;
+          case "style.color": { const c = colorCssVal(v); if (c) e.color = c; break; }
+          case "fillcolor": case "fillColor": case "fill.color": { const c = colorCssVal(v); if (c) e.fill = c; break; }
+          case "stroke.color": { const c = colorCssVal(v); if (c) e.stroke = c; break; }
           case "fill.on": e.fillOn = v === "true" || v === true; break;
           case "fill.type": if (v === "solid") e.fillOn = e.fillOn == null ? true : e.fillOn; break;
           case "stroke.on": e.strokeOn = v === "true" || v === true; break;
-          case "style.fontWeight": e.fw = v; break;
-          case "style.fontStyle": e.fs = v; break;
+          case "style.fontWeight": { const fw = fwVal(v); if (fw) e.fw = fw; break; }
+          case "style.fontStyle": { const fs = fsVal(v); if (fs) e.fs = fs; break; }
           case "style.textDecorationUnderline": e.td = v === true || v === "true" ? "underline" : "none"; break;
           case "style.fontSize": e.fsz = +v || 1; break;
           case "imageData.grayscale": e.gris = v === "true" || v === true; break;
           // atenuar después de la animación: el color del objeto (el texto y, si tiene, el relleno)
-          case "ppt_c": e.color = v; if (e.d && e.d.blq && e.d.blq.querySelector(".forma-svg path:not([fill='none'])")) e.fill = v; break;
+          case "ppt_c": { const c = colorCssVal(v); if (c) { e.color = c; if (e.d && e.d.blq && e.d.blq.querySelector(".forma-svg path:not([fill='none'])")) e.fill = c; } break; }
           default: break;
         }
       };
@@ -1169,9 +1178,12 @@
       // la copia está donde se ve la letra (pos); se transforma y se recorta en la caja de PowerPoint (c)
       st += `transform-origin:${n2(c.x + c.w / 2 - ps.x)}px ${n2(c.y + c.h / 2 - ps.y)}px;transform:${tr || "none"};`;
       if (cl.mascaras.length) st += cssMascara(cl.mascaras, c.x - ps.x, c.y - ps.y, c.w, c.h);
-      if (e.color) st += `color:${e.color};`;
-      if (e.fw) st += `font-weight:${e.fw};`;
-      if (e.fs) st += `font-style:${e.fs};`;
+      const col = e.color ? colorCssVal(e.color) : null;
+      const fw = e.fw ? fwVal(e.fw) : null;
+      const fs = e.fs ? fsVal(e.fs) : null;
+      if (col) st += `color:${col};`;
+      if (fw) st += `font-weight:${fw};`;
+      if (fs) st += `font-style:${fs};`;
       if (e.td) st += `text-decoration-line:${e.td};`;
       if (ultimo.get(el) === st) return;
       ultimo.set(el, st);
@@ -1517,7 +1529,8 @@
     lista.forEach((x) => {
       const s2 = x.id != null ? spidDe(x.id) : null;
       if (s2 == null || !usados.has(String(s2))) return;
-      const g = (x.ppt && A(x.ppt.c).grpId) || "0";
+      const g0 = x.ppt && A(x.ppt.c).grpId;
+      const g = /^\d+$/.test(String(g0 == null ? "" : g0)) ? String(g0) : "0";
       const k = s2 + "|" + g;
       if (yaB.has(k)) return;
       yaB.add(k);

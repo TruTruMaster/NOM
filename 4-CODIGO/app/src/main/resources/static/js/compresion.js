@@ -264,13 +264,22 @@
   }
   const TAB_FIJA_LL = tabla(FIJO_LL, 288), TAB_FIJA_D = tabla(FIJO_D, 30);
 
+  // Sin tope pedido, lo más que cabe en un arreglo (los archivos de Office piden 256 MB por parte en origen.js).
+  const MAX_INFLAR = 2047 * 1024 * 1024;
   /** Descomprime DEFLATE crudo. opc.grande y opc.dic tienen que ser los mismos que al comprimir. */
   function inflar(src, opc) {
     opc = opc || {};
     const grande = !!opc.grande, dic = opc.dic && opc.dic.length ? opc.dic : null, base = dic ? dic.length : 0;
-    let out = new Uint8Array(base + Math.max(256, opc.tam || src.length * 4)), op = base;
+    const max = opc.max > 0 ? opc.max : MAX_INFLAR;
+    const muyGrande = () => { const e = new Error("El archivo trae una parte demasiado grande"); e.muyGrande = true; throw e; };
+    if (opc.tam != null && (!Number.isFinite(opc.tam) || opc.tam > max)) muyGrande();
+    const tamIni = Math.min(max, Math.max(256, opc.tam > 0 ? Math.min(opc.tam, Math.max(src.length * 16, 65536)) : src.length * 4));
+    let out = new Uint8Array(base + tamIni), op = base;
     if (dic) out.set(dic);
-    const crecer = (mas) => { if (op + mas > out.length) { const o = new Uint8Array(Math.max(out.length * 2, op + mas)); o.set(out.subarray(0, op)); out = o; } };
+    const crecer = (mas) => {
+      if (op - base + mas > max) muyGrande();
+      if (op + mas > out.length) { const o = new Uint8Array(Math.min(base + max, Math.max(out.length * 2, op + mas))); o.set(out.subarray(0, op)); out = o; }
+    };
     const n = src.length;
     let ip = 0, buf = 0, cnt = 0, ultimo = 0;
     const mal = () => { throw new Error("Los datos comprimidos están dañados"); };
@@ -322,7 +331,7 @@
         let e = tl[buf & ml], l = e & 15, s = e >>> 4;
         if (!l) mal();
         buf >>>= l; cnt -= l;
-        if (s < 256) { if (op >= out.length) crecer(1 + (out.length >> 1)); out[op++] = s; continue; }
+        if (s < 256) { if (op >= out.length) crecer(1); out[op++] = s; continue; }
         if (s === 256) break;
         s -= 257;
         if (s > 28) mal();
@@ -340,7 +349,7 @@
           dist += buf & ((1 << de) - 1); buf >>>= de; cnt -= de;
         }
         if (dist > op) mal();
-        if (op + largo > out.length) crecer(largo + (out.length >> 1));
+        if (op + largo > out.length) crecer(largo);
         let p = op - dist;
         if (dist >= largo) { out.set(out.subarray(p, p + largo), op); op += largo; }
         else { const fin = op + largo; while (op < fin) out[op++] = out[p++]; }

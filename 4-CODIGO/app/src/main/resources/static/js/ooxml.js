@@ -154,9 +154,9 @@
 
   /** HTML de un párrafo (b, i, u, br) → tramos { t, b, i, u, br }. */
   function tramos(html) {
-    const d = document.createElement("div");
-    d.innerHTML = html || "";
+    const d = new DOMParser().parseFromString(html || "", "text/html").body;
     const r = [];
+    if (!d) return r;
     (function rec(n, st) {
       n.childNodes.forEach((c) => {
         if (c.nodeType === 3) { if (c.nodeValue) r.push({ t: c.nodeValue, ...st }); return; }
@@ -213,7 +213,13 @@
     return out;
   }
   const RE_REF_FIN = /((?:'[^']*(?:''[^']*)*'|[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*)!)?\$?[A-Za-z]{1,3}\$?\d+$/;
-  const RE_REF_INI = /^((?:'[^']*(?:''[^']*)*'|[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*)!)?\$?[A-Za-z]{1,3}\$?\d+(?::\$?[A-Za-z]{1,3}\$?\d+)?/;
+  const RE_REF_INI = /((?:'[^']*(?:''[^']*)*'|[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*)!)?\$?[A-Za-z]{1,3}\$?\d+(?::\$?[A-Za-z]{1,3}\$?\d+)?/y;
+  const RE_OP_XL = /\[([A-Za-z_][A-Za-z0-9_.]*)\]/y;
+  const RE_FN_ARR = /[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*\s*\(/y;
+  const RE_FUNC_XL = /[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*(?=\s*\()/y;
+  const RE_ID_XL = /[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*/y;
+  const RE_BOOL_XL = /(VERDADERO|FALSO)(?![A-Za-z0-9_.(])/iy;
+  const execEn = (re, s, pos) => { re.lastIndex = pos; return re.exec(s); };
   /** Una fórmula de NOM (en español) como la guarda Excel. xlv: versión del importador con que llegó la hoja
       (antes de la 5 las matrices escritas se guardaron con «;» entre columnas). */
   function formulaExcel(f, xlv, vieja) {
@@ -229,31 +235,31 @@
       if (llaves > 0) { r += c === "\\" ? "," : c; continue; }
       if (c === ";") { r += ","; continue; }
       // [y]: parámetro de LAMBDA que se puede omitir (Excel: _xlop.y)
-      if (c === "[" && params) { const q = /^\[([A-Za-z_][A-Za-z0-9_.]*)\]/.exec(s.slice(i)); if (q && params.has(q[1].toUpperCase())) { r += "_xlop." + q[1]; i += q[0].length - 1; continue; } }
+      if (c === "[" && params) { const q = execEn(RE_OP_XL, s, i); if (q && params.has(q[1].toUpperCase())) { r += "_xlop." + q[1]; i += q[0].length - 1; continue; } }
       // A1#: Excel lo guarda como _xlfn.ANCHORARRAY(A1)
       if (c === "#") { const q = RE_REF_FIN.exec(r); if (q && !/[A-Za-z0-9_.]/.test(r[q.index - 1] || "")) { r = r.slice(0, q.index) + "_xlfn.ANCHORARRAY(" + q[0] + ")"; continue; } }
       // @: la intersección implícita, _xlfn.SINGLE(…)
       if (c === "@") {
-        const resto = s.slice(i + 1), q = RE_REF_INI.exec(resto), fn = /^[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*\s*\(/.exec(resto);
         // (en una fórmula del Excel viejo la intersección implícita no se escribe: es como se calcula ahí)
         if (vieja) continue;
-        if (resto[0] === "(") { r += "_xlfn.SINGLE"; continue; }
+        if (s[i + 1] === "(") { r += "_xlfn.SINGLE"; continue; }
+        const q = execEn(RE_REF_INI, s, i + 1), fn = execEn(RE_FN_ARR, s, i + 1);
         if (q && !fn) { r += "_xlfn.SINGLE(" + q[0] + ")"; i += q[0].length; continue; }
         if (fn) {
-          let j = fn[0].length, prof = 1, t = false;
-          for (; j < resto.length && prof; j++) { const ch = resto[j]; if (ch === '"') t = !t; else if (!t) { if (ch === "(") prof++; else if (ch === ")") prof--; } }
-          r += "_xlfn.SINGLE(" + formulaExcel("=" + resto.slice(0, j), xlv, vieja) + ")"; i += j; continue;
+          let j = i + 1 + fn[0].length, prof = 1, t = false;
+          for (; j < s.length && prof; j++) { const ch = s[j]; if (ch === '"') t = !t; else if (!t) { if (ch === "(") prof++; else if (ch === ")") prof--; } }
+          r += "_xlfn.SINGLE(" + formulaExcel("=" + s.slice(i + 1, j), xlv, vieja) + ")"; i = j - 1; continue;
         }
       }
-      const m = /^[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*(?=\s*\()/.exec(s.slice(i));
+      const m = execEn(RE_FUNC_XL, s, i);
       if (m && params && params.has(m[0].toUpperCase()) && !/[A-Za-z0-9_.$]/.test(s[i - 1] || "")) { r += "_xlpm." + m[0]; i += m[0].length - 1; continue; }
       // (lo que no es una función —un nombre definido que es una función propia: Doble(5)— se queda como se escribió)
       if (m) { const n = m[0].toUpperCase(), es = (F().ALIAS || {})[n] || n; r += (F().INGLES || {})[es] || EN[n] || (/^_xl/i.test(m[0]) ? n : m[0]); i += m[0].length - 1; continue; }
       if (params) {
-        const q = /^[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*/.exec(s.slice(i));
+        const q = execEn(RE_ID_XL, s, i);
         if (q && params.has(q[0].toUpperCase()) && !/[A-Za-z0-9_.$!:'\]]/.test(s[i - 1] || "") && s[i + q[0].length] !== "!") { r += "_xlpm." + q[0]; i += q[0].length - 1; continue; }
       }
-      const b = /^(VERDADERO|FALSO)(?![A-Za-z0-9_.(])/i.exec(s.slice(i));
+      const b = execEn(RE_BOOL_XL, s, i);
       if (b && !/[A-Za-z0-9_.]/.test(s[i - 1] || "")) { r += b[1].toUpperCase() === "VERDADERO" ? "TRUE" : "FALSE"; i += b[0].length - 1; continue; }
       r += c;
     }
@@ -1809,12 +1815,12 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     darkGreen: "#008000", darkMagenta: "#800080", darkRed: "#800000", darkYellow: "#808000", darkGray: "#808080", lightGray: "#C0C0C0", black: "#000000" };
 
   /** Ecuación de Word (OMML) → la notación de NOM (\\frac, ^, _, \\sqrt…). */
-  function ommlATex(n) {
+  function ommlATex(n, prof = 0) {
+    if (!n || prof > 64) return "";
     const hs = (x) => [...(x ? x.childNodes : [])].filter((c) => c.nodeType === 1);
     const h1 = (x, nombre) => hs(x).find((c) => c.localName === nombre) || null;
-    const todo = (x) => hs(x).map(ommlATex).join("");
+    const todo = (x) => hs(x).map((c) => ommlATex(c, prof + 1)).join("");
     const g = (x) => { const t = x ? todo(x) : ""; return t.length === 1 ? t : "{" + t + "}"; };
-    if (!n) return "";
     switch (n.localName) {
       case "r": return [...n.getElementsByTagNameNS("*", "t")].map((t) => t.textContent).join("");
       case "f": return `\\frac{${todo(h1(n, "num"))}}{${todo(h1(n, "den"))}}`;
@@ -1869,7 +1875,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     // estilos: id → nombre en inglés ("heading 1", "Title"…), y de cada uno su estilo base y sus
     // propiedades, para saber con qué letra y qué espaciado se ve de verdad cada párrafo (en un
     // documento real casi nada trae formato propio: la fuente y el interlineado vienen del estilo)
-    const estilos = {}, defEstilo = {}, estilosW = {};   // (estilosW: los estilos propios del Word que usan sus párrafos)
+    const estilos = Object.create(null), defEstilo = Object.create(null), estilosW = {};   // (estilosW: los estilos propios del Word que usan sus párrafos)
     let rprDef = null, pprDef = null, idNormal = null, idTablaNormal = null;
     const stTxt = await z.texto("word/styles.xml");
     if (stTxt) {
@@ -1985,7 +1991,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     }
     // ---- lo que se hereda: valores del documento → estilo base → estilo → lo propio
     const rBase = attrsRun(rprDef, {});
-    const cacheR = {}, cacheP = {};
+    const cacheR = Object.create(null), cacheP = Object.create(null);
     /** La letra con la que se ve un estilo. De un estilo de carácter sale solo lo que él cambia. */
     function letraDe(id, prof) {
       const d = id != null ? defEstilo[id] : null;
@@ -2470,8 +2476,8 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     /** Las partes de un estilo de tabla de Word con su herencia (basedOn): rPr, tcPr y tblPr de cada tipo de región. */
     function partesEstiloTabla(id, prof) {
       const d = id != null ? defEstilo[id] : null;
-      if (!d || !d.nodo || (prof || 0) > 8) return {};
-      const out = Object.assign({}, d.base ? partesEstiloTabla(d.base, (prof || 0) + 1) : {});
+      if (!d || !d.nodo || (prof || 0) > 8) return Object.create(null);
+      const out = Object.assign(Object.create(null), d.base ? partesEstiloTabla(d.base, (prof || 0) + 1) : null);
       const una = (n) => ({ rpr: hijo(n, "rPr"), tcpr: hijo(n, "tcPr"), tblpr: hijo(n, "tblPr"), ppr: hijo(n, "pPr") });
       const todo = una(d.nodo);
       out.wholeTable = Object.assign({}, out.wholeTable || {}, Object.fromEntries(Object.entries(todo).filter(([, v]) => v)));
@@ -2765,10 +2771,10 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       const mr = hijo(ppr, "rPr");
       if (mr) { const am = attrsRun(mr, {}); if (+am.tam) pa.tm = +am.tam; if (am.fuente) pa.fm = am.fuente; }
       if (c.num && c.num.id != null && c.num.id !== "0") {
-        const lvl = +(c.num.lvl || 0), f = (formatoNum[c.num.id] || {})[lvl] || "bullet";
+        const lvl = Math.max(0, Math.min(8, Math.trunc(+(c.num.lvl || 0)) || 0)), f = (formatoNum[c.num.id] || {})[lvl] || "bullet";
         // (un nivel con formato «none» no lleva marca: Word solo le da la sangría)
         if (f !== "none") pa.lista = f === "bullet" ? "vinetas" : "numeros";
-        if (lvl && f !== "none") pa.nivel = Math.min(8, lvl);
+        if (lvl && f !== "none") pa.nivel = lvl;
         if (pa.lista === "numeros") pa.numid = String(c.num.id);   // Word cuenta por lista (numId) aunque haya texto en medio
         if (pa.lista === "numeros") {
           // el número como lo escribe Word: un formato sencillo («1.», «a)», «I.») o su texto completo con los niveles
@@ -2878,14 +2884,18 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       const filas = hijos(c, "tr"), celdas = {};
       let cols = 0;
       // texto de una celda: sus párrafos, y si trae otra tabla adentro, sus renglones con " | "
-      const textoCelda = (tc) => {
+      const textoCelda = (tc, prof = 0) => {
+        if (!tc || prof > 64) return "";
         const out = [];
-        const rec = (n) => hijos(n).forEach((h) => {
-          if (h.localName === "p") out.push([...h.getElementsByTagNameNS(W, "t")].filter((t) => { for (let q = t.parentNode; q && q !== h; q = q.parentNode) if (q.localName === "txbxContent" || q.localName === "Fallback") return false; return true; }).map((t) => t.textContent).join(""));
-          else if (h.localName === "tbl") hijos(h, "tr").forEach((tr) => out.push(hijos(tr, "tc").map((x2) => textoCelda(x2).replace(/\n/g, " ")).join(" | ")));
-          else if (h.localName === "sdt") rec(hijo(h, "sdtContent"));
-        });
-        rec(tc);
+        const rec = (n, p) => {
+          if (!n || p > 64) return;
+          hijos(n).forEach((h) => {
+            if (h.localName === "p") out.push([...h.getElementsByTagNameNS(W, "t")].filter((t) => { for (let q = t.parentNode; q && q !== h; q = q.parentNode) if (q.localName === "txbxContent" || q.localName === "Fallback") return false; return true; }).map((t) => t.textContent).join(""));
+            else if (h.localName === "tbl") hijos(h, "tr").forEach((tr) => out.push(hijos(tr, "tc").map((x2) => textoCelda(x2, p + 1).replace(/\n/g, " ")).join(" | ")));
+            else if (h.localName === "sdt") rec(hijo(h, "sdtContent"), p + 1);
+          });
+        };
+        rec(tc, prof);
         return out.join("\n").trim();
       };
       const abiertas = {};   // columna → celda donde empezó una combinación vertical
@@ -3314,19 +3324,23 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
   function partesGrafica(t, ev, r) {
     const num = (v) => F().esNum(v);
     const val = (c, f) => ev.valor(c, f);
-    const conEtiquetas = (() => { for (let f = r.f1; f <= r.f2; f++) if (r.c2 > r.c1 && !num(val(r.c1, f)) && val(r.c1, f) !== "") return true; return false; })();
+    const MAX_FILAS = 100000, MAX_COLS = 256, MAX_CELDAS = 500000;
+    const c2 = Math.min(r.c2, r.c1 + MAX_COLS - 1), fLim = Math.min(r.f2, r.f1 + MAX_FILAS);
+    const conEtiquetas = (() => { for (let f = r.f1; f <= fLim; f++) if (c2 > r.c1 && !num(val(r.c1, f)) && val(r.c1, f) !== "") return true; return false; })();
     const c0 = conEtiquetas ? r.c1 + 1 : r.c1;
     let conNombres = false;
-    if (r.f2 > r.f1) for (let c = c0; c <= r.c2; c++) { const v = val(c, r.f1); if (v !== "" && !num(v)) conNombres = true; }
+    if (fLim > r.f1) for (let c = c0; c <= c2; c++) { const v = val(c, r.f1); if (v !== "" && !num(v)) conNombres = true; }
     const f0 = conNombres ? r.f1 + 1 : r.f1;
+    const maxF = Math.min(MAX_FILAS, Math.max(1, Math.floor(MAX_CELDAS / Math.max(1, c2 - c0 + 1))));
+    const f2 = Math.min(r.f2, f0 + maxF - 1), nFilas = Math.max(0, f2 - f0 + 1);
     const series = [];
-    for (let c = c0; c <= r.c2; c++) {
+    for (let c = c0; c <= c2; c++) {
       let alguno = false;
-      for (let f = f0; f <= r.f2; f++) if (num(val(c, f))) alguno = true;
-      if (alguno) series.push({ c, nombre: conNombres ? F().formatear(val(c, r.f1)) : "Serie " + (series.length + 1), valores: Array.from({ length: r.f2 - f0 + 1 }, (_, k) => (num(val(c, f0 + k)) ? +val(c, f0 + k) : null)) });
+      for (let f = f0; f <= f2; f++) if (num(val(c, f))) { alguno = true; break; }
+      if (alguno) series.push({ c, nombre: conNombres ? F().formatear(val(c, r.f1)) : "Serie " + (series.length + 1), valores: Array.from({ length: nFilas }, (_, k) => (num(val(c, f0 + k)) ? +val(c, f0 + k) : null)) });
     }
-    const etiquetas = Array.from({ length: r.f2 - f0 + 1 }, (_, k) => (conEtiquetas ? F().formatear(val(r.c1, f0 + k)) : String(k + 1)));
-    return { conEtiquetas, conNombres, f0, series, etiquetas };
+    const etiquetas = Array.from({ length: nFilas }, (_, k) => (conEtiquetas ? F().formatear(val(r.c1, f0 + k)) : String(k + 1)));
+    return { conEtiquetas, conNombres, f0, f2, series, etiquetas };
   }
   /** XML de una gráfica nativa de Excel (barras, líneas, área, dispersión o pastel). */
   function graficaXlsx(g, hoja, t, ev) {
@@ -3340,11 +3354,11 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
     const n = pg.etiquetas.length;
     const cache = (vals) => `<c:numCache><c:formatCode>General</c:formatCode><c:ptCount val="${vals.length}"/>${vals.map((v, i) => (v == null ? "" : `<c:pt idx="${i}"><c:v>${v}</c:v></c:pt>`)).join("")}</c:numCache>`;
     const cat = pg.conEtiquetas
-      ? `<c:cat><c:strRef><c:f>${x(abs(r.c1, pg.f0, r.c1, r.f2))}</c:f><c:strCache><c:ptCount val="${n}"/>${pg.etiquetas.map((e, i) => `<c:pt idx="${i}"><c:v>${x(e)}</c:v></c:pt>`).join("")}</c:strCache></c:strRef></c:cat>` : "";
+      ? `<c:cat><c:strRef><c:f>${x(abs(r.c1, pg.f0, r.c1, pg.f2))}</c:f><c:strCache><c:ptCount val="${n}"/>${pg.etiquetas.map((e, i) => `<c:pt idx="${i}"><c:v>${x(e)}</c:v></c:pt>`).join("")}</c:strCache></c:strRef></c:cat>` : "";
     const tx = (s) => (pg.conNombres ? `<c:tx><c:strRef><c:f>${x(abs(s.c, r.f1, s.c, r.f1))}</c:f><c:strCache><c:ptCount val="1"/><c:pt idx="0"><c:v>${x(s.nombre)}</c:v></c:pt></c:strCache></c:strRef></c:tx>` : `<c:tx><c:v>${x(s.nombre)}</c:v></c:tx>`);
     const relleno = (i) => `<c:spPr><a:solidFill><a:srgbClr val="${col[i % col.length].slice(1)}"/></a:solidFill></c:spPr>`;
     const linea = (i) => `<c:spPr><a:ln w="28575"><a:solidFill><a:srgbClr val="${col[i % col.length].slice(1)}"/></a:solidFill></a:ln></c:spPr>`;
-    const vals = (s) => `<c:val><c:numRef><c:f>${x(abs(s.c, pg.f0, s.c, r.f2))}</c:f>${cache(s.valores)}</c:numRef></c:val>`;
+    const vals = (s) => `<c:val><c:numRef><c:f>${x(abs(s.c, pg.f0, s.c, pg.f2))}</c:f>${cache(s.valores)}</c:numRef></c:val>`;
     const ejes = `<c:axId val="1001"/><c:axId val="1002"/>`;
     const ejeX = (titulo, pos) => `<c:catAx><c:axId val="1001"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="${pos || "b"}"/>${titulo ? tituloXml(titulo) : ""}<c:numFmt formatCode="General" sourceLinked="1"/><c:tickLblPos val="nextTo"/><c:crossAx val="1002"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/></c:catAx>`;
     const ejeY = (titulo, pos) => `<c:valAx><c:axId val="1002"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="${pos || "l"}"/><c:majorGridlines/>${titulo ? tituloXml(titulo) : ""}<c:numFmt formatCode="General" sourceLinked="1"/><c:tickLblPos val="nextTo"/><c:crossAx val="1001"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>`;
@@ -3356,7 +3370,7 @@ ${notas.length ? '<Override PartName="/word/footnotes.xml" ContentType="applicat
       plot = `<c:pieChart><c:varyColors val="1"/><c:ser><c:idx val="0"/><c:order val="0"/>${tx(s)}${pg.etiquetas.map((_, i) => `<c:dPt><c:idx val="${i}"/><c:bubble3D val="0"/>${relleno(i)}</c:dPt>`).join("")}${cat}${vals(s)}</c:ser><c:firstSliceAng val="0"/></c:pieChart>`;
     } else if (clase === "dispersion") {
       const xs = pg.series.length > 1 ? pg.series[0] : null, ys = xs ? pg.series.slice(1) : pg.series;
-      plot = `<c:scatterChart><c:scatterStyle val="lineMarker"/><c:varyColors val="0"/>${ys.map((s, i) => `<c:ser><c:idx val="${i}"/><c:order val="${i}"/>${tx(s)}<c:spPr><a:ln w="19050"><a:noFill/></a:ln></c:spPr><c:marker><c:symbol val="circle"/><c:size val="6"/>${relleno(i)}</c:marker>${xs ? `<c:xVal><c:numRef><c:f>${x(abs(xs.c, pg.f0, xs.c, r.f2))}</c:f>${cache(xs.valores)}</c:numRef></c:xVal>` : ""}<c:yVal><c:numRef><c:f>${x(abs(s.c, pg.f0, s.c, r.f2))}</c:f>${cache(s.valores)}</c:numRef></c:yVal><c:smooth val="0"/></c:ser>`).join("")}${ejes}</c:scatterChart>`
+      plot = `<c:scatterChart><c:scatterStyle val="lineMarker"/><c:varyColors val="0"/>${ys.map((s, i) => `<c:ser><c:idx val="${i}"/><c:order val="${i}"/>${tx(s)}<c:spPr><a:ln w="19050"><a:noFill/></a:ln></c:spPr><c:marker><c:symbol val="circle"/><c:size val="6"/>${relleno(i)}</c:marker>${xs ? `<c:xVal><c:numRef><c:f>${x(abs(xs.c, pg.f0, xs.c, pg.f2))}</c:f>${cache(xs.valores)}</c:numRef></c:xVal>` : ""}<c:yVal><c:numRef><c:f>${x(abs(s.c, pg.f0, s.c, pg.f2))}</c:f>${cache(s.valores)}</c:numRef></c:yVal><c:smooth val="0"/></c:ser>`).join("")}${ejes}</c:scatterChart>`
         + `<c:valAx><c:axId val="1001"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/>${g.ejeX ? tituloXml(g.ejeX) : ""}<c:numFmt formatCode="General" sourceLinked="1"/><c:tickLblPos val="nextTo"/><c:crossAx val="1002"/><c:crosses val="autoZero"/><c:crossBetween val="midCat"/></c:valAx>${ejeY(g.ejeY)}`;
     } else {
       const sers = pg.series.map((s, i) => `<c:ser><c:idx val="${i}"/><c:order val="${i}"/>${tx(s)}${clase === "lineas" ? linea(i) + `<c:marker><c:symbol val="circle"/><c:size val="5"/></c:marker>` : relleno(i)}${cat}${vals(s)}${clase === "lineas" ? `<c:smooth val="0"/>` : ""}</c:ser>`).join("");
@@ -4396,7 +4410,7 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
   /** .xlsx → { hojas: [{ nombre, campos }], aviso }: cada hoja con sus celdas, formato, combinadas, anchos y filas fijas. */
   /** Los nombres definidos de todo el libro en workbook.xml: { minúsculas: { n: nombre, d: definición en NOM («=…») } }. */
   function nombresDelLibro(wb) {
-    const out = {};
+    const out = Object.create(null);
     const re = /<(?:\w+:)?definedName\b([^>]*)>([\s\S]*?)<\/(?:\w+:)?definedName>/g;
     let m;
     while ((m = re.exec(wb))) {
@@ -4435,7 +4449,9 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
     // nombres definidos del libro (los de todo el libro; los de una hoja y los de Excel —_xlnm— se conservan en el original)
     if (wb) {
       const nombres = nombresDelLibro(wb);
-      if (Object.keys(nombres).length) doc.nombres = nombres;
+      const limpio = {};
+      for (const k of Object.keys(nombres)) if (k !== "__proto__") limpio[k] = nombres[k];
+      if (Object.keys(limpio).length) doc.nombres = limpio;
     }
     const c = z.texto("docProps/custom.xml");
     if (c && /name="_MarkAsFinal"[^>]*>\s*<vt:bool>\s*(true|1)\s*<\/vt:bool>/i.test(c)) doc.final = true;
@@ -4765,7 +4781,7 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
     const hojasXml = todos(P(libro), "sheet");
     // Tablas de Excel (ListObject) de todas las hojas: su nombre, su rango y sus columnas, para traducir las
     // referencias estructuradas (Tabla[Columna], [@Columna]…) a referencias normales que el motor entiende.
-    const tablasXl = {};
+    const tablasXl = Object.create(null);
     if (V >= 2) for (const h of hojasXml) {
       let rh = destino[h.getAttribute("r:id") || h.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id")] || "";
       rh = rh.startsWith("/") ? rh.slice(1) : "xl/" + rh.replace(/^\.\//, "");
@@ -4796,7 +4812,7 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
       return m && temaXl[+m[1]] ? "#" + conTinte(temaXl[+m[1]], +(m[2] || 0)) : null;
     };
     // estilos propios del libro (los que alguien hizo en Excel): sus elementos usan los formatos «dxf» del libro
-    const estilosTablaLibro = {};
+    const estilosTablaLibro = Object.create(null);
     const dxfsL = todos(hijo(est.documentElement, "dxfs"), "dxf");
     const formatoDxf = (d) => {
         const o = {}, fu = d && hijo(d, "font"), pf = d && todos(d, "patternFill")[0], bo = d && hijo(d, "border");
@@ -4815,7 +4831,7 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
     if (V >= 3) {
       const ts = hijo(est.documentElement, "tableStyles");
       hijos(ts, "tableStyle").forEach((t2) => {
-        const e = {};
+        const e = Object.create(null);
         hijos(t2, "tableStyleElement").forEach((x) => { const f = formatoDxf(dxfsL[+at(x, "dxfId")]); if (+at(x, "size") > 1) f.s = +at(x, "size"); e[at(x, "type")] = f; });
         if (at(t2, "name")) estilosTablaLibro[at(t2, "name")] = e;
       });
@@ -4860,7 +4876,7 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
     }
     const fuenteDml = (n) => (n === "+mn-lt" || n === "+mn-ea" ? fuentesDml.menor || "Calibri" : n === "+mj-lt" || n === "+mj-ea" ? fuentesDml.mayor || "Calibri" : n);
     const rutaRel = (desde, tg) => { const rt = String(tg || "").startsWith("/") ? tg.slice(1) : desde.replace(/[^/]+$/, "") + tg; return rt.split("/").reduce((a, x) => { if (x === "..") a.pop(); else if (x && x !== ".") a.push(x); return a; }, []).join("/"); };
-    const relsDeParte = (ruta) => { const t2 = z.texto(ruta.replace(/([^/]+)$/, "_rels/$1.rels")), o = {}; if (t2) todos(P(t2), "Relationship").forEach((r) => (o[at(r, "Id")] = { tipo: at(r, "Type") || "", ruta: at(r, "TargetMode") === "External" ? null : rutaRel(ruta, at(r, "Target")) })); return o; };
+    const relsDeParte = (ruta) => { const t2 = z.texto(ruta.replace(/([^/]+)$/, "_rels/$1.rels")), o = Object.create(null); if (t2) todos(P(t2), "Relationship").forEach((r) => (o[at(r, "Id")] = { tipo: at(r, "Type") || "", ruta: at(r, "TargetMode") === "External" ? null : rutaRel(ruta, at(r, "Target")) })); return o; };
     const MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", bmp: "image/bmp", svg: "image/svg+xml", webp: "image/webp", emf: "image/x-emf", wmf: "image/x-wmf" };
     const dataUrlXl = (ruta) => {
       const b = ruta && z.bytes(ruta), ext = String(ruta || "").split(".").pop().toLowerCase();
@@ -4879,7 +4895,7 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
     function dibujosDeHoja(ruta) {
       const relsH = relsDeParte(ruta), out = [];
       // controles de formulario de la hoja: shapeId → su tipo y su estado (ctrlProps)
-      const controles = {};
+      const controles = Object.create(null);
       {
         const xh = z.texto(ruta), dh = xh && xh.includes("<control") ? P(xh) : null;
         todos(dh, "control").forEach((c) => {
@@ -4895,10 +4911,10 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
         if (!xd) return;
         const relsD = relsDeParte(r.ruta);
         const pos = (n) => (n ? { c: +(hijo(n, "col") || {}).textContent || 0, dc: (+(hijo(n, "colOff") || {}).textContent || 0) / 9525, f: +(hijo(n, "row") || {}).textContent || 0, df: (+(hijo(n, "rowOff") || {}).textContent || 0) / 9525 } : null);
-        const leerEl = (el, ancla, grupo) => {
-          if (!el) return;
+        const leerEl = (el, ancla, grupo, prof = 0) => {
+          if (!el || prof > 64) return;
           const nm = el.localName;
-          if (nm === "AlternateContent") { const ch = hijo(el, "Choice") || hijo(el, "Fallback"); hijos(ch).forEach((x) => leerEl(x, ancla, grupo)); return; }
+          if (nm === "AlternateContent") { const ch = hijo(el, "Choice") || hijo(el, "Fallback"); hijos(ch).forEach((x) => leerEl(x, ancla, grupo, prof + 1)); return; }
           // posición dentro de un grupo: su xfrm en el espacio del grupo
           const xf = todos(hijo(el, "spPr") || hijo(el, "grpSpPr") || hijo(el, "xfrm") || el, "xfrm")[0];
           const o2 = xf && hijo(xf, "off"), e2 = xf && hijo(xf, "ext");
@@ -4911,7 +4927,7 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
             const sub = { ancla: a, grupoEn: grupo, chx: +at(co, "x"), chy: +at(co, "y"), cx: +at(ce, "cx") || 1, cy: +at(ce, "cy") || 1, ex: +at(ge, "cx") || 1, ey: +at(ge, "cy") || 1 };
             out.push({ tipo: "grupo-ini", a, sub: { chx: sub.chx, chy: sub.chy, cx: sub.cx, cy: sub.cy, giro: gx && at(gx, "rot") ? +at(gx, "rot") / 60000 : 0 } });
             const gIdx = out.length - 1;
-            hijos(el).forEach((x) => { if (x.localName !== "nvGrpSpPr" && x.localName !== "grpSpPr") leerEl(x, null, { idx: gIdx }); });
+            hijos(el).forEach((x) => { if (x.localName !== "nvGrpSpPr" && x.localName !== "grpSpPr") leerEl(x, null, { idx: gIdx }, prof + 1); });
             return;
           }
           const base = { a: grupo ? { grupo: grupo.idx, caja: xf && o2 && e2 ? { x: +at(o2, "x"), y: +at(o2, "y"), w: +at(e2, "cx"), h: +at(e2, "cy") } : null } : a, giro: giro || undefined, vH: vH || undefined, vV: vV || undefined };
@@ -4954,7 +4970,7 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
                 // (Excel escribe 0 × 0 en el marco: el tamaño está en el ancla; las formas van en EMU desde la esquina del marco)
                 out.push({ tipo: "grupo-ini", a, sub: { chx: 0, chy: 0, cx: +at(eG, "cx") || 0, cy: +at(eG, "cy") || 0, giro: 0, emu: true } });
                 const gI = out.length - 1, arbolD = todos(P(xdg), "spTree")[0];
-                hijos(arbolD).forEach((x) => { if (x.localName === "sp" || x.localName === "grpSp") leerEl(x, null, { idx: gI }); });
+                hijos(arbolD).forEach((x) => { if (x.localName === "sp" || x.localName === "grpSp") leerEl(x, null, { idx: gI }, prof + 1); });
                 return;
               }
             }
@@ -5002,7 +5018,7 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
     // la primera celda de su rango); las pinta el modo Excel de la hoja. Las de Excel 2010 (barras con borde o lisas,
     // más juegos de íconos) van aparte en «extLst» y se juntan por su id.
     function formatoCondicional(doc, hoja) {
-      const raiz = doc.documentElement, reglas = [], usados = new Set(), ext14 = {};
+      const raiz = doc.documentElement, reglas = [], usados = new Set(), ext14 = Object.create(null);
       const X14 = (n) => n && /2009\/9\/main/.test(n.namespaceURI || "");
       todos(raiz, "cfRule").forEach((r) => { if (X14(r) && at(r, "id")) ext14[at(r, "id")] = r; });
       const cfvo = (n) => { const fx = todos(n, "f")[0]; return { t: at(n, "type") || "min", v: at(n, "val") != null ? at(n, "val") : fx ? fx.textContent : null, gte: at(n, "gte") !== "0" }; };
@@ -5168,7 +5184,7 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
         if (V >= 9 && sv && /^(1|true)$/.test(at(sv, "showFormulas") || "")) campos.vf = true;
       }
       let maxF = 0, maxC = 0;
-      const compartidas = {}, tablasDatos = [];
+      const compartidas = Object.create(null), tablasDatos = [];
       const derramadas = new Set();   // (versión 5) celdas a las que llega lo que derrama una fórmula de matriz
       todos(doc, "row").forEach((row) => {
         const ht = +at(row, "ht");
@@ -5190,7 +5206,7 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
             const [a1, b1] = String(at(f, "ref") || "").split(":").map((q) => F().parseRef(q));
             const r1 = at(f, "r1") || "", r2 = at(f, "r2") || "", dos = at(f, "dt2D") === "1", fila = at(f, "dtr") === "1";
             const fx = dos ? `=TABLA(${r1};${r2})` : fila ? `=TABLA(${r1};)` : `=TABLA(;${r1})`;
-            if (a1) tablasDatos.push({ a: a1, b: b1 || a1, fx });
+            if (a1 && a1.f < MAX_F && a1.c < MAX_C) tablasDatos.push({ a: a1, b: b1 || a1, fx });
           }
           if (f && (f.textContent || at(f, "t") === "shared")) {
             let fx = f.textContent;
@@ -5264,7 +5280,7 @@ ${dinArch.map((_, k) => `<Override PartName="/xl/pivotTables/pivotTable${k + 1}.
         if (nv > 0) for (let k = min; k <= max && k - min < MAX_C; k++) campos["olc:" + F().colLetra(k - 1)] = nv;
       });
       // (versión 10) las celdas de cada tabla de datos: su fórmula TABLA (Excel solo guarda la primera)
-      tablasDatos.forEach((td) => { for (let f2 = td.a.f; f2 <= td.b.f; f2++) for (let c2 = td.a.c; c2 <= td.b.c; c2++) campos["c:" + F().ref(c2, f2)] = td.fx; });
+      tablasDatos.forEach((td) => { for (let f2 = td.a.f; f2 <= Math.min(td.b.f, MAX_F - 1); f2++) for (let c2 = td.a.c; c2 <= Math.min(td.b.c, MAX_C - 1); c2++) campos["c:" + F().ref(c2, f2)] = td.fx; });
       // (versión 6) la protección de la hoja: el hash de su contraseña y lo que deja hacer
       if (V >= 6) { const sp = todos(doc, "sheetProtection")[0]; if (sp && /^(1|true)$/.test(at(sp, "sheet") || "")) campos.prot = protHojaDe(sp); }
       // (versión 11) los escenarios (Datos → Análisis de hipótesis → Administrador de escenarios)
@@ -6384,7 +6400,7 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
     }
     async function relsDe(ruta) {
       const t = await z.texto(carpeta(ruta) + "_rels/" + ruta.slice(ruta.lastIndexOf("/") + 1) + ".rels");
-      const m = {};
+      const m = Object.create(null);
       if (t) todos(P(t), "Relationship").forEach((r) => (m[at(r, "Id")] = { destino: resolver(ruta, at(r, "Target")), tipo: at(r, "Type") || "", externo: at(r, "TargetMode") === "External", bruto: at(r, "Target") || "" }));
       return m;
     }
@@ -6405,14 +6421,14 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
     // Colores del tema: casi todas las figuras de una presentación real dicen "acento 1" o "texto 1"
     // en vez de un color escrito.
     const esquema = {}, lineasTema = {}, fuentesTema = { mayor: null, menor: null }, fondosTema = {};
-    let relsTema = {};
+    let relsTema = Object.create(null);
     const capas = new Map();   // diseño → formas heredadas del patrón y del diseño (se pintan debajo)
     // Cada patrón trae su propio tema (una presentación puede mezclar varios): colores, fuentes, grosores de línea y
     // rellenos de fondo. Se leen una vez por tema y se cambian al pasar a una diapositiva de otro patrón.
     const temas = new Map();
     async function leerTema(rutaTema) {
       if (temas.has(rutaTema)) return temas.get(rutaTema);
-      const t = { esquema: {}, lineas: {}, fondos: {}, fuentes: { mayor: null, menor: null }, rels: {} };
+      const t = { esquema: {}, lineas: {}, fondos: {}, fuentes: { mayor: null, menor: null }, rels: Object.create(null) };
       const tt = await z.texto(rutaTema), dt = tt ? P(tt) : null;
       const cs = dt ? todos(dt, "clrScheme")[0] : null;
       hs(cs).forEach((c) => { const v = h1(c, "srgbClr") ? at(h1(c, "srgbClr"), "val") : h1(c, "sysClr") ? at(h1(c, "sysClr"), "lastClr") : null; if (v && /^[0-9a-f]{6}$/i.test(v)) t.esquema[c.localName] = v.toUpperCase(); });
@@ -6423,7 +6439,7 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       // rellenos de fondo del tema (bgRef idx="1001"… usa el primero)
       const bgl = dt ? todos(dt, "bgFillStyleLst")[0] : null;
       hs(bgl).forEach((f, i) => { f.__tema = true; t.fondos[i + 1] = f; });
-      t.rels = tt ? await relsDe(rutaTema) : {};
+      t.rels = tt ? await relsDe(rutaTema) : Object.create(null);
       // fuentes del tema: «+mj-lt» (títulos) y «+mn-lt» (cuerpo)
       ["majorFont", "minorFont"].forEach((k, i) => { const f = dt && todos(dt, k)[0], l = f && h1(f, "latin"); if (l && at(l, "typeface")) t.fuentes[i ? "menor" : "mayor"] = at(l, "typeface"); });
       temas.set(rutaTema, t);
@@ -6682,7 +6698,7 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       return r;
     }
     async function marcadores(ruta) {
-      const m = {};
+      const m = Object.create(null);
       const t = await z.texto(ruta);
       if (!t) return m;
       const dm = P(t);
@@ -6917,14 +6933,14 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       if (/^(0|false)$/.test(sld.documentElement.getAttribute("show") || "")) docCampos["oculta:" + pg] = true;
       // Marcadores del diseño y del patrón (para lo que no trae posición propia).
       const relDiseno = Object.values(rels).find((r) => /slideLayout$/.test(r.tipo));
-      let heredados = {}, mDis = {}, mMae = {};
+      let heredados = Object.create(null), mDis = Object.create(null), mMae = Object.create(null);
       if (relDiseno) {
         const relsDis = await relsDe(relDiseno.destino);
         const relMaestro = Object.values(relsDis).find((r) => /slideMaster$/.test(r.tipo));
         // el tema de ESTE patrón (antes de leer colores y fuentes)
         const relTemaM = relMaestro ? Object.values(await relsDe(relMaestro.destino)).find((r) => /\/theme$/.test(r.tipo)) : null;
         usarTema(relTemaM ? await leerTema(relTemaM.destino) : temaPres);
-        mMae = relMaestro ? await marcadores(relMaestro.destino) : {};
+        mMae = relMaestro ? await marcadores(relMaestro.destino) : Object.create(null);
         mDis = await marcadores(relDiseno.destino);
         // mapa de colores: el patrón dice qué es «texto 1» y «fondo 1» (en un tema oscuro, el texto es el claro)
         const leeMapa = (t) => { const m2 = t && /<(?:\w+:)?(?:clrMap|overrideClrMapping)\s([^>]*)>/.exec(t); const o2 = {}; if (m2) m2[1].replace(/(\w+)="(\w+)"/g, (_, k, v) => { o2[k] = v; }); return o2; };
@@ -6933,18 +6949,18 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
         const ovS = leeMapa((/<p:clrMapOvr>\s*(<a:overrideClrMapping[^>]*>)/.exec(xml) || [])[1] || "");
         mapa = Object.assign({}, mapa, ovD, ovS);
         ["bg1", "tx1", "bg2", "tx2"].forEach((k) => { const v = mapa[k] || { bg1: "lt1", tx1: "dk1", bg2: "lt2", tx2: "dk2" }[k]; if (esquema[v]) esquema[k] = esquema[v]; });
-        heredados = Object.assign({}, mMae);
+        heredados = Object.assign(Object.create(null), mMae);
         for (const k in mDis) if (!mDis[k].sinPos || !heredados[k]) heredados[k] = mDis[k];
       }
       let orden = 0;
       docCampos["os:" + pg] = ruta;   // de qué diapositiva del archivo viene esta página
       let agregar = (b) => { const id = "imp" + n + "_" + orden; bloques.push(Object.assign({ id, pagina: pg, orden: ++orden, z: orden, ox: oxActual }, b)); return id; };
       // estilos de tabla del archivo, con los colores del tema de esta diapositiva
-      const estilosTablaPpt = {};
+      const estilosTablaPpt = Object.create(null);
       if (xmlEstTablas) {
         const lnDe = (ln) => { if (!ln) return null; if (h1(ln, "noFill")) return "no"; const c = colorCss(h1(ln, "solidFill")); return c ? [Math.max(0.5, Math.round(((+(at(ln, "w") || 12700)) / 12700) * kPt * 100) / 100), c, null] : null; };
         todos(xmlEstTablas, "tblStyle").forEach((ts) => {
-          const e = {};
+          const e = Object.create(null);
           hs(ts).forEach((parte) => {
             const o = {}, tx = h1(parte, "tcTxStyle"), tcs = h1(parte, "tcStyle");
             if (tx) { if (at(tx, "b") != null) o.b = at(tx, "b") === "on"; if (at(tx, "i") != null) o.i = at(tx, "i") === "on"; const c = hs(tx).find((x) => /Clr$/.test(x.localName)); if (c) { const w = document.createElementNS(c.namespaceURI, "a:solidFill"); w.appendChild(c.cloneNode(true)); o.color = colorCss(w); } }
@@ -6962,7 +6978,8 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
        * de cuadros: en árbol (organigrama) si unos cuelgan de otros, o en fila si es una lista.
        * Todas llevan el mismo "ox": mientras no se toquen, al exportar sale el SmartArt original.
        */
-      async function smartArt(dg, r, anchoOrig, altoOrig) {
+      async function smartArt(dg, r, anchoOrig, altoOrig, prof = 0) {
+        if (prof > 64) return false;
         const relDatos = rels[rid(dg, "dm")], datos = relDatos ? await z.texto(relDatos.destino) : null;
         if (!datos) return false;
         const m = /dataModelExt[^>]*relId="([^"]+)"/.exec(datos), relDib = m ? rels[m[1]] : null;
@@ -6976,7 +6993,7 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
           // El color del texto como lo pinta PowerPoint: el de la etiqueta de estilo de cada figura (su punto de presentación
           // en los datos, por modelId) en los colores del SmartArt (txFillClrLst), no el fontRef del dibujo guardado
           // (que a veces dice blanco sobre un nodo blanco).
-          const etiquetas = {};
+          const etiquetas = Object.create(null);
           todos(P(datos), "pt").forEach((q) => { const ps = h1(q, "prSet"); if (ps && at(ps, "presStyleLbl")) etiquetas[at(q, "modelId")] = { lbl: at(ps, "presStyleLbl"), i: +(at(ps, "presStyleIdx") || 0), n: +(at(ps, "presStyleCnt") || 1) }; });
           const relCol = rels[rid(dg, "cs")], tCol = relCol ? await z.texto(relCol.destino) : null, xCol = tCol ? P(tCol) : null;
           const tintaDe = (mid) => {
@@ -7014,7 +7031,7 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
             const fig = sp.cloneNode(true);
             if (conTexto && txX) { const t = h1(fig, "txBody"); if (t) t.parentNode.removeChild(t); }
             else if (conTexto && tc) conColor(h1(fig, "txBody"), tc);
-            await elemento(fig, grupoSA);
+            await elemento(fig, grupoSA, prof);
             hechas++;
             if (conTexto && txX) {
               // el texto, derecho, en el rectángulo que PowerPoint le guardó (txXfrm), sin relleno ni contorno
@@ -7034,7 +7051,7 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
               const st = h1(t, "style"); if (st) st.parentNode.removeChild(st);
               const tb = h1(t, "txBody");
               if (tc && tb) conColor(tb, tc);
-              await elemento(t, grupoSA);
+              await elemento(t, grupoSA, prof);
             }
             if (mid) for (let k = k0; k < bloques.length; k++) bloques[k].dgm = mid;
           }
@@ -7092,7 +7109,7 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
           } catch (e) { if (typeof console !== "undefined") console.warn("SmartArt sin dibujo: no se pudo acomodar con su diseño", e); }
         }
         // ---- (último recurso) los cuadros de su lista
-        const dm = P(datos), pts = {}, hijosDe = {};
+        const dm = P(datos), pts = Object.create(null), hijosDe = Object.create(null);
         todos(dm, "pt").forEach((q) => { const tipo = at(q, "type") || "node"; if (tipo === "doc" || tipo === "node" || tipo === "asst") pts[at(q, "modelId")] = { tipo, texto: todos(h1(q, "t"), "p").map((x2) => x2.textContent.trim()).filter(Boolean).join("\n") }; });
         todos(dm, "cxn").filter((c) => (at(c, "type") || "parOf") === "parOf" && pts[at(c, "srcId")] && pts[at(c, "destId")]).sort((a, b) => +at(a, "srcOrd") - +at(b, "srcOrd"))
           .forEach((c) => (hijosDe[at(c, "srcId")] = hijosDe[at(c, "srcId")] || []).push(at(c, "destId")));
@@ -7111,7 +7128,7 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
         }
         // árbol: las hojas se reparten a lo ancho y cada cuadro queda centrado sobre los suyos
         let hojas = 0, niveles = 0;
-        const pos = {};
+        const pos = Object.create(null);
         const medir = (id, nivel, visto) => {
           if (visto.has(id) || nivel > 12) return null;
           visto.add(id); niveles = Math.max(niveles, nivel + 1);
@@ -7123,7 +7140,7 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
         const visto = new Set();
         arriba.forEach((id) => medir(id, 0, visto));
         const cw = W0 / Math.max(1, hojas), ch = H0 / Math.max(1, niveles), bw = Math.min(cw * 0.86, 220), bh = Math.min(ch * 0.55, 80);
-        const idDe = {};
+        const idDe = Object.create(null);
         Object.keys(pos).forEach((id) => { idDe[id] = caja(id, pos[id].x * cw - bw / 2, pos[id].nivel * ch + (ch - bh) / 2, bw, bh); });
         Object.keys(pos).forEach((id) => (hijosDe[id] || []).forEach((k) => { if (idDe[k]) agregar({ tipo: "conector", desde: idDe[id], hasta: idDe[k], orden: 0 }); }));
         return true;
@@ -7202,7 +7219,8 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
         return { anchos, altos, celdas };
       }
       const LINEAS_PRST = /^(line|straightConnector1|bentConnector[2-5]|curvedConnector[2-5])$/;
-      async function elemento(el, grupo) {
+      async function elemento(el, grupo, prof = 0) {
+        if (!el || prof > 64) return;
         const nm = el.localName;
         if (nm === "grpSp") {
           // Grupo: sus hijos se ubican con la transformación del grupo.
@@ -7216,7 +7234,7 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
               g = { tx: (v) => prev.tx(+at(o, "x") + (v - +at(co, "x")) * sx), ty: (v) => prev.ty(+at(o, "y") + (v - +at(co, "y")) * sy), s: (v) => prev.s(v * sx), sy: (v) => prev.sy(v * sy) };
             }
           }
-          for (const c of hs(el)) await elemento(c, g);
+          for (const c of hs(el)) await elemento(c, g, prof + 1);
           return;
         }
         const ajustar = (r) => (grupo && r ? Object.assign({}, r, { x: grupo.tx(r.x), y: grupo.ty(r.y), w: grupo.s(r.w), h: grupo.sy(r.h) }) : r);
@@ -7332,12 +7350,12 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
             }
           }
           const dg = todos(el, "relIds")[0];
-          if (dg && (await smartArt(dg, r, +at(e, "cx"), +at(e, "cy")))) return;
+          if (dg && (await smartArt(dg, r, +at(e, "cx"), +at(e, "cy"), prof + 1))) return;
           aproximado = true;
           return;
         }
         if (nm === "cxnSp") { lineaOffice(el, ajustar); return; }
-        if (nm === "AlternateContent") { const f = h1(el, "Fallback") || h1(el, "Choice"); if (f) for (const c of hs(f)) await elemento(c, grupo); }
+        if (nm === "AlternateContent") { const f = h1(el, "Fallback") || h1(el, "Choice"); if (f) for (const c of hs(f)) await elemento(c, grupo, prof + 1); }
       }
       const arbol = todos(sld, "spTree")[0];
       const hijosArbol = hs(arbol);
@@ -7370,7 +7388,7 @@ ${diapos.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
       }
       if (!docCampos.esquemaOffice && Object.keys(esquema).length) docCampos.esquemaOffice = Object.assign({}, esquema);
       // Fondo: el de la diapositiva, o el de su diseño, o el de su patrón (con los rellenos de fondo del tema)
-      const relsDis0 = relDiseno ? await relsDe(relDiseno.destino) : {};
+      const relsDis0 = relDiseno ? await relsDe(relDiseno.destino) : Object.create(null);
       const relMae0 = relDiseno ? Object.values(relsDis0).find((r) => /slideMaster$/.test(r.tipo)) : null;
       const xmlDis0 = relDiseno ? P(await z.texto(relDiseno.destino) || "<x/>") : null, xmlMae0 = relMae0 ? P(await z.texto(relMae0.destino) || "<x/>") : null;
       async function fondoDeHoja(dx, relsX) {

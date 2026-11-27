@@ -50,8 +50,8 @@
       switch (eje) {
         case "self": out.push(p); break;
         case "ch": out.push(...p.hijos); break;
-        case "des": { const r = (q) => q.hijos.forEach((h) => { out.push(h); r(h); }); r(p); break; }
-        case "desOrSelf": { out.push(p); const r = (q) => q.hijos.forEach((h) => { out.push(h); r(h); }); r(p); break; }
+        case "des": { const v = new Set([p]); const r = (q, prof) => { if (prof >= 64) return; q.hijos.forEach((h) => { if (v.has(h)) return; v.add(h); out.push(h); r(h, prof + 1); }); }; r(p, 0); break; }
+        case "desOrSelf": { const v = new Set([p]); out.push(p); const r = (q, prof) => { if (prof >= 64) return; q.hijos.forEach((h) => { if (v.has(h)) return; v.add(h); out.push(h); r(h, prof + 1); }); }; r(p, 0); break; }
         case "par": if (p.padre) out.push(p.padre); break;
         case "ancst": for (let q = p.padre; q; q = q.padre) out.push(q); break;
         case "root": { let q = p; while (q.padre) q = q.padre; out.push(q); break; }
@@ -95,7 +95,11 @@
 
   // ------------------------------------------------------------ el árbol de lo que se dibuja (instancias)
   function profundidad(p) { let d = 0; for (let q = p; q && q.padre; q = q.padre) d++; return d; }
-  function maxProf(p) { return p.hijos.length ? 1 + Math.max(...p.hijos.map(maxProf)) : 0; }
+  function maxProf(p, prof = 0, visto = new Set()) {
+    if (!p || prof >= 64 || visto.has(p) || !p.hijos.length) return 0;
+    visto.add(p);
+    return 1 + Math.max(...p.hijos.map((h) => maxProf(h, prof + 1, visto)));
+  }
   function condicion(c, ctx, inst) {
     const fn = at(c, "func"), op = at(c, "op") || "equ", val = at(c, "val");
     let x;
