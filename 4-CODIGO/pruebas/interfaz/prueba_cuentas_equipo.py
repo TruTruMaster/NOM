@@ -114,7 +114,7 @@ txt = p.evaluate("() => (document.querySelector('.hoja') || document.body).inner
 anota("al tocarlo se abre el detalle (por espacio, y que solo se guardan documentos de NOM)", ok and "Espacio de A" in txt and "Solo documentos de NOM" in txt, txt[:300])
 p.screenshot(path=os.path.join(OUT, "cuentas-almacenamiento.png"))
 p.evaluate("() => NOM.cerrarHoja()"); p.wait_for_timeout(300)
-anota("la barra lateral tiene «En el servidor» junto a lo guardado en el equipo", p.evaluate("() => !!document.querySelector('.riel [data-a=almacen]')"))
+anota("la barra lateral tiene «Tu almacenamiento» junto a lo guardado en el equipo", p.evaluate("() => !!document.querySelector('.riel [data-a=almacen]')"))
 
 # ================================================================== 7. ¿Dónde lo guardamos?
 print("== 7. Nuevo documento e Importar del inicio preguntan dónde")
@@ -321,7 +321,7 @@ if ip and not ip.startswith("127.") and B.startswith("http://") and ("localhost"
     try:
         p.goto(lan + "/"); p.wait_for_selector("#u", timeout=15000)
         av = p.evaluate("() => (document.querySelector('[data-sin-cifrar]') || {}).innerText || ''")
-        anota("entrando por la red local (http) sale «Conexión sin cifrar»", "Conexión sin cifrar" in av and "Wi-Fi de confianza" in av, av)
+        anota("entrando por el mismo Wi-Fi (http) sale «Conexión sin protección»", "Conexión sin protección" in av and "Wi-Fi de confianza" in av, av)
         p.screenshot(path=os.path.join(OUT, "cuentas-sin-cifrar.png"))
         # En la red local el navegador no ofrece su cifrado: la bóveda usa el propio, y también conserva lo local.
         L = N.cuenta(); entrar(L, CL, lan)

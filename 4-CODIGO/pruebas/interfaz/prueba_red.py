@@ -237,7 +237,7 @@ def aviso_version(interfaz, espera):
     P.evaluate("() => { localStorage.removeItem('nom.versionAvisada'); document.querySelectorAll('.avisos .aviso').forEach((x) => x.remove()); }")
     P.evaluate("(i) => NOM.revisarVersion({ nom: 1, servidor: 'prueba', version: i ? '9.9.9' : '0.1.0', interfaz: i })", interfaz); P.wait_for_timeout(300)
     t = P.evaluate("() => (document.querySelector('.avisos') || {}).innerText || ''"); assert espera in t, t; return ""
-intenta("la app avisa si el servidor es más viejo (no dice su nivel de interfaz)", lambda: aviso_version(0, "versión anterior"))
+intenta("la app avisa si el servidor es más viejo (no dice su nivel de interfaz)", lambda: aviso_version(0, "NOM más viejo"))
 intenta("la app avisa si hay una app más nueva, con botón para descargarla", lambda: aviso_version(99, "más nueva de la app"))
 info = N.api("GET", "/api/red/info")[1]
 anota("el servidor dice su versión y su nivel de interfaz", bool(info.get("interfaz")) and info.get("version") not in (None, "0.1.0"), info)

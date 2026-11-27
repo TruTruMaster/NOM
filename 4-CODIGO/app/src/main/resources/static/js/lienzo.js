@@ -2936,6 +2936,14 @@
       <div class="pres-herr" data-herr><button class="icono-btn" data-h="laser" aria-label="Puntero láser" data-micro="Puntero láser||L">${ico("circle-dot")}</button><button class="icono-btn" data-h="pluma" aria-label="Pluma" data-micro="Pluma (dibujar sobre la diapositiva)||P">${ico("pencil")}</button><button class="icono-btn" data-h="borrar" aria-label="Borrar lo dibujado" data-micro="Borrar lo dibujado||E">${ico("eraser")}</button></div>
       <button class="icono-btn salir" aria-label="Salir">${ico("x")}</button></div>`);
     document.body.append(rep);
+    // En pantalla completa, los botones de láser y pluma y el contador se van a los 3 s sin mover el mouse (no tapan
+    // la diapositiva, como en PowerPoint); al moverlo o tocar la pantalla vuelven. La vista del presentador no cambia.
+    if (!presentador) {
+      let quieto = null;
+      const despierta = () => { rep.classList.remove("quieto"); clearTimeout(quieto); quieto = setTimeout(() => rep.classList.add("quieto"), 3000); };
+      rep.addEventListener("pointermove", despierta); rep.addEventListener("pointerdown", despierta);
+      despierta();
+    }
     const d = $("[data-d]", rep), sig = $("[data-sig]", rep);
     const inicio = Date.now();
     const reloj = presentador ? setInterval(() => { const s2 = Math.floor((Date.now() - inicio) / 1000); $("[data-tiempo]", rep).textContent = `${Math.floor(s2 / 60)}:${String(s2 % 60).padStart(2, "0")}`; }, 1000) : null;

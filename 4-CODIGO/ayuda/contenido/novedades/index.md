@@ -4,8 +4,14 @@ descripcion: Qué cambió en cada versión, en palabras sencillas.
 orden: 1
 aplica: Navegador, App Android, Teléfono que comparte
 actualizado: 2026-11-26
-version: 0.23.7
+version: 0.23.8
 ---
+## 0.23.8 — noviembre de 2026
+
+- **Presentar a pantalla completa:** los botones del puntero láser y la pluma, el número de diapositiva y el botón para
+  salir se esconden a los 3 segundos sin mover el mouse, para que nada tape la diapositiva. Vuelven al mover el mouse o
+  tocar la pantalla. Las teclas (flechas, Esc, L, P) funcionan igual.
+
 ## 0.23.7 — noviembre de 2026
 
 - **Palabras de todos los días:** los avisos y botones que todavía decían «servidor», «cifrado», «solo lectura» o «red

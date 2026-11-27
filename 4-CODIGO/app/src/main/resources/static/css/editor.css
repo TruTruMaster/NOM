@@ -1169,6 +1169,9 @@
 .pres-marcas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 99999; overflow: visible; }
 .pres-herr { position: fixed; left: 14px; bottom: 14px; display: flex; gap: 6px; z-index: 5; opacity: .35; transition: opacity var(--t-corto); }
 .pres-herr:hover, .pres-herr:focus-within, .reproductor.con-laser .pres-herr, .reproductor.con-pluma .pres-herr { opacity: 1; }
+/* sin mover el mouse 3 s: fuera los botones y el contador (lectura y presentador no lo usan) */
+.reproductor.quieto:not(.con-laser):not(.con-pluma) .pres-herr, .reproductor.quieto .contador, .reproductor.quieto .salir { opacity: 0; }
+.reproductor .contador, .reproductor .salir { transition: opacity var(--t-corto); }
 .pres-herr .icono-btn { background: rgba(0, 0, 0, .55); color: #fff; }
 .pres-herr .icono-btn[aria-pressed="true"] { background: #F2385A; }
 .reproductor.presentador .pres-herr { left: auto; right: 14px; bottom: 74px; }
