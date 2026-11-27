@@ -95,3 +95,23 @@ las 4:15 no pase sus pruebas en vivo no se publica (queda en una rama `pendiente
 - **Idioma:** «Automático» toma el del equipo; en un teléfono en inglés la app sale en inglés. Para la demo, Ajustes ›
   Idioma › Español (ya está así en el A55).
 - Antes de salir: recargar www.nom.qd.je con Ctrl+Mayús+R en la laptop de la expo.
+
+## 4. Cacería de último momento (27-nov, 05:00-05:45; lo que reportó el equipo)
+
+- **Ordenar A → Z con una tabla elegida revolvía toda la hoja** (y los números de fila): el menú ordenaba la vista
+  de toda la hoja y además, al abrirse, cambiaba la selección a la columna entera. Ahora ordena SOLO la tabla con
+  formato o el rango que estaba elegido, moviendo las celdas como Excel (encabezado detectado, fila de totales fuera,
+  fórmulas ajustadas a su fila, Ctrl+Z lo deshace). Con una sola celda o columna sigue el orden de la vista (solo para
+  ti). `exploracion_orden_tabla.py`: antes 5/3, ahora 8/0.
+- **Imágenes flotantes en el enlace para ver** («visita web»): salían en línea, sin su lugar ni su giro. La exportación
+  a HTML (que usa el enlace para ver) ahora las pone libres desde su párrafo y giradas.
+  `exploracion_imagen_flotante.py` (dos personas a la vez, vista sin páginas, girar, deshacer, quien abre después y el
+  enlace para ver): 13/0 (una corrida de cuatro tardó más de 2.5 s en llegarle a la otra persona; no se repitió).
+- **Fotos giradas o recortadas deformadas** cuando llegaban del almacén después de la marca de espera: se recalcula su
+  proporción al cargar.
+- La portada pide los archivos con la versión y una marca del arranque (`0.24.0-xxxx`): un arreglo publicado con el
+  mismo número ya no se queda en la caché del navegador.
+- Pista del lienzo que se salía de la pantalla en el celular: ahora se parte en renglones.
+- Barridos sin hallazgos: `exploracion_layout.py` (28/0, computadora y celular) y `exploracion_fotos.py` (los 15
+  documentos de «Expo NOM» con todas sus fotos cargadas, 30/0).
+- APK 0.24.0 vuelto a compilar con todo esto (mismo número; release actualizada) e instalado en el A55.
