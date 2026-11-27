@@ -115,3 +115,11 @@ las 4:15 no pase sus pruebas en vivo no se publica (queda en una rama `pendiente
 - Barridos sin hallazgos: `exploracion_layout.py` (28/0, computadora y celular) y `exploracion_fotos.py` (los 15
   documentos de «Expo NOM» con todas sus fotos cargadas, 30/0).
 - APK 0.24.0 vuelto a compilar con todo esto (mismo número; release actualizada) e instalado en el A55.
+- 05:40 — **Tiempo real** (`exploracion_tiempo_real.py` y `_objetos.py`, dos personas en dos navegadores): cada letra le
+  llega a la otra persona en ~130 ms sin Enter; negrita y borrar una letra también; en la presentación poner una
+  figura, cambiar su color, moverla, cambiar su tamaño, girarla y borrarla: 230-250 ms cada uno (6/0). En la hoja, lo
+  escrito en una celda llega al confirmarla (Enter o salir de la celda), como en Excel en línea y Google Sheets.
+- 05:30 — El Chromium de pruebas de la laptop dejó de dibujar (ni una página en blanco: sin cuadros de animación) tras
+  el reinicio de las 04:59; Firefox sí. No es NOM. La suite de funciones en Firefox dio 161/3 con tres secciones que
+  se trabaron por tiempo mientras corrían otras pruebas a la vez (colaboración, cuentas, relevo); a las 03:45 la misma
+  suite en Firefox dio 202/0. Volver a correrla sola antes de confiar en ella.
