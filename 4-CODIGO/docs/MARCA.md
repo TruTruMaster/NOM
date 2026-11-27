@@ -63,8 +63,8 @@ interfaz.
 
 ## 5. Logotipo
 
-`NOM` en Nunito 900 y `COLAB` en Nunito 800 con el índigo del acento; el guion es una barra
-redondeada color llama que une las dos palabras. Nunito es la letra de toda la interfaz, así
+`NOM` en Nunito 900 junto al ícono de la llama (desde el 27-nov-2026 el logotipo ya no lleva «-COLAB»: el proyecto
+se llama solo NOM desde el 25-nov). Nunito es la letra de toda la interfaz, así
 que la marca y la app hablan igual. Las letras están convertidas a trazos en
 `marca/logo-horizontal*.svg`, no dependen de tener la fuente instalada.
 
