@@ -798,6 +798,9 @@ para Investigar y Wikidata.
 
 ## Orden recomendado para la siguiente sesión
 
+**Desde el 26 de noviembre de 2026 (noche, tercera sesión):** empezar por `docs/RELEVO-26NOV-NOCHE-3.md` (preparar la
+expo del 27-nov: matriz de funciones, pruebas en vivo, tiempos y guías). Antes: `docs/RELEVO-26NOV-NOCHE-2.md`.
+
 **Desde el 26 de noviembre de 2026 (noche, segunda sesión):** empezar por `docs/RELEVO-26NOV-NOCHE-2.md` (0.23.6:
 lectores con la copia limpia, llaves de espacios cifrados, teléfono y servidor parejos). Antes: `docs/RELEVO-26NOV-NOCHE.md`.
 
