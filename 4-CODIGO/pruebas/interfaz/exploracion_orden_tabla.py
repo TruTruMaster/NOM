@@ -17,7 +17,7 @@ C = N.cuenta(); esp = N.espacio(C["token"], "Orden"); d = N.documento(C["token"]
 datos = [["Nombre", "Cal", "Grupo"], ["Rosa", "8", "B"], ["Ana", "10", "A"], ["Luis", "6", "B"], ["Eva", "9", "A"]]
 abajo = [["Otra", "zz"], ["tabla", "aa"]]
 with sync_playwright() as pw:
-    b = pw.chromium.launch(); p = b.new_context(viewport={"width": 1366, "height": 860}).new_page(); P = Pagina(p, N.B)
+    b = getattr(pw, os.environ.get("NOM_NAVEGADOR", "chromium")).launch(); p = b.new_context(viewport={"width": 1366, "height": 860}).new_page(); P = Pagina(p, N.B)
     err = []; p.on("pageerror", lambda e: err.append(str(e)[:200]))
     P.entrar(C); P.abrir(d); P.t(1500); P.cerrar_hojas()
     for i, fila in enumerate(datos):

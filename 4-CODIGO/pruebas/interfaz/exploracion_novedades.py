@@ -31,7 +31,7 @@ def boton(P, texto, dentro=".velo .hoja"):
     return P.ev("([t, d]) => { const b = [...document.querySelectorAll(d + ' button')].find(x => x.textContent.trim() === t || x.textContent.trim().startsWith(t)); if (b) { b.click(); return true; } return false; }", [texto, dentro])
 
 with sync_playwright() as pw:
-    b = pw.chromium.launch()
+    b = getattr(pw, os.environ.get("NOM_NAVEGADOR", "chromium")).launch()
     opc = dict(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, device_scale_factor=2) if MOVIL else dict(viewport={"width": 1366, "height": 860})
     ctx = b.new_context(**opc); p = ctx.new_page(); P = Pagina(p, N.B)
     errores = []; p.on("pageerror", lambda e: errores.append(str(e)[:200]))

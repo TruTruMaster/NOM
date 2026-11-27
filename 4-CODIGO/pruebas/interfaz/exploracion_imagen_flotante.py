@@ -37,7 +37,7 @@ def opcion(P, xy, ruta):
     return True
 
 with sync_playwright() as pw:
-    nav = pw.chromium.launch()
+    nav = getattr(pw, os.environ.get("NOM_NAVEGADOR", "chromium")).launch()
     pa = nav.new_context(viewport={"width": 1366, "height": 900}).new_page(); PA = Pagina(pa, N.B)
     pb = nav.new_context(viewport={"width": 1366, "height": 900}).new_page(); PB = Pagina(pb, N.B)
     err = []; pa.on("pageerror", lambda e: err.append("A: " + str(e)[:200])); pb.on("pageerror", lambda e: err.append("B: " + str(e)[:200]))
