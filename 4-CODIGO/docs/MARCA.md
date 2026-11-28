@@ -50,22 +50,22 @@ Rejilla de 100 × 100 (las coordenadas exactas están en `marca/marca.svg`):
 
 | Nombre | Valor | Uso |
 |---|---|---|
-| Noche | `#2B2952` → `#15142A` | Fondo del ícono (degradado de arriba hacia abajo) |
-| Brasa | `#F06A3D` al 26 % | Resplandor bajo la llama, dentro del ícono |
-| Lengua índigo (sobre oscuro) | `#A9A9FF` → `#6767E8` | Ícono, modo oscuro |
-| Lengua índigo (sobre claro) | `#7070EC` → `#4646BE` | Marca sola sobre papel |
-| Fuego | `#FF9F57` → `#EE4F38` | La lengua naranja en todas las versiones |
-| Llama (plano) | `#F06A3D` | El guion del logotipo y versiones sin degradado |
+| Noche | `#2B2952` | Fondo del ícono |
+| Lengua clara (sobre oscuro) | `#E4E4EE` | La lengua izquierda en el ícono |
+| Lengua tinta (sobre claro) | `#2B2952` | La lengua izquierda en la marca sola sobre papel |
+| Fuego | `#F06A3D` | La lengua naranja en todas las versiones (es el color `--llama` de la interfaz) |
 | Tinta / Papel | `#2B2A33` / `#F5F3EF` | Texto del logotipo y fondo, como en la interfaz |
 
-Los degradados van de claro arriba a oscuro abajo: la misma luz que usa la arcilla de la
-interfaz.
+Desde el 27-nov-2026 todos los colores son planos: sin degradados, sin el resplandor de brasa y sin
+el brillo de arriba. El degradado morado (`#A9A9FF` → `#6767E8`) era el color que más se asocia con
+los diseños hechos en serie, y era lo primero que se veía en cada pantalla. Para volver a aplanar
+cualquier SVG del logo: `herramientas/marca/logo_plano.py ARCHIVO...`.
 
 ## 5. Logotipo
 
 `NOM` en Nunito 900 junto al ícono de la llama (desde el 27-nov-2026 el logotipo ya no lleva «-COLAB»: el proyecto
-se llama solo NOM desde el 25-nov). Nunito es la letra de toda la interfaz, así
-que la marca y la app hablan igual. Las letras están convertidas a trazos en
+se llama solo NOM desde el 25-nov). La interfaz usa la letra del sistema
+desde el 27-nov-2026; Nunito queda solo en el logotipo. Las letras están convertidas a trazos en
 `marca/logo-horizontal*.svg`, no dependen de tener la fuente instalada.
 
 ## 6. Versiones y tamaños
@@ -73,6 +73,7 @@ que la marca y la app hablan igual. Las letras están convertidas a trazos en
 | Archivo | Para |
 |---|---|
 | `icono.svg`, `icono-512.png`, `icono-1024.png` | App, favicon, presentaciones |
+| `compartir.svg` → `static/img/compartir.png` | La imagen que se ve al compartir el enlace |
 | `icono-maskable.svg` / `static/img/icono-maskable-512.png` | Android al instalar la página y `apple-touch-icon` |
 | `marca.svg` | La llama sola sobre fondo claro |
 | `marca-mono.svg` | Un solo color (`currentColor`): sellos, impresión a una tinta, notificaciones |
@@ -87,6 +88,6 @@ Tamaño mínimo: ícono a 16 px; logotipo horizontal a 120 px de ancho.
 - No girar, estirar ni reflejar la llama: la inclinación hacia adentro es el mensaje.
 - No pintar las dos lenguas del mismo color sobre el mosaico (para un solo color está
   `marca-mono.svg`).
-- No cerrar la separación ni ponerle contorno, sombra o brillo extra.
+- No cerrar la separación ni ponerle contorno, sombra, brillo ni degradado.
 - No poner la llama naranja sobre fondos naranjas o rojos, ni la índigo sobre índigo.
 - No cambiar la letra del logotipo.

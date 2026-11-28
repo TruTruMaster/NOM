@@ -27,7 +27,7 @@ p.fill("#pt", "Ciencias"); p.click(".hoja-pie [data-si]"); p.wait_for_timeout(80
 print("carpeta:", ev("() => [...document.querySelectorAll('.chip-carpeta')].map(b => b.textContent.trim().replace(/\\s+/g, ' '))"))
 p.click('.chip-carpeta[data-carpeta="Ciencias"]'); p.wait_for_timeout(300)
 print("en la carpeta:", ev("() => [...document.querySelectorAll('.doc-tarjeta')].map(a => a.querySelector('.titulo').textContent)"))
-p.click('.chip-carpeta[data-carpeta="*"]'); p.wait_for_timeout(300)
+p.click('.chip-carpeta[data-carpeta="Ciencias"]'); p.wait_for_timeout(300)   # tocarla otra vez vuelve a mostrar todo (0.24.1)
 # Renombrar
 menu(d3); item("Cambiar el nombre…")
 p.fill("#pt", "Exposición final"); p.click(".hoja-pie [data-si]"); p.wait_for_timeout(800)

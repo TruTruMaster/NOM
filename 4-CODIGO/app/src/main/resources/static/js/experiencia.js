@@ -375,30 +375,26 @@
     const recientes = NOM.leer(api().clave("recientes"), []);
     const propio = espacios.find((e) => e.permiso === "PROPIETARIO") || espacios[0];
     const pasos = [
-      { id: "espacio", t: "Crea tu primer espacio", d: "Como una carpeta compartida para tu equipo.", ok: espacios.length > 0, fn: () => NOM.vistaEspacios.nuevoEspacio(), icono: "layout-grid" },
-      { id: "documento", t: "Escribe tu primer documento", d: "Texto, hoja, presentación o diagrama.", ok: espacios.some((e) => e.documentos > 0) || recientes.length > 0, fn: () => (propio ? NOM.vistaEspacios.nuevoDocumento(propio) : NOM.vistaEspacios.nuevoEspacio()), icono: "file-plus" },
-      { id: "rueda", t: "Prueba la ruedita", d: (conMouse() ? "Clic derecho (o mantén presionado)" : "Mantén presionado medio segundo") + " sobre lo que quieras cambiar.", ok: !!h.rueda, fn: () => (recientes[0] ? (location.hash = "#/doc/" + recientes[0].id) : propio ? NOM.vistaEspacios.nuevoDocumento(propio) : NOM.vistaEspacios.nuevoEspacio()), icono: "circle-dot" },
-      { id: "equipo", t: "Invita a tu equipo", d: "Dales un código o un QR para que entren.", ok: espacios.some((e) => e.miembros > 1 || e.conexion), fn: () => (propio ? NOM.vistaEspacios.accesos(propio) : NOM.vistaEspacios.unirse()), icono: "users" },
-      { id: "ajustes", t: "Hazla tuya", d: "Tema, guardado automático y movimiento.", ok: !!h.preferencias, fn: () => NOM.vistaEspacios.preferencias(), icono: "palette" },
+      { id: "espacio", t: "Crear un espacio", d: "Es una carpeta que compartes con tu equipo.", ok: espacios.length > 0, fn: () => NOM.vistaEspacios.nuevoEspacio() },
+      { id: "documento", t: "Crear un documento", d: "De texto, hoja de cálculo, presentación o diagrama.", ok: espacios.some((e) => e.documentos > 0) || recientes.length > 0, fn: () => (propio ? NOM.vistaEspacios.nuevoDocumento(propio) : NOM.vistaEspacios.nuevoEspacio()) },
+      { id: "rueda", t: "Abrir la ruedita", d: (conMouse() ? "Clic derecho" : "Mantén presionado") + " sobre lo que quieras cambiar.", ok: !!h.rueda, fn: () => (recientes[0] ? (location.hash = "#/doc/" + recientes[0].id) : propio ? NOM.vistaEspacios.nuevoDocumento(propio) : NOM.vistaEspacios.nuevoEspacio()) },
+      { id: "equipo", t: "Invitar a alguien", d: "Con un código o un QR.", ok: espacios.some((e) => e.miembros > 1 || e.conexion), fn: () => (propio ? NOM.vistaEspacios.accesos(propio) : NOM.vistaEspacios.unirse()) },
+      { id: "ajustes", t: "Revisar las preferencias", d: "Tema, guardado automático y movimiento.", ok: !!h.preferencias, fn: () => NOM.vistaEspacios.preferencias() },
     ];
     const hechos = pasos.filter((p) => p.ok).length;
-    if (hechos === pasos.length) {
-      if (NOM.leer(clave("pasos.celebrado"), false)) return;
-      NOM.guardar(clave("pasos.celebrado"), true);
-    }
-    const C = 2 * Math.PI * 18;
-    const el = html(`<section class="pasos caja" aria-label="Primeros pasos">
+    // Cuando ya se hizo todo, la lista deja de salir.
+    if (hechos === pasos.length) return;
+    const el = html(`<section class="pasos" aria-label="Para empezar">
       <div class="pasos-cab">
-        <svg class="pasos-anillo" viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="18" class="fondo"/><circle cx="22" cy="22" r="18" class="avance" style="stroke-dasharray:${C.toFixed(1)};--fin:${(C * (1 - hechos / pasos.length)).toFixed(1)}"/></svg>
-        <div class="crece"><h2>${hechos === pasos.length ? "¡Todo listo! Ya dominas NOM" : "Primeros pasos"}</h2>
-          <p class="suave">${hechos === pasos.length ? "Gracias por darle una oportunidad. Esta tarjeta ya no volverá a salir." : `${hechos} de ${pasos.length} · unos minutos y tu equipo estará trabajando aquí.`}</p></div>
-        <button class="icono-btn" data-ocultar aria-label="Ocultar primeros pasos" data-micro="Ocultar|Puedes seguir sin ella; no volverá a salir.">${ico("x")}</button>
+        <h2 class="crece">Para empezar <span class="suave">${hechos} de ${pasos.length}</span></h2>
+        <button class="btn plano chico" type="button" data-ocultar>Ocultar</button>
       </div>
-      ${hechos === pasos.length ? "" : `<div class="pasos-lista">${pasos.map((p, i) => `<button type="button" class="pasos-item ${p.ok ? "hecho" : ""}" data-p="${i}" style="--i:${i}">
-        <span class="pasos-check">${ico(p.ok ? "check" : p.icono)}</span><span class="crece"><b>${esc(p.t)}</b><small>${esc(p.d)}</small></span>${p.ok ? "" : ico("chevron-right", "ico-s")}</button>`).join("")}</div>`}
+      <ol class="pasos-lista">${pasos.map((p, i) => `<li class="${p.ok ? "hecho" : ""}">${p.ok
+        ? `<span>${esc(p.t)}</span>`
+        : `<button type="button" class="enlace" data-p="${i}">${esc(p.t)}</button>`} <span class="suave">${esc(p.d)}</span></li>`).join("")}</ol>
     </section>`);
     cont.after(el);
-    $("[data-ocultar]", el).onclick = () => { NOM.guardar(clave("pasos.oculto"), true); el.classList.add("saliendo"); setTimeout(() => el.remove(), 260); };
+    $("[data-ocultar]", el).onclick = () => { NOM.guardar(clave("pasos.oculto"), true); el.hidden = true; };
     $$("[data-p]", el).forEach((b) => (b.onclick = () => pasos[+b.dataset.p].fn()));
   };
 

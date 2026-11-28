@@ -172,6 +172,8 @@
     [/^(\d+) documento(s)?$/, (_, n) => `${n} ${+n === 1 ? "document" : "documents"}`],
     [/^(\d+) palabra(s)?$/, (_, n) => `${n} ${+n === 1 ? "word" : "words"}`],
     [/^(\d+) solicitud(es)?$/, (_, n) => `${n} ${+n === 1 ? "request" : "requests"}`],
+    // la línea de la tarjeta del espacio: «3 documentos · 2 personas · hace 5 min»
+    [/^(\d+) documentos? · (\d+) personas? · (.+)$/, (_, d, m, t, dict) => `${d} ${+d === 1 ? "document" : "documents"} · ${m} ${+m === 1 ? "person" : "people"} · ${traducirCadena(t, "en", dict)}`],
     [/^(\d+) documentos? · (\d+) personas?$/, (_, d, m) => `${d} ${+d === 1 ? "document" : "documents"} · ${m} ${+m === 1 ? "person" : "people"}`],
     [/^hace (\d+) min$/, (_, n) => `${n} min ago`],
     [/^hace (\d+) h$/, (_, n) => `${n} hr ago`],

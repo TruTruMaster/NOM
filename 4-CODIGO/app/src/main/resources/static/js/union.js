@@ -147,7 +147,7 @@
         ${mismo ? `<p class="suave chico" style="text-align:center"><a href="#" data-otro-alias>Quiero otro alias</a></p>` : ""}` : "";
     t.innerHTML = `<div class="col">
       <div class="fila" style="gap:14px;align-items:center">
-        <span class="icono-espacio grande" style="background:${NOM.colorHex(info.color, "#7AA7FF")}">${esc((((info.espacio || "").trim())[0] || "?").toUpperCase())}</span>
+        <span class="punto-espacio grande" style="--c:${NOM.colorHex(info.color, "#7AA7FF")}" aria-hidden="true"></span>
         <div class="crece"><span class="etiqueta">Te invitan a</span><h2 style="margin-top:2px">${esc(info.espacio)}</h2>
           <span class="suave chico" style="font-weight:500">de ${esc(info.propietario)} · ${esc(permisoTxt(info.permiso))} · el código sirve hasta el ${esc(new Date(info.caduca).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}</span></div>
       </div>
@@ -193,7 +193,7 @@
           api().limpiarSesion();
         }
         const r = await NOM.acceso.entrarConAlias(codigo, { otro, espacioId: info.espacioId });
-        aviso(r.nuevo ? `Entraste como ${r.usuario.nombre}` : `Hola de nuevo, ${r.usuario.nombre}`, { tipo: "ok" });
+        aviso(`Entraste como ${r.usuario.nombre}`, { tipo: "ok" });
         alEntrar(r, r.nuevo, r.espacio.id);
       } catch (x) { b.disabled = false; mostrarError(x); }
     };

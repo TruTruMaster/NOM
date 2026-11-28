@@ -123,3 +123,23 @@ las 4:15 no pase sus pruebas en vivo no se publica (queda en una rama `pendiente
   el reinicio de las 04:59; Firefox sí. No es NOM. La suite de funciones en Firefox dio 161/3 con tres secciones que
   se trabaron por tiempo mientras corrían otras pruebas a la vez (colaboración, cuentas, relevo); a las 03:45 la misma
   suite en Firefox dio 202/0. Volver a correrla sola antes de confiar en ella.
+
+## 5. 27-nov tarde: 0.24.1, sin aspecto de plantilla
+
+Lo que se veía «hecho con plantilla» en la revisión de la tarde, quitado y publicado (Pi, GitHub y APK 0.24.1, código 54):
+- **Logo plano** (decisión del dueño: «cambia todo»): sin degradados, resplandor ni brillo; lengua izquierda `#E4E4EE`
+  (antes el degradado morado `#A9A9FF → #6767E8`), naranja `#F06A3D`, fondo `#2B2952`. Todos los SVG, PNG, la ayuda,
+  lo legal y el ícono de Android. `herramientas/marca/logo_plano.py` aplana cualquier SVG viejo. La imagen para
+  compartir (`marca/compartir.svg` → `static/img/compartir.png`) se rehízo: todavía decía NOM-COLAB. **Falta**:
+  `marca/Manual de marca NOM.pdf`, `marca/play/*` y las presentaciones siguen con el logo anterior.
+- Letra del sistema en la interfaz (Nunito solo en el logotipo y como fuente de documentos).
+- «Primeros pasos» → «Para empezar», una lista numerada que desaparece al terminar.
+- «Hola de nuevo» → «Entrar con tu cuenta»; sin «Hazla tuya» ni «unos minutos y tu equipo…»; «Propietario» sin corona.
+- Un solo juego de filtros en el espacio: sin el chip «Todo»; una carpeta o «Destacados» se quitan tocándolos otra vez.
+- Tarjeta del espacio con franja de color y «1 documento · 1 persona · hace un momento»; punto de color en vez del
+  cuadro con la inicial (listas, encabezado e invitación); el aviso de almacenamiento sin cuadrito lila.
+- Botones de 40 px en computadora (antes 25: el piso de 24 px de accesibilidad ganaba al tamaño del botón).
+- En inglés: «or» y «(the latest version)».
+- Pruebas en el sitio real: `exploracion_aspecto.py` 17/0 y `exploracion_layout.py` 28/0 (Firefox). Los navegadores
+  de Playwright se habían borrado de `~/.cache/ms-playwright`; se volvieron a bajar (firefox y chromium-headless-shell).
+- El A55 necesita el APK nuevo (versión distinta a la del servidor).

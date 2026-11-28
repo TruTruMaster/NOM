@@ -420,7 +420,7 @@
         // En un navegador normal (no la app): un enlace para descargar la app de Android. El
         // archivo lo entrega la red de GitHub (Fastly), no la conexión del servidor, y
         // ".../releases/latest/..." trae siempre la versión más reciente que se haya publicado.
-        f.append(html(`<p class="servidor-pie">${ico("smartphone", "ico-s")}<span>¿Usas Android? <a href="https://github.com/TruTruMaster/NOM/releases/latest/download/NOM.apk" rel="noopener" data-micro="Descargar la app para Android|Se descarga desde la red de GitHub, así que no gasta el Internet de NOM. Ábrela en el teléfono para instalarla; trae siempre la versión más reciente."><b>Descarga la app</b></a> · siempre la más reciente</span></p>`));
+        f.append(html(`<p class="servidor-pie">${ico("smartphone", "ico-s")}<span>¿Usas Android? <a href="https://github.com/TruTruMaster/NOM/releases/latest/download/NOM.apk" rel="noopener" data-micro="Descargar la app para Android|Se descarga desde la red de GitHub, así que no gasta el Internet de NOM. Ábrela en el teléfono para instalarla; trae siempre la versión más reciente."><b>Descarga la app</b></a> (la versión más reciente)</span></p>`));
       }
     }
 
@@ -495,7 +495,7 @@
 
     function formEntrar() {
       const f = html(`<form class="col" novalidate>
-        ${cabecera("Hola de nuevo", "Entra para ver tus espacios y documentos.")}
+        ${cabecera("Entrar con tu cuenta", "Para ver tus espacios y documentos.")}
         <div class="alerta" data-alerta hidden role="alert"></div>
         <div class="campo"><label for="u">Usuario</label>
           <div class="entrada">${ico("user")}<input id="u" name="nombre" autocomplete="username" autocapitalize="none" spellcheck="false" required value="${esc(opc.nombre || NOM.leer("nom.ultimoNombre", ""))}"></div></div>

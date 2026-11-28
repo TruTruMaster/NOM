@@ -6,7 +6,6 @@
   const { esc, ico, html, $, $$, api, aviso, hoja, confirmar, haceCuanto, bytes, avatar, MODOS } = { ...NOM, api: NOM.api };
 
   const PERMISOS = { PROPIETARIO: "Propietario", EDICION: "Puede editar", LECTURA: "Solo puede ver" };
-  const inicial = (s) => esc((String(s || "?").trim()[0] || "?").toUpperCase());
   const recientes = () => NOM.leer(api.clave("recientes"), []);
   NOM.anotarReciente = (doc, espacio) => {
     const r = recientes().filter((x) => x.id !== doc.id);
@@ -107,7 +106,6 @@
     const a = await usoServidor();
     if (!a || !caja.isConnected) return;
     const b = html(`<button type="button" class="almacen-linea caja" data-micro="Tu almacenamiento|Cuánto ocupan tus espacios y cuánto te queda. Toca para ver el detalle.">
-      <span class="modo-insignia" style="background:var(--acento-tenue);color:var(--acento-tinta)">${ico("cloud")}</span>
       <span class="crece"><b>Guardados en ${esc(nombreServidor())}</b><small>Los ves en cualquier equipo con tu cuenta. Aquí solo se guardan documentos de NOM, comprimidos.</small></span>
       <span class="almacen-uso"><span class="chip ${claseUso(a)}" data-uso>${esc(textoUso(a))}</span>${a.cuota > 0 ? `<span class="barra-uso"><i style="width:${Math.min(100, Math.max(1, (a.uso / a.cuota) * 100))}%"></i></span>` : ""}</span>
     </button>`);
@@ -163,7 +161,7 @@
       let elegido = null;
       const cuerpo = html(`<div class="col">
         <p class="suave" style="font-weight:400">En un espacio queda guardado en ${esc(nombreServidor())} y lo ves en todos tus equipos.</p>
-        <div class="lista">${editables.map((e, i) => `<button type="button" class="lista-item" data-esp="${esc(e.id)}" style="text-align:left;width:100%" ${i ? "" : "autofocus"}><span class="icono-espacio" style="width:36px;height:36px;border-radius:var(--r-s);display:grid;place-items:center;color:#fff;font-weight:700;background:${esc(e.color)}">${inicial(e.nombre)}</span><span class="crece"><b>${esc(e.nombre)}</b><small>${ico("cloud", "ico-s")} En el servidor · ${esc(PERMISOS[e.permiso] || "")}</small></span>${ico("chevron-right")}</button>`).join("")}
+        <div class="lista">${editables.map((e, i) => `<button type="button" class="lista-item" data-esp="${esc(e.id)}" style="text-align:left;width:100%" ${i ? "" : "autofocus"}><span class="punto-espacio" style="--c:${esc(e.color)}" aria-hidden="true"></span><span class="crece"><b>${esc(e.nombre)}</b><small>${ico("cloud", "ico-s")} En el servidor · ${esc(PERMISOS[e.permiso] || "")}</small></span>${ico("chevron-right")}</button>`).join("")}
           <button type="button" class="lista-item" data-local style="text-align:left;width:100%"><span class="modo-insignia" style="width:36px;height:36px;border-radius:var(--r-s)">${ico(api.empaquetada ? "smartphone" : "hard-drive")}</span><span class="crece"><b>Solo en este equipo</b><small>Cifrado con tu contraseña. No se ve en tus otros equipos ni lo ve nadie más.</small></span>${ico("chevron-right")}</button>
         </div></div>`);
       const h = hoja({ titulo: titulo || "¿Dónde lo guardamos?", icono: "cloud", cuerpo, alCerrar: () => listo(elegido) });
@@ -174,18 +172,16 @@
 
   function tarjetaEspacio(e) {
     const con = (e.conectados || []).slice(0, 4);
-    return `<a class="tarjeta tarjeta-espacio caja" href="#/espacio/${esc(e.id)}">
+    const n = +e.documentos || 0, m = +e.miembros || 0;
+    return `<a class="tarjeta tarjeta-espacio caja" href="#/espacio/${esc(e.id)}" style="--c:${esc(e.color)}">
       <div class="fila-e">
-        <span class="icono-espacio" style="background:${esc(e.color)};--c:${esc(e.color)}">${inicial(e.nombre)}</span>
+        <div class="crece"><div class="titulo recorta">${esc(e.nombre)}</div><div class="suave chico" style="font-weight:500">${esc(PERMISOS[e.permiso] || "")}${e.permiso !== "PROPIETARIO" ? " · de " + esc(e.propietario) : ""}</div></div>
         <span class="fila">${e.conexion ? `<span class="chip ok" data-micro="Visible en el Wi-Fi|Quienes estén en el mismo Wi-Fi pueden encontrarlo."><span class="punto vivo"></span>En el Wi-Fi</span>` : ""}
         ${e.solicitudes ? `<span class="chip aviso">${+e.solicitudes || 0} solicitud${e.solicitudes > 1 ? "es" : ""}</span>` : ""}
         ${e.avisos ? `<span class="chip acento" data-micro="Menciones|Te mencionaron en comentarios de este espacio.">${ico("at-sign", "ico-s")} ${e.avisos}</span>` : ""}</span>
       </div>
-      <div><div class="titulo recorta">${esc(e.nombre)}</div><div class="suave chico" style="font-weight:500">${esc(PERMISOS[e.permiso] || "")}${e.permiso !== "PROPIETARIO" ? " · de " + esc(e.propietario) : ""}</div></div>
       <div class="meta">
-        <span>${ico("file-text", "ico-s")} ${+e.documentos || 0}</span>
-        <span>${ico("users", "ico-s")} ${+e.miembros || 0}</span>
-        <span>${ico("clock", "ico-s")} ${esc(haceCuanto(e.actividad))}</span>
+        <span>${n === 1 ? "1 documento" : n + " documentos"} · ${m === 1 ? "1 persona" : m + " personas"} · ${esc(haceCuanto(e.actividad))}</span>
         ${con.length ? `<span class="avatares" style="margin-left:auto">${con.map((u) => avatar(u)).join("")}</span>` : ""}
       </div>
     </a>`;
@@ -321,7 +317,7 @@
           items.forEach((e) => {
             const ya = mios.has(e.id);
             const it = html(`<button class="lista-item" style="text-align:left;width:100%">
-              <span class="icono-espacio" style="width:40px;height:40px;border-radius:var(--r-m);display:grid;place-items:center;color:#fff;font-weight:700;background:${esc(e.color || "#7AA7FF")}">${inicial(e.nombre)}</span>
+              <span class="punto-espacio" style="--c:${esc(e.color || "#7AA7FF")}" aria-hidden="true"></span>
               <span class="crece"><b>${esc(e.nombre)}</b><small>de ${esc(e.propietario)}${e.local ? "" : " · en " + esc(e.equipo)}</small></span>
               ${ya ? `<span class="chip ok">Ya eres miembro</span>` : `<span class="chip acento">Entrar</span>`}
             </button>`);
@@ -410,7 +406,7 @@
           </div>`).join("")}</div></div>` : ""}
         <div class="col"><span class="etiqueta">Miembros (${datos.miembros.length})</span><div class="lista">${datos.miembros.map((m) => `
           <div class="lista-item">${avatar(m)}<span class="crece"><b>${esc(m.nombre)}${m.id === (api.usuario() || {}).id ? " (tú)" : ""}</b><small>${m.conectado ? `<span style="color:var(--ok)">● conectado</span>` : esc(m.empresa || "")}</small></span>
-            ${m.permiso === "PROPIETARIO" ? `<span class="chip acento">${ico("crown", "ico-s")} Propietario</span>`
+            ${m.permiso === "PROPIETARIO" ? `<span class="chip acento">Propietario</span>`
               : dueno ? `<select class="mini-select" data-cambiar="${esc(m.nombre)}" aria-label="Permiso de ${esc(m.nombre)}" style="height:36px;border-radius:var(--r-s);border:1px solid var(--borde);background:var(--sup-2);padding:0 8px;font-weight:500">
                   <option value="EDICION" ${m.permiso === "EDICION" ? "selected" : ""}>Puede editar</option>
                   <option value="LECTURA" ${m.permiso === "LECTURA" ? "selected" : ""}>Solo puede ver</option>
@@ -719,7 +715,7 @@
     const editables = espacios.filter((e) => e.permiso !== "LECTURA");
     if (!editables.length) return aviso("Primero crea un espacio (o pide permiso de edición en uno) para subir el documento.", { tipo: "info", ms: 5000 });
     const cuerpo = html(`<div class="col"><p class="suave" style="font-weight:400">Elige el espacio. Al subirlo quedará guardado en ese espacio y se quitará de este equipo.</p>
-      <div class="lista">${editables.map((e) => `<button class="lista-item" data-esp="${esc(e.id)}" style="text-align:left;width:100%"><span class="icono-espacio" style="width:36px;height:36px;border-radius:var(--r-s);display:grid;place-items:center;color:#fff;font-weight:700;background:${esc(e.color)}">${inicial(e.nombre)}</span><span class="crece"><b>${esc(e.nombre)}</b><small>${esc(PERMISOS[e.permiso])}</small></span>${ico("chevron-right")}</button>`).join("")}</div></div>`);
+      <div class="lista">${editables.map((e) => `<button class="lista-item" data-esp="${esc(e.id)}" style="text-align:left;width:100%"><span class="punto-espacio" style="--c:${esc(e.color)}" aria-hidden="true"></span><span class="crece"><b>${esc(e.nombre)}</b><small>${esc(PERMISOS[e.permiso])}</small></span>${ico("chevron-right")}</button>`).join("")}</div></div>`);
     const h = hoja({ titulo: "Subir a un espacio", icono: "upload", cuerpo });
     $$("[data-esp]", cuerpo).forEach((b) => (b.onclick = async () => {
       try {
@@ -755,10 +751,10 @@
     cont.innerHTML = `
       <div class="encabezado">
         <div class="fila" style="gap:16px;align-items:center">
-          <span class="icono-espacio" style="width:60px;height:60px;border-radius:var(--r-l);display:grid;place-items:center;color:#fff;font-weight:700;font-size:26px;background:${esc(d.color)}">${inicial(d.nombre)}</span>
+          <span class="punto-espacio grande" style="--c:${esc(d.color)}" aria-hidden="true"></span>
           <div><h1>${esc(d.nombre)}</h1>
             <div class="fila" style="margin-top:6px;flex-wrap:wrap">
-              <span class="chip ${dueno ? "acento" : ""}">${ico(dueno ? "crown" : d.permiso === "EDICION" ? "pencil" : "eye", "ico-s")} ${esc(PERMISOS[d.permiso])}</span>
+              <span class="chip ${dueno ? "acento" : ""}">${dueno ? "" : ico(d.permiso === "EDICION" ? "pencil" : "eye", "ico-s") + " "}${esc(PERMISOS[d.permiso])}</span>
               <span data-chip-red></span>
               <span class="avatares" data-conectados></span>
             </div></div>
@@ -842,7 +838,6 @@
       if (!docs.length) { c.innerHTML = ""; return; }
       const n = (k) => docs.filter((x) => x.carpeta === k).length;
       c.innerHTML = `<div class="chips-carpetas" role="group" aria-label="Carpetas">
-          <button type="button" class="chip-carpeta" data-carpeta="*" aria-pressed="${carpetaSel == null && !soloDestacados}">${ico("layout-grid", "ico-s")} Todo</button>
           <button type="button" class="chip-carpeta" data-destacados aria-pressed="${soloDestacados}">${ico("star", "ico-s")} Destacados</button>
           ${cs.map((k) => `<button type="button" class="chip-carpeta" data-carpeta="${esc(k)}" data-soltar="${esc(k)}" aria-pressed="${carpetaSel === k}">${ico("folder", "ico-s")} ${esc(k)} <small>${n(k)}</small></button>`).join("")}
           ${edita ? `<button type="button" class="chip-carpeta tenue" data-nueva-carpeta data-micro="Nueva carpeta|Luego arrastra documentos a ella o usa «Mover a carpeta» en su menú.">${ico("folder-plus", "ico-s")} Nueva carpeta</button>` : ""}
@@ -851,8 +846,8 @@
       $("[data-orden]", c).value = orden;
       $("[data-orden]", c).onchange = (e) => { orden = e.target.value; NOM.guardar("nom.orden.docs", orden); pintarDocs(); };
       $$("[data-carpeta]", c).forEach((b) => {
-        b.onclick = () => { carpetaSel = b.dataset.carpeta === "*" ? null : b.dataset.carpeta; soloDestacados = false; pintarDocs(); };
-        if (b.dataset.carpeta !== "*" && edita) b.oncontextmenu = (e) => { e.preventDefault(); menuCarpeta(b, b.dataset.carpeta); };
+        b.onclick = () => { carpetaSel = carpetaSel === b.dataset.carpeta ? null : b.dataset.carpeta; soloDestacados = false; pintarDocs(); };
+        if (edita) b.oncontextmenu = (e) => { e.preventDefault(); menuCarpeta(b, b.dataset.carpeta); };
       });
       $("[data-destacados]", c).onclick = () => { soloDestacados = !soloDestacados; carpetaSel = null; pintarDocs(); };
       const nc = $("[data-nueva-carpeta]", c);

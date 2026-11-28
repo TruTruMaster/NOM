@@ -453,7 +453,7 @@
 /* (en la hoja con secciones el salto de columna no ocupa renglón, como en Word) */
 .wd-cuerpo.con-secciones .wd-saltocol { display: none !important; }
 .wd-cuerpo.con-secciones > :has(.wd-saltocol) { min-height: calc(var(--li, 1.15) * var(--af) * 1em) !important; }
-.wd-saltocol { display: flex; align-items: center; gap: 8px; color: #9a9a9a; font: 600 9pt/1 Nunito, sans-serif; margin: 4pt 0; }
+.wd-saltocol { display: flex; align-items: center; gap: 8px; color: #9a9a9a; font: 600 9pt/1 var(--fuente); margin: 4pt 0; }
 .wd-saltocol::before, .wd-saltocol::after { content: ""; flex: 1; border-top: 1px dotted #bdbdbd; }
 @media print { .wd-continuaciones { display: none !important; } .wd-cuerpo > [data-clip] { clip-path: none !important; } .wd-saltocol { break-after: column; visibility: hidden; height: 0; margin: 0; } }
 .wd-paginas { position: absolute; inset: 0; pointer-events: none; }
@@ -562,9 +562,9 @@
 .wd-celda:focus { box-shadow: inset 0 0 0 2px rgba(68, 114, 196, .5); }
 .wd-tab-ctl { display: none; gap: 4px; margin-top: 4px; font-family: var(--letra, inherit); }
 .wd-tabla:hover .wd-tab-ctl, .wd-tabla:focus-within .wd-tab-ctl { display: flex; flex-wrap: wrap; }
-.wd-tab-ctl button { display: inline-flex; align-items: center; gap: 3px; border: 1px solid #ccc; background: #fafafa; border-radius: var(--r-xs); padding: 2px 8px; font: 600 11px/1.6 Nunito, sans-serif; color: #444; cursor: pointer; }
+.wd-tab-ctl button { display: inline-flex; align-items: center; gap: 3px; border: 1px solid #ccc; background: #fafafa; border-radius: var(--r-xs); padding: 2px 8px; font: 600 11px/1.6 var(--fuente); color: #444; cursor: pointer; }
 .wd-tab-ctl button:hover { background: #eef2fb; }
-.wd-salto { display: flex; align-items: center; gap: 8px; color: #9a9a9a; font: 600 9pt/1 Nunito, sans-serif; margin: 4pt 0; }
+.wd-salto { display: flex; align-items: center; gap: 8px; color: #9a9a9a; font: 600 9pt/1 var(--fuente); margin: 4pt 0; }
 .wd-salto::before, .wd-salto::after { content: ""; flex: 1; border-top: 1px dashed #bdbdbd; }
 .wd-linea hr { border: 0; border-top: 1px solid #8E8E8E; margin: 6pt 0; }
 .wd-indice { padding: 4pt 0; }
@@ -587,7 +587,7 @@
 /* cursores de las demás personas, como en Google Docs */
 .wd-cursores { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
 .wd-otro { position: absolute; width: 2px; margin-left: -1px; background: var(--c); border-radius: 1px; }
-.wd-otro span { position: absolute; bottom: 100%; left: -1px; background: var(--cf, var(--c)); color: var(--ct, #fff); font: 700 11px/16px Nunito, sans-serif; padding: 0 6px; border-radius: 4px 4px 4px 0; white-space: nowrap; }
+.wd-otro span { position: absolute; bottom: 100%; left: -1px; background: var(--cf, var(--c)); color: var(--ct, #fff); font: 700 11px/16px var(--fuente); padding: 0 6px; border-radius: 4px 4px 4px 0; white-space: nowrap; }
 .wd-otro-sel { position: absolute; opacity: .2; border-radius: 2px; }
 
 /* esquema (títulos) */
@@ -743,7 +743,6 @@
 .union { min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; background: var(--fondo); }
 .union-tarjeta { width: min(440px, 100%); padding: 24px; border-radius: var(--r-xl); background: var(--sup); }
 .union .burbuja { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--sup-hundida); color: var(--tinta-2); }
-.icono-espacio.grande { width: 48px; height: 48px; border-radius: var(--r-l); display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 21px; flex: none; }
 .union-rapida { flex-wrap: wrap; }
 .qr { display: block; width: 100%; height: auto; border-radius: var(--r-s); }
 .qr-caja { background: #fff; border-radius: var(--r-m); padding: 8px; box-shadow: var(--sombra-1); width: 100%; max-width: 240px; aspect-ratio: 1; }
@@ -782,7 +781,7 @@
 .recibo-cab p { color: #555; font-weight: 650; }
 .recibo-quien { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .recibo-quien > div { padding: 10px 12px; border-radius: 10px; background: #F5F3EF; }
-.recibo-quien span { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #6B6875; font-weight: 800; }
+.recibo-quien span { display: block; font-size: 12px; color: #6B6875; font-weight: 700; }
 .recibo-quien b { display: block; font-size: 17px; }
 .recibo-quien small { color: #555; font-weight: 650; }
 .recibo-cifras { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 18px; }
@@ -792,7 +791,7 @@
 .recibo-hoja h2 { font-size: 15px; margin: 18px 0 8px; color: #1F1E26; }
 .recibo-tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .recibo-tabla th, .recibo-tabla td { border-bottom: 1px solid #E7E5EE; padding: 6px 8px; text-align: left; }
-.recibo-tabla th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #6B6875; }
+.recibo-tabla th { font-size: 12px; color: #6B6875; }
 .recibo-huella { font: 600 12px/1.45 var(--mono); word-break: break-all; background: #F5F3EF; padding: 10px 12px; border-radius: 8px; }
 .recibo-nota { font-size: 12px; color: #555; margin-top: 10px; }
 @media print {
@@ -1040,7 +1039,7 @@
 .wd-tab.con-cab tr:first-child td { background-color: #F2F2F2; }
 .wd-tab-ctl { align-items: center; }
 .wd-tab-ctl .sep { width: 1px; height: 18px; background: #ccc; margin: 0 2px; }
-.wd-tab-ctl select { font: 600 11px/1.6 Nunito, sans-serif; border: 1px solid #ccc; border-radius: var(--r-xs); padding: 2px 4px; background: #fafafa; color: #444; }
+.wd-tab-ctl select { font: 600 11px/1.6 var(--fuente); border: 1px solid #ccc; border-radius: var(--r-xs); padding: 2px 4px; background: #fafafa; color: #444; }
 .wd-tabla:not(:focus-within):not(.activa) .wd-tab-ctl { display: none; }
 .wd-tabla.activa .wd-tab-ctl { display: flex; flex-wrap: wrap; }
 .wd-tab-redim { position: absolute; top: 0; width: 9px; margin-left: -4px; height: calc(100% - 30px); cursor: col-resize; z-index: 2; touch-action: none; }
@@ -1077,7 +1076,7 @@
 .wd-notas .wd-nota-pie { margin: 0 0 2px; text-align: left; white-space: normal; }
 .wd-nota[data-obj] { cursor: pointer; color: #1F4E9E; }
 /* Objeto de Word que se conserva sin poder editarse aquí (cuadro de texto, forma, gráfico) */
-.wd-objeto[data-obj] > span { display: inline-block; padding: 0 6px; margin: 0 2px; border: 1px dashed #b9b9c6; border-radius: 6px; color: #77758a; background: #f6f5fa; font: 600 .78em/1.5 Nunito, sans-serif; white-space: nowrap; text-indent: 0; }
+.wd-objeto[data-obj] > span { display: inline-block; padding: 0 6px; margin: 0 2px; border: 1px dashed #b9b9c6; border-radius: 6px; color: #77758a; background: #f6f5fa; font: 600 .78em/1.5 var(--fuente); white-space: nowrap; text-indent: 0; }
 @media print { .wd-objeto[data-obj] { display: none; } }
 .wd-nota[data-obj] sup { font-size: .7em; line-height: 0; padding: 0 1px; }
 .wd-ecuacion[data-obj] { cursor: pointer; display: inline-block; padding: 0 2px; border-radius: 4px; }
@@ -1327,7 +1326,7 @@
 .wd-cuerpo > [dir="rtl"] { text-align: right; }
 .wd-cuerpo > [dir="rtl"][data-alin="centro"] { text-align: center; }
 /* Inicio de una sección de Word (columnas u otra hoja): una marca que no es parte del texto */
-.wd-cuerpo > [data-sec-t]::before { content: attr(data-sec-t); display: block; margin: 0 0 6px; padding: 1px 8px; border-top: 1px dashed #b9b9c6; color: #77758a; font: 600 9px/1.6 Nunito, sans-serif; letter-spacing: .02em; text-indent: 0; text-align: left; text-transform: none; font-variant: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: none; pointer-events: none; }
+.wd-cuerpo > [data-sec-t]::before { content: attr(data-sec-t); display: block; margin: 0 0 6px; padding: 1px 8px; border-top: 1px dashed #b9b9c6; color: #77758a; font: 600 9px/1.6 var(--fuente); letter-spacing: .02em; text-indent: 0; text-align: left; text-transform: none; font-variant: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: none; pointer-events: none; }
 @media print { .wd-cuerpo > [data-sec-t]::before { display: none; } }
 /* Borde de página */
 .wd-borde-pagina { position: absolute; pointer-events: none; box-sizing: border-box; }
@@ -1337,7 +1336,7 @@
 /* Cuadro de texto, SmartArt o gráfico de Word: se lee su texto dentro de un recuadro */
 .wd-objeto.con-texto[data-obj] { display: inline-block; max-width: 100%; vertical-align: top; text-indent: 0; }
 .wd-objeto.con-texto[data-obj] > .wd-obj-caja { display: block; max-width: 100%; padding: 4px 8px 6px; margin: 2px 0; border: 1px solid #b9b9c6; border-radius: 4px; background: #fbfbfd; color: inherit; font: inherit; white-space: normal; text-align: left; }
-.wd-objeto.con-texto[data-obj] > .wd-obj-caja > b { display: block; margin-bottom: 2px; color: #77758a; font: 700 9px/1.4 Nunito, sans-serif; letter-spacing: .04em; text-transform: uppercase; }
+.wd-objeto.con-texto[data-obj] > .wd-obj-caja > b { display: block; margin-bottom: 2px; color: #77758a; font: 700 10px/1.4 var(--fuente); }
 .wd-objeto.con-texto[data-obj] > .wd-obj-caja > span { display: block; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .92em; line-height: 1.25; }
 @media print { .wd-objeto.con-texto[data-obj] { display: inline-block; } .wd-objeto.con-texto[data-obj] > .wd-obj-caja > b { display: none; } }
 /* En un celular, sin páginas, las sangrías en centímetros no deben dejar el texto en una tirita */

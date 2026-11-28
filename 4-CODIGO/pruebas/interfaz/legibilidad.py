@@ -41,7 +41,7 @@ PROHIBIDAS = {
     r"revoca\w*|caduca\w*|caducad\w*": "Anular, vencer",
     r"exporta\w*": "Descargar",
     r"caracteres|carácter": "letras o números",
-    r"bienvenid[oa]": "Hola de nuevo · Ya estás en NOM",
+    r"bienvenid[oa]": "Entrar con tu cuenta · Ya estás en NOM",
     # «cifrado de extremo a extremo» se acepta: es la frase que ya conoce quien usa WhatsApp (nombre de la función).
     r"cifrad[oa]s?(?! de extremo)|cifrar|AES": "protegido con tu contraseña",
 }

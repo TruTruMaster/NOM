@@ -2,6 +2,17 @@
 
 Lo que cambió en cada versión, en corto (es la página «Novedades» de la ayuda; la escribe `4-CODIGO/ayuda/generar.py`). El diario completo, día por día, está en `LOG.md`.
 
+## 0.24.1 — noviembre de 2026
+
+- **Aspecto más sencillo:** el logo va en colores planos (sin degradado morado) y la interfaz usa la letra de tu
+  equipo, como las apps de tu teléfono o computadora.
+- **Inicio:** «Para empezar» es una lista corta en lugar de una fila de tarjetas, y se va sola cuando terminas.
+- **Espacios:** cada tarjeta lleva una franja con el color del espacio y dice en palabras cuántos documentos y personas
+  tiene. Dentro de un espacio, las carpetas y «Destacados» se quitan tocándolos otra vez (ya no hay un «Todo» aparte
+  que repetía a «Todos»).
+- **Botones:** en la computadora, «Entrar» y los demás botones principales ya no se ven aplastados.
+- **Inglés:** «o» y el enlace para bajar la app ya se traducen.
+
 ## 0.24.0 — noviembre de 2026
 
 - **Ajustes nuevos:** cambia los atajos de teclado (o vuelve a los de siempre), elige entre la **ruedita** y la **lista
